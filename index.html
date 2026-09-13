@@ -1069,7 +1069,7 @@
     return `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
   }
 
-  // Hero Video Banner Management (Starts video after 5 seconds muted)
+ // Hero Video Banner Management (Starts video after 5 seconds muted)
   let heroMuted = true;
   function initHeroBanner() {
     const bgContainer = document.getElementById('heroBgContainer');
@@ -1078,16 +1078,16 @@
     
     if (!bgContainer) return;
 
-    // Start video playback after 5 seconds with mute=1
+    // Start video playback after 5 seconds with mute=1 and enablejsapi=1
     setTimeout(() => {
-      bgContainer.innerHTML = `<iframe id="heroIframe" src="https://www.youtube.com/embed/7jz3BSqSXsM?autoplay=1&mute=1&controls=0&loop=1&playlist=7jz3BSqSXsM&modestbranding=1&playsinline=1" title="Shahid Background Trailer" allow="autoplay"></iframe>`;
+      bgContainer.innerHTML = `<iframe id="heroIframe" src="https://www.youtube.com/embed/7jz3BSqSXsM?autoplay=1&mute=1&enablejsapi=1&controls=0&loop=1&playlist=7jz3BSqSXsM&modestbranding=1&playsinline=1" title="Shahid Background Trailer" allow="autoplay"></iframe>`;
       if (thumbnail) {
         thumbnail.classList.add('fade-out');
       }
       if (soundBtn) {
         soundBtn.style.display = 'flex';
       }
-    }, 5000);
+    }, 3000);
   }
 
   function toggleHeroMute() {
