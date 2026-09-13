@@ -137,14 +137,14 @@
     pointer-events: none;
   }
   
-  /* Hero Sound Control Button */
+  /* Hero Sound Control Button (Transparent & Top Right of Video) */
   .hero-sound-btn {
     position: absolute;
-    bottom: 36px;
-    right: 36px;
-    z-index: 15;
-    background: rgba(14, 14, 16, 0.7);
-    border: 1px solid var(--border);
+    top: 24px;
+    right: 24px;
+    z-index: 20;
+    background: rgba(14, 14, 16, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     backdrop-filter: blur(8px);
     color: #fff;
     padding: 10px 16px;
@@ -158,7 +158,7 @@
     transition: background 0.2s, border-color 0.2s;
   }
   .hero-sound-btn:hover {
-    background: rgba(229, 9, 20, 0.8);
+    background: rgba(229, 9, 20, 0.6);
     border-color: var(--accent);
   }
 
@@ -725,9 +725,9 @@
       <!-- Video background container (loads after 5s) -->
       <div class="hero-bg-container" id="heroBgContainer"></div>
       
-      <!-- Unmute / Mute Button for Hero Banner -->
+      <!-- Unmute / Mute Button for Hero Banner (Transparent & Top Right) -->
       <button class="hero-sound-btn" id="heroSoundBtn" onclick="toggleHeroMute()" style="display: none;">
-        <span id="heroSoundIcon">🔇</span> <span id="heroSoundText">Unmute</span>
+        <span id="heroSoundIcon">🔊</span> <span id="heroSoundText">Mute</span>
       </button>
 
       <div class="hero-overlay"></div>
@@ -1069,8 +1069,8 @@
     return `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
   }
 
-  // Hero Video Banner Management (Starts video after 5 seconds, muted with unmute button)
-  let heroMuted = true;
+  // Hero Video Banner Management (Starts video after 5 seconds with volume enabled)
+  let heroMuted = false;
   function initHeroBanner() {
     const bgContainer = document.getElementById('heroBgContainer');
     const thumbnail = document.getElementById('heroThumbnail');
@@ -1078,9 +1078,9 @@
     
     if (!bgContainer) return;
 
-    // Start video playback after 5 seconds
+    // Start video playback after 5 seconds with volume enabled (`mute=0`)
     setTimeout(() => {
-      bgContainer.innerHTML = `<iframe id="heroIframe" src="https://www.youtube.com/embed/7jz3BSqSXsM?autoplay=1&mute=1&controls=0&loop=1&playlist=7jz3BSqSXsM&modestbranding=1&playsinline=1" title="Shahid Background Trailer" allow="autoplay"></iframe>`;
+      bgContainer.innerHTML = `<iframe id="heroIframe" src="https://www.youtube.com/embed/7jz3BSqSXsM?autoplay=1&mute=0&controls=0&loop=1&playlist=7jz3BSqSXsM&modestbranding=1&playsinline=1" title="Shahid Background Trailer" allow="autoplay"></iframe>`;
       if (thumbnail) {
         thumbnail.classList.add('fade-out');
       }
@@ -1133,12 +1133,12 @@
     if (tabId === 'homeTab' && bgContainer && !bgContainer.innerHTML.trim()) {
       if (thumbnail) thumbnail.classList.remove('fade-out');
       if (soundBtn) soundBtn.style.display = 'none';
-      heroMuted = true;
-      document.getElementById('heroSoundIcon').textContent = '🔇';
-      document.getElementById('heroSoundText').textContent = 'Unmute';
+      heroMuted = false;
+      document.getElementById('heroSoundIcon').textContent = '🔊';
+      document.getElementById('heroSoundText').textContent = 'Mute';
 
       setTimeout(() => {
-        bgContainer.innerHTML = `<iframe id="heroIframe" src="https://www.youtube.com/embed/7jz3BSqSXsM?autoplay=1&mute=1&controls=0&loop=1&playlist=7jz3BSqSXsM&modestbranding=1&playsinline=1" title="Shahid Background Trailer" allow="autoplay"></iframe>`;
+        bgContainer.innerHTML = `<iframe id="heroIframe" src="https://www.youtube.com/embed/7jz3BSqSXsM?autoplay=1&mute=0&controls=0&loop=1&playlist=7jz3BSqSXsM&modestbranding=1&playsinline=1" title="Shahid Background Trailer" allow="autoplay"></iframe>`;
         if (thumbnail) thumbnail.classList.add('fade-out');
         if (soundBtn) soundBtn.style.display = 'flex';
       }, 5000);
