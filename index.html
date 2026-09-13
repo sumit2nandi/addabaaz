@@ -59,7 +59,7 @@
     border-bottom: 1px solid var(--border);
   }
 
-  .brand { display: flex; align-items: center; text-decoration: none; }
+  .brand { display: flex; align-items: center; text-decoration: none; cursor: pointer; }
   .logo { width: 140px; height: 36px; display: block; }
   .logo-text { fill: var(--text-primary); }
 
@@ -256,6 +256,77 @@
   }
   .arrow-left { left: -50px; }
   .arrow-right { right: -50px; }
+
+  /* CONTENT PLAYER PAGE STYLES */
+  .player-section { max-width: 1280px; margin: 0 auto; padding: 32px 36px 60px; }
+  .video-container {
+    position: relative;
+    width: 100%;
+    padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+    height: 0;
+    background: #000;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+    border: 1px solid var(--border);
+  }
+  .video-container iframe, .video-container .coming-soon-box {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+  }
+  .coming-soon-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle, #1a1a24 0%, #050505 100%);
+    color: var(--muted);
+    text-align: center;
+  }
+  .coming-soon-box h2 { color: var(--gold); font-size: 32px; margin: 0 0 8px; font-weight: 800; letter-spacing: 1px; }
+
+  .player-details { margin: 24px 0 40px; }
+  .player-details h2 { font-size: 32px; margin: 0 0 8px; font-weight: 800; }
+  .player-details .sub { color: var(--gold); font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+  .player-details p { color: var(--text-secondary); line-height: 1.6; max-width: 900px; font-size: 15px; margin: 0; }
+
+  /* Episode Cards Rail */
+  .episodes-section h3 { font-size: 22px; font-weight: 700; margin-bottom: 16px; }
+  .ep-card {
+    width: 260px;
+    flex: 0 0 260px;
+    background: var(--panel);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+  .ep-card:hover { transform: translateY(-4px); border-color: var(--accent); }
+  .ep-card.active-ep { border-color: var(--gold); box-shadow: 0 0 12px rgba(245, 197, 24, 0.3); }
+  .ep-thumb {
+    height: 145px;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ep-badge {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background: rgba(0,0,0,0.8);
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+  }
 
   /* ABOUT SECTION */
   .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 24px; }
@@ -491,7 +562,7 @@
     .hero-title { font-size: 32px; }
     .about-grid, .contact-grid { grid-template-columns: 1fr; gap: 24px; }
     .contact-form { padding: 24px; }
-    .section-container, .row { padding: 32px 16px; }
+    .section-container, .row, .player-section { padding: 32px 16px; }
 
     .rail { margin: 0; }
     .arrow-left { left: 6px; }
@@ -505,7 +576,7 @@
 
   <!-- Topbar Navigation -->
   <div class="topbar">
-    <a href="javascript:void(0)" onclick="openTab('homeTab', this)" class="brand">
+    <a onclick="openTab('homeTab', this)" class="brand">
       <svg class="logo" viewBox="0 0 400 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ADDABAAZ logo">
         <defs><linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#ff6b6b"/><stop offset="1" stop-color="#e50914"/></linearGradient></defs>
         <g transform="translate(6,8)"><path d="M30 80 L60 10 L90 80 Z" fill="url(#g1)"/><rect x="52" y="40" width="16" height="40" rx="3" fill="#0b0b0b"/></g>
@@ -538,8 +609,8 @@
           <h1 class="hero-title">শহীদ (Shahid)</h1>
           <div class="hero-meta">Web Series • S-01 • EP-10 • Bengali • ADDABAAZ original</div>
           <div class="hero-ctas">
-            <button class="btn btn-primary" onclick="openModal('shahid')">▶ Watch Trailer</button>
-            <button class="btn btn-ghost" onclick="playMedia('shahid')">▶ Play</button>
+            <button class="btn btn-primary" onclick="openModal('shahid')">Details</button>
+            <button class="btn btn-ghost" onclick="playMedia('shahid', 'ep1')">▶ Play EP-01</button>
           </div>
         </div>
       </div>
@@ -603,7 +674,37 @@
     </section>
   </div>
 
-  <!-- TAB 2: ABOUT SECTION -->
+  <!-- TAB 2: VIDEO PLAYER VIEWING PAGE -->
+  <div id="playerTab" class="tab-content">
+    <div class="player-section">
+      <!-- Player Display Area -->
+      <div class="video-container" id="videoPlayerBox">
+        <!-- Content injected dynamically via JS -->
+      </div>
+
+      <div class="player-details">
+        <h2 id="playerTitle">Episode Title</h2>
+        <div class="sub" id="playerSub">Show Name & Subtitle</div>
+        <p id="playerDesc">Episode description text goes here.</p>
+      </div>
+
+      <!-- Bottom Episodes Rail -->
+      <div class="episodes-section">
+        <h3 id="epListTitle">Episodes</h3>
+        <div class="rail" style="margin:0;">
+          <div class="arrow arrow-left disabled" id="epArrowLeft" onclick="scrollRail('epViewport', -1)">◀</div>
+          <div class="rail-viewport" id="epViewport">
+            <div class="rail-track" id="episodesTrack">
+              <!-- Episodes rendered dynamically -->
+            </div>
+          </div>
+          <div class="arrow arrow-right" id="epArrowRight" onclick="scrollRail('epViewport', 1)">▶</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: ABOUT SECTION -->
   <div id="aboutTab" class="tab-content">
     <section class="section-container">
       <div class="section-header">
@@ -638,7 +739,7 @@
     </section>
   </div>
 
-  <!-- TAB 3: SERVICES SECTION -->
+  <!-- TAB 4: SERVICES SECTION -->
   <div id="servicesTab" class="tab-content">
     <section class="section-container">
       <div class="section-header">
@@ -692,7 +793,7 @@
     </section>
   </div>
 
-  <!-- TAB 4: CONTACT SECTION -->
+  <!-- TAB 5: CONTACT SECTION -->
   <div id="contactTab" class="tab-content">
     <section class="section-container">
       <div class="section-header">
@@ -760,6 +861,60 @@
   </footer>
 
 <script>
+  // Extended Database of Projects and Episodes
+  const projectDetails = {
+    shahid: {
+      key: "shahid",
+      title: "শহীদ (Shahid)",
+      subtitle: "Web Series • S-01 • EP-10 • Bengali",
+      description: "A gripping Bengali dramatic web series exploring sacrifice, resistance, and deeply human stories against powerful historical backdrops.",
+      image: "images/Shahid.webp",
+      episodes: [
+        {
+          id: "ep1",
+          title: "হাসতে হাসতে ফাঁসির মঞ্চে | EP-01",
+          sub: "Khudiram Bose | Gourav | Sudip | Deep | Sourav | Mainak",
+          youtubeId: "W9-mH543r0s", // Extracted embed ID for Shahid EP-01 YouTube video
+          image: "images/Shahid.webp"
+        },
+        { id: "ep2", title: "EP-02: Agniyug", sub: "Coming Soon", youtubeId: null, image: "images/Shahid.webp" },
+        { id: "ep3", title: "EP-03: Resistance", sub: "Coming Soon", youtubeId: null, image: "images/Shahid.webp" },
+        { id: "ep4", title: "EP-04: The Freedom Fighter", sub: "Coming Soon", youtubeId: null, image: "images/Shahid.webp" }
+      ]
+    },
+    laughBite: {
+      key: "laughBite",
+      title: "LAUGH BITE",
+      subtitle: "Bengali Stand-Up Comedy • S-01 • EP-24",
+      description: "Turning Everyday Life into Laughter. Stand-up comedy acts capturing Kolkata life, cultural quirks, and modern urban humor.",
+      image: "images/laughBite.webp",
+      episodes: [
+        { id: "ep1", title: "EP-01: Kolkata Traffic & Tea", sub: "Coming Soon", youtubeId: null, image: "images/laughBite.webp" },
+        { id: "ep2", title: "EP-02: Corporate Adda", sub: "Coming Soon", youtubeId: null, image: "images/laughBite.webp" }
+      ]
+    },
+    faltu: {
+      key: "faltu",
+      title: "FALTU KOTHA",
+      subtitle: "Satirical Podcast • S-01 • EP-20",
+      description: "Unfiltered, unscripted, and unapologetically fun. FALTU KOTHA brings spontaneous adda and playful banter on pop culture.",
+      image: "images/FaltuKatha.webp",
+      episodes: [
+        { id: "ep1", title: "EP-01: Contemporary Adda", sub: "Coming Soon", youtubeId: null, image: "images/FaltuKatha.webp" }
+      ]
+    },
+    kichu: {
+      key: "kichu",
+      title: "কিছু কথা কিছু ইতিহাস",
+      subtitle: "Documentary Anthology • S-01 • EP-10",
+      description: "A documentary mini-series weaving historical archives with personal narratives to highlight untold cultural histories.",
+      image: "images/কিছু কথা কিছু ইতিহাস.webp",
+      episodes: [
+        { id: "ep1", title: "EP-01: Heritage of Bengal", sub: "Coming Soon", youtubeId: null, image: "images/কিছু কথা কিছু ইতিহাস.webp" }
+      ]
+    }
+  };
+
   // Dynamic Tab Switcher
   function openTab(tabId, el) {
     const contents = document.querySelectorAll('.tab-content');
@@ -798,21 +953,79 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  // Horizontal Rail Navigation with Boundary Clamping
+  // Play Page Switcher & Renderer
+  function playMedia(showKey, episodeId = 'ep1') {
+    closeModal();
+    const show = projectDetails[showKey];
+    if (!show) return;
+
+    const ep = show.episodes.find(e => e.id === episodeId) || show.episodes[0];
+    const playerBox = document.getElementById('videoPlayerBox');
+    
+    // Video Embed vs Coming Soon logic
+    if (ep && ep.youtubeId) {
+      playerBox.innerHTML = `
+        <iframe 
+          src="https://www.youtube.com/embed/${ep.youtubeId}?autoplay=1" 
+          title="${ep.title}" 
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+          allowfullscreen>
+        </iframe>`;
+    } else {
+      playerBox.innerHTML = `
+        <div class="coming-soon-box">
+          <h2>COMING SOON</h2>
+          <p>This episode video will be available shortly.</p>
+        </div>`;
+    }
+
+    // Set Text Details
+    document.getElementById('playerTitle').innerText = ep ? ep.title : show.title;
+    document.getElementById('playerSub').innerText = `${show.title} • ${ep ? ep.sub : show.subtitle}`;
+    document.getElementById('playerDesc').innerText = show.description;
+    document.getElementById('epListTitle').innerText = `${show.title} — Episodes`;
+
+    // Render Episode Carousel List at the Bottom
+    const epTrack = document.getElementById('episodesTrack');
+    epTrack.innerHTML = show.episodes.map(e => `
+      <div class="ep-card ${e.id === ep.id ? 'active-ep' : ''}" onclick="playMedia('${showKey}', '${e.id}')">
+        <div class="ep-thumb" style="background-image:url('${e.image}')">
+          <div class="play-btn" style="width:36px;height:36px;font-size:14px;">▶</div>
+          <div class="ep-badge">${e.youtubeId ? 'AVAILABLE' : 'COMING SOON'}</div>
+        </div>
+        <div class="meta">
+          <strong>${e.title}</strong>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">${e.sub}</div>
+        </div>
+      </div>
+    `).join('');
+
+    // Open video viewer tab
+    openTab('playerTab');
+    
+    setTimeout(() => {
+      const epViewport = document.getElementById('epViewport');
+      if(epViewport) {
+        epViewport.addEventListener('scroll', () => updateArrowState(epViewport, 'epArrowLeft', 'epArrowRight'));
+        updateArrowState(epViewport, 'epArrowLeft', 'epArrowRight');
+      }
+    }, 400);
+  }
+
+  // Horizontal Rail Navigation & Boundary Checking
   function scrollRail(viewportId, dir) {
     const viewport = document.getElementById(viewportId);
     if(!viewport) return;
-    const card = viewport.querySelector('.card');
+    const card = viewport.querySelector('.card, .ep-card');
     const gap = 18;
     const step = (card ? card.offsetWidth : 210) + gap;
     
     viewport.scrollBy({ left: dir * step * 2, behavior: 'smooth' });
   }
 
-  function updateScrollArrows() {
-    const viewport = document.getElementById('railViewport');
-    const arrowLeft = document.getElementById('arrowLeft');
-    const arrowRight = document.getElementById('arrowRight');
+  function updateArrowState(viewport, leftId, rightId) {
+    const arrowLeft = document.getElementById(leftId);
+    const arrowRight = document.getElementById(rightId);
     if (!viewport || !arrowLeft || !arrowRight) return;
 
     const maxScrollLeft = viewport.scrollWidth - viewport.clientWidth;
@@ -831,6 +1044,11 @@
     }
   }
 
+  function updateScrollArrows() {
+    const viewport = document.getElementById('railViewport');
+    updateArrowState(viewport, 'arrowLeft', 'arrowRight');
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     const viewport = document.getElementById('railViewport');
     if (viewport) {
@@ -840,50 +1058,11 @@
     }
   });
 
-  // Contact Form Submission
+  // Contact Form Handling
   function handleFormSubmit(event) {
     event.preventDefault();
     alert('Thank you for reaching out to ADDABAAZ! We have received your message and will get back to you shortly.');
     document.getElementById('projectForm').reset();
-  }
-
-  // Project Details Data
-  const projectDetails = {
-    laughBite: {
-      key: "laughBite",
-      title: "LAUGH BITE",
-      subtitle: "Bengali Stand-Up Comedy | S-01 | EP-24 | ADDABAAZ",
-      description: `Turning Everyday Life into Laughter\n\nIn today's fast-paced world, laughter has become more vital than ever. Everyday struggles, work pressure, relationships, social media, and city life provide rich material for contemporary stand-up comedy.\n\nBengali stand-up comedy has evolved beyond classical stage jokes. Modern Kolkata life, family dynamics, cultural quirks, urban habits, and social commentary fuel authentic storytelling. Through digital platforms, ADDABAAZ brings sharp comic observations to a global Bengali audience.`,
-      image: "images/laughBite.webp"
-    },
-    shahid: {
-      key: "shahid",
-      title: "শহীদ (Shahid)",
-      subtitle: "Web Series | S-01 | EP-10 | Bengali | ADDABAAZ Original",
-      description: "A gripping Bengali dramatic web series exploring sacrifice, resistance, and deeply human stories against powerful historical backdrops.",
-      image: "images/Shahid.webp"
-    },
-    faltu: {
-      key: "faltu",
-      title: "FALTU KOTHA",
-      subtitle: "Satirical Podcast | S-01 | EP-20 | ADDABAAZ",
-      description: "Unfiltered, unscripted, and unapologetically fun. FALTU KOTHA brings spontaneous adda and playful banter on pop culture and societal quirks.",
-      image: "images/FaltuKatha.webp"
-    },
-    kichu: {
-      key: "kichu",
-      title: "কিছু কথা কিছু ইতিহাস",
-      subtitle: "Documentary Anthology | S-01 | EP-10 | Bengali",
-      description: "A documentary mini-series weaving historical archives with personal narratives to highlight untold cultural histories.",
-      image: "images/কিছু কথা কিছু ইতিহাস.webp"
-    }
-  };
-
-  // Play Action Trigger
-  function playMedia(key) {
-    const data = projectDetails[key];
-    const title = data ? data.title : "Title";
-    alert(`Now playing "${title}"`);
   }
 
   // Open Project Details Modal
@@ -900,7 +1079,7 @@
           <h4 style="margin:0 0 6px;font-size:24px;">${data.title}</h4>
           <div style="color:var(--gold);margin-bottom:14px;font-size:14px;font-weight:600;">${data.subtitle}</div>
           <div style="margin-bottom:20px;">
-            <button class="btn btn-primary" onclick="playMedia('${data.key}')">▶ Play Now</button>
+            <button class="btn btn-primary" onclick="playMedia('${data.key}', 'ep1')">▶ Play Now</button>
           </div>
           <div class="content">${data.description.replace(/\n/g,'<br><br>')}</div>
         </div>
