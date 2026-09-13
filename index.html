@@ -4,6 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>ADDABAAZ — Film & Ad Production House</title>
+
+<!-- Favicon -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M10 80 L50 10 L90 80 Z' fill='%23e50914'/><rect x='42' y='40' width='16' height='40' fill='%23050505'/></svg>">
+
 <!-- Modern Google Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,22 +18,28 @@
     --bg: #050505;
     --panel: #0e0e10;
     --panel-light: #161619;
+    --text-primary: #ffffff;
+    --text-secondary: #d1d1d6;
     --accent: #e50914;
     --accent-hover: #f40612;
     --muted: #a0a0ab;
     --gold: #f5c518;
     --border: rgba(255, 255, 255, 0.08);
+    --topbar-bg: rgba(5, 5, 5, 0.92);
+    --hero-overlay: linear-gradient(180deg, rgba(5,5,5,0.3) 0%, rgba(5,5,5,0.7) 60%, rgba(5,5,5,1) 100%);
+    --modal-backdrop: rgba(0, 0, 0, 0.85);
     --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     --font-bengali: 'Tiro Bangla', serif;
   }
 
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
+
   body {
     margin: 0;
     font-family: var(--font-sans);
     background: var(--bg);
-    color: #fff;
+    color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
   }
 
@@ -37,21 +47,22 @@
   .topbar {
     display: flex;
     align-items: center;
-    justify-space: space-between;
+    gap: 36px;
     padding: 16px 36px;
     position: sticky;
     top: 0;
     z-index: 60;
-    background: rgba(5, 5, 5, 0.92);
+    background: var(--topbar-bg);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
   }
-  .brand { display: flex; align-items: center; gap: 14px; text-decoration: none; }
+  .brand { display: flex; align-items: center; text-decoration: none; }
   .logo { width: 160px; height: 40px; display: block; }
+  .logo-text { fill: var(--text-primary); }
 
   .nav { display: flex; gap: 28px; align-items: center; }
   .nav a {
-    color: #d1d1d6;
+    color: var(--text-secondary);
     text-decoration: none;
     font-weight: 600;
     font-size: 14px;
@@ -72,7 +83,13 @@
     border-radius: 2px;
   }
 
-  .auth { display: flex; gap: 12px; align-items: center; }
+  /* Right-aligned Auth Buttons */
+  .auth {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-left: auto;
+  }
 
   /* HERO banner */
   .hero-wrap {
@@ -90,7 +107,7 @@
   }
   .hero-overlay {
     position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(5,5,5,0.3) 0%, rgba(5,5,5,0.7) 60%, rgba(5,5,5,1) 100%);
+    background: var(--hero-overlay);
     pointer-events: none;
   }
   .hero {
@@ -106,7 +123,7 @@
   }
   .hero-left { flex: 1; max-width: 850px; }
   .hero-kicker { color: var(--gold); font-weight: 700; font-size: 13px; margin-bottom: 12px; letter-spacing: 1.5px; text-transform: uppercase; }
-  .hero-title { font-size: 48px; line-height: 1.05; margin: 0 0 14px; font-weight: 800; letter-spacing: -0.5px; }
+  .hero-title { font-size: 48px; line-height: 1.05; margin: 0 0 14px; font-weight: 800; letter-spacing: -0.5px; color: var(--text-primary); }
   .hero-meta { color: var(--muted); margin-bottom: 22px; font-size: 15px; }
   .hero-ctas { display: flex; gap: 14px; }
 
@@ -126,29 +143,50 @@
   }
   .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 8px 24px rgba(229, 9, 20, 0.25); }
   .btn-primary:hover { background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 12px 28px rgba(229, 9, 20, 0.35); }
-  .btn-ghost { background: rgba(255, 255, 255, 0.08); color: #fff; border: 1px solid rgba(255, 255, 255, 0.12); }
+  .btn-ghost { background: var(--panel-light); color: var(--text-primary); border: 1px solid var(--border); }
   .btn-ghost:hover { background: rgba(255, 255, 255, 0.15); transform: translateY(-2px); }
 
-  /* Tab Navigation System */
-  .tab-content { display: none; }
+  /* Animated Tab Navigation System */
+  .tab-content {
+    display: none;
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    will-change: opacity, transform;
+  }
   .tab-content.active { display: block; }
+  .tab-content.show { opacity: 1; transform: translateY(0); }
 
   /* Section Styling */
   .section-container { padding: 60px 36px; max-width: 1280px; margin: 0 auto; }
   .section-header { margin-bottom: 40px; }
   .section-tag { color: var(--gold); font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
-  .section-title { font-size: 36px; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
+  .section-title { font-size: 36px; font-weight: 800; margin: 0; letter-spacing: -0.5px; color: var(--text-primary); }
   .section-subtitle { color: var(--muted); font-size: 16px; margin-top: 8px; font-weight: 400; }
 
-  /* Projects Rows */
+  /* Projects Rows & Rail Positioning */
   .row { padding: 40px 36px; max-width: 1280px; margin: 0 auto; }
-  .row h3 { margin: 0 0 20px; font-size: 22px; color: #fff; font-weight: 700; }
-  .rail { position: relative; display: flex; overflow: hidden; align-items: center; }
-  .rail-viewport { overflow-x: auto; scroll-behavior: smooth; width: 100%; scrollbar-width: none; }
+  .row h3 { margin: 0 0 20px; font-size: 22px; color: var(--text-primary); font-weight: 700; }
+  
+  /* Rail Container with space for non-overlapping controls */
+  .rail { 
+    position: relative; 
+    display: flex; 
+    align-items: center; 
+    margin: 0 55px; /* Creates gutter space for navigation buttons */
+  }
+  
+  .rail-viewport { 
+    overflow-x: auto; 
+    scroll-behavior: smooth; 
+    width: 100%; 
+    scrollbar-width: none; 
+    padding: 15px 0; /* Vertical breathing room for card hover animation */
+  }
   .rail-viewport::-webkit-scrollbar { display: none; }
-  .rail-track { display: flex; gap: 18px; padding-bottom: 10px; width: max-content; }
+  .rail-track { display: flex; gap: 18px; width: max-content; }
 
-  /* Card base */
+  /* Cards */
   .card {
     width: 210px; flex: 0 0 210px; background: var(--panel); border-radius: 12px; overflow: hidden; position: relative;
     transform-origin: center bottom;
@@ -159,10 +197,10 @@
   }
 
   .card:hover, .card:focus {
-    transform: translateY(-12px) scale(1.04);
-    box-shadow: 0 30px 60px rgba(0,0,0,0.7);
-    border-color: rgba(255, 255, 255, 0.2);
-    z-index: 80;
+    transform: translateY(-10px) scale(1.03);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    border-color: rgba(229, 9, 20, 0.4);
+    z-index: 10;
     outline: none;
   }
 
@@ -183,12 +221,34 @@
   }
 
   .meta { padding: 14px; color: var(--muted); font-size: 13px; }
-  .meta strong { color: #fff; font-size: 15px; }
+  .meta strong { color: var(--text-primary); font-size: 15px; }
   .tag { position: absolute; left: 10px; top: 10px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); padding: 5px 10px; border-radius: 6px; font-size: 11px; color: #fff; font-weight: 700; letter-spacing: 0.5px; }
 
-  .control { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; gap: 8px; z-index: 10; }
-  .arrow { width: 40px; height: 40px; border-radius: 50%; background: rgba(15,15,16,0.85); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; color: #fff; cursor: pointer; border: 1px solid var(--border); transition: background 0.2s; }
-  .arrow:hover { background: var(--accent); }
+  /* Non-overlapping Navigation Arrows Outside Content Area */
+  .arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--panel-light);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
+    cursor: pointer;
+    border: 1px solid var(--border);
+    transition: background 0.2s, transform 0.2s, border-color 0.2s;
+    z-index: 30;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+  .arrow:hover { background: var(--accent); color: #fff; border-color: var(--accent); transform: translateY(-50%) scale(1.08); }
+  
+  /* Positions controls clear off the outer margin boundaries */
+  .arrow-left { left: -52px; }
+  .arrow-right { right: -52px; }
 
   /* ABOUT SECTION */
   .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 24px; }
@@ -197,7 +257,7 @@
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 32px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
   }
   .mission-card h4 {
     color: var(--gold);
@@ -215,7 +275,7 @@
     position: relative;
     padding-left: 28px;
     margin-bottom: 16px;
-    color: #e0e0e6;
+    color: var(--text-secondary);
     line-height: 1.6;
     font-size: 15px;
   }
@@ -245,7 +305,7 @@
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 30px;
-    transition: transform 0.25s ease, border-color 0.25s ease, background-color 0.25s ease;
+    transition: transform 0.25s ease, border-color 0.25s ease;
   }
   .service-card:hover {
     transform: translateY(-6px);
@@ -253,17 +313,17 @@
     background: var(--panel-light);
   }
   .service-num { color: var(--gold); font-size: 14px; font-weight: 800; letter-spacing: 1px; margin-bottom: 12px; }
-  .service-card h4 { margin: 0 0 12px; font-size: 20px; color: #fff; font-weight: 700; }
+  .service-card h4 { margin: 0 0 12px; font-size: 20px; color: var(--text-primary); font-weight: 700; }
   .service-card p { color: var(--muted); margin: 0; font-size: 14px; line-height: 1.65; }
 
   .banner-cta {
-    background: linear-gradient(135deg, rgba(229,9,20,0.18) 0%, rgba(14,14,16,1) 100%);
+    background: linear-gradient(135deg, rgba(229,9,20,0.18) 0%, var(--panel) 100%);
     border: 1px solid rgba(229, 9, 20, 0.4);
     border-radius: 16px;
     padding: 40px;
     text-align: center;
   }
-  .banner-cta h3 { margin: 0 0 8px; font-size: 24px; letter-spacing: 1.5px; font-weight: 800; }
+  .banner-cta h3 { margin: 0 0 8px; font-size: 24px; letter-spacing: 1.5px; font-weight: 800; color: var(--text-primary); }
   .banner-cta p { color: var(--gold); font-weight: 700; font-size: 20px; margin: 0; letter-spacing: 0.5px; }
 
   /* CONTACT SECTION */
@@ -277,7 +337,7 @@
     border: 1px solid var(--border);
     padding: 14px 16px;
     border-radius: 8px;
-    color: #fff;
+    color: var(--text-primary);
     font-size: 15px;
     font-family: var(--font-sans);
     outline: none;
@@ -288,29 +348,64 @@
 
   .contact-info-block { margin-bottom: 36px; }
   .contact-info-block h4 { color: var(--gold); margin: 0 0 10px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; }
-  .contact-info-block p, .contact-info-block a { color: #fff; text-decoration: none; font-size: 16px; line-height: 1.6; margin: 0; display: block; }
+  .contact-info-block p, .contact-info-block a { color: var(--text-primary); text-decoration: none; font-size: 16px; line-height: 1.6; margin: 0; display: block; }
   .contact-info-block a:hover { color: var(--accent); }
 
-  /* Modal */
-  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center; z-index: 200; }
-  .modal { background: #0e0e10; padding: 28px; border-radius: 16px; max-width: 850px; color: #ddd; border: 1px solid var(--border); box-shadow: 0 30px 90px rgba(0,0,0,0.8); }
-  .modal h4 { margin: 0 0 8px; font-size: 24px; color: #fff; }
-  .modal .content { color: #bbbbc5; line-height: 1.65; font-size: 15px; }
-  .close-btn { background: transparent; border: 1px solid var(--border); color: #fff; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-weight: 600; }
-  .close-btn:hover { background: rgba(255,255,255,0.1); }
+  /* Animated Modal Component */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: var(--modal-backdrop);
+    backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    will-change: opacity, visibility;
+  }
+  .modal-backdrop.show {
+    opacity: 1;
+    visibility: visible;
+  }
+  .modal {
+    background: var(--panel);
+    padding: 28px;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 750px;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    box-shadow: 0 30px 90px rgba(0,0,0,0.5);
+    transform: scale(0.9) translateY(20px);
+    opacity: 0;
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+    will-change: transform, opacity;
+  }
+  .modal-backdrop.show .modal {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+  .modal h4 { margin: 0 0 8px; font-size: 24px; color: var(--text-primary); }
+  .modal .content { color: var(--muted); line-height: 1.65; font-size: 15px; }
+  .close-btn { background: transparent; border: 1px solid var(--border); color: var(--text-primary); padding: 10px 18px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+  .close-btn:hover { background: var(--panel-light); }
 
   /* Footer */
   footer { padding: 36px; color: var(--muted); border-top: 1px solid var(--border); text-align: center; font-size: 14px; }
 
-  /* Responsive */
+  /* Responsive Adjustments */
   @media (max-width: 980px) {
     .hero { padding: 36px 24px; flex-direction: column; align-items: flex-start; }
     .hero-title { font-size: 36px; }
     .card { width: 170px; flex: 0 0 170px; }
     .poster { height: 240px; }
     .about-grid, .contact-grid { grid-template-columns: 1fr; }
-    .topbar { padding: 16px 20px; }
+    .topbar { padding: 16px 20px; gap: 16px; }
     .section-container, .row { padding: 40px 20px; }
+    
+    .rail { margin: 0 20px; }
+    .arrow-left { left: -15px; }
+    .arrow-right { right: -15px; }
   }
   @media (max-width: 600px) {
     .nav { display: none; }
@@ -327,11 +422,10 @@
       <svg class="logo" viewBox="0 0 400 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ADDABAAZ logo">
         <defs><linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#ff6b6b"/><stop offset="1" stop-color="#e50914"/></linearGradient></defs>
         <g transform="translate(6,8)"><path d="M30 80 L60 10 L90 80 Z" fill="url(#g1)"/><rect x="52" y="40" width="16" height="40" rx="3" fill="#0b0b0b"/></g>
-        <text x="120" y="62" font-family="'Plus Jakarta Sans', Arial" font-weight="800" font-size="36" fill="#fff">ADDABAAZ</text>
+        <text class="logo-text" x="120" y="62" font-family="'Plus Jakarta Sans', Arial" font-weight="800" font-size="36">ADDABAAZ</text>
       </svg>
     </a>
 
-    <!-- Navigation triggering dynamic tabs -->
     <nav class="nav" aria-label="Main navigation">
       <a onclick="openTab('homeTab', this)" class="nav-link active">Home</a>
       <a onclick="openTab('aboutTab', this)" class="nav-link">About</a>
@@ -340,13 +434,13 @@
     </nav>
 
     <div class="auth">
-      <button class="btn btn-ghost" style="padding: 8px 14px;">Sign In</button>
-      <button class="btn btn-primary" style="padding: 8px 16px;">Subscribe</button>
+      <button class="btn btn-ghost" style="padding: 8px 14px;" onclick="openAuthModal('signIn')">Sign In</button>
+      <button class="btn btn-primary" style="padding: 8px 16px;" onclick="openAuthModal('subscribe')">Subscribe</button>
     </div>
   </div>
 
   <!-- TAB 1: HOME PAGE -->
-  <div id="homeTab" class="tab-content active">
+  <div id="homeTab" class="tab-content active show">
     <header class="hero-wrap" role="banner">
       <div class="hero-bg" style="background-image:url('images/Shahid.webp');"></div>
       <div class="hero-overlay"></div>
@@ -364,9 +458,10 @@
       </div>
     </header>
 
-    <section class="row" aria-label="Featured Projects">
+    <section class="row" aria-label="Featured Productions">
       <h3>Featured Productions</h3>
       <div class="rail">
+        <div class="arrow arrow-left" onclick="scrollRail('railViewport', -1)" aria-label="Scroll left">◀</div>
         <div class="rail-viewport" id="railViewport">
           <div class="rail-track" id="projectsTrack">
 
@@ -416,11 +511,7 @@
 
           </div>
         </div>
-
-        <div class="control">
-          <div class="arrow" onclick="scrollRail('railViewport', -1)" aria-label="Scroll left">◀</div>
-          <div class="arrow" onclick="scrollRail('railViewport', 1)" aria-label="Scroll right">▶</div>
-        </div>
+        <div class="arrow arrow-right" onclick="scrollRail('railViewport', 1)" aria-label="Scroll right">▶</div>
       </div>
     </section>
   </div>
@@ -567,7 +658,7 @@
     </section>
   </div>
 
-  <!-- Modal Component for Details -->
+  <!-- Animated Dynamic Modal Component -->
   <div id="modalBackdrop" class="modal-backdrop" onclick="closeModal()">
     <div class="modal" onclick="event.stopPropagation()">
       <div id="modalContent"></div>
@@ -582,31 +673,45 @@
   </footer>
 
 <script>
-  // Dynamic Tab Switcher with Active State Update
+  // Dynamic Tab Switcher
   function openTab(tabId, el) {
     const contents = document.querySelectorAll('.tab-content');
-    contents.forEach(content => content.classList.remove('active'));
+    const activeTab = document.querySelector('.tab-content.active');
+    const targetTab = document.getElementById(tabId);
 
-    const selectedTab = document.getElementById(tabId);
-    if(selectedTab) {
-      selectedTab.classList.add('active');
-    }
+    if (activeTab === targetTab) return;
 
-    // Active state highlighting for navigation links
     const navLinks = document.querySelectorAll('.nav a');
     navLinks.forEach(link => link.classList.remove('active'));
     if (el && el.classList.contains('nav-link')) {
       el.classList.add('active');
     } else {
-      // Default to matching nav target if clicked via brand or button
       const targetLink = document.querySelector(`.nav a[onclick*="${tabId}"]`);
       if (targetLink) targetLink.classList.add('active');
+    }
+
+    if (activeTab) {
+      activeTab.classList.remove('show');
+      setTimeout(() => {
+        contents.forEach(content => content.classList.remove('active'));
+        if (targetTab) {
+          targetTab.classList.add('active');
+          requestAnimationFrame(() => {
+            targetTab.classList.add('show');
+          });
+        }
+      }, 350);
+    } else if (targetTab) {
+      targetTab.classList.add('active');
+      requestAnimationFrame(() => {
+        targetTab.classList.add('show');
+      });
     }
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  // Horizontal Rail Scrolling Helper
+  // Horizontal Rail Navigation
   function scrollRail(viewportId, dir) {
     const viewport = document.getElementById(viewportId);
     if(!viewport) return;
@@ -616,14 +721,14 @@
     viewport.scrollBy({ left: dir * step * 2, behavior: 'smooth' });
   }
 
-  // Handle Form Submission
+  // Contact Form Submission
   function handleFormSubmit(event) {
     event.preventDefault();
     alert('Thank you for reaching out to ADDABAAZ! We have received your message and will get back to you shortly.');
     document.getElementById('projectForm').reset();
   }
 
-  // Project Details Data
+  // Project Details
   const projectDetails = {
     laughBite: {
       title: "LAUGH BITE",
@@ -651,6 +756,7 @@
     }
   };
 
+  // Open Project Details Modal
   function openModal(key) {
     const data = projectDetails[key];
     if(!data) return;
@@ -661,17 +767,59 @@
           <img src="${data.image}" alt="${data.title}" style="width:200px;height:280px;object-fit:cover;display:block" onerror="this.style.display='none'">
         </div>
         <div style="flex:1;min-width:260px">
-          <h4 style="margin:0 0 6px;color:#fff;font-size:24px;">${data.title}</h4>
+          <h4 style="margin:0 0 6px;font-size:24px;">${data.title}</h4>
           <div style="color:var(--gold);margin-bottom:14px;font-size:14px;font-weight:600;">${data.subtitle}</div>
           <div class="content">${data.description.replace(/\n/g,'<br><br>')}</div>
         </div>
       </div>
     `;
-    document.getElementById('modalBackdrop').style.display = 'flex';
+    const backdrop = document.getElementById('modalBackdrop');
+    backdrop.classList.add('show');
+  }
+
+  // Open Sign In & Subscribe Auth Modals
+  function openAuthModal(type) {
+    const container = document.getElementById('modalContent');
+    if (type === 'signIn') {
+      container.innerHTML = `
+        <h4 style="margin:0 0 10px; font-size:24px;">Sign In to ADDABAAZ</h4>
+        <p style="color:var(--muted); margin-bottom:20px;">Enter your details to access exclusive streaming content and production updates.</p>
+        <form onsubmit="event.preventDefault(); alert('Signed in successfully!'); closeModal();">
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" placeholder="name@example.com" required />
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" placeholder="••••••••" required />
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%; padding:12px; margin-top:8px;">Sign In</button>
+        </form>
+      `;
+    } else if (type === 'subscribe') {
+      container.innerHTML = `
+        <h4 style="margin:0 0 10px; font-size:24px;">Subscribe to ADDABAAZ Premium</h4>
+        <p style="color:var(--muted); margin-bottom:20px;">Get unlimited access to original web series, documentaries, and ad film releases.</p>
+        <form onsubmit="event.preventDefault(); alert('Thank you for subscribing!'); closeModal();">
+          <div class="form-group">
+            <label>Full Name</label>
+            <input type="text" placeholder="Your name" required />
+          </div>
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" placeholder="name@example.com" required />
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%; padding:12px; margin-top:8px;">Join Premium Subscription</button>
+        </form>
+      `;
+    }
+    const backdrop = document.getElementById('modalBackdrop');
+    backdrop.classList.add('show');
   }
 
   function closeModal() {
-    document.getElementById('modalBackdrop').style.display = 'none';
+    const backdrop = document.getElementById('modalBackdrop');
+    backdrop.classList.remove('show');
   }
 
   document.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeModal(); });
