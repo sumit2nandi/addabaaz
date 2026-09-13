@@ -137,13 +137,13 @@
     pointer-events: none;
   }
   
-  /* Hero Sound Control Button (Transparent & Top Right of Video) */
+  /* Hero Sound Control Button (Moved to Bottom Right of Video) */
   .hero-sound-btn {
     position: absolute;
-    top: 24px;
-    right: 24px;
+    bottom: 24px;
+    right: 36px;
     z-index: 20;
-    background: rgba(14, 14, 16, 0.4);
+    background: rgba(14, 14, 16, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.15);
     backdrop-filter: blur(8px);
     color: #fff;
@@ -158,7 +158,7 @@
     transition: background 0.2s, border-color 0.2s;
   }
   .hero-sound-btn:hover {
-    background: rgba(229, 9, 20, 0.6);
+    background: rgba(229, 9, 20, 0.8);
     border-color: var(--accent);
   }
 
@@ -382,26 +382,39 @@
     font-weight: 700;
   }
 
-  /* MODAL EPISODE LIST STYLES */
+  /* MODAL EPISODE LIST STYLES (Horizontal Scroll) */
   .modal-ep-list {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-top: 20px;
-    max-height: 360px;
-    overflow-y: auto;
-    padding-right: 6px;
+    gap: 14px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
   }
+  .modal-ep-list::-webkit-scrollbar {
+    height: 6px;
+  }
+  .modal-ep-list::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .modal-ep-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+  }
+  .modal-ep-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
   .modal-ep-item {
-    display: flex;
-    align-items: center;
-    gap: 16px;
+    flex: 0 0 200px;
     background: var(--panel-light);
     border: 1px solid var(--border);
-    padding: 10px 14px;
     border-radius: 10px;
+    overflow: hidden;
     cursor: pointer;
     transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
   }
   .modal-ep-item:hover {
     border-color: var(--accent);
@@ -409,19 +422,20 @@
     transform: translateY(-2px);
   }
   .modal-ep-thumb {
-    width: 100px;
-    height: 56px;
+    width: 100%;
+    height: 110px;
     background-size: cover;
     background-position: center;
-    border-radius: 6px;
-    flex-shrink: 0;
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
   }
-  .modal-ep-info h5 { margin: 0 0 4px; font-size: 15px; color: var(--text-primary); font-weight: 700; }
-  .modal-ep-info p { margin: 0; font-size: 13px; color: var(--muted); }
+  .modal-ep-info {
+    padding: 10px;
+  }
+  .modal-ep-info h5 { margin: 0 0 4px; font-size: 14px; color: var(--text-primary); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .modal-ep-info p { margin: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* ABOUT SECTION */
   .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 24px; }
@@ -564,25 +578,20 @@
   }
 
   /* Clean Transparent Scrollbars in Details Popup / Modals */
-  .modal::-webkit-scrollbar,
-  .modal-ep-list::-webkit-scrollbar {
+  .modal::-webkit-scrollbar {
     width: 6px;
   }
-  .modal::-webkit-scrollbar-track,
-  .modal-ep-list::-webkit-scrollbar-track {
+  .modal::-webkit-scrollbar-track {
     background: transparent;
   }
-  .modal::-webkit-scrollbar-thumb,
-  .modal-ep-list::-webkit-scrollbar-thumb {
+  .modal::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.15);
     border-radius: 10px;
   }
-  .modal::-webkit-scrollbar-thumb:hover,
-  .modal-ep-list::-webkit-scrollbar-thumb:hover {
+  .modal::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.3);
   }
-  /* Firefox Support */
-  .modal, .modal-ep-list {
+  .modal {
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
   }
@@ -725,9 +734,10 @@
       <!-- Video background container (loads after 5s) -->
       <div class="hero-bg-container" id="heroBgContainer"></div>
       
-      <!-- Unmute / Mute Button for Hero Banner (Transparent, Icon Only & Top Right) -->
+      <!-- Unmute / Mute Button for Hero Banner (Bottom Right) -->
       <button class="hero-sound-btn" id="heroSoundBtn" onclick="toggleHeroMute()" style="display: none;" aria-label="Toggle audio">
         <span id="heroSoundIcon">🔇</span>
+        <span id="heroSoundText">Unmute</span>
       </button>
 
       <div class="hero-overlay"></div>
@@ -1069,7 +1079,7 @@
     return `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
   }
 
- // Hero Video Banner Management (Starts video after 5 seconds muted)
+  // Hero Video Banner Management (Starts video after 3 seconds muted)
   let heroMuted = true;
   function initHeroBanner() {
     const bgContainer = document.getElementById('heroBgContainer');
@@ -1078,14 +1088,12 @@
     
     if (!bgContainer) return;
 
-    // Reset mute state variables and UI when initializing
     heroMuted = true;
     const soundIcon = document.getElementById('heroSoundIcon');
     const soundText = document.getElementById('heroSoundText');
     if (soundIcon) soundIcon.textContent = '🔇';
     if (soundText) soundText.textContent = 'Unmute';
 
-    // Start video playback after 5 seconds with mute=1 and enablejsapi=1
     setTimeout(() => {
       bgContainer.innerHTML = `<iframe id="heroIframe" src="https://www.youtube.com/embed/7jz3BSqSXsM?autoplay=1&mute=1&enablejsapi=1&controls=0&loop=1&playlist=7jz3BSqSXsM&modestbranding=1&playsinline=1" title="Shahid Background Trailer" allow="autoplay"></iframe>`;
       if (thumbnail) {
@@ -1105,7 +1113,6 @@
 
     heroMuted = !heroMuted;
     
-    // Using YouTube IFrame Player API postMessage control for muting/unmuting
     const playerWin = iframe.contentWindow;
     if (heroMuted) {
       playerWin.postMessage('{"event":"command","func":"mute","args":""}', '*');
@@ -1126,26 +1133,22 @@
 
     if (activeTab === targetTab) return;
 
-    // If navigating away from the player tab, stop active player content
     if (activeTab && activeTab.id === 'playerTab' && tabId !== 'playerTab') {
       const playerBox = document.getElementById('videoPlayerBox');
       if (playerBox) playerBox.innerHTML = '';
     }
 
-    // Resume or re-inject banner background iframe when returning to home tab
     const bgContainer = document.getElementById('heroBgContainer');
     const thumbnail = document.getElementById('heroThumbnail');
     const soundBtn = document.getElementById('heroSoundBtn');
 
     if (tabId === 'homeTab' && bgContainer) {
-      bgContainer.innerHTML = ''; // Clear prior instance
+      bgContainer.innerHTML = '';
       if (thumbnail) thumbnail.classList.remove('fade-out');
       if (soundBtn) soundBtn.style.display = 'none';
-      
-      // Re-initialize banner and timer
       initHeroBanner();
     } else if (tabId !== 'homeTab' && bgContainer) {
-      bgContainer.innerHTML = ''; // Pause/remove background video when away from home tab
+      bgContainer.innerHTML = '';
       if (soundBtn) soundBtn.style.display = 'none';
     }
 
@@ -1185,7 +1188,6 @@
     const show = projectDetails[showKey];
     if (!show) return;
 
-    // Stop background hero trailer when playing a video
     const bgContainer = document.getElementById('heroBgContainer');
     const soundBtn = document.getElementById('heroSoundBtn');
     if (bgContainer) bgContainer.innerHTML = '';
@@ -1194,7 +1196,6 @@
     const ep = show.episodes.find(e => e.id === episodeId) || show.episodes[0];
     const playerBox = document.getElementById('videoPlayerBox');
     
-    // Video Embed vs Coming Soon logic
     if (ep && ep.youtubeId) {
       playerBox.innerHTML = `
         <iframe 
@@ -1211,13 +1212,11 @@
         </div>`;
     }
 
-    // Set Text Details
     document.getElementById('playerTitle').innerText = ep ? ep.title : show.title;
     document.getElementById('playerSub').innerText = `${show.title} • ${ep ? ep.sub : show.subtitle}`;
     document.getElementById('playerDesc').innerText = show.description;
     document.getElementById('epListTitle').innerText = `${show.title} — Episodes`;
 
-    // Render Episode Carousel List at the Bottom with YouTube Thumbnails
     const epTrack = document.getElementById('episodesTrack');
     epTrack.innerHTML = show.episodes.map(e => {
       const thumbUrl = getYouTubeThumbnail(e.youtubeId, show.image);
@@ -1235,7 +1234,6 @@
       `;
     }).join('');
 
-    // Open video viewer tab
     openTab('playerTab');
     
     setTimeout(() => {
@@ -1251,7 +1249,7 @@
   function scrollRail(viewportId, dir) {
     const viewport = document.getElementById(viewportId);
     if(!viewport) return;
-    const card = viewport.querySelector('.card, .ep-card');
+    const card = viewport.querySelector('.card, .ep-card, .modal-ep-item');
     const gap = 18;
     const step = (card ? card.offsetWidth : 210) + gap;
     
@@ -1302,20 +1300,20 @@
     document.getElementById('projectForm').reset();
   }
 
-  // Open Project Details Modal with All Episodes Listed & Click-to-Play
+  // Open Project Details Modal with Horizontal Episodes Scroll
   function openModal(key) {
     const data = projectDetails[key];
     if(!data) return;
     const container = document.getElementById('modalContent');
     
     const episodesListHtml = data.episodes && data.episodes.length > 0 ? `
-      <div style="margin-top:20px;">
-        <h5 style="margin:0 0 10px;font-size:16px;color:var(--text-primary);">Episodes</h5>
+      <div style="margin-top:24px;">
+        <h5 style="margin:0 0 12px;font-size:16px;color:var(--text-primary);">Episodes</h5>
         <div class="modal-ep-list">
           ${data.episodes.map(ep => `
             <div class="modal-ep-item" onclick="playMedia('${data.key}', '${ep.id}')">
               <div class="modal-ep-thumb" style="background-image:url('${getYouTubeThumbnail(ep.youtubeId, data.image)}')">
-                <div class="play-btn" style="width:28px;height:28px;font-size:11px;">▶</div>
+                <div class="play-btn" style="width:30px;height:30px;font-size:12px;">▶</div>
               </div>
               <div class="modal-ep-info">
                 <h5>${ep.title}</h5>
