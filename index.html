@@ -725,9 +725,9 @@
       <!-- Video background container (loads after 5s) -->
       <div class="hero-bg-container" id="heroBgContainer"></div>
       
-      <!-- Unmute / Mute Button for Hero Banner (Transparent & Top Right) -->
-      <button class="hero-sound-btn" id="heroSoundBtn" onclick="toggleHeroMute()" style="display: none;">
-        <span id="heroSoundIcon">🔇</span> <span id="heroSoundText">Unmute</span>
+      <!-- Unmute / Mute Button for Hero Banner (Transparent, Icon Only & Top Right) -->
+      <button class="hero-sound-btn" id="heroSoundBtn" onclick="toggleHeroMute()" style="display: none;" aria-label="Toggle audio">
+        <span id="heroSoundIcon">🔇</span>
       </button>
 
       <div class="hero-overlay"></div>
