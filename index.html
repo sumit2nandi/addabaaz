@@ -1078,6 +1078,13 @@
     
     if (!bgContainer) return;
 
+    // Reset mute state variables and UI when initializing
+    heroMuted = true;
+    const soundIcon = document.getElementById('heroSoundIcon');
+    const soundText = document.getElementById('heroSoundText');
+    if (soundIcon) soundIcon.textContent = '🔇';
+    if (soundText) soundText.textContent = 'Unmute';
+
     // Start video playback after 5 seconds with mute=1 and enablejsapi=1
     setTimeout(() => {
       bgContainer.innerHTML = `<iframe id="heroIframe" src="https://www.youtube.com/embed/7jz3BSqSXsM?autoplay=1&mute=1&enablejsapi=1&controls=0&loop=1&playlist=7jz3BSqSXsM&modestbranding=1&playsinline=1" title="Shahid Background Trailer" allow="autoplay"></iframe>`;
@@ -1130,18 +1137,13 @@
     const thumbnail = document.getElementById('heroThumbnail');
     const soundBtn = document.getElementById('heroSoundBtn');
 
-    if (tabId === 'homeTab' && bgContainer && !bgContainer.innerHTML.trim()) {
+    if (tabId === 'homeTab' && bgContainer) {
+      bgContainer.innerHTML = ''; // Clear prior instance
       if (thumbnail) thumbnail.classList.remove('fade-out');
       if (soundBtn) soundBtn.style.display = 'none';
-      heroMuted = true;
-      document.getElementById('heroSoundIcon').textContent = '🔇';
-      document.getElementById('heroSoundText').textContent = 'Unmute';
-
-      setTimeout(() => {
-        bgContainer.innerHTML = `<iframe id="heroIframe" src="https://www.youtube.com/embed/7jz3BSqSXsM?autoplay=1&mute=1&controls=0&loop=1&playlist=7jz3BSqSXsM&modestbranding=1&playsinline=1" title="Shahid Background Trailer" allow="autoplay"></iframe>`;
-        if (thumbnail) thumbnail.classList.add('fade-out');
-        if (soundBtn) soundBtn.style.display = 'flex';
-      }, 5000);
+      
+      // Re-initialize banner and timer
+      initHeroBanner();
     } else if (tabId !== 'homeTab' && bgContainer) {
       bgContainer.innerHTML = ''; // Pause/remove background video when away from home tab
       if (soundBtn) soundBtn.style.display = 'none';
