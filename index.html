@@ -26,7 +26,7 @@
     --gold: #f5c518;
     --border: rgba(255, 255, 255, 0.08);
     --topbar-bg: rgba(5, 5, 5, 0.95);
-    --hero-overlay: linear-gradient(180deg, rgba(5,5,5,0.3) 0%, rgba(5,5,5,0.7) 60%, rgba(5,5,5,1) 100%);
+    --hero-overlay: linear-gradient(180deg, rgba(5,5,5,0.2) 0%, rgba(5,5,5,0.7) 60%, rgba(5,5,5,1) 100%);
     --modal-backdrop: rgba(0, 0, 0, 0.85);
     --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     --font-bengali: 'Tiro Bangla', serif;
@@ -98,15 +98,29 @@
   /* HERO banner */
   .hero-wrap {
     position: relative;
-    min-height: 60vh;
+    min-height: 75vh;
     display: flex;
     align-items: flex-end;
     color: #fff;
     overflow: hidden;
   }
-  .hero-bg {
-    position: absolute; inset: 0; background-size: cover; background-position: center;
-    transform: scale(1.02);
+  .hero-bg-container {
+    position: absolute; 
+    inset: 0; 
+    overflow: hidden;
+    background-color: #000;
+  }
+  .hero-bg-container iframe {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100vw;
+    height: 56.25vw; /* 16:9 Aspect Ratio */
+    min-height: 100vh;
+    min-width: 177.77vh; /* 16:9 Aspect Ratio */
+    transform: translate(-50%, -50%) scale(1.15);
+    pointer-events: none;
+    border: none;
     filter: contrast(0.95) saturate(1.05);
   }
   .hero-overlay {
@@ -327,6 +341,47 @@
     font-size: 11px;
     font-weight: 700;
   }
+
+  /* MODAL EPISODE LIST STYLES */
+  .modal-ep-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 20px;
+    max-height: 360px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .modal-ep-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--panel-light);
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .modal-ep-item:hover {
+    border-color: var(--accent);
+    background: rgba(229, 9, 20, 0.08);
+    transform: translateY(-2px);
+  }
+  .modal-ep-thumb {
+    width: 100px;
+    height: 56px;
+    background-size: cover;
+    background-position: center;
+    border-radius: 6px;
+    flex-shrink: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-ep-info h5 { margin: 0 0 4px; font-size: 15px; color: var(--text-primary); font-weight: 700; }
+  .modal-ep-info p { margin: 0; font-size: 13px; color: var(--muted); }
 
   /* ABOUT SECTION */
   .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 24px; }
@@ -600,7 +655,10 @@
   <!-- TAB 1: HOME PAGE -->
   <div id="homeTab" class="tab-content active show">
     <header class="hero-wrap" role="banner">
-      <div class="hero-bg" style="background-image:url('images/Shahid.webp');"></div>
+      <div class="hero-bg-container" id="heroBgContainer">
+        <!-- Automatically plays Episode 1 in background like Hoichoi -->
+        <iframe src="https://www.youtube.com/embed/7jz3BSqSXsM?autoplay=1&mute=1&controls=0&loop=1&playlist=7jz3BSqSXsM&modestbranding=1&playsinline=1" title="Shahid Background Trailer" allow="autoplay"></iframe>
+      </div>
       <div class="hero-overlay"></div>
 
       <div class="hero">
@@ -609,8 +667,8 @@
           <h1 class="hero-title">শহীদ (Shahid)</h1>
           <div class="hero-meta">Web Series • S-01 • EP-05 • Bengali • ADDABAAZ original</div>
           <div class="hero-ctas">
-            <button class="btn btn-primary" onclick="openModal('shahid')">Details</button>
-            <button class="btn btn-ghost" onclick="playMedia('shahid', 'ep1')">▶ Play EP-01</button>
+            <button class="btn btn-primary" onclick="playMedia('shahid', 'ep1')">▶ Play</button>
+            <button class="btn btn-ghost" onclick="openModal('shahid')">Details</button>
           </div>
         </div>
       </div>
@@ -880,25 +938,25 @@
           id: "ep2",
           title: "EP-02: Masterda Surya Sen",
           sub: "চট্টগ্রাম অস্ত্রাগার লুন্ঠন",
-          youtubeId: "1GsBEE9jkqw" // Placeholder replacement ID
+          youtubeId: "1GsBEE9jkqw"
         },
         {
           id: "ep3",
           title: "EP-03: Matangini Hazra",
           sub: "ভারত ছাড়ো আন্দোলন",
-          youtubeId: "djjo0qJ5gY8" // Placeholder replacement ID
+          youtubeId: "djjo0qJ5gY8"
         },
         {
           id: "ep4",
           title: "EP-04: Pritilata Waddedar",
           sub: "পাহাড়তলী ইউরোপিয়ান ক্লাব আক্রমণ",
-          youtubeId: "Cp8uG-44ICk" // Placeholder replacement ID
+          youtubeId: "Cp8uG-44ICk"
         },
         {
           id: "ep5",
           title: "EP-05: Bina Das",
           sub: "সমাবর্তনে ৫টি গুলি! বীণা দাশের সেই দুঃসাহসিক কাণ্ড",
-          youtubeId: "SBFaqlpsu6c" // Placeholder replacement ID
+          youtubeId: "SBFaqlpsu6c"
         }
       ]
     },
@@ -948,10 +1006,18 @@
 
     if (activeTab === targetTab) return;
 
-    // If navigating away from the player tab, stop background playing by clearing iframe content
+    // If navigating away from the player tab, stop active player content
     if (activeTab && activeTab.id === 'playerTab' && tabId !== 'playerTab') {
       const playerBox = document.getElementById('videoPlayerBox');
       if (playerBox) playerBox.innerHTML = '';
+    }
+
+    // Resume or re-inject banner background iframe when returning to home tab
+    const bgContainer = document.getElementById('heroBgContainer');
+    if (tabId === 'homeTab' && bgContainer && !bgContainer.innerHTML.trim()) {
+      bgContainer.innerHTML = `<iframe src="https://www.youtube.com/embed/7jz3BSqSXsM?autoplay=1&mute=1&controls=0&loop=1&playlist=7jz3BSqSXsM&modestbranding=1&playsinline=1" title="Shahid Background Trailer" allow="autoplay"></iframe>`;
+    } else if (tabId !== 'homeTab' && bgContainer) {
+      bgContainer.innerHTML = ''; // Pause/remove background video when away from home tab
     }
 
     const navLinks = document.querySelectorAll('.nav a');
@@ -989,6 +1055,10 @@
     closeModal();
     const show = projectDetails[showKey];
     if (!show) return;
+
+    // Stop background hero trailer when playing a video
+    const bgContainer = document.getElementById('heroBgContainer');
+    if (bgContainer) bgContainer.innerHTML = '';
 
     const ep = show.episodes.find(e => e.id === episodeId) || show.episodes[0];
     const playerBox = document.getElementById('videoPlayerBox');
@@ -1099,11 +1169,31 @@
     document.getElementById('projectForm').reset();
   }
 
-  // Open Project Details Modal
+  // Open Project Details Modal with All Episodes Listed & Click-to-Play
   function openModal(key) {
     const data = projectDetails[key];
     if(!data) return;
     const container = document.getElementById('modalContent');
+    
+    const episodesListHtml = data.episodes && data.episodes.length > 0 ? `
+      <div style="margin-top:20px;">
+        <h5 style="margin:0 0 10px;font-size:16px;color:var(--text-primary);">Episodes</h5>
+        <div class="modal-ep-list">
+          ${data.episodes.map(ep => `
+            <div class="modal-ep-item" onclick="playMedia('${data.key}', '${ep.id}')">
+              <div class="modal-ep-thumb" style="background-image:url('${getYouTubeThumbnail(ep.youtubeId, data.image)}')">
+                <div class="play-btn" style="width:28px;height:28px;font-size:11px;">▶</div>
+              </div>
+              <div class="modal-ep-info">
+                <h5>${ep.title}</h5>
+                <p>${ep.sub}</p>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : '';
+
     container.innerHTML = `
       <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
         <div style="flex:0 0 160px;border-radius:12px;overflow:hidden;background:#111">
@@ -1112,12 +1202,13 @@
         <div style="flex:1;min-width:240px">
           <h4 style="margin:0 0 6px;font-size:24px;">${data.title}</h4>
           <div style="color:var(--gold);margin-bottom:14px;font-size:14px;font-weight:600;">${data.subtitle}</div>
-          <div style="margin-bottom:20px;">
-            <button class="btn btn-primary" onclick="playMedia('${data.key}', 'ep1')">▶ Play Now</button>
+          <div style="margin-bottom:14px;">
+            <button class="btn btn-primary" onclick="playMedia('${data.key}', 'ep1')">▶ Play Episode 1</button>
           </div>
-          <div class="content">${data.description.replace(/\n/g,'<br><br>')}</div>
+          <div class="content">${data.description}</div>
         </div>
       </div>
+      ${episodesListHtml}
     `;
     const backdrop = document.getElementById('modalBackdrop');
     backdrop.classList.add('show');
