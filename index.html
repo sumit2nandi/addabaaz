@@ -607,7 +607,7 @@
         <div class="hero-left">
           <div class="hero-kicker">FEATURED PRODUCTION</div>
           <h1 class="hero-title">শহীদ (Shahid)</h1>
-          <div class="hero-meta">Web Series • S-01 • EP-10 • Bengali • ADDABAAZ original</div>
+          <div class="hero-meta">Web Series • S-01 • EP-05 • Bengali • ADDABAAZ original</div>
           <div class="hero-ctas">
             <button class="btn btn-primary" onclick="openModal('shahid')">Details</button>
             <button class="btn btn-ghost" onclick="playMedia('shahid', 'ep1')">▶ Play EP-01</button>
@@ -641,7 +641,7 @@
               </div>
               <div class="meta">
                 <div><strong>শহীদ (Shahid)</strong></div>
-                <div style="margin-top:6px;color:var(--muted);font-size:13px">Drama Series • S-01 • EP-10</div>
+                <div style="margin-top:6px;color:var(--muted);font-size:13px">Drama Series • S-01 • EP-05</div>
               </div>
             </div>
 
@@ -861,25 +861,45 @@
   </footer>
 
 <script>
-  // Extended Database of Projects and Episodes
+  // Extended Database of Projects and Episodes with YouTube IDs
   const projectDetails = {
     shahid: {
       key: "shahid",
       title: "শহীদ (Shahid)",
-      subtitle: "Web Series • S-01 • EP-10 • Bengali",
-      description: "A gripping Bengali dramatic web series exploring sacrifice, resistance, and deeply human stories against powerful historical backdrops.",
+      subtitle: "Web Series • S-01 • EP-05 • Bengali",
+      description: "শহীদ (Shahid) — A gripping Bengali dramatic web series exploring sacrifice, resistance, and deeply human stories against powerful historical backdrops.",
       image: "images/Shahid.webp",
       episodes: [
         {
           id: "ep1",
-          title: "হাসতে হাসতে ফাঁসির মঞ্চে | EP-01",
-          sub: "Khudiram Bose | Gourav | Sudip | Deep | Sourav | Mainak",
-          youtubeId: "7jz3BSqSXsM", // Extracted embed ID for Shahid EP-01 YouTube video
-          image: "images/Shahid.webp"
+          title: "EP-01: Khudiram Bose",
+          sub: "হাসতে হাসতে ফাঁসির মঞ্চে",
+          youtubeId: "7jz3BSqSXsM"
         },
-        { id: "ep2", title: "EP-02: Agniyug", sub: "Coming Soon", youtubeId: null, image: "images/Shahid.webp" },
-        { id: "ep3", title: "EP-03: Resistance", sub: "Coming Soon", youtubeId: null, image: "images/Shahid.webp" },
-        { id: "ep4", title: "EP-04: The Freedom Fighter", sub: "Coming Soon", youtubeId: null, image: "images/Shahid.webp" }
+        {
+          id: "ep2",
+          title: "EP-02: Masterda Surya Sen",
+          sub: "চট্টগ্রাম অস্ত্রাগার লুন্ঠন",
+          youtubeId: "dQw4w9WgXcQ" // Placeholder replacement ID
+        },
+        {
+          id: "ep3",
+          title: "EP-03: Matangini Hazra",
+          sub: "ভারত ছাড়ো আন্দোলন",
+          youtubeId: "dQw4w9WgXcQ" // Placeholder replacement ID
+        },
+        {
+          id: "ep4",
+          title: "EP-04: Pritilata Waddedar",
+          sub: "পাহাড়তলী ইউরোপিয়ান ক্লাব আক্রমণ",
+          youtubeId: "dQw4w9WgXcQ" // Placeholder replacement ID
+        },
+        {
+          id: "ep5",
+          title: "EP-05: Bina Das",
+          sub: "সমাবর্তনে ৫টি গুলি! বীণা দাশের সেই দুঃসাহসিক কাণ্ড",
+          youtubeId: "dQw4w9WgXcQ" // Placeholder replacement ID
+        }
       ]
     },
     laughBite: {
@@ -889,8 +909,7 @@
       description: "Turning Everyday Life into Laughter. Stand-up comedy acts capturing Kolkata life, cultural quirks, and modern urban humor.",
       image: "images/laughBite.webp",
       episodes: [
-        { id: "ep1", title: "EP-01: Kolkata Traffic & Tea", sub: "Coming Soon", youtubeId: null, image: "images/laughBite.webp" },
-        { id: "ep2", title: "EP-02: Corporate Adda", sub: "Coming Soon", youtubeId: null, image: "images/laughBite.webp" }
+        { id: "ep1", title: "EP-01: Kolkata Traffic & Tea", sub: "Coming Soon", youtubeId: null }
       ]
     },
     faltu: {
@@ -900,7 +919,7 @@
       description: "Unfiltered, unscripted, and unapologetically fun. FALTU KOTHA brings spontaneous adda and playful banter on pop culture.",
       image: "images/FaltuKatha.webp",
       episodes: [
-        { id: "ep1", title: "EP-01: Contemporary Adda", sub: "Coming Soon", youtubeId: null, image: "images/FaltuKatha.webp" }
+        { id: "ep1", title: "EP-01: Contemporary Adda", sub: "Coming Soon", youtubeId: null }
       ]
     },
     kichu: {
@@ -910,18 +929,30 @@
       description: "A documentary mini-series weaving historical archives with personal narratives to highlight untold cultural histories.",
       image: "images/কিছু কথা কিছু ইতিহাস.webp",
       episodes: [
-        { id: "ep1", title: "EP-01: Heritage of Bengal", sub: "Coming Soon", youtubeId: null, image: "images/কিছু কথা কিছু ইতিহাস.webp" }
+        { id: "ep1", title: "EP-01: Heritage of Bengal", sub: "Coming Soon", youtubeId: null }
       ]
     }
   };
 
-  // Dynamic Tab Switcher
+  // Helper to construct YouTube Thumbnail URLs automatically
+  function getYouTubeThumbnail(youtubeId, fallbackImage) {
+    if (!youtubeId) return fallbackImage;
+    return `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
+  }
+
+  // Dynamic Tab Switcher with Background Video Cleanup
   function openTab(tabId, el) {
     const contents = document.querySelectorAll('.tab-content');
     const activeTab = document.querySelector('.tab-content.active');
     const targetTab = document.getElementById(tabId);
 
     if (activeTab === targetTab) return;
+
+    // If navigating away from the player tab, stop background playing by clearing iframe content
+    if (activeTab && activeTab.id === 'playerTab' && tabId !== 'playerTab') {
+      const playerBox = document.getElementById('videoPlayerBox');
+      if (playerBox) playerBox.innerHTML = '';
+    }
 
     const navLinks = document.querySelectorAll('.nav a');
     navLinks.forEach(link => link.classList.remove('active'));
@@ -985,20 +1016,23 @@
     document.getElementById('playerDesc').innerText = show.description;
     document.getElementById('epListTitle').innerText = `${show.title} — Episodes`;
 
-    // Render Episode Carousel List at the Bottom
+    // Render Episode Carousel List at the Bottom with YouTube Thumbnails
     const epTrack = document.getElementById('episodesTrack');
-    epTrack.innerHTML = show.episodes.map(e => `
-      <div class="ep-card ${e.id === ep.id ? 'active-ep' : ''}" onclick="playMedia('${showKey}', '${e.id}')">
-        <div class="ep-thumb" style="background-image:url('${e.image}')">
-          <div class="play-btn" style="width:36px;height:36px;font-size:14px;">▶</div>
-          <div class="ep-badge">${e.youtubeId ? 'AVAILABLE' : 'COMING SOON'}</div>
+    epTrack.innerHTML = show.episodes.map(e => {
+      const thumbUrl = getYouTubeThumbnail(e.youtubeId, show.image);
+      return `
+        <div class="ep-card ${e.id === ep.id ? 'active-ep' : ''}" onclick="playMedia('${showKey}', '${e.id}')">
+          <div class="ep-thumb" style="background-image:url('${thumbUrl}')">
+            <div class="play-btn" style="width:36px;height:36px;font-size:14px;">▶</div>
+            <div class="ep-badge">${e.youtubeId ? 'AVAILABLE' : 'COMING SOON'}</div>
+          </div>
+          <div class="meta">
+            <strong>${e.title}</strong>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;">${e.sub}</div>
+          </div>
         </div>
-        <div class="meta">
-          <strong>${e.title}</strong>
-          <div style="font-size:12px;color:var(--muted);margin-top:4px;">${e.sub}</div>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
     // Open video viewer tab
     openTab('playerTab');
