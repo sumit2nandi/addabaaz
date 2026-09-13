@@ -43,7 +43,7 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /* Responsive Header & Topbar Layout */
+  /* Header & Topbar Layout */
   .topbar {
     display: flex;
     align-items: center;
@@ -87,7 +87,7 @@
     border-radius: 2px;
   }
 
-  /* Right-aligned Auth Buttons */
+  /* Right Auth Buttons */
   .auth {
     display: flex;
     gap: 10px;
@@ -144,7 +144,7 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    white-space: nowrap; /* Prevents text multi-line wrapping */
+    white-space: nowrap;
   }
   .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 8px 24px rgba(229, 9, 20, 0.25); }
   .btn-primary:hover { background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 12px 28px rgba(229, 9, 20, 0.35); }
@@ -228,7 +228,7 @@
   .meta strong { color: var(--text-primary); font-size: 15px; }
   .tag { position: absolute; left: 10px; top: 10px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); padding: 5px 10px; border-radius: 6px; font-size: 11px; color: #fff; font-weight: 700; letter-spacing: 0.5px; }
 
-  /* Navigation Arrows */
+  /* Dynamic Navigation Arrows */
   .arrow {
     position: absolute;
     top: 50%;
@@ -244,11 +244,16 @@
     color: var(--text-primary);
     cursor: pointer;
     border: 1px solid var(--border);
-    transition: background 0.2s, transform 0.2s, border-color 0.2s;
+    transition: all 0.25s ease;
     z-index: 30;
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
   }
-  .arrow:hover { background: var(--accent); color: #fff; border-color: var(--accent); transform: translateY(-50%) scale(1.08); }
+  .arrow:hover:not(.disabled) { background: var(--accent); color: #fff; border-color: var(--accent); transform: translateY(-50%) scale(1.08); }
+  .arrow.disabled {
+    opacity: 0;
+    pointer-events: none;
+    cursor: default;
+  }
   .arrow-left { left: -50px; }
   .arrow-right { right: -50px; }
 
@@ -331,7 +336,7 @@
   /* CONTACT SECTION */
   .contact-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 48px; }
   .contact-form { background: var(--panel); padding: 36px; border-radius: 16px; border: 1px solid var(--border); }
-  .form-group { margin-bottom: 22px; }
+  .form-group { margin-bottom: 18px; }
   .form-group label { display: block; margin-bottom: 8px; font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
   .form-group input, .form-group textarea {
     width: 100%;
@@ -353,7 +358,7 @@
   .contact-info-block p, .contact-info-block a { color: var(--text-primary); text-decoration: none; font-size: 16px; line-height: 1.6; margin: 0; display: block; }
   .contact-info-block a:hover { color: var(--accent); }
 
-  /* Animated Modal Component */
+  /* Modal Component */
   .modal-backdrop {
     position: fixed; inset: 0;
     background: var(--modal-backdrop);
@@ -372,10 +377,10 @@
   }
   .modal {
     background: var(--panel);
-    padding: 28px;
+    padding: 32px 28px 28px;
     border-radius: 16px;
     width: 100%;
-    max-width: 750px;
+    max-width: 720px;
     max-height: 90vh;
     overflow-y: auto;
     color: var(--text-secondary);
@@ -383,6 +388,7 @@
     box-shadow: 0 30px 90px rgba(0,0,0,0.5);
     transform: scale(0.9) translateY(20px);
     opacity: 0;
+    position: relative;
     transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
     will-change: transform, opacity;
   }
@@ -390,19 +396,87 @@
     transform: scale(1) translateY(0);
     opacity: 1;
   }
-  .modal h4 { margin: 0 0 8px; font-size: 24px; color: var(--text-primary); }
-  .modal .content { color: var(--muted); line-height: 1.65; font-size: 15px; }
-  .close-btn { background: transparent; border: 1px solid var(--border); color: var(--text-primary); padding: 10px 18px; border-radius: 8px; cursor: pointer; font-weight: 600; }
-  .close-btn:hover { background: var(--panel-light); }
+
+  /* Animated Cross Close Button */
+  .animated-close-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--panel-light);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s ease, background-color 0.2s ease, border-color 0.2s ease;
+    z-index: 10;
+  }
+  .animated-close-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: var(--text-secondary);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    transition: stroke 0.2s ease, transform 0.3s ease;
+  }
+  .animated-close-btn:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    transform: rotate(90deg);
+  }
+  .animated-close-btn:hover svg {
+    stroke: #ffffff;
+  }
+
+  /* Social Logins */
+  .social-login-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 20px 0;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .social-login-divider::before, .social-login-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--border);
+  }
+  .social-login-divider span { padding: 0 10px; }
+  
+  .social-btns { display: flex; flex-direction: column; gap: 10px; }
+  .btn-social {
+    width: 100%;
+    background: var(--panel-light);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-weight: 600;
+    padding: 11px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .btn-social:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  .btn-social svg { width: 18px; height: 18px; }
 
   /* Footer */
   footer { padding: 36px; color: var(--muted); border-top: 1px solid var(--border); text-align: center; font-size: 14px; }
 
-  /* Comprehensive Mobile Responsiveness */
+  /* Mobile Responsiveness */
   @media (max-width: 820px) {
-    .topbar {
-      padding: 12px 16px;
-    }
+    .topbar { padding: 12px 16px; }
     .nav {
       order: 3;
       width: 100%;
@@ -411,23 +485,17 @@
       padding-top: 10px;
       margin-top: 4px;
     }
-    .auth {
-      margin-left: auto;
-    }
-    .auth .btn {
-      padding: 8px 12px;
-      font-size: 13px;
-    }
+    .auth { margin-left: auto; }
+    .auth .btn { padding: 8px 12px; font-size: 13px; }
     .hero { padding: 32px 20px 48px; }
     .hero-title { font-size: 32px; }
     .about-grid, .contact-grid { grid-template-columns: 1fr; gap: 24px; }
     .contact-form { padding: 24px; }
     .section-container, .row { padding: 32px 16px; }
 
-    /* Adjust Rail & Arrows on mobile screens */
     .rail { margin: 0; }
-    .arrow-left { left: 4px; }
-    .arrow-right { right: 4px; }
+    .arrow-left { left: 6px; }
+    .arrow-right { right: 6px; }
     .card { width: 170px; flex: 0 0 170px; }
     .poster { height: 240px; }
   }
@@ -435,7 +503,7 @@
 </head>
 <body>
 
-  <!-- Responsive Topbar Navigation -->
+  <!-- Topbar Navigation -->
   <div class="topbar">
     <a href="javascript:void(0)" onclick="openTab('homeTab', this)" class="brand">
       <svg class="logo" viewBox="0 0 400 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ADDABAAZ logo">
@@ -445,13 +513,11 @@
       </svg>
     </a>
 
-    <!-- Sign in and subscribe buttons with whitespace nowrap protection -->
     <div class="auth">
       <button class="btn btn-ghost" onclick="openAuthModal('signIn')">Sign In</button>
       <button class="btn btn-primary" onclick="openAuthModal('subscribe')">Subscribe</button>
     </div>
 
-    <!-- Navigation tabs -->
     <nav class="nav" aria-label="Main navigation">
       <a onclick="openTab('homeTab', this)" class="nav-link active">Home</a>
       <a onclick="openTab('aboutTab', this)" class="nav-link">About</a>
@@ -473,7 +539,7 @@
           <div class="hero-meta">Web Series • S-01 • EP-10 • Bengali • ADDABAAZ original</div>
           <div class="hero-ctas">
             <button class="btn btn-primary" onclick="openModal('shahid')">▶ Watch Trailer</button>
-            <button class="btn btn-ghost" onclick="openTab('aboutTab')">Explore Production</button>
+            <button class="btn btn-ghost" onclick="playMedia('shahid')">▶ Play</button>
           </div>
         </div>
       </div>
@@ -482,7 +548,7 @@
     <section class="row" aria-label="Featured Productions">
       <h3>Featured Productions</h3>
       <div class="rail">
-        <div class="arrow arrow-left" onclick="scrollRail('railViewport', -1)" aria-label="Scroll left">◀</div>
+        <div class="arrow arrow-left disabled" id="arrowLeft" onclick="scrollRail('railViewport', -1)" aria-label="Scroll left">◀</div>
         <div class="rail-viewport" id="railViewport">
           <div class="rail-track" id="projectsTrack">
 
@@ -532,7 +598,7 @@
 
           </div>
         </div>
-        <div class="arrow arrow-right" onclick="scrollRail('railViewport', 1)" aria-label="Scroll right">▶</div>
+        <div class="arrow arrow-right" id="arrowRight" onclick="scrollRail('railViewport', 1)" aria-label="Scroll right">▶</div>
       </div>
     </section>
   </div>
@@ -682,10 +748,10 @@
   <!-- Animated Dynamic Modal Component -->
   <div id="modalBackdrop" class="modal-backdrop" onclick="closeModal()">
     <div class="modal" onclick="event.stopPropagation()">
+      <button class="animated-close-btn" onclick="closeModal()" aria-label="Close modal">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
       <div id="modalContent"></div>
-      <div style="margin-top:24px;text-align:right">
-        <button class="close-btn" onclick="closeModal()">Close</button>
-      </div>
     </div>
   </div>
 
@@ -732,15 +798,47 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  // Horizontal Rail Navigation
+  // Horizontal Rail Navigation with Boundary Clamping
   function scrollRail(viewportId, dir) {
     const viewport = document.getElementById(viewportId);
     if(!viewport) return;
     const card = viewport.querySelector('.card');
     const gap = 18;
     const step = (card ? card.offsetWidth : 210) + gap;
+    
     viewport.scrollBy({ left: dir * step * 2, behavior: 'smooth' });
   }
+
+  function updateScrollArrows() {
+    const viewport = document.getElementById('railViewport');
+    const arrowLeft = document.getElementById('arrowLeft');
+    const arrowRight = document.getElementById('arrowRight');
+    if (!viewport || !arrowLeft || !arrowRight) return;
+
+    const maxScrollLeft = viewport.scrollWidth - viewport.clientWidth;
+    const currentScroll = viewport.scrollLeft;
+
+    if (currentScroll <= 5) {
+      arrowLeft.classList.add('disabled');
+    } else {
+      arrowLeft.classList.remove('disabled');
+    }
+
+    if (currentScroll >= maxScrollLeft - 5) {
+      arrowRight.classList.add('disabled');
+    } else {
+      arrowRight.classList.remove('disabled');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const viewport = document.getElementById('railViewport');
+    if (viewport) {
+      viewport.addEventListener('scroll', updateScrollArrows);
+      window.addEventListener('resize', updateScrollArrows);
+      updateScrollArrows();
+    }
+  });
 
   // Contact Form Submission
   function handleFormSubmit(event) {
@@ -749,33 +847,44 @@
     document.getElementById('projectForm').reset();
   }
 
-  // Project Details
+  // Project Details Data
   const projectDetails = {
     laughBite: {
+      key: "laughBite",
       title: "LAUGH BITE",
       subtitle: "Bengali Stand-Up Comedy | S-01 | EP-24 | ADDABAAZ",
       description: `Turning Everyday Life into Laughter\n\nIn today's fast-paced world, laughter has become more vital than ever. Everyday struggles, work pressure, relationships, social media, and city life provide rich material for contemporary stand-up comedy.\n\nBengali stand-up comedy has evolved beyond classical stage jokes. Modern Kolkata life, family dynamics, cultural quirks, urban habits, and social commentary fuel authentic storytelling. Through digital platforms, ADDABAAZ brings sharp comic observations to a global Bengali audience.`,
       image: "images/laughBite.webp"
     },
     shahid: {
+      key: "shahid",
       title: "শহীদ (Shahid)",
       subtitle: "Web Series | S-01 | EP-10 | Bengali | ADDABAAZ Original",
       description: "A gripping Bengali dramatic web series exploring sacrifice, resistance, and deeply human stories against powerful historical backdrops.",
       image: "images/Shahid.webp"
     },
     faltu: {
+      key: "faltu",
       title: "FALTU KOTHA",
       subtitle: "Satirical Podcast | S-01 | EP-20 | ADDABAAZ",
       description: "Unfiltered, unscripted, and unapologetically fun. FALTU KOTHA brings spontaneous adda and playful banter on pop culture and societal quirks.",
       image: "images/FaltuKatha.webp"
     },
     kichu: {
+      key: "kichu",
       title: "কিছু কথা কিছু ইতিহাস",
       subtitle: "Documentary Anthology | S-01 | EP-10 | Bengali",
       description: "A documentary mini-series weaving historical archives with personal narratives to highlight untold cultural histories.",
       image: "images/কিছু কথা কিছু ইতিহাস.webp"
     }
   };
+
+  // Play Action Trigger
+  function playMedia(key) {
+    const data = projectDetails[key];
+    const title = data ? data.title : "Title";
+    alert(`Now playing "${title}"`);
+  }
 
   // Open Project Details Modal
   function openModal(key) {
@@ -790,6 +899,9 @@
         <div style="flex:1;min-width:240px">
           <h4 style="margin:0 0 6px;font-size:24px;">${data.title}</h4>
           <div style="color:var(--gold);margin-bottom:14px;font-size:14px;font-weight:600;">${data.subtitle}</div>
+          <div style="margin-bottom:20px;">
+            <button class="btn btn-primary" onclick="playMedia('${data.key}')">▶ Play Now</button>
+          </div>
           <div class="content">${data.description.replace(/\n/g,'<br><br>')}</div>
         </div>
       </div>
@@ -805,6 +917,22 @@
       container.innerHTML = `
         <h4 style="margin:0 0 10px; font-size:24px;">Sign In to ADDABAAZ</h4>
         <p style="color:var(--muted); margin-bottom:20px;">Enter your details to access exclusive streaming content and production updates.</p>
+        
+        <div class="social-btns">
+          <button class="btn-social" onclick="alert('Signed in with Google!'); closeModal();">
+            <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+            Continue with Google
+          </button>
+          <button class="btn-social" onclick="alert('Signed in with Facebook!'); closeModal();">
+            <svg viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+            Continue with Facebook
+          </button>
+        </div>
+
+        <div class="social-login-divider">
+          <span>or sign in with email</span>
+        </div>
+
         <form onsubmit="event.preventDefault(); alert('Signed in successfully!'); closeModal();">
           <div class="form-group">
             <label>Email Address</label>
