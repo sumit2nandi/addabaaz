@@ -123,10 +123,50 @@
     border: none;
     filter: contrast(0.95) saturate(1.05);
   }
+  /* Hero Banner Thumbnail Image Overlay */
+  .hero-thumbnail {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    z-index: 2;
+    transition: opacity 0.8s ease;
+  }
+  .hero-thumbnail.fade-out {
+    opacity: 0;
+    pointer-events: none;
+  }
+  
+  /* Hero Sound Control Button */
+  .hero-sound-btn {
+    position: absolute;
+    bottom: 36px;
+    right: 36px;
+    z-index: 15;
+    background: rgba(14, 14, 16, 0.7);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .hero-sound-btn:hover {
+    background: rgba(229, 9, 20, 0.8);
+    border-color: var(--accent);
+  }
+
   .hero-overlay {
     position: absolute; inset: 0;
     background: var(--hero-overlay);
     pointer-events: none;
+    z-index: 5;
   }
   .hero {
     position: relative;
@@ -350,7 +390,7 @@
     margin-top: 20px;
     max-height: 360px;
     overflow-y: auto;
-    padding-right: 4px;
+    padding-right: 6px;
   }
   .modal-ep-item {
     display: flex;
@@ -523,6 +563,30 @@
     opacity: 1;
   }
 
+  /* Clean Transparent Scrollbars in Details Popup / Modals */
+  .modal::-webkit-scrollbar,
+  .modal-ep-list::-webkit-scrollbar {
+    width: 6px;
+  }
+  .modal::-webkit-scrollbar-track,
+  .modal-ep-list::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .modal::-webkit-scrollbar-thumb,
+  .modal-ep-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+  }
+  .modal::-webkit-scrollbar-thumb:hover,
+  .modal-ep-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+  /* Firefox Support */
+  .modal, .modal-ep-list {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  }
+
   /* Animated Cross Close Button */
   .animated-close-btn {
     position: absolute;
@@ -655,10 +719,17 @@
   <!-- TAB 1: HOME PAGE -->
   <div id="homeTab" class="tab-content active show">
     <header class="hero-wrap" role="banner">
-      <div class="hero-bg-container" id="heroBgContainer">
-        <!-- Automatically plays Episode 1 in background like Hoichoi -->
-        <iframe src="https://www.youtube.com/embed/7jz3BSqSXsM?autoplay=1&mute=1&controls=0&loop=1&playlist=7jz3BSqSXsM&modestbranding=1&playsinline=1" title="Shahid Background Trailer" allow="autoplay"></iframe>
-      </div>
+      <!-- Thumbnail image shown initially for 5 seconds -->
+      <div class="hero-thumbnail" id="heroThumbnail" style="background-image: url('images/Shahid.webp');"></div>
+      
+      <!-- Video background container (loads after 5s) -->
+      <div class="hero-bg-container" id="heroBgContainer"></div>
+      
+      <!-- Unmute / Mute Button for Hero Banner -->
+      <button class="hero-sound-btn" id="heroSoundBtn" onclick="toggleHeroMute()" style="display: none;">
+        <span id="heroSoundIcon">🔇</span> <span id="heroSoundText">Unmute</span>
+      </button>
+
       <div class="hero-overlay"></div>
 
       <div class="hero">
@@ -998,6 +1069,48 @@
     return `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
   }
 
+  // Hero Video Banner Management (Starts video after 5 seconds, muted with unmute button)
+  let heroMuted = true;
+  function initHeroBanner() {
+    const bgContainer = document.getElementById('heroBgContainer');
+    const thumbnail = document.getElementById('heroThumbnail');
+    const soundBtn = document.getElementById('heroSoundBtn');
+    
+    if (!bgContainer) return;
+
+    // Start video playback after 5 seconds
+    setTimeout(() => {
+      bgContainer.innerHTML = `<iframe id="heroIframe" src="https://www.youtube.com/embed/7jz3BSqSXsM?autoplay=1&mute=1&controls=0&loop=1&playlist=7jz3BSqSXsM&modestbranding=1&playsinline=1" title="Shahid Background Trailer" allow="autoplay"></iframe>`;
+      if (thumbnail) {
+        thumbnail.classList.add('fade-out');
+      }
+      if (soundBtn) {
+        soundBtn.style.display = 'flex';
+      }
+    }, 5000);
+  }
+
+  function toggleHeroMute() {
+    const iframe = document.getElementById('heroIframe');
+    const soundIcon = document.getElementById('heroSoundIcon');
+    const soundText = document.getElementById('heroSoundText');
+    if (!iframe) return;
+
+    heroMuted = !heroMuted;
+    
+    // Using YouTube IFrame Player API postMessage control for muting/unmuting
+    const playerWin = iframe.contentWindow;
+    if (heroMuted) {
+      playerWin.postMessage('{"event":"command","func":"mute","args":""}', '*');
+      soundIcon.textContent = '🔇';
+      soundText.textContent = 'Unmute';
+    } else {
+      playerWin.postMessage('{"event":"command","func":"unMute","args":""}', '*');
+      soundIcon.textContent = '🔊';
+      soundText.textContent = 'Mute';
+    }
+  }
+
   // Dynamic Tab Switcher with Background Video Cleanup
   function openTab(tabId, el) {
     const contents = document.querySelectorAll('.tab-content');
@@ -1014,10 +1127,24 @@
 
     // Resume or re-inject banner background iframe when returning to home tab
     const bgContainer = document.getElementById('heroBgContainer');
+    const thumbnail = document.getElementById('heroThumbnail');
+    const soundBtn = document.getElementById('heroSoundBtn');
+
     if (tabId === 'homeTab' && bgContainer && !bgContainer.innerHTML.trim()) {
-      bgContainer.innerHTML = `<iframe src="https://www.youtube.com/embed/7jz3BSqSXsM?autoplay=1&mute=1&controls=0&loop=1&playlist=7jz3BSqSXsM&modestbranding=1&playsinline=1" title="Shahid Background Trailer" allow="autoplay"></iframe>`;
+      if (thumbnail) thumbnail.classList.remove('fade-out');
+      if (soundBtn) soundBtn.style.display = 'none';
+      heroMuted = true;
+      document.getElementById('heroSoundIcon').textContent = '🔇';
+      document.getElementById('heroSoundText').textContent = 'Unmute';
+
+      setTimeout(() => {
+        bgContainer.innerHTML = `<iframe id="heroIframe" src="https://www.youtube.com/embed/7jz3BSqSXsM?autoplay=1&mute=1&controls=0&loop=1&playlist=7jz3BSqSXsM&modestbranding=1&playsinline=1" title="Shahid Background Trailer" allow="autoplay"></iframe>`;
+        if (thumbnail) thumbnail.classList.add('fade-out');
+        if (soundBtn) soundBtn.style.display = 'flex';
+      }, 5000);
     } else if (tabId !== 'homeTab' && bgContainer) {
       bgContainer.innerHTML = ''; // Pause/remove background video when away from home tab
+      if (soundBtn) soundBtn.style.display = 'none';
     }
 
     const navLinks = document.querySelectorAll('.nav a');
@@ -1058,7 +1185,9 @@
 
     // Stop background hero trailer when playing a video
     const bgContainer = document.getElementById('heroBgContainer');
+    const soundBtn = document.getElementById('heroSoundBtn');
     if (bgContainer) bgContainer.innerHTML = '';
+    if (soundBtn) soundBtn.style.display = 'none';
 
     const ep = show.episodes.find(e => e.id === episodeId) || show.episodes[0];
     const playerBox = document.getElementById('videoPlayerBox');
@@ -1154,6 +1283,8 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    initHeroBanner();
+
     const viewport = document.getElementById('railViewport');
     if (viewport) {
       viewport.addEventListener('scroll', updateScrollArrows);
