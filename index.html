@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ADDABAAZ — Film & Ad Production House</title>
+<!-- Modern Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Tiro+Bangla:ital@0;1&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #050505;
+    --panel: #0e0e10;
+    --panel-light: #161619;
+    --accent: #e50914;
+    --accent-hover: #f40612;
+    --muted: #a0a0ab;
+    --gold: #f5c518;
+    --border: rgba(255, 255, 255, 0.08);
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-bengali: 'Tiro Bangla', serif;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: #fff;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Topbar */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-space: space-between;
+    padding: 16px 36px;
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    background: rgba(5, 5, 5, 0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 14px; text-decoration: none; }
+  .logo { width: 160px; height: 40px; display: block; }
+
+  .nav { display: flex; gap: 28px; align-items: center; }
+  .nav a {
+    color: #d1d1d6;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+    transition: color 0.2s ease;
+    cursor: pointer;
+    position: relative;
+    padding: 4px 0;
+  }
+  .nav a:hover, .nav a.active { color: var(--gold); }
+  .nav a.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--gold);
+    border-radius: 2px;
+  }
+
+  .auth { display: flex; gap: 12px; align-items: center; }
+
+  /* HERO banner */
+  .hero-wrap {
+    position: relative;
+    min-height: 60vh;
+    display: flex;
+    align-items: flex-end;
+    color: #fff;
+    overflow: hidden;
+  }
+  .hero-bg {
+    position: absolute; inset: 0; background-size: cover; background-position: center;
+    transform: scale(1.02);
+    filter: contrast(0.95) saturate(1.05);
+  }
+  .hero-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(5,5,5,0.3) 0%, rgba(5,5,5,0.7) 60%, rgba(5,5,5,1) 100%);
+    pointer-events: none;
+  }
+  .hero {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 48px 36px 64px;
+    display: flex;
+    gap: 28px;
+    align-items: flex-end;
+  }
+  .hero-left { flex: 1; max-width: 850px; }
+  .hero-kicker { color: var(--gold); font-weight: 700; font-size: 13px; margin-bottom: 12px; letter-spacing: 1.5px; text-transform: uppercase; }
+  .hero-title { font-size: 48px; line-height: 1.05; margin: 0 0 14px; font-weight: 800; letter-spacing: -0.5px; }
+  .hero-meta { color: var(--muted); margin-bottom: 22px; font-size: 15px; }
+  .hero-ctas { display: flex; gap: 14px; }
+
+  .btn {
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 8px 24px rgba(229, 9, 20, 0.25); }
+  .btn-primary:hover { background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 12px 28px rgba(229, 9, 20, 0.35); }
+  .btn-ghost { background: rgba(255, 255, 255, 0.08); color: #fff; border: 1px solid rgba(255, 255, 255, 0.12); }
+  .btn-ghost:hover { background: rgba(255, 255, 255, 0.15); transform: translateY(-2px); }
+
+  /* Tab Navigation System */
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Section Styling */
+  .section-container { padding: 60px 36px; max-width: 1280px; margin: 0 auto; }
+  .section-header { margin-bottom: 40px; }
+  .section-tag { color: var(--gold); font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+  .section-title { font-size: 36px; font-weight: 800; margin: 0; letter-spacing: -0.5px; }
+  .section-subtitle { color: var(--muted); font-size: 16px; margin-top: 8px; font-weight: 400; }
+
+  /* Projects Rows */
+  .row { padding: 40px 36px; max-width: 1280px; margin: 0 auto; }
+  .row h3 { margin: 0 0 20px; font-size: 22px; color: #fff; font-weight: 700; }
+  .rail { position: relative; display: flex; overflow: hidden; align-items: center; }
+  .rail-viewport { overflow-x: auto; scroll-behavior: smooth; width: 100%; scrollbar-width: none; }
+  .rail-viewport::-webkit-scrollbar { display: none; }
+  .rail-track { display: flex; gap: 18px; padding-bottom: 10px; width: max-content; }
+
+  /* Card base */
+  .card {
+    width: 210px; flex: 0 0 210px; background: var(--panel); border-radius: 12px; overflow: hidden; position: relative;
+    transform-origin: center bottom;
+    transition: transform 0.25s cubic-bezier(.2,.9,.2,1), box-shadow 0.25s ease;
+    will-change: transform, box-shadow;
+    cursor: pointer;
+    border: 1px solid var(--border);
+  }
+
+  .card:hover, .card:focus {
+    transform: translateY(-12px) scale(1.04);
+    box-shadow: 0 30px 60px rgba(0,0,0,0.7);
+    border-color: rgba(255, 255, 255, 0.2);
+    z-index: 80;
+    outline: none;
+  }
+
+  .poster {
+    width: 100%; height: 300px; background-size: cover; background-position: center; display: flex; align-items: flex-end; padding: 12px; color: #fff; font-weight: 800; font-size: 14px;
+    position: relative;
+  }
+
+  .play-overlay {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.4);
+    opacity: 0; transition: opacity 0.2s ease;
+  }
+  .card:hover .play-overlay, .card:focus .play-overlay { opacity: 1; }
+  .play-btn {
+    width: 56px; height: 56px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center;
+    font-size: 20px; color: #fff; box-shadow: 0 4px 20px rgba(229,9,20,0.5);
+  }
+
+  .meta { padding: 14px; color: var(--muted); font-size: 13px; }
+  .meta strong { color: #fff; font-size: 15px; }
+  .tag { position: absolute; left: 10px; top: 10px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); padding: 5px 10px; border-radius: 6px; font-size: 11px; color: #fff; font-weight: 700; letter-spacing: 0.5px; }
+
+  .control { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; gap: 8px; z-index: 10; }
+  .arrow { width: 40px; height: 40px; border-radius: 50%; background: rgba(15,15,16,0.85); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; color: #fff; cursor: pointer; border: 1px solid var(--border); transition: background 0.2s; }
+  .arrow:hover { background: var(--accent); }
+
+  /* ABOUT SECTION */
+  .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 24px; }
+  .mission-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  }
+  .mission-card h4 {
+    color: var(--gold);
+    margin: 0 0 20px;
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+  }
+  .mission-list { list-style: none; padding: 0; margin: 0; }
+  .mission-list li {
+    position: relative;
+    padding-left: 28px;
+    margin-bottom: 16px;
+    color: #e0e0e6;
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .mission-list li.bengali-text {
+    font-family: var(--font-bengali);
+    font-size: 17px;
+    line-height: 1.7;
+  }
+  .mission-list li::before {
+    content: "✦";
+    color: var(--accent);
+    font-size: 14px;
+    position: absolute;
+    left: 4px;
+    top: 2px;
+  }
+
+  /* SERVICES SECTION */
+  .services-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 24px;
+    margin-bottom: 48px;
+  }
+  .service-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 30px;
+    transition: transform 0.25s ease, border-color 0.25s ease, background-color 0.25s ease;
+  }
+  .service-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(229, 9, 20, 0.4);
+    background: var(--panel-light);
+  }
+  .service-num { color: var(--gold); font-size: 14px; font-weight: 800; letter-spacing: 1px; margin-bottom: 12px; }
+  .service-card h4 { margin: 0 0 12px; font-size: 20px; color: #fff; font-weight: 700; }
+  .service-card p { color: var(--muted); margin: 0; font-size: 14px; line-height: 1.65; }
+
+  .banner-cta {
+    background: linear-gradient(135deg, rgba(229,9,20,0.18) 0%, rgba(14,14,16,1) 100%);
+    border: 1px solid rgba(229, 9, 20, 0.4);
+    border-radius: 16px;
+    padding: 40px;
+    text-align: center;
+  }
+  .banner-cta h3 { margin: 0 0 8px; font-size: 24px; letter-spacing: 1.5px; font-weight: 800; }
+  .banner-cta p { color: var(--gold); font-weight: 700; font-size: 20px; margin: 0; letter-spacing: 0.5px; }
+
+  /* CONTACT SECTION */
+  .contact-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 48px; }
+  .contact-form { background: var(--panel); padding: 36px; border-radius: 16px; border: 1px solid var(--border); }
+  .form-group { margin-bottom: 22px; }
+  .form-group label { display: block; margin-bottom: 8px; font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .form-group input, .form-group textarea {
+    width: 100%;
+    background: var(--panel-light);
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 15px;
+    font-family: var(--font-sans);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus, .form-group textarea:focus { border-color: var(--accent); }
+  .form-group textarea { resize: vertical; min-height: 130px; }
+
+  .contact-info-block { margin-bottom: 36px; }
+  .contact-info-block h4 { color: var(--gold); margin: 0 0 10px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; }
+  .contact-info-block p, .contact-info-block a { color: #fff; text-decoration: none; font-size: 16px; line-height: 1.6; margin: 0; display: block; }
+  .contact-info-block a:hover { color: var(--accent); }
+
+  /* Modal */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal { background: #0e0e10; padding: 28px; border-radius: 16px; max-width: 850px; color: #ddd; border: 1px solid var(--border); box-shadow: 0 30px 90px rgba(0,0,0,0.8); }
+  .modal h4 { margin: 0 0 8px; font-size: 24px; color: #fff; }
+  .modal .content { color: #bbbbc5; line-height: 1.65; font-size: 15px; }
+  .close-btn { background: transparent; border: 1px solid var(--border); color: #fff; padding: 10px 18px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+  .close-btn:hover { background: rgba(255,255,255,0.1); }
+
+  /* Footer */
+  footer { padding: 36px; color: var(--muted); border-top: 1px solid var(--border); text-align: center; font-size: 14px; }
+
+  /* Responsive */
+  @media (max-width: 980px) {
+    .hero { padding: 36px 24px; flex-direction: column; align-items: flex-start; }
+    .hero-title { font-size: 36px; }
+    .card { width: 170px; flex: 0 0 170px; }
+    .poster { height: 240px; }
+    .about-grid, .contact-grid { grid-template-columns: 1fr; }
+    .topbar { padding: 16px 20px; }
+    .section-container, .row { padding: 40px 20px; }
+  }
+  @media (max-width: 600px) {
+    .nav { display: none; }
+    .hero-title { font-size: 28px; }
+    .services-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- Topbar Navigation -->
+  <div class="topbar">
+    <a href="javascript:void(0)" onclick="openTab('homeTab', this)" class="brand">
+      <svg class="logo" viewBox="0 0 400 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ADDABAAZ logo">
+        <defs><linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#ff6b6b"/><stop offset="1" stop-color="#e50914"/></linearGradient></defs>
+        <g transform="translate(6,8)"><path d="M30 80 L60 10 L90 80 Z" fill="url(#g1)"/><rect x="52" y="40" width="16" height="40" rx="3" fill="#0b0b0b"/></g>
+        <text x="120" y="62" font-family="'Plus Jakarta Sans', Arial" font-weight="800" font-size="36" fill="#fff">ADDABAAZ</text>
+      </svg>
+    </a>
+
+    <!-- Navigation triggering dynamic tabs -->
+    <nav class="nav" aria-label="Main navigation">
+      <a onclick="openTab('homeTab', this)" class="nav-link active">Home</a>
+      <a onclick="openTab('aboutTab', this)" class="nav-link">About</a>
+      <a onclick="openTab('servicesTab', this)" class="nav-link">Services</a>
+      <a onclick="openTab('contactTab', this)" class="nav-link">Contact</a>
+    </nav>
+
+    <div class="auth">
+      <button class="btn btn-ghost" style="padding: 8px 14px;">Sign In</button>
+      <button class="btn btn-primary" style="padding: 8px 16px;">Subscribe</button>
+    </div>
+  </div>
+
+  <!-- TAB 1: HOME PAGE -->
+  <div id="homeTab" class="tab-content active">
+    <header class="hero-wrap" role="banner">
+      <div class="hero-bg" style="background-image:url('images/Shahid.webp');"></div>
+      <div class="hero-overlay"></div>
+
+      <div class="hero">
+        <div class="hero-left">
+          <div class="hero-kicker">FEATURED PRODUCTION</div>
+          <h1 class="hero-title">শহীদ (Shahid)</h1>
+          <div class="hero-meta">Web Series • S-01 • EP-10 • Bengali • ADDABAAZ original</div>
+          <div class="hero-ctas">
+            <button class="btn btn-primary" onclick="openModal('shahid')">▶ Watch Trailer</button>
+            <button class="btn btn-ghost" onclick="openTab('aboutTab')">Explore Production</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="row" aria-label="Featured Projects">
+      <h3>Featured Productions</h3>
+      <div class="rail">
+        <div class="rail-viewport" id="railViewport">
+          <div class="rail-track" id="projectsTrack">
+
+            <div class="card" tabindex="0" onclick="openModal('laughBite')">
+              <div class="poster" style="background-image:url('images/laughBite.webp')">
+                <div class="tag">Stand-Up</div>
+                <div class="play-overlay"><div class="play-btn">▶</div></div>
+              </div>
+              <div class="meta">
+                <div><strong>LAUGH BITE</strong></div>
+                <div style="margin-top:6px;color:var(--muted);font-size:13px">Bengali Stand-Up Comedy • S-01 • EP-24</div>
+              </div>
+            </div>
+
+            <div class="card" tabindex="0" onclick="openModal('shahid')">
+              <div class="poster" style="background-image:url('images/Shahid.webp')">
+                <div class="tag">Web Series</div>
+                <div class="play-overlay"><div class="play-btn">▶</div></div>
+              </div>
+              <div class="meta">
+                <div><strong>শহীদ (Shahid)</strong></div>
+                <div style="margin-top:6px;color:var(--muted);font-size:13px">Drama Series • S-01 • EP-10</div>
+              </div>
+            </div>
+
+            <div class="card" tabindex="0" onclick="openModal('faltu')">
+              <div class="poster" style="background-image:url('images/FaltuKatha.webp')">
+                <div class="tag">Podcast</div>
+                <div class="play-overlay"><div class="play-btn">▶</div></div>
+              </div>
+              <div class="meta">
+                <div><strong>FALTU KOTHA</strong></div>
+                <div style="margin-top:6px;color:var(--muted);font-size:13px">Satirical Podcast • S-01 • EP-20</div>
+              </div>
+            </div>
+
+            <div class="card" tabindex="0" onclick="openModal('kichu')">
+              <div class="poster" style="background-image:url('images/কিছু কথা কিছু ইতিহাস.webp')">
+                <div class="tag">Documentary</div>
+                <div class="play-overlay"><div class="play-btn">▶</div></div>
+              </div>
+              <div class="meta">
+                <div><strong>কিছু কথা কিছু ইতিহাস</strong></div>
+                <div style="margin-top:6px;color:var(--muted);font-size:13px">Historical Anthology • S-01 • EP-10</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="control">
+          <div class="arrow" onclick="scrollRail('railViewport', -1)" aria-label="Scroll left">◀</div>
+          <div class="arrow" onclick="scrollRail('railViewport', 1)" aria-label="Scroll right">▶</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- TAB 2: ABOUT SECTION -->
+  <div id="aboutTab" class="tab-content">
+    <section class="section-container">
+      <div class="section-header">
+        <div class="section-tag">About Production House</div>
+        <h2 class="section-title">ADDABAAZ</h2>
+        <div class="section-subtitle">A Premier Film Production House & Commercial Ad Film Company in Kolkata</div>
+      </div>
+
+      <div class="about-grid">
+        <div class="mission-card">
+          <h4>OUR MISSION (আমাদের লক্ষ্য)</h4>
+          <ul class="mission-list">
+            <li class="bengali-text">নতুন ও মৌলিক গল্পের মাধ্যমে দর্শকের মনে গভীর ছাপ তৈরি করা।</li>
+            <li class="bengali-text">সিনেমা ও বিজ্ঞাপনে সৃজনশীলতা, গুণমান এবং নতুন ভাবনার সংমিশ্রণ ঘটানো।</li>
+            <li class="bengali-text">প্রতিভাবান লেখক, পরিচালক ও শিল্পীদের তাঁদের নিজস্ব গল্প বলার সুযোগ করে দেওয়া।</li>
+            <li class="bengali-text">স্থানীয় গল্পকে আন্তর্জাতিক মানের ভিজ্যুয়াল ও নির্মাণশৈলীতে তুলে ধরা।</li>
+            <li class="bengali-text">এমন চলচ্চিত্র ও বিজ্ঞাপন তৈরি করা, যা শুধু দেখা নয়—অনুভব ও মনে রাখার মতো।</li>
+          </ul>
+        </div>
+
+        <div class="mission-card">
+          <h4>OUR MISSION</h4>
+          <ul class="mission-list">
+            <li>Creating a lasting impact through original, compelling storytelling.</li>
+            <li>Blending artistic creativity, high production quality, and innovative concepts in cinema & advertising.</li>
+            <li>Empowering visionaries, emerging writers, directors, and artists to express their authentic voices.</li>
+            <li>Elevating hyper-local narratives onto a global stage with world-class visuals and craftsmanship.</li>
+            <li>Crafting cinematic experiences and brand commercials that resonate emotionally and remain unforgettable.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- TAB 3: SERVICES SECTION -->
+  <div id="servicesTab" class="tab-content">
+    <section class="section-container">
+      <div class="section-header">
+        <div class="section-tag">Capabilities & Production</div>
+        <h2 class="section-title">OUR EXPERTISE</h2>
+        <div class="section-subtitle">Full-service film and commercial advertisement production based in Kolkata</div>
+      </div>
+
+      <div class="services-grid">
+        <div class="service-card">
+          <div class="service-num">01</div>
+          <h4>FILM PRODUCTION</h4>
+          <p>Developing and executing full-length feature films, indie projects, and short films from initial narrative concept to silver screen release.</p>
+        </div>
+
+        <div class="service-card">
+          <div class="service-num">02</div>
+          <h4>AD FILM PRODUCTION</h4>
+          <p>Translating brand visions and corporate identities into high-impact visual stories, TV commercials, and digital brand films.</p>
+        </div>
+
+        <div class="service-card">
+          <div class="service-num">03</div>
+          <h4>DIRECTION & PRODUCTION</h4>
+          <p>Providing end-to-end creative leadership and technical production management across pre-production, principal photography, and post-production.</p>
+        </div>
+
+        <div class="service-card">
+          <div class="service-num">04</div>
+          <h4>SCRIPT & STORYTELLING</h4>
+          <p>Nurturing raw ideas into polished screenplays, sharp dialogues, and deeply engaging cinematic narratives engineered for emotional resonance.</p>
+        </div>
+
+        <div class="service-card">
+          <div class="service-num">05</div>
+          <h4>CINEMATIC VISUALS</h4>
+          <p>Crafting signature visual aesthetic through modern camera work, artistic lighting design, expert color grading, and meticulous creative direction.</p>
+        </div>
+
+        <div class="service-card">
+          <div class="service-num">06</div>
+          <h4>DIGITAL CONTENT</h4>
+          <p>Producing trend-defining digital shows, web series, webcasts, and high-converting video assets optimized for OTT platforms, YouTube, and social media.</p>
+        </div>
+      </div>
+
+      <div class="banner-cta">
+        <h3>YOUR VISION. OUR EXPERTISE.</h3>
+        <p>"LET'S MAKE GREAT FILMS TOGETHER"</p>
+      </div>
+    </section>
+  </div>
+
+  <!-- TAB 4: CONTACT SECTION -->
+  <div id="contactTab" class="tab-content">
+    <section class="section-container">
+      <div class="section-header">
+        <div class="section-tag">Collaborate</div>
+        <h2 class="section-title">INITIATE A PROJECT</h2>
+        <div class="section-subtitle">Reach out for production inquiries, commercial briefs, press relations, or general correspondence.</div>
+      </div>
+
+      <div class="contact-grid">
+        <div class="contact-form">
+          <h3 style="margin:0 0 24px;font-size:20px;">PROJECT INQUIRY</h3>
+          <form id="projectForm" onsubmit="handleFormSubmit(event)">
+            <div class="form-group">
+              <label for="name">Your Name</label>
+              <input type="text" id="name" placeholder="Enter your full name" required />
+            </div>
+            <div class="form-group">
+              <label for="email">Email Address</label>
+              <input type="email" id="email" placeholder="name@company.com" required />
+            </div>
+            <div class="form-group">
+              <label for="message">Project Details / Message</label>
+              <textarea id="message" placeholder="Describe your film, advertisement concept, or inquiry..." required></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%; padding:14px;">Send Message</button>
+          </form>
+        </div>
+
+        <div class="contact-details">
+          <div class="contact-info-block">
+            <h4>DIRECT CONTACT</h4>
+            <a href="mailto:office@addabaaz.in">office@addabaaz.in</a>
+            <a href="tel:+913331886679">+91 33318 86679</a>
+          </div>
+
+          <div class="contact-info-block">
+            <h4>HEADQUARTERS</h4>
+            <p>162/B, 283 Lake Gardens<br />Kolkata, West Bengal 700040<br />India</p>
+          </div>
+
+          <div class="contact-info-block">
+            <h4>CONNECT WITH US</h4>
+            <p style="display:flex; gap:16px;">
+              <a href="#" style="color:var(--gold); font-weight:700;">INSTAGRAM</a>
+              <a href="#" style="color:var(--gold); font-weight:700;">FACEBOOK</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Modal Component for Details -->
+  <div id="modalBackdrop" class="modal-backdrop" onclick="closeModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div id="modalContent"></div>
+      <div style="margin-top:24px;text-align:right">
+        <button class="close-btn" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    © 2026 ADDABAAZ — All rights reserved. Registered Production Studio, Kolkata, West Bengal.
+  </footer>
+
+<script>
+  // Dynamic Tab Switcher with Active State Update
+  function openTab(tabId, el) {
+    const contents = document.querySelectorAll('.tab-content');
+    contents.forEach(content => content.classList.remove('active'));
+
+    const selectedTab = document.getElementById(tabId);
+    if(selectedTab) {
+      selectedTab.classList.add('active');
+    }
+
+    // Active state highlighting for navigation links
+    const navLinks = document.querySelectorAll('.nav a');
+    navLinks.forEach(link => link.classList.remove('active'));
+    if (el && el.classList.contains('nav-link')) {
+      el.classList.add('active');
+    } else {
+      // Default to matching nav target if clicked via brand or button
+      const targetLink = document.querySelector(`.nav a[onclick*="${tabId}"]`);
+      if (targetLink) targetLink.classList.add('active');
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // Horizontal Rail Scrolling Helper
+  function scrollRail(viewportId, dir) {
+    const viewport = document.getElementById(viewportId);
+    if(!viewport) return;
+    const card = viewport.querySelector('.card');
+    const gap = 18;
+    const step = (card ? card.offsetWidth : 210) + gap;
+    viewport.scrollBy({ left: dir * step * 2, behavior: 'smooth' });
+  }
+
+  // Handle Form Submission
+  function handleFormSubmit(event) {
+    event.preventDefault();
+    alert('Thank you for reaching out to ADDABAAZ! We have received your message and will get back to you shortly.');
+    document.getElementById('projectForm').reset();
+  }
+
+  // Project Details Data
+  const projectDetails = {
+    laughBite: {
+      title: "LAUGH BITE",
+      subtitle: "Bengali Stand-Up Comedy | S-01 | EP-24 | ADDABAAZ",
+      description: `Turning Everyday Life into Laughter\n\nIn today's fast-paced world, laughter has become more vital than ever. Everyday struggles, work pressure, relationships, social media, and city life provide rich material for contemporary stand-up comedy.\n\nBengali stand-up comedy has evolved beyond classical stage jokes. Modern Kolkata life, family dynamics, cultural quirks, urban habits, and social commentary fuel authentic storytelling. Through digital platforms, ADDABAAZ brings sharp comic observations to a global Bengali audience.`,
+      image: "images/laughBite.webp"
+    },
+    shahid: {
+      title: "শহীদ (Shahid)",
+      subtitle: "Web Series | S-01 | EP-10 | Bengali | ADDABAAZ Original",
+      description: "A gripping Bengali dramatic web series exploring sacrifice, resistance, and deeply human stories against powerful historical backdrops.",
+      image: "images/Shahid.webp"
+    },
+    faltu: {
+      title: "FALTU KOTHA",
+      subtitle: "Satirical Podcast | S-01 | EP-20 | ADDABAAZ",
+      description: "Unfiltered, unscripted, and unapologetically fun. FALTU KOTHA brings spontaneous adda and playful banter on pop culture and societal quirks.",
+      image: "images/FaltuKatha.webp"
+    },
+    kichu: {
+      title: "কিছু কথা কিছু ইতিহাস",
+      subtitle: "Documentary Anthology | S-01 | EP-10 | Bengali",
+      description: "A documentary mini-series weaving historical archives with personal narratives to highlight untold cultural histories.",
+      image: "images/কিছু কথা কিছু ইতিহাস.webp"
+    }
+  };
+
+  function openModal(key) {
+    const data = projectDetails[key];
+    if(!data) return;
+    const container = document.getElementById('modalContent');
+    container.innerHTML = `
+      <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
+        <div style="flex:0 0 200px;border-radius:12px;overflow:hidden;background:#111">
+          <img src="${data.image}" alt="${data.title}" style="width:200px;height:280px;object-fit:cover;display:block" onerror="this.style.display='none'">
+        </div>
+        <div style="flex:1;min-width:260px">
+          <h4 style="margin:0 0 6px;color:#fff;font-size:24px;">${data.title}</h4>
+          <div style="color:var(--gold);margin-bottom:14px;font-size:14px;font-weight:600;">${data.subtitle}</div>
+          <div class="content">${data.description.replace(/\n/g,'<br><br>')}</div>
+        </div>
+      </div>
+    `;
+    document.getElementById('modalBackdrop').style.display = 'flex';
+  }
+
+  function closeModal() {
+    document.getElementById('modalBackdrop').style.display = 'none';
+  }
+
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeModal(); });
+</script>
+</body>
+</html>
