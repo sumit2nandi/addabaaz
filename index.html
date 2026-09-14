@@ -261,8 +261,8 @@
   .episode-heading { display:flex; align-items:baseline; gap:10px; margin:0 0 10px; }
   .episode-heading h4 { margin:0; font-size:18px; }
   .episode-heading span { color:var(--muted); font-size:12px; }
-  .catalog-card { width:220px; flex:0 0 220px; }
-  .catalog-card .poster { height:124px; aspect-ratio:16/9; }
+  .catalog-card { width:200px; flex:0 0 220px; }
+  .catalog-card .poster { height:112px; aspect-ratio:16/9; }
   .catalog-card .meta { min-height:118px; }
   .catalog-card .video-title { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; line-height:1.45; }
   .catalog-card .video-meta { margin-top:7px; color:var(--muted); font-size:11px; line-height:1.45; }
@@ -770,7 +770,7 @@
           <h1 class="hero-title">শহীদ (Shahid)</h1>
           <div class="hero-meta">Web Series • Shahid • 34 catalogue videos • Bengali • ADDABAAZ</div>
           <div class="hero-ctas">
-            <button class="btn btn-primary" onclick="playMedia('shahid', 'ep1')">▶ Play</button>
+            <button class="btn btn-primary" onclick="playMedia('shahid', projectDetails.shahid.episodes[0].id)">▶ Play</button>
             <button class="btn btn-ghost" onclick="openModal('shahid')">Details</button>
             
             <!-- Minimalist Sound Toggle Button Aligned with Play & Details -->
@@ -1163,23 +1163,37 @@ function getYouTubeThumbnail(youtubeId, fallbackImage) {
   }
 
   function renderShowRows() {
-    const eligible = projectOrder.filter(k => projectDetails[k].episodes.length>0);
+    const eligible = projectOrder.filter(k => projectDetails[k].episodes && projectDetails[k].episodes.length);
     const scored = eligible.map(k => {
-      const p=projectDetails[k];
-      const views=p.episodes.reduce((n,v)=>n+Number(String(v.views).replace(/,/g,'')||0),0);
-      const latest=p.episodes.reduce((a,v)=>!a||v.publishDate>a.publishDate?v:a,null);
-      return {k,views,latest,episodes:p.episodes.length};
+      const p = projectDetails[k];
+      const views = p.episodes.reduce((n,v) => n + Number(String(v.views).replace(/,/g,'') || 0), 0);
+      const latest = p.episodes.reduce((a,v) => !a || v.publishDate > a.publishDate ? v : a, null);
+      return { k, views, latest };
     });
-    const popular=[...scored].sort((a,b)=>b.views-a.views).map(x=>x.k);
-    const newest=[...scored].sort((a,b)=>(b.latest?.publishDate||'').localeCompare(a.latest?.publishDate||'')).map(x=>x.k);
-    const comedy=eligible.filter(k=>projectDetails[k].genre==='Comedy');
-    const drama=eligible.filter(k=>projectDetails[k].genre==='Drama & History');
-    document.getElementById('popularTrack').innerHTML=popular.map(makeShowCard).join('');
-    document.getElementById('newTrack').innerHTML=newest.map(makeShowCard).join('');
-    document.getElementById('comedyTrack').innerHTML=comedy.map(makeShowCard).join('');
-    document.getElementById('dramaTrack').innerHTML=drama.map(makeShowCard).join('');
-    document.getElementById('promoTrack').innerHTML=promoVideos.filter(v=>v.kind==='PROMO').map(makePromoCard).join('');
-    document.getElementById('specialTrack').innerHTML=promoVideos.filter(v=>v.kind==='SPECIAL').map(makePromoCard).join('');
+
+    // Each show is assigned once. Ordering is intentional so sections never repeat the same show.
+    const claimed = new Set();
+    const popular = [...scored].sort((a,b) => b.views - a.views).slice(0, Math.min(2, scored.length)).map(x => x.k);
+    popular.forEach(k => claimed.add(k));
+
+    const newest = [...scored]
+      .filter(x => !claimed.has(x.k))
+      .sort((a,b) => (b.latest?.publishDate || '').localeCompare(a.latest?.publishDate || ''))
+      .slice(0, 1)
+      .map(x => x.k);
+    newest.forEach(k => claimed.add(k));
+
+    const comedy = eligible.filter(k => !claimed.has(k) && projectDetails[k].genre === 'Comedy');
+    comedy.forEach(k => claimed.add(k));
+    const drama = eligible.filter(k => !claimed.has(k) && projectDetails[k].genre === 'Drama & History');
+    drama.forEach(k => claimed.add(k));
+
+    document.getElementById('popularTrack').innerHTML = popular.map(makeShowCard).join('');
+    document.getElementById('newTrack').innerHTML = newest.map(makeShowCard).join('');
+    document.getElementById('comedyTrack').innerHTML = comedy.map(makeShowCard).join('');
+    document.getElementById('dramaTrack').innerHTML = drama.map(makeShowCard).join('');
+    document.getElementById('promoTrack').innerHTML = promoVideos.filter(v => v.kind === 'PROMO').map(makePromoCard).join('');
+    document.getElementById('specialTrack').innerHTML = promoVideos.filter(v => v.kind === 'SPECIAL').map(makePromoCard).join('');
   }
 
   function playStandalone(id) {
@@ -1204,49 +1218,79 @@ function getYouTubeThumbnail(youtubeId, fallbackImage) {
   }
 
   function playVideo(showKey, videoId) {
-    const show=projectDetails[showKey]; if(!show) return;
-    const v=show.episodes.find(x=>x.id===videoId) || show.episodes[0]; if(!v) return;
-    playMedia(showKey, videoId);
-  }
-
-  // Play Page Switcher & Renderer
-  function playMedia(showKey, episodeId = null) {
-    closeModal();
-    if (heroTimer) clearTimeout(heroTimer);
     const show = projectDetails[showKey];
     if (!show) return;
+    const video = show.episodes.find(v => v.id === videoId) || show.episodes[0];
+    if (!video) return;
+    playMedia(showKey, video.id);
+  }
+
+  function playFirstEpisode(showKey) {
+    const show = projectDetails[showKey];
+    if (!show || !show.episodes.length) return;
+    playMedia(showKey, show.episodes[0].id);
+  }
+
+  // Play Page Switcher & Renderer — preserves the original working player flow
+  function playMedia(showKey, episodeId) {
+    const show = projectDetails[showKey];
+    if (!show) return;
+
+    const ep = show.episodes.find(e => e.id === episodeId) || show.episodes[0];
+    if (!ep) return;
+
+    closeModal();
+    if (heroTimer) clearTimeout(heroTimer);
 
     const bgContainer = document.getElementById('heroBgContainer');
     const soundBtn = document.getElementById('heroSoundBtn');
     if (bgContainer) bgContainer.innerHTML = '';
     if (soundBtn) soundBtn.style.display = 'none';
 
-    const ep = show.episodes.find(e => e.id === episodeId) || show.episodes[0];
     const playerBox = document.getElementById('videoPlayerBox');
-    if (!ep) return;
+    if (!playerBox) return;
 
     if (ep.youtubeId && ep.availability === 'available') {
-      playerBox.innerHTML = `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(ep.youtubeId)}?autoplay=1" title="${escapeHtml(ep.title)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+      playerBox.innerHTML = `
+        <iframe
+          src="https://www.youtube.com/embed/${encodeURIComponent(ep.youtubeId)}?autoplay=1"
+          title="${escapeHtml(ep.title)}"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; autoplay"
+          allowfullscreen>
+        </iframe>`;
     } else {
-      playerBox.innerHTML = `<div class="coming-soon-box"><h2>VIDEO UNAVAILABLE</h2><p>This catalogue item is currently marked as ${escapeHtml(ep.availability || 'unavailable')}.</p></div>`;
+      playerBox.innerHTML = `
+        <div class="coming-soon-box">
+          <h2>VIDEO UNAVAILABLE</h2>
+          <p>This episode is currently unavailable.</p>
+        </div>`;
     }
 
-    const episodeLabel = ep.episode ? `Episode ${String(ep.episode).padStart(2,'0')}` : ep.kind;
     document.getElementById('playerTitle').innerText = ep.title;
-    document.getElementById('playerSub').innerText = `${show.title} • ${episodeLabel} • ${ep.duration}`;
-    document.getElementById('playerDesc').innerText = `${show.description} ${ep.views} views • Published ${new Date(ep.publishDate).toLocaleDateString()}.`;
-    document.getElementById('epListTitle').innerText = `${show.title} — All Videos`;
+    document.getElementById('playerSub').innerText = `${show.title} • Episode ${String(ep.episode || 1).padStart(2,'0')} • ${ep.duration}`;
+    document.getElementById('playerDesc').innerText = show.description;
+    document.getElementById('epListTitle').innerText = `${show.title} — Episodes`;
 
     const epTrack = document.getElementById('episodesTrack');
     epTrack.innerHTML = show.episodes.map(e => {
       const thumbUrl = e.thumbnail || getYouTubeThumbnail(e.youtubeId, show.image);
-      return `<div class="ep-card ${e.id === ep.id ? 'active-ep' : ''}" onclick="playMedia('${showKey}', '${e.id}')">
-        <div class="ep-thumb" style="background-image:url('${escapeHtml(thumbUrl)}')"><div class="play-btn" style="width:36px;height:36px;font-size:14px;">▶</div><div class="ep-badge">${escapeHtml(videoLabel(e))}</div></div>
-        <div class="meta"><strong>${escapeHtml(e.title)}</strong><div style="font-size:12px;color:var(--muted);margin-top:4px;">${escapeHtml(e.duration)} • ${escapeHtml(e.views)} views</div></div>
-      </div>`;
+      return `
+        <div class="ep-card ${e.id === ep.id ? 'active-ep' : ''}" role="button" tabindex="0"
+             onclick="playVideo('${showKey}', '${e.id}')"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();playVideo('${showKey}', '${e.id}')}" aria-label="Play ${escapeHtml(e.title)}">
+          <div class="ep-thumb" style="background-image:url('${escapeHtml(thumbUrl)}')">
+            <div class="play-btn" style="width:36px;height:36px;font-size:14px;">▶</div>
+            <div class="ep-badge">${escapeHtml(videoLabel(e))}</div>
+          </div>
+          <div class="meta">
+            <strong>${escapeHtml(e.title)}</strong>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;">${escapeHtml(e.duration)}</div>
+          </div>
+        </div>`;
     }).join('');
 
     openTab('playerTab');
+
     setTimeout(() => {
       const epViewport = document.getElementById('epViewport');
       if (epViewport) {
@@ -1314,9 +1358,9 @@ function getYouTubeThumbnail(youtubeId, fallbackImage) {
         <h5 style="margin:0 0 12px;font-size:16px;color:var(--text-primary);">Episodes</h5>
         <div class="modal-ep-list">
           ${data.episodes.map(ep => `
-            <div class="modal-ep-item" role="button" tabindex="0" onclick="playMedia('${data.key}', '${ep.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();playMedia('${data.key}', '${ep.id}')}" aria-label="Play ${escapeHtml(ep.title)}">
+            <div class="modal-ep-item" role="button" tabindex="0" onclick="playVideo('${data.key}', '${ep.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();playVideo('${data.key}', '${ep.id}')}" aria-label="Play ${escapeHtml(ep.title)}">
               <div class="modal-ep-thumb" style="background-image:url('${getYouTubeThumbnail(ep.youtubeId, data.image)}')">
-                <button type="button" class="play-btn modal-play-btn" onclick="event.stopPropagation(); playMedia('${data.key}', '${ep.id}')" aria-label="Play ${escapeHtml(ep.title)}">▶</button>
+                <button type="button" class="play-btn modal-play-btn" onclick="event.stopPropagation(); playVideo('${data.key}', '${ep.id}')" aria-label="Play ${escapeHtml(ep.title)}">▶</button>
               </div>
               <div class="modal-ep-info">
                 <h5>${ep.title}</h5>
@@ -1337,7 +1381,7 @@ function getYouTubeThumbnail(youtubeId, fallbackImage) {
           <h4 style="margin:0 0 6px;font-size:28px;font-weight:800;">${data.title}</h4>
           <div style="color:var(--gold);margin-bottom:16px;font-size:15px;font-weight:600;">${data.subtitle}</div>
           <div style="margin-bottom:18px;">
-            <button type="button" class="btn btn-primary" onclick="playMedia('${data.key}', '${data.episodes[0]?.id || ''}')">▶ Play First Episode</button>
+            <button type="button" class="btn btn-primary" onclick="playFirstEpisode('${data.key}')">▶ Play First Episode</button>
           </div>
           <div class="content" style="font-size:15px;line-height:1.65;color:var(--text-secondary);">${data.description}</div>
         </div>
