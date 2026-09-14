@@ -271,7 +271,7 @@
 
   /* Cards */
   .card {
-    width: 210px; flex: 0 0 210px; background: var(--panel); border-radius: 12px; overflow: hidden; position: relative;
+    width: 180px; flex: 0 0 180px; background: var(--panel); border-radius: 12px; overflow: hidden; position: relative;
     transform-origin: center bottom;
     transition: transform 0.25s cubic-bezier(.2,.9,.2,1), box-shadow 0.25s ease;
     will-change: transform, box-shadow;
@@ -288,7 +288,7 @@
   }
 
   .poster {
-    width: 100%; height: 300px; background-size: cover; background-position: center; display: flex; align-items: flex-end; padding: 12px; color: #fff; font-weight: 800; font-size: 14px;
+    width: 100%; height: 255px; background-size: cover; background-position: center; display: flex; align-items: flex-end; padding: 12px; color: #fff; font-weight: 800; font-size: 14px;
     position: relative;
   }
 
@@ -303,7 +303,10 @@
     font-size: 20px; color: #fff; box-shadow: 0 4px 20px rgba(229,9,20,0.5);
   }
 
-  .meta { padding: 14px; color: var(--muted); font-size: 13px; }
+  .modal-play-btn { border:0; padding:0; cursor:pointer; appearance:none; position:relative; z-index:4; }
+  .modal-play-btn:hover { transform:scale(1.05); }
+
+  .meta { padding: 11px; color: var(--muted); font-size: 13px; }
   .meta strong { color: var(--text-primary); font-size: 15px; }
   .tag { position: absolute; left: 10px; top: 10px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); padding: 5px 10px; border-radius: 6px; font-size: 11px; color: #fff; font-weight: 700; letter-spacing: 0.5px; }
 
@@ -333,8 +336,8 @@
     pointer-events: none;
     cursor: default;
   }
-  .arrow-left { left: -50px; }
-  .arrow-right { right: -50px; }
+  .arrow-left { left: -44px; }
+  .arrow-right { right: -44px; }
 
   /* CONTENT PLAYER PAGE STYLES */
   .player-section { max-width: 1280px; margin: 0 auto; padding: 32px 36px 60px; }
@@ -431,7 +434,7 @@
   }
 
   .modal-ep-item {
-    flex: 0 0 220px;
+    flex: 0 0 200px;
     background: var(--panel-light);
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -448,7 +451,7 @@
   }
   .modal-ep-thumb {
     width: 100%;
-    height: 125px;
+    height: 112px;
     background-size: cover;
     background-position: center;
     position: relative;
@@ -720,8 +723,8 @@
     .rail { margin: 0; }
     .arrow-left { left: 6px; }
     .arrow-right { right: 6px; }
-    .card { width: 170px; flex: 0 0 170px; }
-    .poster { height: 240px; }
+    .card { width: 150px; flex: 0 0 150px; }
+    .poster { height: 212px; }
     .modal { padding: 24px 20px; max-width: 100%; }
   }
 </style>
@@ -1311,9 +1314,9 @@ function getYouTubeThumbnail(youtubeId, fallbackImage) {
         <h5 style="margin:0 0 12px;font-size:16px;color:var(--text-primary);">Episodes</h5>
         <div class="modal-ep-list">
           ${data.episodes.map(ep => `
-            <div class="modal-ep-item" onclick="playMedia('${data.key}', '${ep.id}')">
+            <div class="modal-ep-item" role="button" tabindex="0" onclick="playMedia('${data.key}', '${ep.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();playMedia('${data.key}', '${ep.id}')}" aria-label="Play ${escapeHtml(ep.title)}">
               <div class="modal-ep-thumb" style="background-image:url('${getYouTubeThumbnail(ep.youtubeId, data.image)}')">
-                <div class="play-btn" style="width:34px;height:34px;font-size:13px;">▶</div>
+                <button type="button" class="play-btn modal-play-btn" onclick="event.stopPropagation(); playMedia('${data.key}', '${ep.id}')" aria-label="Play ${escapeHtml(ep.title)}">▶</button>
               </div>
               <div class="modal-ep-info">
                 <h5>${ep.title}</h5>
@@ -1334,7 +1337,7 @@ function getYouTubeThumbnail(youtubeId, fallbackImage) {
           <h4 style="margin:0 0 6px;font-size:28px;font-weight:800;">${data.title}</h4>
           <div style="color:var(--gold);margin-bottom:16px;font-size:15px;font-weight:600;">${data.subtitle}</div>
           <div style="margin-bottom:18px;">
-            <button class="btn btn-primary" onclick="playMedia('${data.key}', '${data.episodes[0]?.id || ''}')">▶ Play First Episode</button>
+            <button type="button" class="btn btn-primary" onclick="playMedia('${data.key}', '${data.episodes[0]?.id || ''}')">▶ Play First Episode</button>
           </div>
           <div class="content" style="font-size:15px;line-height:1.65;color:var(--text-secondary);">${data.description}</div>
         </div>
