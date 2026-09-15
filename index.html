@@ -298,7 +298,7 @@
 
   /* Cards */
   .card {
-    width: 158px; flex: 0 0 158px; background: var(--panel); border-radius: 12px; overflow: hidden; position: relative;
+    width: 210px; flex: 0 0 210px; background: var(--panel); border-radius: 12px; overflow: hidden; position: relative;
     transform-origin: center bottom;
     transition: transform 0.25s cubic-bezier(.2,.9,.2,1), box-shadow 0.25s ease;
     will-change: transform, box-shadow;
@@ -315,7 +315,7 @@
   }
 
   .poster {
-    width: 100%; height: 205px; background-size: cover; background-position: center; display: flex; align-items: flex-end; padding: 12px; color: #fff; font-weight: 800; font-size: 14px;
+    width: 100%; height: 272px; background-size: cover; background-position: center; display: flex; align-items: flex-end; padding: 12px; color: #fff; font-weight: 800; font-size: 14px;
     position: relative;
   }
 
@@ -441,8 +441,8 @@
   /* Episode Cards Rail */
   .episodes-section h3 { font-size: 22px; font-weight: 700; margin-bottom: 16px; }
   .ep-card {
-    width: 260px;
-    flex: 0 0 260px;
+    width: 320px;
+    flex: 0 0 320px;
     background: var(--panel);
     border-radius: 12px;
     overflow: hidden;
@@ -453,7 +453,7 @@
   .ep-card:hover { transform: translateY(-4px); border-color: var(--accent); }
   .ep-card.active-ep { border-color: var(--gold); box-shadow: 0 0 12px rgba(245, 197, 24, 0.3); }
   .ep-thumb {
-    height: 145px;
+    height: 180px;
     background-size: cover;
     background-position: center;
     position: relative;
@@ -487,7 +487,7 @@
   .modal-ep-list::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
 
   .modal-ep-item {
-    flex: 0 0 200px;
+    flex: 0 0 240px;
     background: var(--panel-light);
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -500,7 +500,7 @@
   .modal-ep-item:hover { border-color: var(--accent); background: rgba(229, 9, 20, 0.08); transform: translateY(-2px); }
   .modal-ep-thumb {
     width: 100%;
-    height: 112px;
+    height: 135px;
     background-size: cover;
     background-position: center;
     position: relative;
@@ -811,16 +811,7 @@
     .auth .btn { padding: 8px 12px; font-size: 13px; }
     .hero { padding: 32px 20px 64px; }
     .hero-title { font-size: 32px; }
-    /* Fit the 16:9 player to the screen width so nothing is cropped at the
-       sides; it stays vertically centred inside the hero. */
-    .hero-bg-container iframe {
-      width: 100%;
-      height: auto;
-      min-width: 0;
-      min-height: 0;
-      aspect-ratio: 16 / 9;
-      transform: translate(-50%, -50%) scale(1);
-    }
+    .hero-bg-container iframe { transform: translate(-50%, -50%) scale(1.6); }
     .hero-dots { bottom: 14px; }
     .about-grid, .contact-grid { grid-template-columns: 1fr; gap: 24px; }
     .contact-form { padding: 24px; }
@@ -863,7 +854,9 @@
 
     /* Player page episode rails */
     .ep-card { width: 210px; flex: 0 0 210px; }
+    .ep-thumb { height: 118px; }
     .modal-ep-item { flex: 0 0 170px; }
+    .modal-ep-thumb { height: 100px; }
 
     .team-grid { grid-template-columns: 1fr; gap: 16px; }
     .modal { padding: 24px 20px; max-width: 100%; }
@@ -882,6 +875,10 @@
       opacity: 1;
       background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.05) 55%);
     }
+  }
+
+  @media (max-width: 480px) {
+    .hero-bg-container iframe { transform: translate(-50%, -50%) scale(2.1); }
   }
 
   /* Very small phones: tighter gutters so 3 cards + peek still fit */
@@ -985,12 +982,12 @@
       <div class="section-header">
         <div class="section-tag">About Production House</div>
         <h2 class="section-title">ADDABAAZ</h2>
-        <div class="section-subtitle">A Premier Film Production House & Commercial Ad Film Company in Kolkata</div>
+        <div class="section-subtitle">A Premier Film Production House &amp; Commercial Ad Film Company in Kolkata</div>
       </div>
 
       <div class="about-grid">
         <div class="mission-card">
-          <h4>OUR MISSION (আমাদের লক্ষ্য)</h4>
+          <h4>Our Mission (আমাদের লক্ষ্য)</h4>
           <ul class="mission-list">
             <li class="bengali-text">নতুন ও মৌলিক গল্পের মাধ্যমে দর্শকের মনে গভীর ছাপ তৈরি করা।</li>
             <li class="bengali-text">সিনেমা ও বিজ্ঞাপনে সৃজনশীলতা, গুণমান এবং নতুন ভাবনার সংমিশ্রণ ঘটানো।</li>
@@ -1001,10 +998,10 @@
         </div>
 
         <div class="mission-card">
-          <h4>OUR MISSION</h4>
+          <h4>Our Mission</h4>
           <ul class="mission-list">
             <li>Creating a lasting impact through original, compelling storytelling.</li>
-            <li>Blending artistic creativity, high production quality, and innovative concepts in cinema & advertising.</li>
+            <li>Blending artistic creativity, high production quality, and innovative concepts in cinema &amp; advertising.</li>
             <li>Empowering visionaries, emerging writers, directors, and artists to express their authentic voices.</li>
             <li>Elevating hyper-local narratives onto a global stage with world-class visuals and craftsmanship.</li>
             <li>Crafting cinematic experiences and brand commercials that resonate emotionally and remain unforgettable.</li>
@@ -1015,36 +1012,36 @@
       <!-- ================= TEAM / LEADERS ================= -->
       <div class="section-header" style="margin-top:72px;">
         <div class="section-tag">The People Behind ADDABAAZ</div>
-        <h2 class="section-title">OUR LEADERS &amp; TEAM</h2>
+        <h2 class="section-title">Our Leaders &amp; Team</h2>
         <div class="section-subtitle">The creative minds shaping every ADDABAAZ story.</div>
       </div>
 
       <div class="team-grid">
         <div class="team-card">
           <div class="team-role">🎬 Creative Director</div>
-          <h3 class="team-name">DEEP</h3>
+          <h3 class="team-name">Deep</h3>
           <p class="team-quote">“Create your own ideas, tell your own stories—that’s where films are born.”</p>
         </div>
 
         <div class="team-card">
           <div class="team-role">🎥 Brand Director</div>
-          <h3 class="team-name">S. SIKDAR</h3>
+          <h3 class="team-name">S. Sikdar</h3>
           <p class="team-quote">“Leaders emphasize that brands live in the mind, defined by customer perception, stories, and relationships rather than just factory output.”</p>
         </div>
 
         <div class="team-card">
           <div class="team-role">🎞️ Film Director</div>
-          <h3 class="team-name">RAJDEEP GHOSH</h3>
+          <h3 class="team-name">Rajdeep Ghosh</h3>
         </div>
 
         <div class="team-card">
           <div class="team-role">🎞️ Film Director</div>
-          <h3 class="team-name">SUJOY SARKAR</h3>
+          <h3 class="team-name">Sujoy Sarkar</h3>
         </div>
 
         <div class="team-card">
           <div class="team-role">🎞️ Film Director</div>
-          <h3 class="team-name">ANURAAG PATI</h3>
+          <h3 class="team-name">Anuraag Pati</h3>
         </div>
 
         <div class="team-card">
@@ -1061,13 +1058,13 @@
 
         <div class="team-card">
           <div class="team-role">📸 Director of Photography (DOP)</div>
-          <h3 class="team-name">SOURAV CHATTERJEE</h3>
+          <h3 class="team-name">Sourav Chatterjee</h3>
           <p class="team-quote">“Focus on visual storytelling, lighting for mood, and translating a director’s vision into moving images.”</p>
         </div>
 
         <div class="team-card">
           <div class="team-role">✍️ Writer &amp; Screenplay Director</div>
-          <h3 class="team-name">DEEP</h3>
+          <h3 class="team-name">Deep</h3>
           <p class="team-quote">“Let every word become a clear, captivating, and meaningful story.”</p>
         </div>
       </div>
@@ -1079,47 +1076,47 @@
   <div id="servicesTab" class="tab-content">
     <section class="section-container">
       <div class="section-header">
-        <div class="section-tag">Capabilities & Production</div>
-        <h2 class="section-title">OUR EXPERTISE</h2>
+        <div class="section-tag">Capabilities &amp; Production</div>
+        <h2 class="section-title">Our Expertise</h2>
         <div class="section-subtitle">Full-service film and commercial advertisement production based in Kolkata</div>
       </div>
 
       <div class="services-grid">
         <div class="service-card">
           <div class="service-num">01</div>
-          <h4>FILM PRODUCTION</h4>
+          <h4>Film Production</h4>
           <p>Developing and executing full-length feature films, indie projects, and short films from initial narrative concept to silver screen release.</p>
         </div>
         <div class="service-card">
           <div class="service-num">02</div>
-          <h4>AD FILM PRODUCTION</h4>
+          <h4>Ad Film Production</h4>
           <p>Translating brand visions and corporate identities into high-impact visual stories, TV commercials, and digital brand films.</p>
         </div>
         <div class="service-card">
           <div class="service-num">03</div>
-          <h4>DIRECTION & PRODUCTION</h4>
+          <h4>Direction &amp; Production</h4>
           <p>Providing end-to-end creative leadership and technical production management across pre-production, principal photography, and post-production.</p>
         </div>
         <div class="service-card">
           <div class="service-num">04</div>
-          <h4>SCRIPT & STORYTELLING</h4>
+          <h4>Script &amp; Storytelling</h4>
           <p>Nurturing raw ideas into polished screenplays, sharp dialogues, and deeply engaging cinematic narratives engineered for emotional resonance.</p>
         </div>
         <div class="service-card">
           <div class="service-num">05</div>
-          <h4>CINEMATIC VISUALS</h4>
+          <h4>Cinematic Visuals</h4>
           <p>Crafting a signature visual aesthetic through modern camera work, artistic lighting design, expert color grading, and meticulous creative direction.</p>
         </div>
         <div class="service-card">
           <div class="service-num">06</div>
-          <h4>DIGITAL CONTENT</h4>
+          <h4>Digital Content</h4>
           <p>Producing trend-defining digital shows, web series, webcasts, and high-converting video assets optimized for OTT platforms, YouTube, and social media.</p>
         </div>
       </div>
 
       <div class="banner-cta">
-        <h3>YOUR VISION. OUR EXPERTISE.</h3>
-        <p>"LET'S MAKE GREAT FILMS TOGETHER"</p>
+        <h3>Your Vision. Our Expertise.</h3>
+        <p>"Let's Make Great Films Together"</p>
       </div>
     </section>
   </div>
@@ -1129,13 +1126,13 @@
     <section class="section-container">
       <div class="section-header">
         <div class="section-tag">Collaborate</div>
-        <h2 class="section-title">INITIATE A PROJECT</h2>
+        <h2 class="section-title">Initiate a Project</h2>
         <div class="section-subtitle">Reach out for production inquiries, commercial briefs, press relations, or general correspondence.</div>
       </div>
 
       <div class="contact-grid">
         <div class="contact-form">
-          <h3 style="margin:0 0 24px;font-size:20px;">PROJECT INQUIRY</h3>
+          <h3 style="margin:0 0 24px;font-size:20px;">Project Inquiry</h3>
           <form id="projectForm" onsubmit="handleFormSubmit(event)">
             <div class="form-group">
               <label for="name">Your Name</label>
@@ -1155,16 +1152,16 @@
 
         <div class="contact-details">
           <div class="contact-info-block">
-            <h4>DIRECT CONTACT</h4>
+            <h4>Direct Contact</h4>
             <a href="mailto:office@addabaaz.in">office@addabaaz.in</a>
             <a href="tel:+913331886679">+91 33318 86679</a>
           </div>
           <div class="contact-info-block">
-            <h4>HEADQUARTERS</h4>
+            <h4>Headquarters</h4>
             <p>162/B, 283 Lake Gardens<br />Kolkata, West Bengal 700040<br />India</p>
           </div>
           <div class="contact-info-block">
-            <h4>CONNECT WITH US</h4>
+            <h4>Connect With Us</h4>
             <div class="social-row">
               <a href="https://www.facebook.com/ADDABAAZDEEP" target="_blank" rel="noopener noreferrer" class="social-link">
                 <i class="fab fa-facebook-f"></i> <span>Facebook</span>
@@ -1244,13 +1241,15 @@
     if (!playerBox) return;
     // Plain iframe with mobile-friendly parameters.
     // - autoplay=1 : request autoplay
-    // - mute=1     : required for autoplay to be allowed on mobile browsers
     // - playsinline=1 : keeps playback inline on iOS
     // - rel=0      : limits related videos to the same channel
     // - modestbranding=1 : minimal YouTube branding
+    // NOTE: deliberately NOT passing mute=1 so playback starts with audio.
+    //       Some browsers may still require a user gesture for unmuted
+    //       autoplay; the user can press play on the player if blocked.
     playerBox.innerHTML = `
       <iframe
-        src="https://www.youtube.com/embed/${encodeURIComponent(youtubeId)}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1"
+        src="https://www.youtube.com/embed/${encodeURIComponent(youtubeId)}?autoplay=1&playsinline=1&rel=0&modestbranding=1"
         title="ADDABAAZ video player"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         allowfullscreen>
@@ -1333,7 +1332,7 @@
       const epCount = slide.show.episodes.length;
       content.innerHTML = `
         <div class="hero-content-swap">
-          <div class="hero-kicker">ADDABAAZ ORIGINAL</div>
+          <div class="hero-kicker">ADDABAAZ Original</div>
           <h1 class="hero-title">${escapeHtml(slide.show.title)}</h1>
           <div class="hero-meta">${escapeHtml(slide.show.subtitle)} • ${epCount} episodes • Bengali</div>
           <div class="hero-ctas">
