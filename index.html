@@ -963,7 +963,7 @@
         <p id="playerDesc">Episode description text goes here.</p>
       </div>
 
-      <div class="episodes-section">
+      <div class="episodes-section" id="episodesSection">
         <h3 id="epListTitle">Episodes</h3>
         <div class="rail" style="margin:0;">
           <div class="arrow arrow-left disabled" id="epArrowLeft" onclick="scrollRail('epViewport', -1)">◀</div>
@@ -1224,36 +1224,61 @@
     return show.image || (show.episodes[0] && show.episodes[0].thumbnail) || '';
   }
 
-  // Instantly jump the window back to the top. Used whenever the visible tab
-  // changes, because the document height changes at that moment and cancels
-  // any smooth scroll that might still be animating (very noticeable on mobile).
+  // Instantly jump the window back to the top. Temporarily disables CSS
+  // smooth scrolling so the jump happens immediately, even on mobile.
   function resetScrollPosition() {
-    window.scrollTo(0, 0);
-    document.documentElement.scrollTop = 0;
+    const html = document.documentElement;
+    const prevBehavior = html.style.scrollBehavior;
+    html.style.scrollBehavior = 'auto';
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    } catch (e) {
+      window.scrollTo(0, 0);
+    }
+    html.scrollTop = 0;
     if (document.body) document.body.scrollTop = 0;
+    html.style.scrollBehavior = prevBehavior;
   }
 
   // ============================================================
-  // VIDEO PLAYER (plain iframe with mobile-friendly params)
+  // VIDEO PLAYER
   // ============================================================
   function createVideoPlayer(youtubeId) {
     const playerBox = document.getElementById('videoPlayerBox');
     if (!playerBox) return;
-    // Plain iframe with mobile-friendly parameters.
-    // - autoplay=1 : request autoplay
-    // - playsinline=1 : keeps playback inline on iOS
-    // - rel=0      : limits related videos to the same channel
-    // - modestbranding=1 : minimal YouTube branding
-    // NOTE: deliberately NOT passing mute=1 so playback starts with audio.
-    //       Some browsers may still require a user gesture for unmuted
-    //       autoplay; the user can press play on the player if blocked.
+
+    // Start muted (required for autoplay on mobile browsers), then send an
+    // unMute command to the YouTube player as soon as it is playing. Because
+    // this runs inside the click's user-activation window, most browsers will
+    // honour the unmute. If a browser still refuses, the video keeps playing
+    // muted and the user can tap the player's speaker icon.
     playerBox.innerHTML = `
       <iframe
-        src="https://www.youtube.com/embed/${encodeURIComponent(youtubeId)}?autoplay=1&playsinline=1&rel=0&modestbranding=1"
+        id="ytPlayerIframe"
+        src="https://www.youtube.com/embed/${encodeURIComponent(youtubeId)}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}"
         title="ADDABAAZ video player"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         allowfullscreen>
       </iframe>`;
+
+    const iframe = document.getElementById('ytPlayerIframe');
+    if (!iframe) return;
+
+    const unmute = () => {
+      try {
+        iframe.contentWindow.postMessage(
+          '{"event":"command","func":"unMute","args":""}', '*'
+        );
+        iframe.contentWindow.postMessage(
+          '{"event":"command","func":"setVolume","args":"[100]"}', '*'
+        );
+      } catch (e) { /* ignore */ }
+    };
+
+    // Several attempts to maximise the chance the unmute takes.
+    setTimeout(unmute, 600);
+    setTimeout(unmute, 1500);
+    setTimeout(unmute, 3000);
   }
 
   // ============================================================
@@ -1544,9 +1569,11 @@
           });
         }
         // The content swap changes the document height, which cancels any
-        // smooth scroll that was in flight. Reset again once the new tab
-        // is actually in the DOM.
+        // scroll that was in flight. Reset several times to be safe on mobile.
         resetScrollPosition();
+        requestAnimationFrame(resetScrollPosition);
+        setTimeout(resetScrollPosition, 60);
+        setTimeout(resetScrollPosition, 200);
       }, 350);
     } else if (targetTab) {
       targetTab.classList.add('active');
@@ -1558,6 +1585,7 @@
     // Immediate, non-smooth reset so the user never sees the old scroll
     // position while the outgoing tab is still fading out.
     resetScrollPosition();
+    requestAnimationFrame(resetScrollPosition);
   }
 
   const projectOrder = ['shahid','laughBite','faltu','centralCalcuttaBoarding'];
@@ -1642,9 +1670,12 @@
     document.getElementById('playerSub').textContent = `PROMO • ${v.duration}`;
     document.getElementById('playerDesc').textContent = 'ADDABAAZ short-form content.';
     document.getElementById('episodesTrack').innerHTML = '';
+    const epSection = document.getElementById('episodesSection');
+    if (epSection) epSection.style.display = 'none';
     openTab('playerTab', null, opts);
     // Force an immediate scroll to top on mobile when opening the player
     resetScrollPosition();
+    requestAnimationFrame(resetScrollPosition);
   }
 
   function playVideo(showKey, videoId) {
@@ -1691,6 +1722,9 @@
     document.getElementById('playerDesc').innerText = show.description;
     document.getElementById('epListTitle').innerText = `${show.title} — Episodes`;
 
+    const epSection = document.getElementById('episodesSection');
+    if (epSection) epSection.style.display = '';
+
     const epTrack = document.getElementById('episodesTrack');
     epTrack.innerHTML = show.episodes.map(e => {
       const thumbUrl = e.thumbnail || getYouTubeThumbnail(e.youtubeId, show.image);
@@ -1712,6 +1746,7 @@
     openTab('playerTab', null, opts);
     // Force an immediate scroll to top on mobile when opening the player
     resetScrollPosition();
+    requestAnimationFrame(resetScrollPosition);
 
     setTimeout(() => {
       const epViewport = document.getElementById('epViewport');
