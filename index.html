@@ -811,7 +811,16 @@
     .auth .btn { padding: 8px 12px; font-size: 13px; }
     .hero { padding: 32px 20px 64px; }
     .hero-title { font-size: 32px; }
-    .hero-bg-container iframe { transform: translate(-50%, -50%) scale(1.6); }
+    /* Fit the 16:9 player to the screen width so nothing is cropped at the
+       sides; it stays vertically centred inside the hero. */
+    .hero-bg-container iframe {
+      width: 100%;
+      height: auto;
+      min-width: 0;
+      min-height: 0;
+      aspect-ratio: 16 / 9;
+      transform: translate(-50%, -50%) scale(1);
+    }
     .hero-dots { bottom: 14px; }
     .about-grid, .contact-grid { grid-template-columns: 1fr; gap: 24px; }
     .contact-form { padding: 24px; }
@@ -860,10 +869,10 @@
     .modal { padding: 24px 20px; max-width: 100%; }
 
     /* Reduce vertical gaps between rows on mobile */
-    .row { padding: 24px 12px; }
-    .row h3 { margin-bottom: 12px; font-size: 20px; }
+    .row { padding: 14px 12px; }
+    .row h3 { margin-bottom: 10px; font-size: 20px; }
     .row + .row { margin-top: 0; }
-    .rail-viewport { padding: 6px 0; }
+    .rail-viewport { padding: 4px 0; }
     .hero-wrap { min-height: 60vh; }
   }
 
@@ -875,13 +884,10 @@
     }
   }
 
-  @media (max-width: 480px) {
-    .hero-bg-container iframe { transform: translate(-50%, -50%) scale(2.1); }
-  }
-
   /* Very small phones: tighter gutters so 3 cards + peek still fit */
   @media (max-width: 380px) {
-    .section-container, .row, .player-section { padding: 22px 10px; }
+    .section-container, .player-section { padding: 22px 10px; }
+    .row { padding: 12px 10px; }
     .rail-track { gap: 8px; }
     .card {
       width: calc((100% - 16px) / 3.15);
@@ -1102,7 +1108,7 @@
         <div class="service-card">
           <div class="service-num">05</div>
           <h4>CINEMATIC VISUALS</h4>
-          <p>Crafting signature visual aesthetic through modern camera work, artistic lighting design, expert color grading, and meticulous creative direction.</p>
+          <p>Crafting a signature visual aesthetic through modern camera work, artistic lighting design, expert color grading, and meticulous creative direction.</p>
         </div>
         <div class="service-card">
           <div class="service-num">06</div>
@@ -1219,6 +1225,15 @@
 
   function getShowPoster(show) {
     return show.image || (show.episodes[0] && show.episodes[0].thumbnail) || '';
+  }
+
+  // Instantly jump the window back to the top. Used whenever the visible tab
+  // changes, because the document height changes at that moment and cancels
+  // any smooth scroll that might still be animating (very noticeable on mobile).
+  function resetScrollPosition() {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
   }
 
   // ============================================================
@@ -1529,6 +1544,10 @@
             targetTab.classList.add('show');
           });
         }
+        // The content swap changes the document height, which cancels any
+        // smooth scroll that was in flight. Reset again once the new tab
+        // is actually in the DOM.
+        resetScrollPosition();
       }, 350);
     } else if (targetTab) {
       targetTab.classList.add('active');
@@ -1537,8 +1556,9 @@
       });
     }
 
-    // Always bring the user back to the top on tab change
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Immediate, non-smooth reset so the user never sees the old scroll
+    // position while the outgoing tab is still fading out.
+    resetScrollPosition();
   }
 
   const projectOrder = ['shahid','laughBite','faltu','centralCalcuttaBoarding'];
@@ -1625,7 +1645,7 @@
     document.getElementById('episodesTrack').innerHTML = '';
     openTab('playerTab', null, opts);
     // Force an immediate scroll to top on mobile when opening the player
-    window.scrollTo(0, 0);
+    resetScrollPosition();
   }
 
   function playVideo(showKey, videoId) {
@@ -1692,7 +1712,7 @@
 
     openTab('playerTab', null, opts);
     // Force an immediate scroll to top on mobile when opening the player
-    window.scrollTo(0, 0);
+    resetScrollPosition();
 
     setTimeout(() => {
       const epViewport = document.getElementById('epViewport');
@@ -1768,7 +1788,7 @@
     history.replaceState({ tab: 'homeTab', playback: null }, '', location.pathname + location.search);
 
     // Ensure page loads at the top
-    window.scrollTo(0, 0);
+    resetScrollPosition();
 
     document.querySelectorAll('.rail-viewport').forEach(v => {
       if (v.id) v.addEventListener('scroll', () => updateScrollArrowsFor(v));
