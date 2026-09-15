@@ -334,6 +334,41 @@
   .meta strong { color: var(--text-primary); font-size: 15px; }
   .tag { position: absolute; left: 10px; top: 10px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); padding: 5px 10px; border-radius: 6px; font-size: 11px; color: #fff; font-weight: 700; letter-spacing: 0.5px; }
 
+  /* Badge used by promo/reel cards (was previously unstyled) */
+  .kind-badge {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    z-index: 3;
+    background: rgba(0,0,0,0.72);
+    backdrop-filter: blur(4px);
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    line-height: 1;
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    pointer-events: none;
+  }
+
+  /* Keep promo card titles from stretching cards to uneven heights */
+  .catalog-card .meta .video-title strong {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .catalog-card .meta .video-meta {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
   /* Dynamic Navigation Arrows */
   .arrow {
     position: absolute;
@@ -744,34 +779,70 @@
     .contact-form { padding: 24px; }
     .section-container, .row, .player-section { padding: 32px 16px; }
 
-    /* ---- Mobile: no arrows, 3-across compact show cards ---- */
+    /* ---- Rails: hide arrows, normalise the track ---- */
     .rail { margin: 0; }
     .arrow { display: none !important; }
-    .rail-track { gap: 12px; }
+    .rail-viewport { padding: 10px 0; -webkit-overflow-scrolling: touch; }
+
+    /* Track is a normal 100%-wide flex row. Cards overflow to the right and
+       the viewport scrolls — percentage widths now resolve against the rail
+       width instead of an indefinite max-content width. */
+    .rail-track { width: 100%; gap: 12px; }
+
+    /* Exactly 3 cards visible (2 gaps x 12px = 24px) */
     .card {
       width: calc((100% - 24px) / 3);
       flex: 0 0 calc((100% - 24px) / 3);
-      border-radius: 10px;
       min-width: 0;
+      border-radius: 10px;
     }
-    .poster { height: 118px; padding: 8px; }
-    .meta { padding: 8px; font-size: 11px; }
-    .meta strong {
-      font-size: 12px;
-      display: block;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+    .card .poster {
+      height: auto;
+      aspect-ratio: 3 / 4;
+      padding: 6px;
     }
-    .tag { font-size: 9px; padding: 3px 6px; left: 6px; top: 6px; letter-spacing: 0.2px; }
-    .play-btn { width: 38px; height: 38px; font-size: 14px; }
+    .meta { padding: 7px 8px; font-size: 10px; }
+    .meta strong { font-size: 11px; }
+    .catalog-card .meta .video-title strong { font-size: 11px; }
+    .tag, .kind-badge {
+      font-size: 8px;
+      padding: 3px 5px;
+      left: 5px;
+      top: 5px;
+      border-radius: 4px;
+      letter-spacing: 0.2px;
+    }
+    .play-btn { width: 34px; height: 34px; font-size: 13px; }
+
+    /* Player page episode rails */
+    .ep-card { width: 210px; flex: 0 0 210px; }
+    .modal-ep-item { flex: 0 0 170px; }
 
     .team-grid { grid-template-columns: 1fr; gap: 16px; }
     .modal { padding: 24px 20px; max-width: 100%; }
   }
+
+  /* Touch devices: keep the play affordance visible (no hover state) */
+  @media (hover: none) and (pointer: coarse) {
+    .play-overlay {
+      opacity: 1;
+      background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.05) 55%);
+    }
+  }
+
   @media (max-width: 480px) {
     .hero-bg-container iframe { transform: translate(-50%, -50%) scale(2.1); }
-    .poster { height: 105px; }
+  }
+
+  /* Very small phones: tighter gutters so 3 cards still fit */
+  @media (max-width: 380px) {
+    .section-container, .row, .player-section { padding: 28px 12px; }
+    .rail-track { gap: 10px; }
+    .card {
+      width: calc((100% - 20px) / 3);
+      flex: 0 0 calc((100% - 20px) / 3);
+    }
+    .tag, .kind-badge { font-size: 7px; padding: 2px 4px; }
   }
 </style>
 </head>
