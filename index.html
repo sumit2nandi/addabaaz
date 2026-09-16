@@ -1017,10 +1017,10 @@
   }
 
   /* ============================================================
-     UPCOMING RELEASES / COMING SOON
+     UPCOMING RELEASES / COMING SOON / BEHIND THE SCENES
      ============================================================ */
 
-  /* --- Card used in the homepage rail AND the Upcoming grid --- */
+  /* --- Card used in the homepage rails AND the dedicated grids --- */
   .upcoming-card {
     width: 210px;
     flex: 0 0 210px;
@@ -1107,7 +1107,25 @@
     text-overflow: ellipsis;
   }
 
-  /* --- "Show All" button under the homepage Coming Soon rail --- */
+  /* --- Behind the Scenes variant --- */
+  .upcoming-card.bts-card .upcoming-poster-wrap {
+    aspect-ratio: 4 / 3;
+  }
+  .upcoming-card.bts-card .upcoming-badge {
+    background: linear-gradient(135deg, #f5c518 0%, #d99f00 100%);
+    color: #050505;
+    box-shadow: 0 4px 12px rgba(245, 197, 24, 0.45);
+  }
+  .upcoming-card.bts-card .upcoming-fallback i {
+    color: rgba(245, 197, 24, 0.85);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .upcoming-card.bts-card:hover, .upcoming-card.bts-card:focus {
+      border-color: rgba(245, 197, 24, 0.55);
+    }
+  }
+
+  /* --- "Show All" button under the homepage rails --- */
   .show-all-wrap {
     display: flex;
     justify-content: center;
@@ -1119,8 +1137,17 @@
     font-size: 14px;
     letter-spacing: 0.4px;
   }
+  .btn-show-all.btn-gold {
+    background: linear-gradient(135deg, #f5c518 0%, #d99f00 100%);
+    color: #050505;
+    box-shadow: 0 8px 24px rgba(245, 197, 24, 0.3);
+  }
+  .btn-show-all.btn-gold:hover {
+    background: linear-gradient(135deg, #ffd633 0%, #e6aa00 100%);
+    box-shadow: 0 12px 28px rgba(245, 197, 24, 0.45);
+  }
 
-  /* --- Full grid on the Upcoming Releases page --- */
+  /* --- Full grid on the dedicated pages --- */
   .upcoming-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -1130,6 +1157,10 @@
   .upcoming-grid .upcoming-card {
     width: 100%;
     flex: none;
+  }
+  /* BTS grid uses wider tiles because photos are landscape */
+  .upcoming-grid.bts-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   }
   .upcoming-empty {
     grid-column: 1 / -1;
@@ -1291,6 +1322,9 @@
       width: 100%;
       flex: none;
     }
+    .upcoming-grid.bts-grid {
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    }
 
     .show-all-wrap { margin-top: 10px; }
     .btn-show-all { padding: 11px 20px; font-size: 13px; }
@@ -1305,6 +1339,7 @@
   @media (max-width: 380px) {
     .upcoming-card { width: calc((100% - 16px) / 3.15); flex: 0 0 calc((100% - 16px) / 3.15); }
     .upcoming-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+    .upcoming-grid.bts-grid { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); }
   }
 </style>
 </head>
@@ -1363,6 +1398,22 @@
     </section>
     <!-- ============================================== -->
 
+    <!-- ================= BEHIND THE SCENES ================= -->
+    <section class="row animate-row" id="btsSection" aria-label="Behind the scenes from ADDABAAZ productions">
+      <h3>Behind the Scenes</h3>
+      <div class="rail">
+        <div class="arrow arrow-left disabled" onclick="scrollRail('btsViewport',-1)">◀</div>
+        <div class="rail-viewport" id="btsViewport"><div class="rail-track" id="btsTrack"></div></div>
+        <div class="arrow arrow-right" onclick="scrollRail('btsViewport',1)">▶</div>
+      </div>
+      <div class="show-all-wrap">
+        <button type="button" class="btn btn-show-all btn-gold" onclick="openTab('btsTab', null)">
+          Show All Behind the Scenes →
+        </button>
+      </div>
+    </section>
+    <!-- ===================================================== -->
+
     <div id="promoRowsContainer"></div>
   </div>
 
@@ -1394,6 +1445,19 @@
         <div class="section-subtitle">A first look at the stories ADDABAAZ is bringing to the screen next.</div>
       </div>
       <div class="upcoming-grid" id="upcomingGrid"></div>
+    </section>
+  </div>
+  <!-- ========================================================== -->
+
+  <!-- ================= BEHIND THE SCENES PAGE ================= -->
+  <div id="btsTab" class="tab-content">
+    <section class="section-container">
+      <div class="section-header">
+        <div class="section-tag">On Set</div>
+        <h2 class="section-title">Behind the Scenes</h2>
+        <div class="section-subtitle">Moments, faces and frames from the making of ADDABAAZ productions.</div>
+      </div>
+      <div class="upcoming-grid bts-grid" id="btsGrid"></div>
     </section>
   </div>
   <!-- ========================================================== -->
@@ -1608,10 +1672,10 @@
   <!-- Full-size poster preview (desktop hover) -->
   <div id="posterPreview" class="poster-preview" aria-hidden="true">
     <div class="poster-preview-media">
-      <img src="" alt="Upcoming release poster" />
+      <img src="" alt="Poster preview" />
       <div class="poster-preview-fallback" style="display:none;">
         <i class="fas fa-film"></i>
-        <span>Coming Soon</span>
+        <span>Preview</span>
       </div>
     </div>
     <div class="poster-preview-title" style="display:none;"></div>
@@ -1894,14 +1958,14 @@
   /* ============================================================
      UPCOMING RELEASES  (Coming Soon)
      ------------------------------------------------------------
-     ► Put your poster files inside:  UpcomingReleases/
+     ► Put your poster files inside:  images/UpcomingReleases/
      ► Then list the filenames in the array below.
        `title` is optional — leave it as '' to show only the poster.
      ============================================================ */
   const UPCOMING_FOLDER = 'UpcomingReleases/';
   const UPCOMING_HOME_LIMIT = 10;   // posters shown in the homepage "Coming Soon" row
 
-  const upcomingReleases = [
+   const upcomingReleases = [
     { file: 'POSTER (1).png', title: '' },
     { file: 'POSTER (3).png', title: '' },
     { file: 'POSTER (4).png', title: '' },
@@ -1915,6 +1979,38 @@
     { file: 'ChatGPT Image Jun 11, 2026, 03_00_37 AM.png', title: '' },
     { file: 'ChatGPT Image Jun 11, 2026, 03_03_30 AM.png', title: '' },
     { file: 'Gemini_Generated_Image_d59vdwd59vdwd59v.png', title: '' }
+  ];
+
+  /* ============================================================
+     BEHIND THE SCENES
+     ------------------------------------------------------------
+     ► Put your BTS photos inside:  images/BTS/
+     ► Filenames below include spaces and parentheses — they are
+       URL-encoded automatically when rendered.
+     ============================================================ */
+  const BTS_FOLDER = 'BTS/';
+  const BTS_HOME_LIMIT = 10;   // photos shown in the homepage "Behind the Scenes" row
+
+  const behindTheScenes = [
+    { file: 'UTTRAN BTS (16).png', title: 'UTTRAN — Behind the Scenes' },
+    { file: 'SONG BTS (1).png',    title: 'SONG — Behind the Scenes' },
+    { file: 'SONG BTS (2).png',    title: 'SONG — Behind the Scenes' },
+    { file: 'SONG BTS (3).png',    title: 'SONG — Behind the Scenes' },
+    { file: 'SONG BTS (4).png',    title: 'SONG — Behind the Scenes' },
+    { file: 'SONG BTS (5).png',    title: 'SONG — Behind the Scenes' },
+    { file: 'UTTRAN BTS (2).png',  title: 'UTTRAN — Behind the Scenes' },
+    { file: 'UTTRAN BTS (4).png',  title: 'UTTRAN — Behind the Scenes' },
+    { file: 'UTTRAN BTS (5).png',  title: 'UTTRAN — Behind the Scenes' },
+    { file: 'UTTRAN BTS (6).png',  title: 'UTTRAN — Behind the Scenes' },
+    { file: 'UTTRAN BTS (7).png',  title: 'UTTRAN — Behind the Scenes' },
+    { file: 'UTTRAN BTS (8).png',  title: 'UTTRAN — Behind the Scenes' },
+    { file: 'UTTRAN BTS (9).png',  title: 'UTTRAN — Behind the Scenes' },
+    { file: 'UTTRAN BTS (10).png', title: 'UTTRAN — Behind the Scenes' },
+    { file: 'UTTRAN BTS (11).png', title: 'UTTRAN — Behind the Scenes' },
+    { file: 'UTTRAN BTS (12).png', title: 'UTTRAN — Behind the Scenes' },
+    { file: 'UTTRAN BTS (13).png', title: 'UTTRAN — Behind the Scenes' },
+    { file: 'UTTRAN BTS (14).png', title: 'UTTRAN — Behind the Scenes' },
+    { file: 'UTTRAN BTS (15).png', title: 'UTTRAN — Behind the Scenes' }
   ];
 
   /* ============================================================
@@ -1952,10 +2048,23 @@
     html.style.scrollBehavior = prevBehavior;
   }
 
+  /* Encode only the filename portion of a folder+file path */
+  function buildMediaUrl(folder, file) {
+    return folder + encodeURIComponent(file);
+  }
+
   /* ============================================================
      SCROLL MEMORY
      ============================================================ */
-  const scrollMemory = { homeTab: 0, aboutTab: 0, servicesTab: 0, contactTab: 0, playerTab: 0, upcomingTab: 0 };
+  const scrollMemory = {
+    homeTab: 0,
+    aboutTab: 0,
+    servicesTab: 0,
+    contactTab: 0,
+    playerTab: 0,
+    upcomingTab: 0,
+    btsTab: 0
+  };
 
   function currentTabId() {
     const a = document.querySelector('.tab-content.active');
@@ -2398,24 +2507,49 @@
   }
 
   /* ============================================================
-     UPCOMING RELEASES — RENDERING
+     POSTER-STYLE CARDS  (Upcoming Releases + Behind the Scenes)
      ============================================================ */
-  function makeUpcomingCard(item) {
-    const src = UPCOMING_FOLDER + item.file;
-    const title = item.title || '';
-    const altText = title || 'Upcoming ADDABAAZ release poster';
 
-    return '<div class="upcoming-card" tabindex="0" role="button" ' +
+  /* Generic maker — used by both rails/grids below */
+  function makePosterCard(item, opts) {
+    opts = opts || {};
+    const folder = opts.folder || UPCOMING_FOLDER;
+    const badge = opts.badge || 'Coming Soon';
+    const cardClass = opts.cardClass || '';
+    const fallbackIcon = opts.fallbackIcon || 'fa-film';
+    const src = buildMediaUrl(folder, item.file);
+    const title = item.title || '';
+    const altText = title || 'ADDABAAZ image';
+
+    return '<div class="upcoming-card ' + cardClass + '" tabindex="0" role="button" ' +
         'data-poster-src="' + escapeHtml(src) + '" ' +
         'data-poster-title="' + escapeHtml(title) + '" ' +
         'aria-label="' + escapeHtml(altText) + '">' +
         '<div class="upcoming-poster-wrap">' +
-          '<div class="upcoming-fallback"><i class="fas fa-film"></i><span>Coming Soon</span></div>' +
+          '<div class="upcoming-fallback"><i class="fas ' + fallbackIcon + '"></i><span>' + escapeHtml(badge) + '</span></div>' +
           '<img class="upcoming-poster-img" src="' + escapeHtml(src) + '" alt="' + escapeHtml(altText) + '" loading="lazy" onerror="this.style.display=\'none\';" />' +
-          '<div class="upcoming-badge">Coming Soon</div>' +
+          '<div class="upcoming-badge">' + escapeHtml(badge) + '</div>' +
         '</div>' +
         (title ? '<div class="meta">' + escapeHtml(title) + '</div>' : '') +
       '</div>';
+  }
+
+  function makeUpcomingCard(item) {
+    return makePosterCard(item, {
+      folder: UPCOMING_FOLDER,
+      badge: 'Coming Soon',
+      cardClass: '',
+      fallbackIcon: 'fa-film'
+    });
+  }
+
+  function makeBtsCard(item) {
+    return makePosterCard(item, {
+      folder: BTS_FOLDER,
+      badge: 'BTS',
+      cardClass: 'bts-card',
+      fallbackIcon: 'fa-camera'
+    });
   }
 
   function renderComingSoonRow() {
@@ -2434,6 +2568,22 @@
     bindPosterHoverListeners();
   }
 
+  function renderBtsRow() {
+    const section = document.getElementById('btsSection');
+    const track = document.getElementById('btsTrack');
+    if (!track) return;
+
+    if (!behindTheScenes.length) {
+      if (section) section.style.display = 'none';
+      return;
+    }
+    if (section) section.style.display = '';
+
+    const items = behindTheScenes.slice(0, BTS_HOME_LIMIT);
+    track.innerHTML = items.map(makeBtsCard).join('');
+    bindPosterHoverListeners();
+  }
+
   function renderUpcomingGrid() {
     const grid = document.getElementById('upcomingGrid');
     if (!grid) return;
@@ -2446,8 +2596,20 @@
     bindPosterHoverListeners();
   }
 
+  function renderBtsGrid() {
+    const grid = document.getElementById('btsGrid');
+    if (!grid) return;
+
+    if (!behindTheScenes.length) {
+      grid.innerHTML = '<div class="upcoming-empty">Behind-the-scenes moments are coming soon.</div>';
+      return;
+    }
+    grid.innerHTML = behindTheScenes.map(makeBtsCard).join('');
+    bindPosterHoverListeners();
+  }
+
   /* ============================================================
-     UPCOMING RELEASES — HOVER PREVIEW (desktop only)
+     POSTER HOVER PREVIEW (desktop only)
      ============================================================ */
   let posterPreviewShowTimer = null;
   let posterPreviewHideTimer = null;
@@ -2573,7 +2735,7 @@
   }
 
   /* ============================================================
-     UPCOMING RELEASES — FULL-SIZE POSTER MODAL
+     POSTER FULL-SIZE MODAL
      ============================================================ */
   function openPosterModal(src, title) {
     if (!src) return;
@@ -2590,11 +2752,11 @@
     container.innerHTML =
       '<div class="poster-modal-inner">' +
         '<div class="poster-modal-imgwrap">' +
-          '<img src="' + escapeHtml(src) + '" alt="' + escapeHtml(title || 'Upcoming release poster') + '" ' +
+          '<img src="' + escapeHtml(src) + '" alt="' + escapeHtml(title || 'ADDABAAZ image') + '" ' +
             'onerror="this.style.display=\'none\'; if(this.nextElementSibling){this.nextElementSibling.style.display=\'flex\';}" />' +
           '<div class="poster-modal-fallback" style="display:none;">' +
-            '<i class="fas fa-film"></i>' +
-            '<span>Coming Soon</span>' +
+            '<i class="fas fa-camera"></i>' +
+            '<span>Preview</span>' +
           '</div>' +
         '</div>' +
         caption +
@@ -2603,7 +2765,7 @@
     document.getElementById('modalBackdrop').classList.add('show');
   }
 
-  /* Delegated click / keyboard handling for upcoming cards */
+  /* Delegated click / keyboard handling for poster-style cards */
   document.addEventListener('click', (e) => {
     const card = e.target && e.target.closest ? e.target.closest('.upcoming-card') : null;
     if (!card) return;
@@ -2694,7 +2856,7 @@
   const projectOrder = ['shahid', 'laughBite', 'faltu', 'centralCalcuttaBoarding'];
 
   /* ============================================================
-     CARD BUILDERS
+     CARD BUILDERS  (video cards)
      ============================================================ */
   function makeShowCard(showKey) {
     const show = projectDetails[showKey];
@@ -3101,7 +3263,9 @@
 
     renderShowRows();
     renderComingSoonRow();
+    renderBtsRow();
     renderUpcomingGrid();
+    renderBtsGrid();
     initHeroBanner();
     setupRowAnimations();
     setupHeroSwipe();
