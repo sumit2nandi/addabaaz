@@ -90,12 +90,8 @@
     border-radius: 2px;
   }
 
-  .auth {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    margin-left: auto;
-  }
+  /* Sign In / Subscribe hidden as requested */
+  .auth { display: none !important; }
 
   /* HERO slideshow banner */
   .hero-wrap {
@@ -242,6 +238,7 @@
   }
   .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 8px 24px rgba(229, 9, 20, 0.25); }
   .btn-primary:hover { background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 12px 28px rgba(229, 9, 20, 0.35); }
+  .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
   .btn-ghost { background: var(--panel-light); color: var(--text-primary); border: 1px solid var(--border); }
   .btn-ghost:hover { background: rgba(255, 255, 255, 0.15); transform: translateY(-2px); }
 
@@ -692,6 +689,82 @@
   .contact-info-block p, .contact-info-block a { color: var(--text-primary); text-decoration: none; font-size: 16px; line-height: 1.6; margin: 0; display: block; }
   .contact-info-block a:hover { color: var(--accent); }
 
+  /* ─── Contact lines with icons (phone / whatsapp / email) ─── */
+  .contact-info-block a.contact-line {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 0;
+    transition: color 0.2s ease, transform 0.2s ease;
+  }
+  .contact-info-block a.contact-line i {
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--panel-light);
+    border: 1px solid var(--border);
+    font-size: 14px;
+    color: var(--gold);
+    transition: background 0.22s ease, color 0.22s ease, border-color 0.22s ease, transform 0.22s ease;
+  }
+  .contact-info-block a.contact-line:hover { transform: translateX(4px); }
+  .contact-info-block a.contact-line:hover i { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .contact-info-block a.contact-line.whatsapp i { color: #25D366; }
+  .contact-info-block a.contact-line.whatsapp:hover i { background: #25D366; border-color: #25D366; color: #fff; }
+
+  /* ─── CAPTCHA ─── */
+  .captcha-row {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .captcha-question {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 118px;
+    padding: 0 16px;
+    background: linear-gradient(135deg, rgba(229,9,20,0.16), rgba(245,197,24,0.12));
+    border: 1px dashed rgba(245, 197, 24, 0.5);
+    border-radius: 8px;
+    font-weight: 800;
+    font-size: 17px;
+    letter-spacing: 1.2px;
+    color: var(--gold);
+    user-select: none;
+    -webkit-user-select: none;
+    white-space: nowrap;
+  }
+  .captcha-row input { flex: 1 1 auto; min-width: 0; }
+  .captcha-refresh {
+    flex: 0 0 50px;
+    background: var(--panel-light);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.35s ease;
+  }
+  .captcha-refresh:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    transform: rotate(180deg);
+  }
+  .captcha-error { color: #ff6b6b; font-size: 13px; margin-top: 8px; min-height: 16px; }
+  .form-status { margin-top: 14px; font-size: 14px; text-align: center; min-height: 20px; line-height: 1.5; }
+  .form-status.success { color: #4ade80; }
+  .form-status.error { color: #ff6b6b; }
+  .form-note { margin-top: 16px; font-size: 12px; color: var(--muted); text-align: center; line-height: 1.5; }
+
   /* Modal Component */
   .modal-backdrop {
     position: fixed; inset: 0;
@@ -867,6 +940,11 @@
     .row + .row { margin-top: 0; }
     .rail-viewport { padding: 4px 0; }
     .hero-wrap { min-height: 60vh; }
+
+    /* Contact icons a touch smaller on mobile */
+    .contact-info-block a.contact-line i { width: 32px; height: 32px; flex: 0 0 32px; font-size: 13px; }
+    .captcha-question { min-width: 96px; font-size: 15px; padding: 0 12px; }
+    .captcha-refresh { flex: 0 0 44px; }
   }
 
   /* Touch devices: keep the play affordance visible (no hover state) */
@@ -906,7 +984,9 @@
       </svg>
     </a>
 
-    <div class="auth">
+    <!-- Sign In / Subscribe buttons hidden per request.
+         To bring them back, remove the style="display:none" from the .auth div below. -->
+    <div class="auth" style="display:none">
       <button class="btn btn-ghost" onclick="openAuthModal('signIn')">Sign In</button>
       <button class="btn btn-primary" onclick="openAuthModal('subscribe')">Subscribe</button>
     </div>
@@ -1133,33 +1213,82 @@
       <div class="contact-grid">
         <div class="contact-form">
           <h3 style="margin:0 0 24px;font-size:20px;">Project Inquiry</h3>
-          <form id="projectForm" onsubmit="handleFormSubmit(event)">
+          <form id="projectForm" onsubmit="handleFormSubmit(event)" novalidate>
             <div class="form-group">
               <label for="name">Your Name</label>
-              <input type="text" id="name" placeholder="Enter your full name" required />
+              <input type="text" id="name" name="name" placeholder="Enter your full name" required />
             </div>
             <div class="form-group">
               <label for="email">Email Address</label>
-              <input type="email" id="email" placeholder="name@company.com" required />
+              <input type="email" id="email" name="email" placeholder="name@company.com" required />
+            </div>
+            <div class="form-group">
+              <label for="phone">Phone / WhatsApp <span style="text-transform:none;letter-spacing:0;">(optional)</span></label>
+              <input type="tel" id="phone" name="phone" placeholder="+91 90000 00000" />
             </div>
             <div class="form-group">
               <label for="message">Project Details / Message</label>
-              <textarea id="message" placeholder="Describe your film, advertisement concept, or inquiry..." required></textarea>
+              <textarea id="message" name="message" placeholder="Describe your film, advertisement concept, or inquiry..." required></textarea>
             </div>
-            <button type="submit" class="btn btn-primary" style="width:100%; padding:14px;">Send Message</button>
+
+            <!-- ============ CAPTCHA ============ -->
+            <div class="form-group">
+              <label for="captchaAnswer">Verification — solve to continue</label>
+              <div class="captcha-row">
+                <span class="captcha-question" id="captchaQuestion" aria-live="polite">…</span>
+                <input type="text" id="captchaAnswer" name="captcha" inputmode="numeric" autocomplete="off"
+                       placeholder="Your answer" required />
+                <button type="button" class="captcha-refresh" onclick="refreshCaptcha()"
+                        title="Get a new challenge" aria-label="Get a new challenge">
+                  <i class="fas fa-rotate-right"></i>
+                </button>
+              </div>
+              <div class="captcha-error" id="captchaError" role="alert"></div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="submitBtn" style="width:100%; padding:14px;">Send Message</button>
+            <div class="form-status" id="formStatus" role="status"></div>
+            <div class="form-note">Your details are sent securely to our production desk and never shared with third parties.</div>
           </form>
         </div>
 
         <div class="contact-details">
           <div class="contact-info-block">
             <h4>Direct Contact</h4>
-            <a href="mailto:office@addabaaz.in">office@addabaaz.in</a>
-            <a href="tel:+913331886679">+91 33318 86679</a>
+            <a class="contact-line" href="mailto:office@addabaaz.in">
+              <i class="fas fa-envelope"></i><span>office@addabaaz.in</span>
+            </a>
+            <a class="contact-line" href="tel:+913331886679">
+              <i class="fas fa-phone-volume"></i><span>+91 33318 86679</span>
+            </a>
           </div>
+
+          <!-- ============ CALL NUMBERS ============ -->
+          <div class="contact-info-block">
+            <h4>Call Us</h4>
+            <a class="contact-line" href="tel:+919007417916">
+              <i class="fas fa-phone"></i><span>+91 90074 17916</span>
+            </a>
+            <a class="contact-line" href="tel:+919007771995">
+              <i class="fas fa-phone"></i><span>+91 90077 71995</span>
+            </a>
+          </div>
+
+          <!-- ============ WHATSAPP ============ -->
+          <div class="contact-info-block">
+            <h4>WhatsApp</h4>
+            <a class="contact-line whatsapp"
+               href="https://wa.me/917439741537?text=Hello%20ADDABAAZ%2C%20I%27d%20like%20to%20discuss%20a%20project."
+               target="_blank" rel="noopener noreferrer">
+              <i class="fab fa-whatsapp"></i><span>+91 74397 41537</span>
+            </a>
+          </div>
+
           <div class="contact-info-block">
             <h4>Headquarters</h4>
             <p>162/B, 283 Lake Gardens<br />Kolkata, West Bengal 700040<br />India</p>
           </div>
+
           <div class="contact-info-block">
             <h4>Connect With Us</h4>
             <div class="social-row">
@@ -1194,6 +1323,26 @@
   </footer>
 
 <script>
+  // ============================================================
+  // PROJECT INQUIRY FORM  →  GOOGLE SHEETS
+  // ------------------------------------------------------------
+  // Fill in ONE of the two options below (see setup notes in chat).
+  // ============================================================
+  const FORM_CONFIG = {
+    // ── OPTION A (recommended): Google Apps Script Web App ──
+    // Paste the /exec URL of your deployed Apps Script here.
+    appsScriptUrl: '',
+
+    // ── OPTION B: Native Google Form (posts straight into its linked Sheet) ──
+    googleFormAction: '',   // https://docs.google.com/forms/d/e/<FORM_ID>/formResponse
+    googleFormFields: {     // entry IDs from the form's "Get pre-filled link"
+      name: '',             // e.g. 'entry.123456789'
+      email: '',
+      phone: '',
+      message: ''
+    }
+  };
+
   // ============================================================
   // DATA
   // ============================================================
@@ -1238,6 +1387,41 @@
     html.scrollTop = 0;
     if (document.body) document.body.scrollTop = 0;
     html.style.scrollBehavior = prevBehavior;
+  }
+
+  // ============================================================
+  // SCROLL MEMORY  (so the browser Back button returns to the
+  // exact same place on the page it came from)
+  // ============================================================
+  const scrollMemory = {
+    homeTab: 0,
+    aboutTab: 0,
+    servicesTab: 0,
+    contactTab: 0,
+    playerTab: 0
+  };
+
+  function currentTabId() {
+    const a = document.querySelector('.tab-content.active');
+    return a ? a.id : 'homeTab';
+  }
+
+  function saveScrollPosition(tabId) {
+    const id = tabId || currentTabId();
+    scrollMemory[id] = window.pageYOffset || document.documentElement.scrollTop || 0;
+  }
+
+  function restoreScrollPosition(tabId) {
+    const y = scrollMemory[tabId] || 0;
+    const html = document.documentElement;
+    const prev = html.style.scrollBehavior;
+    html.style.scrollBehavior = 'auto';
+    try {
+      window.scrollTo(0, y);
+    } catch (e) {
+      window.scrollTo({ top: y, left: 0, behavior: 'auto' });
+    }
+    html.style.scrollBehavior = prev;
   }
 
   // ============================================================
@@ -1525,10 +1709,15 @@
     const targetTab = document.getElementById(tabId);
 
     if (activeTab === targetTab) {
-      // If the user clicks the same tab again, scroll to the top
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Same tab clicked again — just return to the top (unless we're
+      // coming back via the browser Back button).
+      if (fromHistory) restoreScrollPosition(tabId);
+      else window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
+
+    // Remember exactly where the user was on the tab we are leaving.
+    if (activeTab) saveScrollPosition(activeTab.id);
 
     if (!fromHistory) {
       history.pushState(
@@ -1558,6 +1747,12 @@
       if (targetLink) targetLink.classList.add('active');
     }
 
+    // Going back  → restore the remembered scroll position.
+    // Normal nav  → jump to the top.
+    const afterSwap = fromHistory
+      ? () => restoreScrollPosition(tabId)
+      : () => resetScrollPosition();
+
     if (activeTab) {
       activeTab.classList.remove('show');
       setTimeout(() => {
@@ -1569,11 +1764,11 @@
           });
         }
         // The content swap changes the document height, which cancels any
-        // scroll that was in flight. Reset several times to be safe on mobile.
-        resetScrollPosition();
-        requestAnimationFrame(resetScrollPosition);
-        setTimeout(resetScrollPosition, 60);
-        setTimeout(resetScrollPosition, 200);
+        // scroll that was in flight. Re-apply several times to be safe on mobile.
+        afterSwap();
+        requestAnimationFrame(afterSwap);
+        setTimeout(afterSwap, 60);
+        setTimeout(afterSwap, 200);
       }, 350);
     } else if (targetTab) {
       targetTab.classList.add('active');
@@ -1582,10 +1777,12 @@
       });
     }
 
-    // Immediate, non-smooth reset so the user never sees the old scroll
-    // position while the outgoing tab is still fading out.
-    resetScrollPosition();
-    requestAnimationFrame(resetScrollPosition);
+    // Immediate reset (only for forward navigation) so the user never sees
+    // the old scroll position while the outgoing tab is still fading out.
+    if (!fromHistory) {
+      resetScrollPosition();
+      requestAnimationFrame(resetScrollPosition);
+    }
   }
 
   const projectOrder = ['shahid','laughBite','faltu','centralCalcuttaBoarding'];
@@ -1674,8 +1871,11 @@
     if (epSection) epSection.style.display = 'none';
     openTab('playerTab', null, opts);
     // Force an immediate scroll to top on mobile when opening the player
-    resetScrollPosition();
-    requestAnimationFrame(resetScrollPosition);
+    // (but never when we arrived here through the Back button).
+    if (!opts.fromHistory) {
+      resetScrollPosition();
+      requestAnimationFrame(resetScrollPosition);
+    }
   }
 
   function playVideo(showKey, videoId) {
@@ -1745,8 +1945,11 @@
 
     openTab('playerTab', null, opts);
     // Force an immediate scroll to top on mobile when opening the player
-    resetScrollPosition();
-    requestAnimationFrame(resetScrollPosition);
+    // (but never when we arrived here through the Back button).
+    if (!opts.fromHistory) {
+      resetScrollPosition();
+      requestAnimationFrame(resetScrollPosition);
+    }
 
     setTimeout(() => {
       const epViewport = document.getElementById('epViewport');
@@ -1810,13 +2013,173 @@
   }
 
   // ============================================================
+  // CAPTCHA  (self-contained, no external service required)
+  // ============================================================
+  let captchaAnswer = '';
+
+  function rnd(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  function generateCaptcha() {
+    const mode = Math.floor(Math.random() * 3);
+    let a, b, question, answer;
+
+    if (mode === 0) {
+      a = rnd(3, 24); b = rnd(2, 19);
+      question = `${a} + ${b}`;
+      answer = a + b;
+    } else if (mode === 1) {
+      a = rnd(12, 40); b = rnd(2, 9);
+      question = `${a} − ${b}`;
+      answer = a - b;
+    } else {
+      a = rnd(2, 9); b = rnd(2, 9);
+      question = `${a} × ${b}`;
+      answer = a * b;
+    }
+
+    captchaAnswer = String(answer);
+
+    const qEl = document.getElementById('captchaQuestion');
+    if (qEl) qEl.textContent = `${question} = ?`;
+
+    const inp = document.getElementById('captchaAnswer');
+    if (inp) inp.value = '';
+
+    const err = document.getElementById('captchaError');
+    if (err) err.textContent = '';
+  }
+
+  function refreshCaptcha() {
+    generateCaptcha();
+    const st = document.getElementById('formStatus');
+    if (st) { st.textContent = ''; st.className = 'form-status'; }
+  }
+
+  // ============================================================
+  // PROJECT INQUIRY SUBMIT
+  // ============================================================
+  async function handleFormSubmit(event) {
+    event.preventDefault();
+
+    const nameEl    = document.getElementById('name');
+    const emailEl   = document.getElementById('email');
+    const phoneEl   = document.getElementById('phone');
+    const msgEl     = document.getElementById('message');
+    const capEl     = document.getElementById('captchaAnswer');
+    const statusEl  = document.getElementById('formStatus');
+    const btn       = document.getElementById('submitBtn');
+
+    const name    = nameEl  ? nameEl.value.trim()  : '';
+    const email   = emailEl ? emailEl.value.trim() : '';
+    const phone   = phoneEl ? phoneEl.value.trim() : '';
+    const message = msgEl   ? msgEl.value.trim()   : '';
+    const captcha = capEl   ? capEl.value.trim()   : '';
+
+    const setStatus = (msg, cls) => {
+      if (!statusEl) return;
+      statusEl.textContent = msg;
+      statusEl.className = 'form-status ' + (cls || '');
+    };
+
+    // --- basic validation ---
+    if (!name || !email || !message) {
+      setStatus('Please fill in your name, email and message.', 'error');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setStatus('Please enter a valid email address.', 'error');
+      return;
+    }
+
+    // --- captcha validation ---
+    if (!captcha) {
+      const err = document.getElementById('captchaError');
+      if (err) err.textContent = 'Please solve the verification question.';
+      setStatus('Verification required.', 'error');
+      return;
+    }
+    if (captcha !== captchaAnswer) {
+      const err = document.getElementById('captchaError');
+      if (err) err.textContent = 'Incorrect answer. Here is a new question.';
+      setStatus('Verification failed — please try again.', 'error');
+      generateCaptcha();
+      return;
+    }
+
+    const payload = {
+      name: name,
+      email: email,
+      phone: phone,
+      message: message,
+      page: location.href,
+      submittedAt: new Date().toISOString()
+    };
+
+    // --- send ---
+    if (btn) { btn.disabled = true; }
+    const originalBtnText = btn ? btn.textContent : '';
+    if (btn) btn.textContent = 'Sending…';
+    setStatus('', '');
+
+    try {
+      if (FORM_CONFIG.appsScriptUrl) {
+        // ── Option A: Google Apps Script → Google Sheet ──
+        await fetch(FORM_CONFIG.appsScriptUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+      } else if (FORM_CONFIG.googleFormAction && FORM_CONFIG.googleFormFields.name) {
+        // ── Option B: native Google Form (writes into its linked Sheet) ──
+        const f = FORM_CONFIG.googleFormFields;
+        const body = new URLSearchParams();
+        body.append(f.name, name);
+        body.append(f.email, email);
+        if (f.phone) body.append(f.phone, phone);
+        body.append(f.message, message);
+
+        await fetch(FORM_CONFIG.googleFormAction, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: body.toString()
+        });
+      } else {
+        // ── Not configured yet: log locally so nothing is lost while testing ──
+        console.log('[ADDABAAZ] Inquiry (form not connected to Google yet):', payload);
+        await new Promise(r => setTimeout(r, 700));
+      }
+
+      setStatus('✓ Thank you! Your message has been received. We will get back to you shortly.', 'success');
+      document.getElementById('projectForm').reset();
+      generateCaptcha();
+    } catch (err) {
+      console.error('[ADDABAAZ] Inquiry submit failed:', err);
+      setStatus('Something went wrong. Please email us directly at office@addabaaz.in', 'error');
+      generateCaptcha();
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = originalBtnText || 'Send Message'; }
+    }
+  }
+
+  // ============================================================
   // INIT
   // ============================================================
   document.addEventListener('DOMContentLoaded', () => {
+    // We handle scroll restoration ourselves (Back button returns to the
+    // exact spot the user left; forward navigation always starts at the top).
+    if ('scrollRestoration' in history) {
+      history.scrollRestoration = 'manual';
+    }
+
     renderShowRows();
     initHeroBanner();
     setupRowAnimations();
     setupHeroSwipe();
+    generateCaptcha();
 
     // Seed initial history entry so the back button works from the start
     history.replaceState({ tab: 'homeTab', playback: null }, '', location.pathname + location.search);
@@ -1853,12 +2216,6 @@
     }
     openTab(tabId, null, { fromHistory: true });
   });
-
-  function handleFormSubmit(event) {
-    event.preventDefault();
-    alert('Thank you for reaching out to ADDABAAZ! We have received your message and will get back to you shortly.');
-    document.getElementById('projectForm').reset();
-  }
 
   function openModal(key) {
     const data = projectDetails[key];
