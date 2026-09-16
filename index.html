@@ -82,6 +82,24 @@
     box-shadow: 0 10px 24px rgba(229, 9, 20, 0.5),
                 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
   }
+  .brand {
+  gap: 12px;
+}
+
+.brand-text {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: 1.5px;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: color 0.25s ease;
+}
+
+.brand:hover .brand-text {
+  color: var(--gold);
+}
 
   .nav { display: flex; gap: 20px; align-items: center; }
   .nav a {
@@ -884,6 +902,7 @@
 
   /* Mobile Responsiveness */
   @media (max-width: 820px) {
+    .brand-text { font-size: 18px; letter-spacing: 1px; }
     .topbar { padding: 10px 16px; }
     .logo { width: 46px; height: 46px; border-radius: 12px; }
     .nav {
@@ -972,6 +991,7 @@
 
   /* Very small phones: tighter gutters so 3 cards + peek still fit */
   @media (max-width: 380px) {
+    .brand-text { font-size: 16px; letter-spacing: 0.5px; }
     .section-container, .player-section { padding: 22px 10px; }
     .row { padding: 12px 10px; }
     .rail-track { gap: 8px; }
@@ -990,6 +1010,7 @@
   <div class="topbar">
     <a onclick="openTab('homeTab', this)" class="brand" aria-label="ADDABAAZ — Home">
       <img src="images/addabaaz-logo.png" alt="ADDABAAZ" class="logo" />
+      <span class="brand-text">ADDABAAZ</span>
     </a>
 
     <!-- Sign In / Subscribe buttons hidden per request.
