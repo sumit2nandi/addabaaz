@@ -2594,23 +2594,22 @@
       fallbackIcon: 'fa-film'
     });
   }
-  function renderFeaturedUpcoming() {
-  const container = document.getElementById('featuredUpcomingContainer');
-  if (!container) return;
+    function renderFeaturedUpcoming() {
+    const container = document.getElementById('featuredUpcomingContainer');
+    if (!container) return;
 
-  const src =
-    'UpcomingReleases/' +
-    encodeURIComponent('ChatGPT Image Jun 11, 2026, 03_00_37 AM.png');
+    const src =
+      'UpcomingReleases/' +
+      encodeURIComponent('ChatGPT Image Jun 11, 2026, 03_00_37 AM.png');
 
-  container.innerHTML = `
-    <div class="featured-upcoming-card upcoming-card"
-         data-poster-src="${src}"
-         data-poster-title="">
-      <img src     <div class="featured-upcoming-overlay"></div>
-      <div class="featured-upcoming-badge">Featured Release</div>
-    </div>
-  `;
-}
+    container.innerHTML = `
+      <div class="featured-upcoming-card">
+        <img src="${src}" alt="Featured Release" />
+        <div class="featured-upcoming-overlay"></div>
+        <div class="featured-upcoming-badge">Featured Release</div>
+      </div>
+    `;
+  }
   function makeBtsCard(item) {
     return makePosterCard(item, {
       folder: BTS_FOLDER,
