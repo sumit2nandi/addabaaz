@@ -136,9 +136,10 @@
   .header-search-wrap {
     position: relative;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: flex-end;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
+    margin-left: auto;
   }
   .header-search {
     display: flex;
@@ -178,13 +179,16 @@
   .header-search input::placeholder { color: var(--muted); }
 
   .header-search-panel {
-    position: absolute;
-    top: calc(100% + 10px);
+    position: fixed;
+    top: 72px;
     left: 50%;
     transform: translateX(-50%);
-    width: min(100vw - 28px, 1280px);
-    max-height: 430px;
+    width: min(92vw, 1240px);
+    max-height: 70vh;
     overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
     background: rgba(10, 10, 14, 0.72);
     border: 1px solid rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(12px);
@@ -193,6 +197,7 @@
     padding: 16px;
     display: none;
     z-index: 120;
+    touch-action: pan-y;
   }
   .header-search-panel.show {
     display: block;
@@ -214,6 +219,20 @@
     flex: 0 0 100%;
     max-width: none;
     min-width: 0;
+    pointer-events: auto;
+  }
+  .search-results-grid .card:hover,
+  .search-results-grid .upcoming-card:hover,
+  .search-results-grid .card:focus,
+  .search-results-grid .upcoming-card:focus {
+    transform: none !important;
+    box-shadow: none !important;
+    border-color: var(--border) !important;
+  }
+  .search-results-grid .card .play-overlay,
+  .search-results-grid .upcoming-card .upcoming-fallback,
+  .search-results-grid .upcoming-card .upcoming-badge {
+    pointer-events: none;
   }
 
   .search-empty-state {
@@ -1049,11 +1068,21 @@
       padding-top: 8px;
       margin-top: 2px;
     }
-    .header-search {
+    .header-search-wrap {
       order: 2;
-      width: min(100%, 280px);
-      max-width: none;
+      width: auto;
+      max-width: 280px;
       margin-left: auto;
+    }
+    .header-search {
+      width: 100%;
+      max-width: none;
+      min-width: 0;
+    }
+    .header-search-panel {
+      top: 62px;
+      width: min(92vw, 560px);
+      max-height: 68vh;
     }
     .hero { padding: 32px 20px 64px; }
     .hero-title { font-size: 32px; }
@@ -3013,6 +3042,14 @@
       }
     });
 
+    promoVideos.forEach(item => {
+      const title = item.title || '';
+      const searchable = [title, item.duration || '', item.kind || '', item.id || ''].join(' ').toLowerCase();
+      if (searchable.includes(query)) {
+        cards.push(makePromoCard(item));
+      }
+    });
+
     if (!cards.length) {
       panel.innerHTML = '<div class="search-empty-state">No results found for “' + escapeHtml(query) + '”</div>';
       panel.classList.add('show');
@@ -3024,6 +3061,15 @@
 
     bindCardHoverListeners();
     bindPosterHoverListeners();
+    const searchCards = panel.querySelectorAll('.card, .upcoming-card');
+    searchCards.forEach(card => {
+      card.removeAttribute('data-hover-preview');
+      card.style.pointerEvents = 'auto';
+      card.onmouseenter = null;
+      card.onmouseleave = null;
+      card.onfocus = null;
+      card.onblur = null;
+    });
   }
 
   document.addEventListener('input', (event) => {
