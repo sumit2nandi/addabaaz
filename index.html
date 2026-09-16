@@ -1329,19 +1329,18 @@
   // Fill in ONE of the two options below (see setup notes in chat).
   // ============================================================
   const FORM_CONFIG = {
-    // ── OPTION A (recommended): Google Apps Script Web App ──
-    // Paste the /exec URL of your deployed Apps Script here.
-    appsScriptUrl: '',
+  // Option A (Apps Script) left empty — using Option B below
+  appsScriptUrl: '',
 
-    // ── OPTION B: Native Google Form (posts straight into its linked Sheet) ──
-    googleFormAction: 'https://docs.google.com/forms/d/e/1FAIpQLSefTIXeGfnzRR7oumsp1wsSvoOjEWjtK-opcCN5T1LR0ZE7fA/viewform?usp=pp_url',   // https://docs.google.com/forms/d/e/<FORM_ID>/formResponse
-    googleFormFields: {     // entry IDs from the form's "Get pre-filled link"
-      name: 'name',             // e.g. 'entry.123456789'
-      email: 'email',
-      phone: 'phone',
-      message: 'message'
-    }
-  };
+  // Option B: Native Google Form submission
+  googleFormAction: 'https://docs.google.com/forms/d/e/1FAIpQLSefTIXeGfnzRR7oumsp1wsSvoOjEWjtK-opcCN5T1LR0ZE7fA/formResponse',
+  googleFormFields: {
+    name:    'entry.1034004557',
+    email:   'entry.608979481',
+    phone:   'entry.641949480',
+    message: 'entry.548756118'
+  }
+};
 
   // ============================================================
   // DATA
