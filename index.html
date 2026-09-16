@@ -2428,10 +2428,10 @@
   }
 
   function refreshCaptcha() {
-    generateCaptcha(true);
-    const st = document.getElementById('formStatus');
-    if (st) { st.textContent = ''; st.className = 'form-status'; }
-  }
+  generateCaptcha(true);
+  // NOTE: deliberately do NOT clear #formStatus here.
+  // The success / error message must remain visible after submission.
+}
 
   /* ============================================================
      FORM SUBMIT
