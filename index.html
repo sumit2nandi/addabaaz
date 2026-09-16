@@ -133,6 +133,106 @@
     border-radius: 2px;
   }
 
+  .header-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    flex: 1 1 auto;
+  }
+  .header-search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px 8px 14px;
+    min-width: 220px;
+    max-width: 320px;
+    width: min(32vw, 320px);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  }
+  .header-search:focus-within {
+    border-color: rgba(245, 197, 24, 0.7);
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.12);
+  }
+  .header-search i {
+    color: var(--muted);
+    font-size: 14px;
+    width: 14px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .header-search input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    padding: 0;
+  }
+  .header-search input::placeholder { color: var(--muted); }
+
+  .header-search-panel {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(100vw - 28px, 1280px);
+    max-height: 430px;
+    overflow-y: auto;
+    background: rgba(10, 10, 14, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    border-radius: 16px;
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.45);
+    padding: 16px;
+    display: none;
+    z-index: 120;
+  }
+  .header-search-panel.show {
+    display: block;
+  }
+  .header-search-panel::-webkit-scrollbar { width: 6px; }
+  .header-search-panel::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.15);
+    border-radius: 10px;
+  }
+
+  .search-results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 16px;
+  }
+  .search-results-grid .card,
+  .search-results-grid .upcoming-card {
+    width: 100%;
+    flex: 0 0 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .search-empty-state {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 80px;
+    border-radius: 12px;
+    color: var(--muted);
+    text-align: center;
+    padding: 18px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    font-size: 13px;
+  }
+  .search-empty-row {
+    min-height: 86px;
+  }
+
   .auth { display: none !important; }
 
   /* ---------- Hero ---------- */
@@ -949,6 +1049,12 @@
       padding-top: 8px;
       margin-top: 2px;
     }
+    .header-search {
+      order: 2;
+      width: min(100%, 280px);
+      max-width: none;
+      margin-left: auto;
+    }
     .hero { padding: 32px 20px 64px; }
     .hero-title { font-size: 32px; }
     .hero-bg-container iframe { transform: translate(-50%, -50%) scale(1.6); }
@@ -1357,6 +1463,14 @@
       <a onclick="openTab('servicesTab', this)" class="nav-link">Services</a>
       <a onclick="openTab('contactTab', this)" class="nav-link">Contact</a>
     </nav>
+
+    <div class="header-search-wrap">
+      <label class="header-search" aria-label="Search content">
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <input id="headerSearchInput" type="search" placeholder="Search shows, promos, releases..." aria-label="Search ADDABAAZ content" />
+      </label>
+      <div id="headerSearchResults" class="header-search-panel" aria-live="polite"></div>
+    </div>
   </div>
 
   <div id="homeTab" class="tab-content active show">
@@ -2849,6 +2963,88 @@
       requestAnimationFrame(resetScrollPosition);
     }
   }
+
+  function closeHeaderSearchResults() {
+    const panel = document.getElementById('headerSearchResults');
+    if (!panel) return;
+    panel.innerHTML = '';
+    panel.classList.remove('show');
+  }
+
+  function performHeaderSearch() {
+    const searchInput = document.getElementById('headerSearchInput');
+    const panel = document.getElementById('headerSearchResults');
+    if (!searchInput || !panel) return;
+
+    const query = searchInput.value.trim().toLowerCase();
+    if (!query) {
+      closeHeaderSearchResults();
+      return;
+    }
+
+    const cards = [];
+
+    projectOrder.forEach(showKey => {
+      const show = projectDetails[showKey];
+      if (!show) return;
+      const searchable = [
+        show.title,
+        show.subtitle,
+        (show.episodes || []).map(ep => ep.title).join(' '),
+        (show.episodes || []).map(ep => ep.duration).join(' ')
+      ].join(' ').toLowerCase();
+
+      if (searchable.includes(query)) {
+        cards.push(makeShowCard(showKey));
+      }
+    });
+
+    upcomingReleases.forEach(item => {
+      const title = item.title || '';
+      if (title.toLowerCase().includes(query)) {
+        cards.push(makeUpcomingCard(item));
+      }
+    });
+
+    behindTheScenes.forEach(item => {
+      const title = item.title || '';
+      if (title.toLowerCase().includes(query)) {
+        cards.push(makeBtsCard(item));
+      }
+    });
+
+    if (!cards.length) {
+      panel.innerHTML = '<div class="search-empty-state">No results found for “' + escapeHtml(query) + '”</div>';
+      panel.classList.add('show');
+      return;
+    }
+
+    panel.innerHTML = '<div class="search-results-grid">' + cards.slice(0, 12).join('') + '</div>';
+    panel.classList.add('show');
+
+    bindCardHoverListeners();
+    bindPosterHoverListeners();
+  }
+
+  document.addEventListener('input', (event) => {
+    if (event.target && event.target.id === 'headerSearchInput') {
+      performHeaderSearch();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.target && event.target.id === 'headerSearchInput' && event.key === 'Escape') {
+      event.target.value = '';
+      closeHeaderSearchResults();
+    }
+  });
+
+  document.addEventListener('click', (event) => {
+    const wrapper = event.target && event.target.closest ? event.target.closest('.header-search-wrap') : null;
+    if (!wrapper) {
+      closeHeaderSearchResults();
+    }
+  });
 
   const projectOrder = ['shahid', 'laughBite', 'faltu', 'centralCalcuttaBoarding'];
 
