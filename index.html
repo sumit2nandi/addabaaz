@@ -35,19 +35,23 @@
   }
 
   * { box-sizing: border-box; }
-   html { 
-    scroll-behavior: smooth; 
-    overflow-x: hidden;
-  }
+   html {
+  scroll-behavior: smooth;
+  /* Do NOT use overflow-x: hidden here — it breaks mobile URL-bar behavior */
+}
 
-  body {
-    margin: 0;
-    font-family: var(--font-sans);
-    background: var(--bg);
-    color: var(--text-primary);
-    -webkit-font-smoothing: antialiased;
-    overflow-x: hidden;
-  }
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+
+  /* Prevent horizontal scroll WITHOUT creating a scroll container */
+  overflow-x: clip;
+  width: 100%;
+  position: relative;
+}
 
   /* ---------- Topbar (slimmer height) ---------- */
   .topbar {
