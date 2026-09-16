@@ -445,6 +445,37 @@
   }
   .card-preview-video iframe.ready { opacity: 1; }
 
+  /* ----- Unmute / Mute button for the hover preview ----- */
+  .card-preview-sound-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 8;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  }
+  .card-preview-sound-btn:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    transform: scale(1.1);
+  }
+  .card-preview-sound-btn svg { width: 17px; height: 17px; fill: currentColor; display: block; }
+  .card-preview-sound-btn.is-unmuted {
+    background: rgba(229, 9, 20, 0.85);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+
   .card-preview-info { padding: 14px 16px 16px; }
   .card-preview-title {
     font-size: 18px;
@@ -765,8 +796,25 @@
   .contact-info-block a.contact-line:hover i { background: var(--accent); border-color: var(--accent); color: #fff; }
   .contact-info-block a.contact-line.whatsapp i { color: #25D366; }
   .contact-info-block a.contact-line.whatsapp:hover i { background: #25D366; border-color: #25D366; color: #fff; }
-  .contact-info-block a.contact-line.maps i { color: #4285F4; }
-  .contact-info-block a.contact-line.maps:hover i { background: #4285F4; border-color: #4285F4; color: #fff; }
+
+  /* Google Maps address link — colourful badge icon, address is the link text */
+  .contact-info-block a.contact-line.maps { align-items: flex-start; }
+  .contact-info-block a.contact-line.maps i.gmaps-badge {
+    background: #ffffff;
+    border-color: rgba(255, 255, 255, 0.25);
+    margin-top: 2px;
+  }
+  .contact-info-block a.contact-line.maps i.gmaps-badge svg {
+    display: block;
+    width: 19px;
+    height: 19px;
+  }
+  .contact-info-block a.contact-line.maps:hover i.gmaps-badge {
+    background: #ffffff;
+    border-color: #ffffff;
+    transform: scale(1.06);
+  }
+  .contact-info-block a.contact-line.maps span { line-height: 1.55; }
 
   .captcha-row { display: flex; align-items: stretch; gap: 10px; }
   .captcha-canvas {
@@ -943,6 +991,7 @@
     .hero-wrap { min-height: 60vh; }
 
     .contact-info-block a.contact-line i { width: 32px; height: 32px; flex: 0 0 32px; font-size: 13px; }
+    .contact-info-block a.contact-line.maps i.gmaps-badge svg { width: 17px; height: 17px; }
     .captcha-canvas { width: 148px; height: 50px; }
     .captcha-refresh { flex: 0 0 44px; }
 
@@ -1182,9 +1231,28 @@
 
           <div class="contact-info-block">
             <h4>Headquarters</h4>
-            <p>162/B, 283 Lake Gardens<br />Kolkata, West Bengal 700045<br />India</p>
-            <a class="contact-line maps" href="https://maps.app.goo.gl/4pKaxqR8CGJ5S6Fd7" target="_blank" rel="noopener noreferrer" style="margin-top:10px;">
-              <i class="fas fa-map-location-dot"></i><span>View on Google Maps</span>
+            <a class="contact-line maps"
+               href="https://maps.app.goo.gl/4pKaxqR8CGJ5S6Fd7"
+               target="_blank" rel="noopener noreferrer"
+               title="Open in Google Maps"
+               aria-label="Open ADDABAAZ headquarters location in Google Maps">
+              <i class="gmaps-badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                  <defs>
+                    <clipPath id="gmapsPinClip">
+                      <path d="M12 1.6c-3.86 0-7 3.14-7 7 0 5.25 7 13.8 7 13.8s7-8.55 7-13.8c0-3.86-3.14-7-7-7z"/>
+                    </clipPath>
+                  </defs>
+                  <g clip-path="url(#gmapsPinClip)">
+                    <rect x="0" y="0" width="12" height="12" fill="#34A853"/>
+                    <rect x="12" y="0" width="12" height="12" fill="#4285F4"/>
+                    <rect x="0" y="12" width="12" height="12" fill="#FBBC04"/>
+                    <rect x="12" y="12" width="12" height="12" fill="#EA4335"/>
+                  </g>
+                  <circle cx="12" cy="8.6" r="3.3" fill="#ffffff"/>
+                </svg>
+              </i>
+              <span>162/B, 283 Lake Gardens<br />Kolkata, West Bengal 700045<br />India</span>
             </a>
           </div>
 
@@ -1203,6 +1271,10 @@
 
   <div id="cardPreview" class="card-preview" aria-hidden="true">
     <div class="card-preview-video"></div>
+    <button type="button" id="cardPreviewSoundBtn" class="card-preview-sound-btn"
+            onclick="toggleCardPreviewSound(event)" aria-label="Unmute preview" title="Unmute">
+      <svg id="cardPreviewSoundIcon" viewBox="0 0 24 24" aria-hidden="true"></svg>
+    </button>
     <div class="card-preview-info">
       <div class="card-preview-title"></div>
       <div class="card-preview-meta"></div>
@@ -1777,6 +1849,42 @@
   let cardPreviewHideTimer = null;
   let cardPreviewCleanupTimer = null;
   let cardPreviewActiveCard = null;
+  let cardPreviewMuted = true;
+
+  const SPEAKER_MUTED_SVG =
+    '<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>';
+  const SPEAKER_UNMUTED_SVG =
+    '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>';
+
+  function updateCardPreviewSoundIcon() {
+    const icon = document.getElementById('cardPreviewSoundIcon');
+    const btn = document.getElementById('cardPreviewSoundBtn');
+    if (icon) icon.innerHTML = cardPreviewMuted ? SPEAKER_MUTED_SVG : SPEAKER_UNMUTED_SVG;
+    if (btn) {
+      btn.classList.toggle('is-unmuted', !cardPreviewMuted);
+      btn.setAttribute('aria-label', cardPreviewMuted ? 'Unmute preview' : 'Mute preview');
+      btn.title = cardPreviewMuted ? 'Unmute' : 'Mute';
+    }
+  }
+
+  function toggleCardPreviewSound(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    const preview = document.getElementById('cardPreview');
+    if (!preview) return;
+    const iframe = preview.querySelector('.card-preview-video iframe');
+    if (!iframe || !iframe.contentWindow) return;
+
+    cardPreviewMuted = !cardPreviewMuted;
+    try {
+      if (cardPreviewMuted) {
+        iframe.contentWindow.postMessage('{"event":"command","func":"mute","args":""}', '*');
+      } else {
+        iframe.contentWindow.postMessage('{"event":"command","func":"unMute","args":""}', '*');
+        iframe.contentWindow.postMessage('{"event":"command","func":"setVolume","args":"[100]"}', '*');
+      }
+    } catch (err) {}
+    updateCardPreviewSoundIcon();
+  }
 
   function supportsHoverPreview() {
     if (window.innerWidth <= 820) return false;
@@ -1802,7 +1910,14 @@
 
     window.addEventListener('scroll', hideCardPreview, { passive: true });
     window.addEventListener('resize', hideCardPreview);
-    document.addEventListener('click', () => hideCardPreview(), true);
+
+    // Clicking anywhere outside the preview closes it.
+    // Clicks INSIDE the preview (e.g. the unmute button) must NOT close it.
+    document.addEventListener('click', (e) => {
+      const t = e.target;
+      if (t && t.closest && t.closest('#cardPreview')) return;
+      hideCardPreview();
+    }, true);
   }
 
   function bindCardHoverListeners() {
@@ -1854,10 +1969,19 @@
     const posterEl = card.querySelector('.poster');
     videoBox.style.backgroundImage = posterEl ? posterEl.style.backgroundImage : 'none';
 
+    const originParam = (location.origin && location.origin !== 'null')
+      ? '&origin=' + encodeURIComponent(location.origin)
+      : '';
+
     videoBox.innerHTML =
       '<iframe src="https://www.youtube.com/embed/' + encodeURIComponent(yt) +
       '?autoplay=1&mute=1&loop=1&playlist=' + encodeURIComponent(yt) +
-      '&controls=0&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3" title="ADDABAAZ preview" allow="autoplay; encrypted-media; picture-in-picture" frameborder="0"></iframe>';
+      '&controls=0&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3&enablejsapi=1' + originParam +
+      '" title="ADDABAAZ preview" allow="autoplay; encrypted-media; picture-in-picture" frameborder="0"></iframe>';
+
+    // Always start each new preview muted and show the matching icon
+    cardPreviewMuted = true;
+    updateCardPreviewSoundIcon();
 
     // Position FIRST (centered on the tile), then reveal — avoids flash
     positionPreviewOverTile(preview, card);
@@ -1913,6 +2037,7 @@
     preview.classList.remove('show');
     preview.setAttribute('aria-hidden', 'true');
     cardPreviewActiveCard = null;
+    cardPreviewMuted = true;
 
     cardPreviewCleanupTimer = setTimeout(() => {
       if (preview.classList.contains('show')) return;
@@ -2224,15 +2349,27 @@
 
   /* ============================================================
      IMAGE CAPTCHA
+     ------------------------------------------------------------
+     NOTE: generateCaptcha() only redraws when the canvas actually
+     changes size. Mobile browsers fire `resize` while scrolling
+     (URL bar hide/show) — without this guard the CAPTCHA would
+     change mid-scroll. Use refreshCaptcha() to force a new code.
      ============================================================ */
   let captchaText = '';
+  let captchaRenderedWidth = 0;
 
-  function generateCaptcha() {
+  function generateCaptcha(force) {
     const canvas = document.getElementById('captchaCanvas');
     if (!canvas || !canvas.getContext) return;
-    const ctx = canvas.getContext('2d');
+
     const cssW = parseFloat(getComputedStyle(canvas).width) || 170;
     const cssH = parseFloat(getComputedStyle(canvas).height) || 54;
+
+    // Skip redraw when the canvas size did not really change
+    if (!force && captchaRenderedWidth > 0 && Math.abs(cssW - captchaRenderedWidth) < 2) return;
+    captchaRenderedWidth = cssW;
+
+    const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(cssW * dpr);
     canvas.height = Math.round(cssH * dpr);
@@ -2291,7 +2428,7 @@
   }
 
   function refreshCaptcha() {
-    generateCaptcha();
+    generateCaptcha(true);
     const st = document.getElementById('formStatus');
     if (st) { st.textContent = ''; st.className = 'form-status'; }
   }
@@ -2334,7 +2471,7 @@
       const err = document.getElementById('captchaError');
       if (err) err.textContent = 'Incorrect code. Here is a new one.';
       setStatus('Verification failed — please try again.', 'error');
-      generateCaptcha();
+      refreshCaptcha();
       return;
     }
 
@@ -2371,11 +2508,11 @@
 
       setStatus('✓ Thank you! Your message has been received. We will get back to you shortly.', 'success');
       document.getElementById('projectForm').reset();
-      generateCaptcha();
+      refreshCaptcha();
     } catch (err) {
       console.error('[ADDABAAZ] Inquiry submit failed:', err);
       setStatus('Something went wrong. Please email us directly at office@addabaaz.in', 'error');
-      generateCaptcha();
+      refreshCaptcha();
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = originalBtnText || 'Send Message'; }
     }
@@ -2384,6 +2521,8 @@
   /* ============================================================
      INIT
      ============================================================ */
+  let resizeDebounceTimer = null;
+
   document.addEventListener('DOMContentLoaded', () => {
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
@@ -2393,17 +2532,22 @@
     setupHeroSwipe();
     initCardPreview();
 
-    requestAnimationFrame(() => generateCaptcha());
+    requestAnimationFrame(() => generateCaptcha(true));
     history.replaceState({ tab: 'homeTab', playback: null }, '', location.pathname + location.search);
     resetScrollPosition();
 
     document.querySelectorAll('.rail-viewport').forEach(v => {
       if (v.id) v.addEventListener('scroll', () => updateScrollArrowsFor(v));
     });
+
+    // Debounced: mobile browsers fire `resize` on scroll (URL bar).
+    // generateCaptcha() will ignore it unless the canvas size truly changed.
     window.addEventListener('resize', () => {
       document.querySelectorAll('.rail-viewport').forEach(v => updateScrollArrowsFor(v));
-      generateCaptcha();
+      clearTimeout(resizeDebounceTimer);
+      resizeDebounceTimer = setTimeout(() => { generateCaptcha(); }, 250);
     });
+
     setTimeout(() => {
       document.querySelectorAll('.rail-viewport').forEach(v => updateScrollArrowsFor(v));
     }, 0);
