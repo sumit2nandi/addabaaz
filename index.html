@@ -1329,6 +1329,59 @@
     .upcoming-card { width: calc((100% - 16px) / 3.15); flex: 0 0 calc((100% - 16px) / 3.15); }
     .upcoming-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
   }
+  .featured-upcoming-wrap{
+  margin-bottom:32px;
+}
+
+.featured-upcoming-card{
+  position:relative;
+  width:100%;
+  height:520px;
+  border-radius:18px;
+  overflow:hidden;
+  cursor:pointer;
+  border:1px solid var(--border);
+  background:#111;
+}
+
+.featured-upcoming-card img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+
+.featured-upcoming-overlay{
+  position:absolute;
+  inset:0;
+  background:linear-gradient(
+    180deg,
+    rgba(0,0,0,0.08) 0%,
+    rgba(0,0,0,0.25) 40%,
+    rgba(0,0,0,0.85) 100%
+  );
+}
+
+.featured-upcoming-badge{
+  position:absolute;
+  top:18px;
+  left:18px;
+  z-index:4;
+  background:var(--accent);
+  color:#fff;
+  padding:8px 14px;
+  border-radius:8px;
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:1px;
+  text-transform:uppercase;
+}
+
+@media (max-width:820px){
+  .featured-upcoming-card{
+    height:260px;
+  }
+}
 </style>
 </head>
 <body>
@@ -1372,8 +1425,15 @@
 
     <!-- ================= COMING SOON ================= -->
     <section class="row animate-row" id="comingSoonSection" aria-label="Coming soon — upcoming ADDABAAZ releases">
-      <h3>Coming Soon</h3>
-      <div class="rail">
+  <h3>Coming Soon</h3>
+
+  <!-- Row 1 : Featured Poster -->
+  <div class="featured-upcoming-wrap">
+    <div id="featuredUpcomingContainer"></div>
+  </div>
+
+  <!-- Row 2 : Existing Carousel -->
+  <div class="rail">
         <div class="arrow arrow-left disabled" onclick="scrollRail('comingSoonViewport',-1)">◀</div>
         <div class="rail-viewport" id="comingSoonViewport"><div class="rail-track" id="comingSoonTrack"></div></div>
         <div class="arrow arrow-right" onclick="scrollRail('comingSoonViewport',1)">▶</div>
@@ -2534,7 +2594,23 @@
       fallbackIcon: 'fa-film'
     });
   }
+  function renderFeaturedUpcoming() {
+  const container = document.getElementById('featuredUpcomingContainer');
+  if (!container) return;
 
+  const src =
+    'UpcomingReleases/' +
+    encodeURIComponent('ChatGPT Image Jun 11, 2026, 03_00_37 AM.png');
+
+  container.innerHTML = `
+    <div class="featured-upcoming-card upcoming-card"
+         data-poster-src="${src}"
+         data-poster-title="">
+      <img src     <div class="featured-upcoming-overlay"></div>
+      <div class="featured-upcoming-badge">Featured Release</div>
+    </div>
+  `;
+}
   function makeBtsCard(item) {
     return makePosterCard(item, {
       folder: BTS_FOLDER,
@@ -2555,7 +2631,9 @@
     }
     if (section) section.style.display = '';
 
-    const items = upcomingReleases.slice(0, UPCOMING_HOME_LIMIT);
+const items = upcomingReleases.filter(
+  item => item.file !== 'ChatGPT Image Jun 11, 2026, 03_00_37 AM.png'
+).slice(0, UPCOMING_HOME_LIMIT);
     track.innerHTML = items.map(makeUpcomingCard).join('');
     bindPosterHoverListeners();
   }
@@ -3254,6 +3332,7 @@
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
     renderShowRows();
+    renderFeaturedUpcoming();
     renderComingSoonRow();
     renderBtsRow();
     renderUpcomingGrid();
