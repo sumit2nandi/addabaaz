@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>ADDABAAZ — Film & Ad Production House</title>
 
-<!-- Favicon -->
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M10 80 L50 10 L90 80 Z' fill='%23e50914'/><rect x='42' y='40' width='16' height='40' fill='%23050505'/></svg>">
+<!-- Favicon (uses the ADDABAAZ app icon) -->
+<link rel="icon" type="image/png" href="images/addabaaz-logo.png">
+<link rel="apple-touch-icon" href="images/addabaaz-logo.png">
+<meta name="theme-color" content="#050505">
 
 <!-- Modern Google Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -53,7 +55,7 @@
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 16px 24px;
-    padding: 14px 28px;
+    padding: 12px 28px;
     position: sticky;
     top: 0;
     z-index: 60;
@@ -63,8 +65,23 @@
   }
 
   .brand { display: flex; align-items: center; text-decoration: none; cursor: pointer; }
-  .logo { width: 140px; height: 36px; display: block; }
-  .logo-text { fill: var(--text-primary); }
+
+  /* ─── ADDABAAZ logo (app-icon style) ─── */
+  .logo {
+    width: 56px;
+    height: 56px;
+    display: block;
+    border-radius: 14px;
+    object-fit: cover;
+    box-shadow: 0 6px 18px rgba(229, 9, 20, 0.35),
+                0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  .brand:hover .logo {
+    transform: translateY(-2px) scale(1.04);
+    box-shadow: 0 10px 24px rgba(229, 9, 20, 0.5),
+                0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  }
 
   .nav { display: flex; gap: 20px; align-items: center; }
   .nav a {
@@ -716,30 +733,26 @@
   .contact-info-block a.contact-line.whatsapp i { color: #25D366; }
   .contact-info-block a.contact-line.whatsapp:hover i { background: #25D366; border-color: #25D366; color: #fff; }
 
-  /* ─── CAPTCHA ─── */
+  /* ─── IMAGE CAPTCHA ─── */
   .captcha-row {
     display: flex;
     align-items: stretch;
     gap: 10px;
   }
-  .captcha-question {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 118px;
-    padding: 0 16px;
-    background: linear-gradient(135deg, rgba(229,9,20,0.16), rgba(245,197,24,0.12));
-    border: 1px dashed rgba(245, 197, 24, 0.5);
+  .captcha-canvas {
+    flex: 0 0 auto;
+    width: 170px;
+    height: 54px;
+    display: block;
     border-radius: 8px;
-    font-weight: 800;
-    font-size: 17px;
-    letter-spacing: 1.2px;
-    color: var(--gold);
+    border: 1px solid var(--border);
+    background: #0a0a0d;
+    cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
-    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
   }
-  .captcha-row input { flex: 1 1 auto; min-width: 0; }
+  .captcha-row input { flex: 1 1 auto; min-width: 0; letter-spacing: 3px; text-transform: uppercase; font-weight: 700; }
   .captcha-refresh {
     flex: 0 0 50px;
     background: var(--panel-light);
@@ -871,7 +884,8 @@
 
   /* Mobile Responsiveness */
   @media (max-width: 820px) {
-    .topbar { padding: 12px 16px; }
+    .topbar { padding: 10px 16px; }
+    .logo { width: 46px; height: 46px; border-radius: 12px; }
     .nav {
       order: 3;
       width: 100%;
@@ -881,7 +895,6 @@
       margin-top: 4px;
     }
     .auth { margin-left: auto; }
-    .auth .btn { padding: 8px 12px; font-size: 13px; }
     .hero { padding: 32px 20px 64px; }
     .hero-title { font-size: 32px; }
     .hero-bg-container iframe { transform: translate(-50%, -50%) scale(1.6); }
@@ -895,12 +908,8 @@
     .arrow { display: none !important; }
     .rail-viewport { padding: 10px 0; -webkit-overflow-scrolling: touch; }
 
-    /* Track is a normal 100%-wide flex row. Cards overflow to the right and
-       the viewport scrolls — percentage widths now resolve against the rail
-       width instead of an indefinite max-content width. */
     .rail-track { width: 100%; gap: 10px; }
 
-    /* Slightly smaller width so 3 cards + a peek of the 4th are visible on mobile */
     .card {
       width: calc((100% - 20px) / 3.15);
       flex: 0 0 calc((100% - 20px) / 3.15);
@@ -925,7 +934,6 @@
     }
     .play-btn { width: 34px; height: 34px; font-size: 13px; }
 
-    /* Player page episode rails */
     .ep-card { width: 210px; flex: 0 0 210px; }
     .ep-thumb { height: 118px; }
     .modal-ep-item { flex: 0 0 170px; }
@@ -934,7 +942,6 @@
     .team-grid { grid-template-columns: 1fr; gap: 16px; }
     .modal { padding: 24px 20px; max-width: 100%; }
 
-    /* Reduce vertical gaps between rows on mobile */
     .row { padding: 14px 12px; }
     .row h3 { margin-bottom: 10px; font-size: 20px; }
     .row + .row { margin-top: 0; }
@@ -943,7 +950,7 @@
 
     /* Contact icons a touch smaller on mobile */
     .contact-info-block a.contact-line i { width: 32px; height: 32px; flex: 0 0 32px; font-size: 13px; }
-    .captcha-question { min-width: 96px; font-size: 15px; padding: 0 12px; }
+    .captcha-canvas { width: 148px; height: 50px; }
     .captcha-refresh { flex: 0 0 44px; }
   }
 
@@ -957,6 +964,10 @@
 
   @media (max-width: 480px) {
     .hero-bg-container iframe { transform: translate(-50%, -50%) scale(2.1); }
+    .captcha-canvas { width: 130px; height: 46px; }
+    .captcha-refresh { flex: 0 0 40px; font-size: 13px; }
+    .captcha-row { gap: 8px; }
+    .captcha-row input { padding: 11px 12px; font-size: 14px; }
   }
 
   /* Very small phones: tighter gutters so 3 cards + peek still fit */
@@ -969,6 +980,7 @@
       flex: 0 0 calc((100% - 16px) / 3.15);
     }
     .tag, .kind-badge { font-size: 7px; padding: 2px 4px; }
+    .captcha-canvas { width: 116px; height: 42px; }
   }
 </style>
 </head>
@@ -976,12 +988,8 @@
 
   <!-- Topbar Navigation -->
   <div class="topbar">
-    <a onclick="openTab('homeTab', this)" class="brand">
-      <svg class="logo" viewBox="0 0 400 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ADDABAAZ logo">
-        <defs><linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#ff6b6b"/><stop offset="1" stop-color="#e50914"/></linearGradient></defs>
-        <g transform="translate(6,8)"><path d="M30 80 L60 10 L90 80 Z" fill="url(#g1)"/><rect x="52" y="40" width="16" height="40" rx="3" fill="#0b0b0b"/></g>
-        <text class="logo-text" x="120" y="62" font-family="'Plus Jakarta Sans', Arial" font-weight="800" font-size="36">ADDABAAZ</text>
-      </svg>
+    <a onclick="openTab('homeTab', this)" class="brand" aria-label="ADDABAAZ — Home">
+      <img src="images/addabaaz-logo.png" alt="ADDABAAZ" class="logo" />
     </a>
 
     <!-- Sign In / Subscribe buttons hidden per request.
@@ -1231,15 +1239,17 @@
               <textarea id="message" name="message" placeholder="Describe your film, advertisement concept, or inquiry..." required></textarea>
             </div>
 
-            <!-- ============ CAPTCHA ============ -->
+            <!-- ============ IMAGE CAPTCHA ============ -->
             <div class="form-group">
-              <label for="captchaAnswer">Verification — solve to continue</label>
+              <label for="captchaAnswer">Verification — type the characters shown</label>
               <div class="captcha-row">
-                <span class="captcha-question" id="captchaQuestion" aria-live="polite">…</span>
-                <input type="text" id="captchaAnswer" name="captcha" inputmode="numeric" autocomplete="off"
-                       placeholder="Your answer" required />
+                <canvas id="captchaCanvas" class="captcha-canvas" onclick="refreshCaptcha()"
+                        title="Tap for a new code" aria-label="CAPTCHA image"></canvas>
+                <input type="text" id="captchaAnswer" name="captcha" autocomplete="off"
+                       autocapitalize="characters" spellcheck="false" maxlength="6"
+                       placeholder="Code" required />
                 <button type="button" class="captcha-refresh" onclick="refreshCaptcha()"
-                        title="Get a new challenge" aria-label="Get a new challenge">
+                        title="Get a new code" aria-label="Get a new code">
                   <i class="fas fa-rotate-right"></i>
                 </button>
               </div>
@@ -1326,21 +1336,22 @@
   // ============================================================
   // PROJECT INQUIRY FORM  →  GOOGLE SHEETS
   // ------------------------------------------------------------
-  // Fill in ONE of the two options below (see setup notes in chat).
+  // Uses Option B (native Google Form POST) — entry IDs below are
+  // mapped to the fields in the user's Google Form.
   // ============================================================
   const FORM_CONFIG = {
-  // Option A (Apps Script) left empty — using Option B below
-  appsScriptUrl: '',
+    // Option A (Apps Script) left empty — using Option B below
+    appsScriptUrl: '',
 
-  // Option B: Native Google Form submission
-  googleFormAction: 'https://docs.google.com/forms/d/e/1FAIpQLSefTIXeGfnzRR7oumsp1wsSvoOjEWjtK-opcCN5T1LR0ZE7fA/formResponse',
-  googleFormFields: {
-    name:    'entry.1034004557',
-    email:   'entry.608979481',
-    phone:   'entry.641949480',
-    message: 'entry.548756118'
-  }
-};
+    // Option B: Native Google Form submission
+    googleFormAction: 'https://docs.google.com/forms/d/e/1FAIpQLSefTIXeGfnzRR7oumsp1wsSvoOjEWjtK-opcCN5T1LR0ZE7fA/formResponse',
+    googleFormFields: {
+      name:    'entry.1034004557',
+      email:   'entry.608979481',
+      phone:   'entry.641949480',
+      message: 'entry.548756118'
+    }
+  };
 
   // ============================================================
   // DATA
@@ -2012,40 +2023,94 @@
   }
 
   // ============================================================
-  // CAPTCHA  (self-contained, no external service required)
+  // IMAGE CAPTCHA  (canvas-drawn, no external service needed)
   // ============================================================
-  let captchaAnswer = '';
-
-  function rnd(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-  }
+  let captchaText = '';
 
   function generateCaptcha() {
-    const mode = Math.floor(Math.random() * 3);
-    let a, b, question, answer;
+    const canvas = document.getElementById('captchaCanvas');
+    if (!canvas || !canvas.getContext) return;
 
-    if (mode === 0) {
-      a = rnd(3, 24); b = rnd(2, 19);
-      question = `${a} + ${b}`;
-      answer = a + b;
-    } else if (mode === 1) {
-      a = rnd(12, 40); b = rnd(2, 9);
-      question = `${a} − ${b}`;
-      answer = a - b;
-    } else {
-      a = rnd(2, 9); b = rnd(2, 9);
-      question = `${a} × ${b}`;
-      answer = a * b;
+    const ctx = canvas.getContext('2d');
+
+    // Use the canvas's CSS size, but scale the backing store for crisp
+    // rendering on high-DPI screens.
+    const cssW = parseFloat(getComputedStyle(canvas).width)  || 170;
+    const cssH = parseFloat(getComputedStyle(canvas).height) || 54;
+    const dpr  = window.devicePixelRatio || 1;
+
+    canvas.width  = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const w = cssW;
+    const h = cssH;
+
+    // --- Background gradient ---
+    const bg = ctx.createLinearGradient(0, 0, w, h);
+    bg.addColorStop(0, '#1a1a22');
+    bg.addColorStop(1, '#07070a');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+
+    // --- Wave noise lines ---
+    for (let i = 0; i < 6; i++) {
+      ctx.strokeStyle = `hsla(${Math.random() * 360}, 70%, 60%, 0.35)`;
+      ctx.lineWidth = 1 + Math.random() * 1.4;
+      ctx.beginPath();
+      ctx.moveTo(Math.random() * w, Math.random() * h);
+      ctx.bezierCurveTo(
+        Math.random() * w, Math.random() * h,
+        Math.random() * w, Math.random() * h,
+        Math.random() * w, Math.random() * h
+      );
+      ctx.stroke();
     }
 
-    captchaAnswer = String(answer);
+    // --- Noise dots ---
+    for (let i = 0; i < 70; i++) {
+      ctx.fillStyle = `hsla(${Math.random() * 360}, 70%, 65%, 0.45)`;
+      ctx.beginPath();
+      ctx.arc(Math.random() * w, Math.random() * h, Math.random() * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
-    const qEl = document.getElementById('captchaQuestion');
-    if (qEl) qEl.textContent = `${question} = ?`;
+    // --- Characters ---
+    // Avoid visually similar characters (0/O, 1/I/l).
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const len = 5;
+    let text = '';
+    const slotW = w / (len + 1);
+
+    for (let i = 0; i < len; i++) {
+      const ch = chars[Math.floor(Math.random() * chars.length)];
+      text += ch;
+
+      ctx.save();
+      ctx.translate(slotW * (i + 0.95), h / 2 + 6);
+      ctx.rotate((Math.random() - 0.5) * 0.65);
+
+      const fontSize = Math.round(h * (0.52 + Math.random() * 0.14));
+      ctx.font = `800 ${fontSize}px "Plus Jakarta Sans", Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+      ctx.shadowBlur = 5;
+      ctx.shadowOffsetY = 1;
+
+      // Bright, slightly varied fill so it reads on the dark background.
+      const hue = Math.random() * 60; // warm gold / red range
+      const light = 62 + Math.random() * 20;
+      ctx.fillStyle = `hsl(${hue}, 95%, ${light}%)`;
+      ctx.fillText(ch, 0, 0);
+      ctx.restore();
+    }
+
+    captchaText = text;
 
     const inp = document.getElementById('captchaAnswer');
     if (inp) inp.value = '';
-
     const err = document.getElementById('captchaError');
     if (err) err.textContent = '';
   }
@@ -2092,16 +2157,16 @@
       return;
     }
 
-    // --- captcha validation ---
+    // --- image-captcha validation (case-insensitive) ---
     if (!captcha) {
       const err = document.getElementById('captchaError');
-      if (err) err.textContent = 'Please solve the verification question.';
+      if (err) err.textContent = 'Please type the code shown in the image.';
       setStatus('Verification required.', 'error');
       return;
     }
-    if (captcha !== captchaAnswer) {
+    if (captcha.toUpperCase() !== captchaText.toUpperCase()) {
       const err = document.getElementById('captchaError');
-      if (err) err.textContent = 'Incorrect answer. Here is a new question.';
+      if (err) err.textContent = 'Incorrect code. Here is a new one.';
       setStatus('Verification failed — please try again.', 'error');
       generateCaptcha();
       return;
@@ -2178,7 +2243,10 @@
     initHeroBanner();
     setupRowAnimations();
     setupHeroSwipe();
-    generateCaptcha();
+
+    // Draw the first CAPTCHA once the layout has been applied so the canvas
+    // can measure its own CSS width/height correctly.
+    requestAnimationFrame(() => generateCaptcha());
 
     // Seed initial history entry so the back button works from the start
     history.replaceState({ tab: 'homeTab', playback: null }, '', location.pathname + location.search);
@@ -2191,6 +2259,8 @@
     });
     window.addEventListener('resize', () => {
       document.querySelectorAll('.rail-viewport').forEach(v => updateScrollArrowsFor(v));
+      // Redraw the captcha if its CSS size changed (e.g. orientation change).
+      generateCaptcha();
     });
     setTimeout(() => {
       document.querySelectorAll('.rail-viewport').forEach(v => updateScrollArrowsFor(v));
