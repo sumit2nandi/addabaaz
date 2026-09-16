@@ -1047,7 +1047,7 @@
   .upcoming-poster-wrap {
     position: relative;
     width: 100%;
-    aspect-ratio: 2 / 3;
+    aspect-ratio: 2 / 3;      /* PORTRAIT — shared by Coming Soon and BTS */
     background: linear-gradient(145deg, #1a1a24 0%, #0a0a0d 100%);
     overflow: hidden;
   }
@@ -1107,10 +1107,9 @@
     text-overflow: ellipsis;
   }
 
-  /* --- Behind the Scenes variant --- */
-  .upcoming-card.bts-card .upcoming-poster-wrap {
-    aspect-ratio: 4 / 3;
-  }
+  /* --- Behind the Scenes variant ---
+     NOTE: the BTS rail/grid now uses the SAME portrait 2:3 frame as
+     Coming Soon. Only the badge colour and the hover border differ. */
   .upcoming-card.bts-card .upcoming-badge {
     background: linear-gradient(135deg, #f5c518 0%, #d99f00 100%);
     color: #050505;
@@ -1147,7 +1146,9 @@
     box-shadow: 0 12px 28px rgba(245, 197, 24, 0.45);
   }
 
-  /* --- Full grid on the dedicated pages --- */
+  /* --- Full grid on the dedicated pages ---
+     Both Upcoming Releases and Behind the Scenes now use the same
+     portrait poster grid. */
   .upcoming-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -1157,10 +1158,6 @@
   .upcoming-grid .upcoming-card {
     width: 100%;
     flex: none;
-  }
-  /* BTS grid uses wider tiles because photos are landscape */
-  .upcoming-grid.bts-grid {
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   }
   .upcoming-empty {
     grid-column: 1 / -1;
@@ -1322,9 +1319,6 @@
       width: 100%;
       flex: none;
     }
-    .upcoming-grid.bts-grid {
-      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    }
 
     .show-all-wrap { margin-top: 10px; }
     .btn-show-all { padding: 11px 20px; font-size: 13px; }
@@ -1339,7 +1333,6 @@
   @media (max-width: 380px) {
     .upcoming-card { width: calc((100% - 16px) / 3.15); flex: 0 0 calc((100% - 16px) / 3.15); }
     .upcoming-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
-    .upcoming-grid.bts-grid { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); }
   }
 </style>
 </head>
@@ -1457,7 +1450,7 @@
         <h2 class="section-title">Behind the Scenes</h2>
         <div class="section-subtitle">Moments, faces and frames from the making of ADDABAAZ productions.</div>
       </div>
-      <div class="upcoming-grid bts-grid" id="btsGrid"></div>
+      <div class="upcoming-grid" id="btsGrid"></div>
     </section>
   </div>
   <!-- ========================================================== -->
@@ -1962,23 +1955,22 @@
      ► Then list the filenames in the array below.
        `title` is optional — leave it as '' to show only the poster.
      ============================================================ */
-  const UPCOMING_FOLDER = 'UpcomingReleases/';
+  const UPCOMING_FOLDER = 'images/UpcomingReleases/';
   const UPCOMING_HOME_LIMIT = 10;   // posters shown in the homepage "Coming Soon" row
 
-   const upcomingReleases = [
-    { file: 'POSTER (1).png', title: '' },
-    { file: 'POSTER (3).png', title: '' },
-    { file: 'POSTER (4).png', title: '' },
-    { file: 'POSTER (5).png', title: '' },
-    { file: 'POSTER (6).png', title: '' },
-    { file: 'POSTER (7).png', title: '' },
-    { file: 'POSTER (8).png', title: '' },
-    { file: 'Untitled - May 10, 2026 at 13.25.46-21.png', title: '' },
-    { file: 'ChatGPT Image Jun 11, 2026, 02_53_40 AM.png', title: '' },
-    { file: 'ChatGPT Image Jun 11, 2026, 02_57_55 AM.png', title: '' },
-    { file: 'ChatGPT Image Jun 11, 2026, 03_00_37 AM.png', title: '' },
-    { file: 'ChatGPT Image Jun 11, 2026, 03_03_30 AM.png', title: '' },
-    { file: 'Gemini_Generated_Image_d59vdwd59vdwd59v.png', title: '' }
+  const upcomingReleases = [
+    { file: 'upcoming-01.jpg', title: '' },
+    { file: 'upcoming-02.jpg', title: '' },
+    { file: 'upcoming-03.jpg', title: '' },
+    { file: 'upcoming-04.jpg', title: '' },
+    { file: 'upcoming-05.jpg', title: '' },
+    { file: 'upcoming-06.jpg', title: '' },
+    { file: 'upcoming-07.jpg', title: '' },
+    { file: 'upcoming-08.jpg', title: '' },
+    { file: 'upcoming-09.jpg', title: '' },
+    { file: 'upcoming-10.jpg', title: '' },
+    { file: 'upcoming-11.jpg', title: '' },
+    { file: 'upcoming-12.jpg', title: '' }
   ];
 
   /* ============================================================
@@ -1987,30 +1979,32 @@
      ► Put your BTS photos inside:  images/BTS/
      ► Filenames below include spaces and parentheses — they are
        URL-encoded automatically when rendered.
+     ► These now display in the SAME portrait 2:3 frame as the
+       Coming Soon posters (object-fit: cover crops the extra).
      ============================================================ */
-  const BTS_FOLDER = 'BTS/';
+  const BTS_FOLDER = 'images/BTS/';
   const BTS_HOME_LIMIT = 10;   // photos shown in the homepage "Behind the Scenes" row
 
   const behindTheScenes = [
-    { file: 'UTTRAN BTS (16).png', title: 'UTTRAN — Behind the Scenes' },
-    { file: 'SONG BTS (1).png',    title: 'SONG — Behind the Scenes' },
-    { file: 'SONG BTS (2).png',    title: 'SONG — Behind the Scenes' },
-    { file: 'SONG BTS (3).png',    title: 'SONG — Behind the Scenes' },
-    { file: 'SONG BTS (4).png',    title: 'SONG — Behind the Scenes' },
-    { file: 'SONG BTS (5).png',    title: 'SONG — Behind the Scenes' },
-    { file: 'UTTRAN BTS (2).png',  title: 'UTTRAN — Behind the Scenes' },
-    { file: 'UTTRAN BTS (4).png',  title: 'UTTRAN — Behind the Scenes' },
-    { file: 'UTTRAN BTS (5).png',  title: 'UTTRAN — Behind the Scenes' },
-    { file: 'UTTRAN BTS (6).png',  title: 'UTTRAN — Behind the Scenes' },
-    { file: 'UTTRAN BTS (7).png',  title: 'UTTRAN — Behind the Scenes' },
-    { file: 'UTTRAN BTS (8).png',  title: 'UTTRAN — Behind the Scenes' },
-    { file: 'UTTRAN BTS (9).png',  title: 'UTTRAN — Behind the Scenes' },
-    { file: 'UTTRAN BTS (10).png', title: 'UTTRAN — Behind the Scenes' },
-    { file: 'UTTRAN BTS (11).png', title: 'UTTRAN — Behind the Scenes' },
-    { file: 'UTTRAN BTS (12).png', title: 'UTTRAN — Behind the Scenes' },
-    { file: 'UTTRAN BTS (13).png', title: 'UTTRAN — Behind the Scenes' },
-    { file: 'UTTRAN BTS (14).png', title: 'UTTRAN — Behind the Scenes' },
-    { file: 'UTTRAN BTS (15).png', title: 'UTTRAN — Behind the Scenes' }
+    { file: 'UTTRAN BTS (16).png', title: '' },
+    { file: 'SONG BTS (1).png',    title: '' },
+    { file: 'SONG BTS (2).png',    title: '' },
+    { file: 'SONG BTS (3).png',    title: '' },
+    { file: 'SONG BTS (4).png',    title: '' },
+    { file: 'SONG BTS (5).png',    title: '' },
+    { file: 'UTTRAN BTS (2).png',  title: '' },
+    { file: 'UTTRAN BTS (4).png',  title: '' },
+    { file: 'UTTRAN BTS (5).png',  title: '' },
+    { file: 'UTTRAN BTS (6).png',  title: '' },
+    { file: 'UTTRAN BTS (7).png',  title: '' },
+    { file: 'UTTRAN BTS (8).png',  title: '' },
+    { file: 'UTTRAN BTS (9).png',  title: '' },
+    { file: 'UTTRAN BTS (10).png', title: '' },
+    { file: 'UTTRAN BTS (11).png', title: '' },
+    { file: 'UTTRAN BTS (12).png', title: '' },
+    { file: 'UTTRAN BTS (13).png', title: '' },
+    { file: 'UTTRAN BTS (14).png', title: '' },
+    { file: 'UTTRAN BTS (15).png', title: '' }
   ];
 
   /* ============================================================
@@ -2508,6 +2502,8 @@
 
   /* ============================================================
      POSTER-STYLE CARDS  (Upcoming Releases + Behind the Scenes)
+     ------------------------------------------------------------
+     Both sections share the same portrait 2:3 card frame.
      ============================================================ */
 
   /* Generic maker — used by both rails/grids below */
