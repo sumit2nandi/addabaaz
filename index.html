@@ -353,14 +353,6 @@
     border: 1px solid var(--border);
   }
 
-  .card:hover, .card:focus {
-    transform: translateY(-10px) scale(1.03);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.5);
-    border-color: rgba(229, 9, 20, 0.4);
-    z-index: 10;
-    outline: none;
-  }
-
   .poster {
     width: 100%; height: 272px; background-size: cover; background-position: center; display: flex; align-items: flex-end; padding: 12px; color: #fff; font-weight: 800; font-size: 14px;
     position: relative;
@@ -371,10 +363,21 @@
     background: rgba(0,0,0,0.4);
     opacity: 0; transition: opacity 0.2s ease;
   }
-  .card:hover .play-overlay, .card:focus .play-overlay { opacity: 1; }
   .play-btn {
     width: 56px; height: 56px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center;
     font-size: 20px; color: #fff; box-shadow: 0 4px 20px rgba(229,9,20,0.5);
+  }
+
+  /* ─── Hover effects ONLY on desktop devices (mouse + fine pointer) ─── */
+  @media (hover: hover) and (pointer: fine) {
+    .card:hover, .card:focus {
+      transform: translateY(-10px) scale(1.03);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+      border-color: rgba(229, 9, 20, 0.4);
+      z-index: 10;
+      outline: none;
+    }
+    .card:hover .play-overlay, .card:focus .play-overlay { opacity: 1; }
   }
 
   .modal-play-btn { border:0; padding:0; cursor:pointer; appearance:none; position:relative; z-index:4; }
@@ -417,6 +420,95 @@
     margin-top: 4px;
     font-size: 12px;
     color: var(--muted);
+  }
+
+  /* ────────────────────────────────────────────────────────
+     CARD HOVER PREVIEW POPUP (desktop only)
+     Small floating window that shows the video autoplaying
+     when a show/promo tile is hovered.
+     ──────────────────────────────────────────────────────── */
+  .card-preview {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 360px;
+    background: var(--panel);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.04);
+    z-index: 150;
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.94);
+    transition: opacity 0.22s ease, transform 0.22s cubic-bezier(.2,.9,.2,1);
+    will-change: opacity, transform, left, top;
+    display: none; /* set to block by JS on desktop */
+  }
+  .card-preview.show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: scale(1);
+  }
+  .card-preview-video {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    background-size: cover;
+    background-position: center;
+    overflow: hidden;
+  }
+  .card-preview-video iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.45s ease;
+  }
+  .card-preview-video iframe.ready { opacity: 1; }
+
+  .card-preview-info {
+    padding: 12px 14px 14px;
+  }
+  .card-preview-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1.3;
+    margin-bottom: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .card-preview-meta {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 12px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .card-preview-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .card-preview-actions .btn {
+    padding: 7px 14px;
+    font-size: 12px;
+    border-radius: 6px;
+  }
+  .card-preview-actions .btn .play-glyph {
+    font-size: 10px;
+    line-height: 1;
   }
 
   /* Dynamic Navigation Arrows */
@@ -987,6 +1079,9 @@
     .contact-info-block a.contact-line i { width: 32px; height: 32px; flex: 0 0 32px; font-size: 13px; }
     .captcha-canvas { width: 148px; height: 50px; }
     .captcha-refresh { flex: 0 0 44px; }
+
+    /* Preview popup never shows on mobile */
+    .card-preview { display: none !important; }
   }
 
   @media (max-width: 480px) {
@@ -1349,6 +1444,23 @@
     </section>
   </div>
 
+  <!-- ================= CARD HOVER PREVIEW (desktop only) ================= -->
+  <div id="cardPreview" class="card-preview" aria-hidden="true">
+    <div class="card-preview-video"></div>
+    <div class="card-preview-info">
+      <div class="card-preview-title"></div>
+      <div class="card-preview-meta"></div>
+      <div class="card-preview-actions">
+        <button type="button" class="btn btn-primary card-preview-play">
+          <span class="play-glyph">▶</span> Play
+        </button>
+        <button type="button" class="btn btn-ghost card-preview-details">
+          Details
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Animated Dynamic Modal Component -->
   <div id="modalBackdrop" class="modal-backdrop" onclick="closeModal()">
     <div class="modal" onclick="event.stopPropagation()">
@@ -1366,15 +1478,9 @@
 <script>
   // ============================================================
   // PROJECT INQUIRY FORM  →  GOOGLE SHEETS
-  // ------------------------------------------------------------
-  // Uses Option B (native Google Form POST) — entry IDs below are
-  // mapped to the fields in the user's Google Form.
   // ============================================================
   const FORM_CONFIG = {
-    // Option A (Apps Script) left empty — using Option B below
     appsScriptUrl: '',
-
-    // Option B: Native Google Form submission
     googleFormAction: 'https://docs.google.com/forms/d/e/1FAIpQLSefTIXeGfnzRR7oumsp1wsSvoOjEWjtK-opcCN5T1LR0ZE7fA/formResponse',
     googleFormFields: {
       name:    'entry.1034004557',
@@ -1472,11 +1578,6 @@
     const playerBox = document.getElementById('videoPlayerBox');
     if (!playerBox) return;
 
-    // Start muted (required for autoplay on mobile browsers), then send an
-    // unMute command to the YouTube player as soon as it is playing. Because
-    // this runs inside the click's user-activation window, most browsers will
-    // honour the unmute. If a browser still refuses, the video keeps playing
-    // muted and the user can tap the player's speaker icon.
     playerBox.innerHTML = `
       <iframe
         id="ytPlayerIframe"
@@ -1500,7 +1601,6 @@
       } catch (e) { /* ignore */ }
     };
 
-    // Several attempts to maximise the chance the unmute takes.
     setTimeout(unmute, 600);
     setTimeout(unmute, 1500);
     setTimeout(unmute, 3000);
@@ -1510,14 +1610,13 @@
   // HERO SLIDESHOW
   // ============================================================
   const HERO_SLIDE_DURATION = 12000; // 12s per slide
-  let heroSlides = [];      // computed from top shows
+  let heroSlides = [];
   let heroCurrentIndex = 0;
   let heroSlideTimer = null;
   let heroVideoTimer = null;
   let heroMuted = true;
 
   function computeHeroSlides() {
-    // Rank shows by total views; take top 3 with at least 1 episode
     const ranked = projectOrder
       .map(k => {
         const p = projectDetails[k];
@@ -1530,7 +1629,6 @@
       .sort((a,b) => b.views - a.views)
       .slice(0, 3);
 
-    // For each show, pick the most recent episode with a youtubeId (prefer promo/trailer-like preview)
     heroSlides = ranked.map(r => {
       const show = r.show;
       const withYT = show.episodes.filter(e => e.youtubeId);
@@ -1564,7 +1662,6 @@
     heroCurrentIndex = index;
     const slide = heroSlides[index];
 
-    // ---- Thumbnail layers ----
     const thumbs = document.querySelectorAll('.hero-slide-thumb');
     thumbs.forEach((thumb, i) => {
       if (i === index) {
@@ -1576,7 +1673,6 @@
       }
     });
 
-    // ---- Text content (with fade-in animation) ----
     const content = document.getElementById('heroContent');
     if (content) {
       const epCount = slide.show.episodes.length;
@@ -1611,7 +1707,6 @@
     const slide = heroSlides[heroCurrentIndex];
     if (!slide) return;
 
-    // Clear any existing video
     bgContainer.innerHTML = '';
     if (heroVideoTimer) { clearTimeout(heroVideoTimer); heroVideoTimer = null; }
 
@@ -1620,9 +1715,7 @@
 
     if (!slide.youtubeId) return;
 
-    // Delay video start so the thumbnail is visible first
     heroVideoTimer = setTimeout(() => {
-      // Fade out thumbnail
       const activeThumb = document.querySelector(`.hero-slide-thumb.active`);
       if (activeThumb) activeThumb.classList.add('fade-out');
 
@@ -1639,7 +1732,6 @@
         if (icon) icon.innerHTML = '<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>';
       }
 
-      // Stop the video slightly before next slide
       heroVideoTimer = setTimeout(() => {
         bgContainer.innerHTML = '';
         const thumb = document.querySelector('.hero-slide-thumb.active');
@@ -1710,7 +1802,6 @@
     document.querySelectorAll('.hero-slide-thumb').forEach(t => t.classList.remove('fade-out'));
   }
 
-  // ---- Swipe / drag support for the hero banner ----
   function setupHeroSwipe() {
     const heroWrap = document.querySelector('.hero-wrap');
     if (!heroWrap) return;
@@ -1739,25 +1830,211 @@
   }
 
   // ============================================================
+  // CARD HOVER PREVIEW  (desktop only — small popup with autoplay)
+  // ============================================================
+  let cardPreviewShowTimer = null;
+  let cardPreviewHideTimer = null;
+  let cardPreviewCleanupTimer = null;
+
+  function supportsHoverPreview() {
+    try {
+      return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function initCardPreview() {
+    const preview = document.getElementById('cardPreview');
+    if (!preview) return;
+
+    // Only attach on true desktop environments
+    if (!supportsHoverPreview()) {
+      preview.style.display = 'none';
+      return;
+    }
+
+    preview.style.display = 'block';
+
+    // Show preview when hovering a card (after a small delay so quick
+    // mouse movement doesn't trigger it)
+    document.addEventListener('mouseover', (e) => {
+      const card = e.target.closest && e.target.closest('.card');
+      if (!card) return;
+      if (card === preview._card) return;
+
+      clearTimeout(cardPreviewShowTimer);
+      clearTimeout(cardPreviewHideTimer);
+
+      cardPreviewShowTimer = setTimeout(() => {
+        showCardPreview(card);
+      }, 550);
+    });
+
+    // Hide when the mouse leaves the card
+    document.addEventListener('mouseout', (e) => {
+      const card = e.target.closest && e.target.closest('.card');
+      if (!card || card !== preview._card) return;
+      const to = e.relatedTarget;
+      if (to) {
+        if (card.contains(to)) return;
+        if (preview.contains(to)) return;
+      }
+      clearTimeout(cardPreviewShowTimer);
+      scheduleHideCardPreview();
+    });
+
+    // Keep the popup open while the mouse is over it
+    preview.addEventListener('mouseenter', () => {
+      clearTimeout(cardPreviewHideTimer);
+    });
+    preview.addEventListener('mouseleave', () => {
+      scheduleHideCardPreview();
+    });
+
+    // Hide on any click on a card (so the modal/player opens cleanly)
+    document.addEventListener('click', (e) => {
+      const card = e.target.closest && e.target.closest('.card');
+      if (card) hideCardPreview();
+    }, true);
+
+    // Hide on scroll/resize so the popup doesn't lag behind
+    window.addEventListener('scroll', hideCardPreview, { passive: true });
+    window.addEventListener('resize', hideCardPreview);
+  }
+
+  function scheduleHideCardPreview() {
+    clearTimeout(cardPreviewHideTimer);
+    cardPreviewHideTimer = setTimeout(hideCardPreview, 220);
+  }
+
+  function showCardPreview(card) {
+    const preview = document.getElementById('cardPreview');
+    if (!preview) return;
+
+    const yt = card.dataset ? card.dataset.yt : '';
+    if (!yt) return; // nothing to preview (e.g. shows without episodes)
+
+    if (cardPreviewCleanupTimer) clearTimeout(cardPreviewCleanupTimer);
+
+    preview._card = card;
+
+    // --- Content ---
+    const title = card.dataset.previewTitle || '';
+    const meta  = card.dataset.previewMeta  || '';
+    preview.querySelector('.card-preview-title').textContent = title;
+    preview.querySelector('.card-preview-meta').textContent  = meta;
+
+    // Show Play + Details buttons; hide Details for promos
+    const type = card.dataset.type || 'show';
+    const detailsBtn = preview.querySelector('.card-preview-details');
+    detailsBtn.style.display = (type === 'show') ? '' : 'none';
+
+    // --- Video (thumbnail behind, iframe fades in) ---
+    const videoBox = preview.querySelector('.card-preview-video');
+    const posterEl = card.querySelector('.poster');
+    const bg = posterEl ? posterEl.style.backgroundImage : '';
+    videoBox.style.backgroundImage = bg || 'none';
+
+    videoBox.innerHTML = `
+      <iframe
+        src="https://www.youtube.com/embed/${encodeURIComponent(yt)}?autoplay=1&mute=1&loop=1&playlist=${encodeURIComponent(yt)}&controls=0&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3"
+        title="ADDABAAZ preview"
+        allow="autoplay; encrypted-media"
+        frameborder="0"></iframe>`;
+
+    // Make the popup visible so we can measure it
+    preview.classList.add('show');
+
+    // Fade the iframe in once YouTube is likely ready
+    const iframe = videoBox.querySelector('iframe');
+    setTimeout(() => {
+      if (iframe && iframe.isConnected) iframe.classList.add('ready');
+    }, 450);
+
+    // --- Position ---
+    const rect = card.getBoundingClientRect();
+    const pw = preview.offsetWidth  || 360;
+    const ph = preview.offsetHeight || 300;
+    const gap = 12;
+    const margin = 12;
+
+    // Prefer the right side; fall back to the left; else center
+    let left = rect.right + gap;
+    if (left + pw > window.innerWidth - margin) {
+      left = rect.left - pw - gap;
+    }
+    if (left < margin) {
+      left = Math.max(margin, Math.min(window.innerWidth - pw - margin, rect.left + rect.width / 2 - pw / 2));
+    }
+
+    // Vertically center the popup on the card, clamped to viewport
+    let top = rect.top + (rect.height - ph) / 2;
+    top = Math.max(margin, Math.min(top, window.innerHeight - ph - margin));
+
+    preview.style.left = left + 'px';
+    preview.style.top  = top + 'px';
+
+    // --- Button wiring (fresh handlers each time) ---
+    const playBtn = preview.querySelector('.card-preview-play');
+    playBtn.onclick = () => {
+      hideCardPreview();
+      if (type === 'show') {
+        playFirstEpisode(card.dataset.showKey);
+      } else {
+        playStandalone(card.dataset.promoId);
+      }
+    };
+    detailsBtn.onclick = () => {
+      hideCardPreview();
+      if (type === 'show') {
+        openModal(card.dataset.showKey);
+      } else {
+        playStandalone(card.dataset.promoId);
+      }
+    };
+  }
+
+  function hideCardPreview() {
+    const preview = document.getElementById('cardPreview');
+    if (!preview) return;
+    if (!preview.classList.contains('show') && !preview._card) return;
+
+    preview.classList.remove('show');
+    preview._card = null;
+
+    // Tear down the iframe so the video stops playing
+    if (cardPreviewCleanupTimer) clearTimeout(cardPreviewCleanupTimer);
+    cardPreviewCleanupTimer = setTimeout(() => {
+      if (!preview.classList.contains('show')) {
+        const videoBox = preview.querySelector('.card-preview-video');
+        if (videoBox) {
+          videoBox.innerHTML = '';
+          videoBox.style.backgroundImage = 'none';
+        }
+      }
+    }, 260);
+  }
+
+  // ============================================================
   // TAB SWITCHER (with history / back-button support)
   // ============================================================
-  let currentPlayback = null; // { type:'media', showKey, episodeId } | { type:'standalone', id }
+  let currentPlayback = null;
 
   function openTab(tabId, el, opts = {}) {
+    hideCardPreview();
+
     const fromHistory = !!opts.fromHistory;
     const contents = document.querySelectorAll('.tab-content');
     const activeTab = document.querySelector('.tab-content.active');
     const targetTab = document.getElementById(tabId);
 
     if (activeTab === targetTab) {
-      // Same tab clicked again — just return to the top (unless we're
-      // coming back via the browser Back button).
       if (fromHistory) restoreScrollPosition(tabId);
       else window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    // Remember exactly where the user was on the tab we are leaving.
     if (activeTab) saveScrollPosition(activeTab.id);
 
     if (!fromHistory) {
@@ -1788,8 +2065,6 @@
       if (targetLink) targetLink.classList.add('active');
     }
 
-    // Going back  → restore the remembered scroll position.
-    // Normal nav  → jump to the top.
     const afterSwap = fromHistory
       ? () => restoreScrollPosition(tabId)
       : () => resetScrollPosition();
@@ -1804,8 +2079,6 @@
             targetTab.classList.add('show');
           });
         }
-        // The content swap changes the document height, which cancels any
-        // scroll that was in flight. Re-apply several times to be safe on mobile.
         afterSwap();
         requestAnimationFrame(afterSwap);
         setTimeout(afterSwap, 60);
@@ -1818,8 +2091,6 @@
       });
     }
 
-    // Immediate reset (only for forward navigation) so the user never sees
-    // the old scroll position while the outgoing tab is still fading out.
     if (!fromHistory) {
       resetScrollPosition();
       requestAnimationFrame(resetScrollPosition);
@@ -1833,7 +2104,16 @@
   // ============================================================
   function makeShowCard(showKey) {
     const show = projectDetails[showKey];
-    return `<div class="card" tabindex="0" onclick="openModal('${showKey}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openModal('${showKey}')}">
+    const firstEp = (show.episodes && show.episodes[0]) || null;
+    const yt = firstEp ? (firstEp.youtubeId || '') : '';
+    return `<div class="card" tabindex="0"
+        data-type="show"
+        data-show-key="${escapeHtml(showKey)}"
+        data-yt="${escapeHtml(yt)}"
+        data-preview-title="${escapeHtml(show.title)}"
+        data-preview-meta="${escapeHtml(show.subtitle)}"
+        onclick="openModal('${showKey}')"
+        onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openModal('${showKey}')}">
       <div class="poster" style="background-image:url('${escapeHtml(getShowPoster(show))}')"><div class="tag">${escapeHtml(show.subtitle.split('•')[0].trim())}</div><div class="play-overlay"><div class="play-btn">▶</div></div></div>
       <div class="meta"><div><strong>${escapeHtml(show.title)}</strong></div></div>
     </div>`;
@@ -1842,7 +2122,14 @@
   function makePromoCard(v) {
     const thumb = v.thumbnail || getYouTubeThumbnail(v.youtubeId,'');
     const badge = v.kind === 'SPECIAL' ? 'SPECIAL' : 'PROMO';
-    return `<div class="card catalog-card" tabindex="0" onclick="playStandalone('${v.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();playStandalone('${v.id}')}">
+    return `<div class="card catalog-card" tabindex="0"
+        data-type="promo"
+        data-promo-id="${escapeHtml(v.id)}"
+        data-yt="${escapeHtml(v.youtubeId || '')}"
+        data-preview-title="${escapeHtml(v.title)}"
+        data-preview-meta="${escapeHtml((v.duration || '') + ' • ' + badge)}"
+        onclick="playStandalone('${v.id}')"
+        onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();playStandalone('${v.id}')}">
       <div class="poster" style="background-image:url('${escapeHtml(thumb)}')"><div class="kind-badge">${badge}</div><div class="play-overlay"><div class="play-btn">▶</div></div></div>
       <div class="meta"><div class="video-title"><strong>${escapeHtml(v.title)}</strong></div><div class="video-meta">${escapeHtml(v.duration)}</div></div>
     </div>`;
@@ -1901,6 +2188,7 @@
     currentPlayback = { type: 'standalone', id: v.id };
     closeModal();
     stopHeroBanner();
+    hideCardPreview();
     if (v.youtubeId && v.availability === 'available') {
       createVideoPlayer(v.youtubeId);
     }
@@ -1911,8 +2199,6 @@
     const epSection = document.getElementById('episodesSection');
     if (epSection) epSection.style.display = 'none';
     openTab('playerTab', null, opts);
-    // Force an immediate scroll to top on mobile when opening the player
-    // (but never when we arrived here through the Back button).
     if (!opts.fromHistory) {
       resetScrollPosition();
       requestAnimationFrame(resetScrollPosition);
@@ -1944,6 +2230,7 @@
 
     closeModal();
     stopHeroBanner();
+    hideCardPreview();
 
     if (ep.youtubeId && ep.availability === 'available') {
       createVideoPlayer(ep.youtubeId);
@@ -1985,8 +2272,6 @@
     }).join('');
 
     openTab('playerTab', null, opts);
-    // Force an immediate scroll to top on mobile when opening the player
-    // (but never when we arrived here through the Back button).
     if (!opts.fromHistory) {
       resetScrollPosition();
       requestAnimationFrame(resetScrollPosition);
@@ -2064,8 +2349,6 @@
 
     const ctx = canvas.getContext('2d');
 
-    // Use the canvas's CSS size, but scale the backing store for crisp
-    // rendering on high-DPI screens.
     const cssW = parseFloat(getComputedStyle(canvas).width)  || 170;
     const cssH = parseFloat(getComputedStyle(canvas).height) || 54;
     const dpr  = window.devicePixelRatio || 1;
@@ -2077,14 +2360,12 @@
     const w = cssW;
     const h = cssH;
 
-    // --- Background gradient ---
     const bg = ctx.createLinearGradient(0, 0, w, h);
     bg.addColorStop(0, '#1a1a22');
     bg.addColorStop(1, '#07070a');
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, w, h);
 
-    // --- Wave noise lines ---
     for (let i = 0; i < 6; i++) {
       ctx.strokeStyle = `hsla(${Math.random() * 360}, 70%, 60%, 0.35)`;
       ctx.lineWidth = 1 + Math.random() * 1.4;
@@ -2098,7 +2379,6 @@
       ctx.stroke();
     }
 
-    // --- Noise dots ---
     for (let i = 0; i < 70; i++) {
       ctx.fillStyle = `hsla(${Math.random() * 360}, 70%, 65%, 0.45)`;
       ctx.beginPath();
@@ -2106,8 +2386,6 @@
       ctx.fill();
     }
 
-    // --- Characters ---
-    // Avoid visually similar characters (0/O, 1/I/l).
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     const len = 5;
     let text = '';
@@ -2130,8 +2408,7 @@
       ctx.shadowBlur = 5;
       ctx.shadowOffsetY = 1;
 
-      // Bright, slightly varied fill so it reads on the dark background.
-      const hue = Math.random() * 60; // warm gold / red range
+      const hue = Math.random() * 60;
       const light = 62 + Math.random() * 20;
       ctx.fillStyle = `hsl(${hue}, 95%, ${light}%)`;
       ctx.fillText(ch, 0, 0);
@@ -2178,7 +2455,6 @@
       statusEl.className = 'form-status ' + (cls || '');
     };
 
-    // --- basic validation ---
     if (!name || !email || !message) {
       setStatus('Please fill in your name, email and message.', 'error');
       return;
@@ -2188,7 +2464,6 @@
       return;
     }
 
-    // --- image-captcha validation (case-insensitive) ---
     if (!captcha) {
       const err = document.getElementById('captchaError');
       if (err) err.textContent = 'Please type the code shown in the image.';
@@ -2212,7 +2487,6 @@
       submittedAt: new Date().toISOString()
     };
 
-    // --- send ---
     if (btn) { btn.disabled = true; }
     const originalBtnText = btn ? btn.textContent : '';
     if (btn) btn.textContent = 'Sending…';
@@ -2220,7 +2494,6 @@
 
     try {
       if (FORM_CONFIG.appsScriptUrl) {
-        // ── Option A: Google Apps Script → Google Sheet ──
         await fetch(FORM_CONFIG.appsScriptUrl, {
           method: 'POST',
           mode: 'no-cors',
@@ -2228,7 +2501,6 @@
           body: JSON.stringify(payload)
         });
       } else if (FORM_CONFIG.googleFormAction && FORM_CONFIG.googleFormFields.name) {
-        // ── Option B: native Google Form (writes into its linked Sheet) ──
         const f = FORM_CONFIG.googleFormFields;
         const body = new URLSearchParams();
         body.append(f.name, name);
@@ -2243,7 +2515,6 @@
           body: body.toString()
         });
       } else {
-        // ── Not configured yet: log locally so nothing is lost while testing ──
         console.log('[ADDABAAZ] Inquiry (form not connected to Google yet):', payload);
         await new Promise(r => setTimeout(r, 700));
       }
@@ -2264,8 +2535,6 @@
   // INIT
   // ============================================================
   document.addEventListener('DOMContentLoaded', () => {
-    // We handle scroll restoration ourselves (Back button returns to the
-    // exact spot the user left; forward navigation always starts at the top).
     if ('scrollRestoration' in history) {
       history.scrollRestoration = 'manual';
     }
@@ -2274,15 +2543,12 @@
     initHeroBanner();
     setupRowAnimations();
     setupHeroSwipe();
+    initCardPreview();
 
-    // Draw the first CAPTCHA once the layout has been applied so the canvas
-    // can measure its own CSS width/height correctly.
     requestAnimationFrame(() => generateCaptcha());
 
-    // Seed initial history entry so the back button works from the start
     history.replaceState({ tab: 'homeTab', playback: null }, '', location.pathname + location.search);
 
-    // Ensure page loads at the top
     resetScrollPosition();
 
     document.querySelectorAll('.rail-viewport').forEach(v => {
@@ -2290,7 +2556,6 @@
     });
     window.addEventListener('resize', () => {
       document.querySelectorAll('.rail-viewport').forEach(v => updateScrollArrowsFor(v));
-      // Redraw the captcha if its CSS size changed (e.g. orientation change).
       generateCaptcha();
     });
     setTimeout(() => {
@@ -2320,6 +2585,7 @@
   function openModal(key) {
     const data = projectDetails[key];
     if (!data) return;
+    hideCardPreview();
     const container = document.getElementById('modalContent');
 
     const episodesListHtml = data.episodes && data.episodes.length > 0 ? `
