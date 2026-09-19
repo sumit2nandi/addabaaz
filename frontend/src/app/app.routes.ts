@@ -13,6 +13,13 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/home/home').then((m) => m.Home),
   },
   {
+    // Spring Security redirects here after Google sign-in.
+    path: 'oauth2/callback',
+    title: 'Signing in — ADDABAAZ',
+    loadComponent: () =>
+      import('./pages/oauth-callback/oauth-callback').then((m) => m.OAuthCallback),
+  },
+  {
     path: 'about',
     title: 'About — ADDABAAZ',
     loadComponent: () => import('./pages/about/about').then((m) => m.About),

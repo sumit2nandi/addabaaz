@@ -5,6 +5,7 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { ContentService } from '../../core/services/content.service';
+import { PlaybackService } from '../../core/services/playback.service';
 import { Episode } from '../../core/models/content';
 import { MediaRail } from '../../shared/media-rail/media-rail';
 import { episodeNumberLabel, isPlayable, videoLabel } from '../../core/utils/media';
@@ -22,6 +23,7 @@ export class Watch {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly content = inject(ContentService);
+  private readonly playback = inject(PlaybackService);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly document = inject(DOCUMENT);
 
@@ -75,11 +77,26 @@ export class Watch {
   readonly label = videoLabel;
 
   constructor() {
-    // Unknown / unpublished links fall back to the homepage.
+    // Unknown / unpublished links fall back to the homepage — but only once the
+    // catalogue has actually arrived, otherwise every deep link would bounce.
     effect(() => {
       const requested = this.showKey() || this.promoId();
       if (!requested) return;
+      if (this.content.loading()) return;
       if (!this.video()) void this.router.navigate(['/']);
+    });
+
+    // Record what a signed-in profile starts watching (continue-watching rail).
+    effect(() => {
+      const video = this.video();
+      const showKey = this.showKey();
+      if (!video || this.content.loading()) return;
+      this.playback.markWatching({
+        showKey: this.promo() ? null : showKey,
+        episodeId: this.promo() ? null : video.id,
+        promoId: this.promo() ? video.id : null,
+        duration: video.duration,
+      });
     });
 
     // Lift the autoplay mute shortly after the player boots.

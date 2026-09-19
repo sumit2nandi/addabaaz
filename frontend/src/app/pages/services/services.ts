@@ -1,6 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 
-import { SERVICES } from '../../core/data/site.data';
+import { ContentService } from '../../core/services/content.service';
 
 @Component({
   selector: 'app-services',
@@ -8,5 +8,8 @@ import { SERVICES } from '../../core/data/site.data';
   styleUrl: './services.scss',
 })
 export class Services {
-  readonly services = SERVICES;
+  private readonly content = inject(ContentService);
+
+  /** The six expertise cards, served from the `service` table. */
+  readonly services = this.content.serviceItems;
 }

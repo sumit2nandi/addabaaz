@@ -1,5 +1,13 @@
 <app-hero-banner />
 
+@if (auth.isAuthenticated() && continueWatching().length > 0) {
+  <app-media-rail heading="Continue Watching" ariaLabel="Pick up where you left off">
+    @for (item of continueWatching(); track item.id) {
+      <app-continue-card [progress]="item" />
+    }
+  </app-media-rail>
+}
+
 <app-media-rail heading="All Shows" ariaLabel="All ADDABAAZ shows with full episodes">
   @for (show of shows(); track show.key) {
     <app-show-card [show]="show" />
@@ -20,7 +28,7 @@
   @for (item of upcoming(); track item.file) {
     <app-poster-card
       [item]="item"
-      [folder]="upcomingFolder"
+      [folder]="upcomingFolder()"
       badge="Coming Soon"
       fallbackIcon="fa-film"
     />
@@ -35,7 +43,7 @@
   @for (item of behindTheScenes(); track item.file) {
     <app-poster-card
       [item]="item"
-      [folder]="btsFolder"
+      [folder]="btsFolder()"
       badge="BTS"
       cardClass="bts-card"
       fallbackIcon="fa-camera"

@@ -3,11 +3,13 @@ import { Router } from '@angular/router';
 
 import { ContentService } from '../../core/services/content.service';
 import { ModalService } from '../../core/services/modal.service';
+import { AuthService } from '../../core/services/auth.service';
+import { BillingService } from '../../core/services/billing.service';
 import { videoLabel } from '../../core/utils/media';
 
 /**
  * The one modal on the page: show details, full-size posters and the
- * (currently hidden) sign-in / subscribe dialogs.
+ * sign-in / subscribe dialogs (now backed by the ADDABAAZ API).
  */
 @Component({
   selector: 'app-modal-host',
@@ -17,6 +19,8 @@ import { videoLabel } from '../../core/utils/media';
 export class ModalHost {
   private readonly modal = inject(ModalService);
   private readonly content = inject(ContentService);
+  private readonly auth = inject(AuthService);
+  private readonly billing = inject(BillingService);
   private readonly router = inject(Router);
 
   readonly state = this.modal.state;
@@ -34,9 +38,21 @@ export class ModalHost {
     return state?.kind === 'auth' ? state : null;
   });
 
+  /** Auth helpers used by the sign-in / subscribe dialogs. */
+  readonly user = this.auth.user;
+  readonly isAuthenticated = this.auth.isAuthenticated;
+  readonly plans = computed(() => this.billing.plans().filter((plan) => plan.code !== 'FREE'));
+
   readonly posterImageFailed = signal(false);
+  readonly authBusy = signal(false);
+  readonly authMessage = signal('');
+  readonly authError = signal('');
 
   readonly label = videoLabel;
+
+  constructor() {
+    this.billing.loadPlans();
+  }
 
   @HostListener('document:keydown.escape')
   onEscape(): void {
@@ -45,6 +61,7 @@ export class ModalHost {
 
   close(): void {
     this.modal.close();
+    this.resetAuthState();
   }
 
   stopPropagation(event: Event): void {
@@ -78,14 +95,65 @@ export class ModalHost {
     this.playEpisode(showKey, episodeId);
   }
 
-  /** Reset per-open state when the modal switches content. */
-  onAuthSubmit(mode: 'signIn' | 'subscribe'): void {
-    window.alert(mode === 'signIn' ? 'Signed in successfully!' : 'Thank you for subscribing!');
-    this.modal.close();
+  // --------------------------------------------------------------------- auth
+
+  signIn(email: string, password: string): void {
+    this.authBusy.set(true);
+    this.authError.set('');
+    this.authMessage.set('');
+
+    this.auth.login({ email, password }).subscribe({
+      next: (user) => {
+        this.authBusy.set(false);
+        this.authMessage.set(`Welcome back${user.fullName ? ', ' + user.fullName : ''}!`);
+        this.billing.loadCurrent();
+        this.modal.close();
+      },
+      error: (error: { error?: { message?: string } }) => {
+        this.authBusy.set(false);
+        this.authError.set(error?.error?.message ?? 'Those credentials did not match our records.');
+      },
+    });
   }
 
+  /** Google sign-in is a full-page redirect handled by Spring Security. */
   socialSignIn(provider: string): void {
-    window.alert(`Signed in with ${provider}!`);
-    this.modal.close();
+    if (provider === 'Google') {
+      this.auth.signInWithGoogle();
+      return;
+    }
+    this.authError.set(`${provider} sign-in is not enabled yet — use Google or your email.`);
+  }
+
+  /** Subscribe: pick a plan; sign-in is required first. */
+  choosePlan(planCode: string): void {
+    if (!this.isAuthenticated()) {
+      this.authError.set('Sign in first, then pick a plan.');
+      this.modal.openAuth('signIn');
+      return;
+    }
+    this.authBusy.set(true);
+    this.authError.set('');
+    this.billing.subscribe(planCode).subscribe({
+      next: (subscription) => {
+        this.authBusy.set(false);
+        this.authMessage.set(`${subscription.plan.name} is active until ${new Date(subscription.endsAt).toLocaleDateString()}.`);
+        this.modal.close();
+      },
+      error: (error: { error?: { message?: string } }) => {
+        this.authBusy.set(false);
+        this.authError.set(error?.error?.message ?? 'Could not start that subscription.');
+      },
+    });
+  }
+
+  signOut(): void {
+    this.auth.logout().subscribe(() => this.modal.close());
+  }
+
+  private resetAuthState(): void {
+    this.authBusy.set(false);
+    this.authError.set('');
+    this.authMessage.set('');
   }
 }

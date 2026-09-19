@@ -1,8 +1,9 @@
 /**
  * Domain models for the ADDABAAZ catalogue.
  *
- * The shapes mirror the data that lived inside the original `index.html`
- * (see `core/data/*.data.ts`), so content can keep being edited in one place.
+ * These are the shapes the UI works with. They are built from the API payloads
+ * in `core/models/api.ts` by `ContentService` — every show, episode, promo,
+ * poster, team member and service now comes from the database.
  */
 
 export type VideoKind = 'EPISODE' | 'PROMO' | 'SPECIAL';

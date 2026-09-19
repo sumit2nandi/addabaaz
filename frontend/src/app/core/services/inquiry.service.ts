@@ -1,54 +1,37 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { Observable } from 'rxjs';
 
-import { FORM_CONFIG } from '../data/site.data';
+import { ApiInquiry } from '../models/api';
+import { ApiService } from './api.service';
 
 export interface InquiryPayload {
   name: string;
   email: string;
-  phone: string;
+  phone?: string;
   message: string;
-  page: string;
-  submittedAt: string;
+  page?: string;
+  /** Server-issued CAPTCHA challenge id + the characters the visitor typed. */
+  captchaId: string;
+  captchaCode: string;
 }
 
 /**
- * Sends the contact form to whichever transport is configured in
- * `FORM_CONFIG` (Apps Script first, Google Forms second, console otherwise).
+ * Sends the contact form to the ADDABAAZ API, which validates the CAPTCHA and
+ * stores the message in the `contact_inquiry` table.
  */
 @Injectable({ providedIn: 'root' })
 export class InquiryService {
-  async submit(payload: InquiryPayload): Promise<void> {
-    const config = FORM_CONFIG;
+  private readonly api = inject(ApiService);
 
-    if (config.appsScriptUrl) {
-      await fetch(config.appsScriptUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload),
-      });
-      return;
-    }
-
-    if (config.googleFormAction && config.googleFormFields.name) {
-      const fields = config.googleFormFields;
-      const body = new URLSearchParams();
-      body.append(fields.name, payload.name);
-      body.append(fields.email, payload.email);
-      if (fields.phone) body.append(fields.phone, payload.phone);
-      body.append(fields.message, payload.message);
-
-      await fetch(config.googleFormAction, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: body.toString(),
-      });
-      return;
-    }
-
-    // No transport configured yet — keep the payload visible for developers.
-    console.log('[ADDABAAZ] Inquiry (form not connected):', payload);
-    await new Promise((resolve) => setTimeout(resolve, 700));
+  submit(payload: InquiryPayload): Observable<ApiInquiry> {
+    return this.api.submitInquiry({
+      name: payload.name,
+      email: payload.email,
+      phone: payload.phone || undefined,
+      message: payload.message,
+      page: payload.page,
+      captchaId: payload.captchaId,
+      captchaCode: payload.captchaCode,
+    });
   }
 }

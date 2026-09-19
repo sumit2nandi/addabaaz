@@ -8,7 +8,7 @@
   </div>
 
   <div class="services-grid">
-    @for (service of services; track service.num) {
+    @for (service of services(); track service.num) {
       <div class="service-card">
         <div class="service-num">{{ service.num }}</div>
         <h4>{{ service.title }}</h4>

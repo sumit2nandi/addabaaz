@@ -97,7 +97,13 @@
     }
 
     @if (authState(); as current) {
-      @if (current.mode === 'signIn') {
+      @if (isAuthenticated()) {
+        <h4 class="modal-title">Your ADDABAAZ account</h4>
+        <p class="modal-lead">
+          Signed in as {{ user()?.email }}{{ user()?.fullName ? ' (' + user()?.fullName + ')' : '' }}.
+        </p>
+        <button type="button" class="btn btn-primary modal-submit" (click)="signOut()">Sign Out</button>
+      } @else if (current.mode === 'signIn') {
         <h4 class="modal-title">Sign In to ADDABAAZ</h4>
         <p class="modal-lead">
           Enter your details to access exclusive streaming content and production updates.
@@ -106,38 +112,59 @@
           <button type="button" class="btn-social" (click)="socialSignIn('Google')">
             Continue with Google
           </button>
-          <button type="button" class="btn-social" (click)="socialSignIn('Facebook')">
-            Continue with Facebook
-          </button>
         </div>
         <div class="social-login-divider"><span>or sign in with email</span></div>
-        <form (submit)="onAuthSubmit('signIn'); $event.preventDefault()">
+        <form (submit)="signIn(email.value, password.value); $event.preventDefault()">
           <div class="form-group">
             <label>Email Address</label>
-            <input type="email" placeholder="name@example.com" required />
+            <input #email type="email" placeholder="name@example.com" required />
           </div>
           <div class="form-group">
             <label>Password</label>
-            <input type="password" placeholder="••••••••" required />
+            <input #password type="password" placeholder="••••••••" required />
           </div>
-          <button type="submit" class="btn btn-primary modal-submit">Sign In</button>
+          @if (authError()) {
+            <div class="captcha-error" role="alert">{{ authError() }}</div>
+          }
+          <button type="submit" class="btn btn-primary modal-submit" [disabled]="authBusy()">
+            {{ authBusy() ? 'Signing in…' : 'Sign In' }}
+          </button>
         </form>
       } @else {
         <h4 class="modal-title">Subscribe to ADDABAAZ Premium</h4>
         <p class="modal-lead">
           Get unlimited access to original web series, documentaries, and ad film releases.
         </p>
-        <form (submit)="onAuthSubmit('subscribe'); $event.preventDefault()">
-          <div class="form-group">
-            <label>Full Name</label>
-            <input type="text" placeholder="Your name" required />
-          </div>
+        <div class="plan-list">
+          @for (plan of plans(); track plan.code) {
+            <button
+              type="button"
+              class="plan-option"
+              [disabled]="authBusy()"
+              (click)="choosePlan(plan.code)"
+            >
+              <span class="plan-name">{{ plan.name }}</span>
+              <span class="plan-price">₹{{ plan.priceInr }} / {{ plan.durationDays }} days</span>
+            </button>
+          } @empty {
+            <p class="plan-empty">Plans are loading…</p>
+          }
+        </div>
+        @if (authError()) {
+          <div class="captcha-error" role="alert">{{ authError() }}</div>
+        }
+        <div class="social-login-divider"><span>new to ADDABAAZ?</span></div>
+        <form (submit)="signIn(subscribeEmail.value, subscribePassword.value); $event.preventDefault()">
           <div class="form-group">
             <label>Email Address</label>
-            <input type="email" placeholder="name@example.com" required />
+            <input #subscribeEmail type="email" placeholder="name@example.com" required />
           </div>
-          <button type="submit" class="btn btn-primary modal-submit">
-            Join Premium Subscription
+          <div class="form-group">
+            <label>Password</label>
+            <input #subscribePassword type="password" placeholder="••••••••" required />
+          </div>
+          <button type="submit" class="btn btn-primary modal-submit" [disabled]="authBusy()">
+            Sign In
           </button>
         </form>
       }

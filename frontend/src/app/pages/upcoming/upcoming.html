@@ -12,7 +12,7 @@
       @for (item of posters(); track item.file) {
         <app-poster-card
           [item]="item"
-          [folder]="folder"
+          [folder]="folder()"
           badge="Coming Soon"
           fallbackIcon="fa-film"
         />

@@ -12,7 +12,7 @@
       @for (item of photos(); track item.file) {
         <app-poster-card
           [item]="item"
-          [folder]="folder"
+          [folder]="folder()"
           badge="BTS"
           cardClass="bts-card"
           fallbackIcon="fa-camera"

@@ -1,6 +1,6 @@
-import { Component, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 
-import { MISSION_BENGALI, MISSION_ENGLISH, TEAM } from '../../core/data/site.data';
+import { ContentService } from '../../core/services/content.service';
 
 @Component({
   selector: 'app-about',
@@ -8,9 +8,12 @@ import { MISSION_BENGALI, MISSION_ENGLISH, TEAM } from '../../core/data/site.dat
   styleUrl: './about.scss',
 })
 export class About {
-  readonly missionBengali = MISSION_BENGALI;
-  readonly missionEnglish = MISSION_ENGLISH;
-  readonly team = TEAM;
+  private readonly content = inject(ContentService);
+
+  /** Mission statements and the team roster both come from the API. */
+  readonly missionBengali = this.content.missionBengali;
+  readonly missionEnglish = this.content.missionEnglish;
+  readonly team = this.content.teamMembers;
 
   /** Avatar images are optional — hide the ones that fail to load. */
   readonly failedImages = signal<ReadonlySet<string>>(new Set());

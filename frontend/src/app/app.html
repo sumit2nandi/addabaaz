@@ -6,12 +6,17 @@
     </span>
   </a>
 
-  <!-- Sign-in / subscribe are not live yet — kept exactly as in the original markup. -->
-  <div class="auth" style="display: none">
-    <button type="button" class="btn btn-ghost" (click)="modal.openAuth('signIn')">Sign In</button>
-    <button type="button" class="btn btn-primary" (click)="modal.openAuth('subscribe')">
-      Subscribe
-    </button>
+  <!-- Sign-in and subscriptions are live: both talk to the ADDABAAZ API. -->
+  <div class="auth">
+    @if (auth.isAuthenticated()) {
+      <span class="auth-email">{{ auth.user()?.email }}</span>
+      <button type="button" class="btn btn-ghost" (click)="signOut()">Sign Out</button>
+    } @else {
+      <button type="button" class="btn btn-ghost" (click)="modal.openAuth('signIn')">Sign In</button>
+      <button type="button" class="btn btn-primary" (click)="modal.openAuth('subscribe')">
+        Subscribe
+      </button>
+    }
   </div>
 
   <nav class="nav" aria-label="Main navigation">
