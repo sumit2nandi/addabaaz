@@ -1,0 +1,30 @@
+<div
+  class="upcoming-card"
+  [ngClass]="cardClass()"
+  tabindex="0"
+  role="button"
+  [attr.aria-label]="alt()"
+  (click)="open()"
+  (keydown)="onKeydown($event)"
+  (mouseenter)="onEnter()"
+  (mouseleave)="onLeave()"
+>
+  <div class="upcoming-poster-wrap">
+    <div class="upcoming-fallback">
+      <i class="fas" [ngClass]="fallbackIcon()"></i>
+      <span>{{ badge() }}</span>
+    </div>
+    <img
+      class="upcoming-poster-img"
+      [src]="src()"
+      [alt]="alt()"
+      loading="lazy"
+      [style.display]="imageFailed() ? 'none' : ''"
+      (error)="onImageError()"
+    />
+    <div class="upcoming-badge">{{ badge() }}</div>
+  </div>
+  @if (title()) {
+    <div class="meta">{{ title() }}</div>
+  }
+</div>

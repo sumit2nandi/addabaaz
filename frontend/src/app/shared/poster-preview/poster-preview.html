@@ -1,0 +1,25 @@
+<div
+  class="poster-preview"
+  [class.show]="visible()"
+  [style.left.px]="left()"
+  [style.top.px]="top()"
+  [attr.aria-hidden]="visible() ? 'false' : 'true'"
+>
+  @for (slot of slots(); track slot.src) {
+    <div class="poster-preview-media">
+      <img
+        [src]="slot.src"
+        alt="Poster preview"
+        [style.display]="imageFailed() ? 'none' : ''"
+        (error)="onImageError()"
+      />
+      <div class="poster-preview-fallback" [style.display]="imageFailed() ? 'flex' : 'none'">
+        <i class="fas fa-film"></i>
+        <span>Preview</span>
+      </div>
+    </div>
+    <div class="poster-preview-title" [style.display]="slot.title ? '' : 'none'">
+      {{ slot.title }}
+    </div>
+  }
+</div>

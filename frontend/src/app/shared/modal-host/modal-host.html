@@ -1,0 +1,146 @@
+<div class="modal-backdrop" [class.show]="open()" (click)="close()" role="presentation">
+  <div
+    class="modal"
+    [class.poster-modal]="posterState() !== null"
+    (click)="stopPropagation($event)"
+    role="dialog"
+    aria-modal="true"
+  >
+    <button type="button" class="animated-close-btn" (click)="close()" aria-label="Close modal">
+      <svg viewBox="0 0 24 24">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+
+    @if (showState(); as current) {
+      <div class="modal-show">
+        <div class="modal-show-poster">
+          <img
+            [src]="current.show.image || (current.show.episodes[0]?.thumbnail ?? '')"
+            [alt]="current.show.title"
+            [style.display]="posterImageFailed() ? 'none' : ''"
+            (error)="onPosterImageError()"
+          />
+        </div>
+
+        <div class="modal-show-body">
+          <h4>{{ current.show.title }}</h4>
+          <div class="modal-show-subtitle">{{ current.show.subtitle }}</div>
+          <div class="modal-show-actions">
+            <button
+              type="button"
+              class="btn btn-primary"
+              (click)="playFirstEpisode(current.show.key)"
+            >
+              ▶ Play First Episode
+            </button>
+          </div>
+          <div class="content">{{ current.show.description }}</div>
+        </div>
+      </div>
+
+      @if (current.show.episodes.length) {
+        <div class="modal-episodes">
+          <h5>Episodes</h5>
+          <div class="modal-ep-list">
+            @for (episode of current.show.episodes; track episode.id) {
+              <div
+                class="modal-ep-item"
+                role="button"
+                tabindex="0"
+                [attr.aria-label]="'Play ' + episode.title"
+                (click)="playEpisode(current.show.key, episode.id)"
+                (keydown)="onEpisodeKeydown($event, current.show.key, episode.id)"
+              >
+                <div
+                  class="modal-ep-thumb"
+                  [style.backgroundImage]="
+                    'url(' +
+                    episodeThumbnail(current.show.key, episode.youtubeId, current.show.image) +
+                    ')'
+                  "
+                >
+                  <button
+                    type="button"
+                    class="play-btn modal-play-btn"
+                    (click)="stopPropagation($event); playEpisode(current.show.key, episode.id)"
+                    [attr.aria-label]="'Play ' + episode.title"
+                  >
+                    ▶
+                  </button>
+                </div>
+                <div class="modal-ep-info">
+                  <h5>{{ episode.title }}</h5>
+                  <p>{{ label(episode) }} • {{ episode.duration }}</p>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    }
+
+    @if (posterState(); as current) {
+      <div class="poster-modal-inner">
+        <div class="poster-modal-imgwrap">
+          <img [src]="current.src" [alt]="current.title || 'ADDABAAZ image'" />
+          <div class="poster-modal-fallback" style="display: none">
+            <i class="fas fa-camera"></i>
+            <span>Preview</span>
+          </div>
+        </div>
+        @if (current.title) {
+          <div class="poster-modal-caption">{{ current.title }}</div>
+        }
+      </div>
+    }
+
+    @if (authState(); as current) {
+      @if (current.mode === 'signIn') {
+        <h4 class="modal-title">Sign In to ADDABAAZ</h4>
+        <p class="modal-lead">
+          Enter your details to access exclusive streaming content and production updates.
+        </p>
+        <div class="social-btns">
+          <button type="button" class="btn-social" (click)="socialSignIn('Google')">
+            Continue with Google
+          </button>
+          <button type="button" class="btn-social" (click)="socialSignIn('Facebook')">
+            Continue with Facebook
+          </button>
+        </div>
+        <div class="social-login-divider"><span>or sign in with email</span></div>
+        <form (submit)="onAuthSubmit('signIn'); $event.preventDefault()">
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" placeholder="name@example.com" required />
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" placeholder="••••••••" required />
+          </div>
+          <button type="submit" class="btn btn-primary modal-submit">Sign In</button>
+        </form>
+      } @else {
+        <h4 class="modal-title">Subscribe to ADDABAAZ Premium</h4>
+        <p class="modal-lead">
+          Get unlimited access to original web series, documentaries, and ad film releases.
+        </p>
+        <form (submit)="onAuthSubmit('subscribe'); $event.preventDefault()">
+          <div class="form-group">
+            <label>Full Name</label>
+            <input type="text" placeholder="Your name" required />
+          </div>
+          <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" placeholder="name@example.com" required />
+          </div>
+          <button type="submit" class="btn btn-primary modal-submit">
+            Join Premium Subscription
+          </button>
+        </form>
+      }
+    }
+  </div>
+</div>

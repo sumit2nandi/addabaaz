@@ -1,0 +1,20 @@
+<div
+  class="card"
+  tabindex="0"
+  role="button"
+  [attr.aria-label]="show().title"
+  (click)="open()"
+  (keydown)="onKeydown($event)"
+  (mouseenter)="onEnter()"
+  (mouseleave)="onLeave()"
+>
+  <div class="poster" [style.backgroundImage]="posterStyle()">
+    <div class="tag">{{ tag() }}</div>
+    <div class="play-overlay"><div class="play-btn">▶</div></div>
+  </div>
+  <div class="meta">
+    <div>
+      <strong>{{ show().title }}</strong>
+    </div>
+  </div>
+</div>

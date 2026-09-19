@@ -1,0 +1,43 @@
+<section
+  class="animate-row"
+  [class.row]="!plain()"
+  [class.rail-plain]="plain()"
+  [attr.aria-label]="ariaLabel()"
+  appReveal
+>
+  @if (heading()) {
+    <h3>{{ heading() }}</h3>
+  }
+
+  <ng-content select="[railTop]" />
+
+  <div class="rail">
+    <div
+      class="arrow arrow-left"
+      [class.disabled]="atStart()"
+      role="button"
+      tabindex="0"
+      aria-label="Scroll left"
+      (click)="scroll(-1)"
+      (keydown)="onArrowKey($event, -1)"
+    >
+      ◀
+    </div>
+    <div class="rail-viewport" #viewport (scroll)="onScroll()">
+      <div class="rail-track"><ng-content /></div>
+    </div>
+    <div
+      class="arrow arrow-right"
+      [class.disabled]="atEnd()"
+      role="button"
+      tabindex="0"
+      aria-label="Scroll right"
+      (click)="scroll(1)"
+      (keydown)="onArrowKey($event, 1)"
+    >
+      ▶
+    </div>
+  </div>
+
+  <ng-content select="[railFooter]" />
+</section>

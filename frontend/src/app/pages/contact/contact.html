@@ -1,0 +1,162 @@
+<section class="section-container page-enter">
+  <div class="section-header">
+    <div class="section-tag">Collaborate</div>
+    <h2 class="section-title">Initiate a Project</h2>
+    <div class="section-subtitle">
+      Reach out for production inquiries, commercial briefs, press relations, or general
+      correspondence.
+    </div>
+  </div>
+
+  <div class="contact-grid">
+    <div class="contact-form">
+      <h3 class="form-heading">Project Inquiry</h3>
+
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <div class="form-group">
+          <label for="name">Your Name</label>
+          <input id="name" type="text" formControlName="name" placeholder="Enter your full name" />
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input id="email" type="email" formControlName="email" placeholder="name@company.com" />
+        </div>
+
+        <div class="form-group">
+          <label for="phone"> Phone / WhatsApp <span class="label-note">(optional)</span> </label>
+          <input id="phone" type="tel" formControlName="phone" placeholder="+91 90000 00000" />
+        </div>
+
+        <div class="form-group">
+          <label for="message">Project Details / Message</label>
+          <textarea
+            id="message"
+            formControlName="message"
+            placeholder="Describe your film, advertisement concept, or inquiry..."
+          ></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="captcha">Verification — type the characters shown</label>
+          <div class="captcha-row">
+            <app-captcha />
+            <input
+              id="captcha"
+              type="text"
+              formControlName="captcha"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+              maxlength="6"
+              placeholder="Code"
+            />
+            <button
+              type="button"
+              class="captcha-refresh"
+              (click)="refreshCaptcha()"
+              title="Get a new code"
+              aria-label="Get a new code"
+            >
+              <i class="fas fa-rotate-right"></i>
+            </button>
+          </div>
+          <div class="captcha-error" role="alert">{{ captchaError() }}</div>
+          @if (submitted() && form.controls.captcha.invalid && !captchaError()) {
+            <div class="captcha-error" role="alert">Please type the code shown in the image.</div>
+          }
+        </div>
+
+        <button type="submit" class="btn btn-primary submit-btn" [disabled]="submitting()">
+          {{ submitting() ? 'Sending…' : 'Send Message' }}
+        </button>
+
+        <div [class]="statusClass()" role="status">{{ status() }}</div>
+
+        <div class="form-note">
+          Your details are sent securely to our production desk and never shared with third parties.
+        </div>
+      </form>
+    </div>
+
+    <div class="contact-details">
+      <div class="contact-info-block">
+        <h4>Direct Contact</h4>
+        <a class="contact-line" [href]="'mailto:' + details.email">
+          <i class="fas fa-envelope"></i><span>{{ details.email }}</span>
+        </a>
+        <a class="contact-line" [href]="'tel:' + details.landline.replace(' ', '')">
+          <i class="fas fa-phone-volume"></i><span>{{ details.landline }}</span>
+        </a>
+      </div>
+
+      <div class="contact-info-block">
+        <h4>Call Us</h4>
+        @for (phone of details.phones; track phone) {
+          <a class="contact-line" [href]="'tel:' + phone.replace(' ', '')">
+            <i class="fas fa-phone"></i><span>{{ phone }}</span>
+          </a>
+        }
+      </div>
+
+      <div class="contact-info-block">
+        <h4>WhatsApp</h4>
+        <a
+          class="contact-line whatsapp"
+          [href]="details.whatsapp.url"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <i class="fab fa-whatsapp"></i><span>{{ details.whatsapp.number }}</span>
+        </a>
+      </div>
+
+      <div class="contact-info-block">
+        <h4>Headquarters</h4>
+        <a
+          class="contact-line maps"
+          [href]="details.mapsUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open in Google Maps"
+          aria-label="Open ADDABAAZ headquarters location in Google Maps"
+        >
+          <i class="gmaps-badge" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+              <defs>
+                <clipPath id="gmapsPinClip">
+                  <path
+                    d="M12 1.6c-3.86 0-7 3.14-7 7 0 5.25 7 13.8 7 13.8s7-8.55 7-13.8c0-3.86-3.14-7-7-7z"
+                  />
+                </clipPath>
+              </defs>
+              <g clip-path="url(#gmapsPinClip)">
+                <rect x="0" y="0" width="12" height="12" fill="#34A853" />
+                <rect x="12" y="0" width="12" height="12" fill="#4285F4" />
+                <rect x="0" y="12" width="12" height="12" fill="#FBBC04" />
+                <rect x="12" y="12" width="12" height="12" fill="#EA4335" />
+              </g>
+              <circle cx="12" cy="8.6" r="3.3" fill="#ffffff" />
+            </svg>
+          </i>
+          <span>
+            @for (line of details.address; track line) {
+              {{ line }}<br />
+            }
+          </span>
+        </a>
+      </div>
+
+      <div class="contact-info-block">
+        <h4>Connect With Us</h4>
+        <div class="social-row">
+          @for (social of details.social; track social.url) {
+            <a class="social-link" [href]="social.url" target="_blank" rel="noopener noreferrer">
+              <i [class]="social.icon"></i> <span>{{ social.label }}</span>
+            </a>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

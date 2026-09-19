@@ -1,0 +1,60 @@
+<div class="player-section page-enter">
+  <div class="video-container">
+    @if (playerUrl()) {
+      <iframe
+        #playerIframe
+        [src]="playerUrl()"
+        title="ADDABAAZ video player"
+        allow="
+          accelerometer;
+          autoplay;
+          clipboard-write;
+          encrypted-media;
+          gyroscope;
+          picture-in-picture;
+          web-share;
+        "
+        allowfullscreen
+      ></iframe>
+    } @else {
+      <div class="coming-soon-box">
+        <h2>VIDEO UNAVAILABLE</h2>
+        <p>This episode is currently unavailable.</p>
+      </div>
+    }
+  </div>
+
+  <div class="player-details">
+    <h2>{{ title() }}</h2>
+    <div class="sub">{{ subtitle() }}</div>
+    <p>{{ description() }}</p>
+  </div>
+
+  @if (show(); as current) {
+    <div class="episodes-section">
+      <h3>{{ episodeListTitle() }}</h3>
+      <app-media-rail [plain]="true" [ariaLabel]="episodeListTitle()">
+        @for (item of current.episodes; track item.id) {
+          <div
+            class="ep-card"
+            [class.active-ep]="item.id === activeEpisodeId()"
+            role="button"
+            tabindex="0"
+            [attr.aria-label]="'Play ' + item.title"
+            (click)="playEpisode(item.id)"
+            (keydown)="onEpisodeKeydown($event, item.id)"
+          >
+            <div class="ep-thumb" [style.backgroundImage]="'url(' + thumbnail(item) + ')'">
+              <div class="play-btn">▶</div>
+              <div class="ep-badge">{{ label(item) }}</div>
+            </div>
+            <div class="meta">
+              <strong>{{ item.title }}</strong>
+              <div class="ep-duration">{{ item.duration }}</div>
+            </div>
+          </div>
+        }
+      </app-media-rail>
+    </div>
+  }
+</div>

@@ -1,0 +1,21 @@
+<div
+  class="card catalog-card"
+  tabindex="0"
+  role="button"
+  [attr.aria-label]="video().title"
+  (click)="play()"
+  (keydown)="onKeydown($event)"
+  (mouseenter)="onEnter()"
+  (mouseleave)="onLeave()"
+>
+  <div class="poster" [style.backgroundImage]="thumbnailStyle()">
+    <div class="kind-badge">{{ badge() }}</div>
+    <div class="play-overlay"><div class="play-btn">▶</div></div>
+  </div>
+  <div class="meta">
+    <div class="video-title">
+      <strong>{{ video().title }}</strong>
+    </div>
+    <div class="video-meta">{{ video().duration }}</div>
+  </div>
+</div>

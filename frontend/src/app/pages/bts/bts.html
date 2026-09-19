@@ -1,0 +1,25 @@
+<section class="section-container page-enter">
+  <div class="section-header">
+    <div class="section-tag">On Set</div>
+    <h2 class="section-title">Behind the Scenes</h2>
+    <div class="section-subtitle">
+      Moments, faces and frames from the making of ADDABAAZ productions.
+    </div>
+  </div>
+
+  @if (photos().length) {
+    <div class="upcoming-grid">
+      @for (item of photos(); track item.file) {
+        <app-poster-card
+          [item]="item"
+          [folder]="folder"
+          badge="BTS"
+          cardClass="bts-card"
+          fallbackIcon="fa-camera"
+        />
+      }
+    </div>
+  } @else {
+    <div class="upcoming-empty">Behind-the-scenes moments are coming soon.</div>
+  }
+</section>
