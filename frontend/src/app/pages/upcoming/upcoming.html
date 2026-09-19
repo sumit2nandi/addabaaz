@@ -1,0 +1,24 @@
+<section class="section-container page-enter">
+  <div class="section-header">
+    <div class="section-tag">Future Releases</div>
+    <h2 class="section-title">Upcoming Releases</h2>
+    <div class="section-subtitle">
+      A first look at the stories ADDABAAZ is bringing to the screen next.
+    </div>
+  </div>
+
+  @if (posters().length) {
+    <div class="upcoming-grid">
+      @for (item of posters(); track item.file) {
+        <app-poster-card
+          [item]="item"
+          [folder]="folder"
+          badge="Coming Soon"
+          fallbackIcon="fa-film"
+        />
+      }
+    </div>
+  } @else {
+    <div class="upcoming-empty">New releases are on their way — check back soon.</div>
+  }
+</section>

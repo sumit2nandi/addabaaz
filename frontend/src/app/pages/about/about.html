@@ -1,0 +1,56 @@
+<section class="section-container page-enter">
+  <div class="section-header">
+    <div class="section-tag">About Production House</div>
+    <h2 class="section-title">ADDABAAZ</h2>
+    <div class="section-subtitle">
+      A Premier Film Production House &amp; Commercial Ad Film Company in Kolkata
+    </div>
+  </div>
+
+  <div class="about-grid">
+    <div class="mission-card">
+      <h4>Our Mission (আমাদের লক্ষ্য)</h4>
+      <ul class="mission-list">
+        @for (line of missionBengali; track line) {
+          <li class="bengali-text">{{ line }}</li>
+        }
+      </ul>
+    </div>
+
+    <div class="mission-card">
+      <h4>Our Mission</h4>
+      <ul class="mission-list">
+        @for (line of missionEnglish; track line) {
+          <li>{{ line }}</li>
+        }
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-header team-header">
+    <div class="section-tag">The People Behind ADDABAAZ</div>
+    <h2 class="section-title">Our Leaders &amp; Team</h2>
+    <div class="section-subtitle">The creative minds shaping every ADDABAAZ story.</div>
+  </div>
+
+  <div class="team-grid">
+    @for (member of team; track member.name) {
+      <div class="team-card">
+        <img
+          [src]="member.image"
+          [alt]="member.name"
+          class="team-avatar"
+          [style.display]="isHidden(member.name) ? 'none' : ''"
+          (error)="onAvatarError(member.name)"
+        />
+        <div class="team-info">
+          <div class="team-role">{{ member.role }}</div>
+          <h3 class="team-name">{{ member.name }}</h3>
+          @if (member.quote) {
+            <p class="team-quote">{{ member.quote }}</p>
+          }
+        </div>
+      </div>
+    }
+  </div>
+</section>

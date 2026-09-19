@@ -1,0 +1,24 @@
+<section class="section-container page-enter">
+  <div class="section-header">
+    <div class="section-tag">Capabilities &amp; Production</div>
+    <h2 class="section-title">Our Expertise</h2>
+    <div class="section-subtitle">
+      Full-service film and commercial advertisement production based in Kolkata
+    </div>
+  </div>
+
+  <div class="services-grid">
+    @for (service of services; track service.num) {
+      <div class="service-card">
+        <div class="service-num">{{ service.num }}</div>
+        <h4>{{ service.title }}</h4>
+        <p>{{ service.description }}</p>
+      </div>
+    }
+  </div>
+
+  <div class="banner-cta">
+    <h3>Your Vision. Our Expertise.</h3>
+    <p>"Let's Make Great Films Together"</p>
+  </div>
+</section>

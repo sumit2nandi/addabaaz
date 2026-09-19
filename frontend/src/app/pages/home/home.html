@@ -1,0 +1,59 @@
+<app-hero-banner />
+
+<app-media-rail heading="All Shows" ariaLabel="All ADDABAAZ shows with full episodes">
+  @for (show of shows(); track show.key) {
+    <app-show-card [show]="show" />
+  }
+</app-media-rail>
+
+<app-media-rail heading="Coming Soon" ariaLabel="Coming soon — upcoming ADDABAAZ releases">
+  @if (featuredUpcoming(); as featured) {
+    <div railTop class="featured-upcoming-wrap">
+      <div class="featured-upcoming-card">
+        <img [src]="featured" alt="Releasing This Month" />
+        <div class="featured-upcoming-overlay"></div>
+        <div class="featured-upcoming-badge">Releasing This Month</div>
+      </div>
+    </div>
+  }
+
+  @for (item of upcoming(); track item.file) {
+    <app-poster-card
+      [item]="item"
+      [folder]="upcomingFolder"
+      badge="Coming Soon"
+      fallbackIcon="fa-film"
+    />
+  }
+
+  <div railFooter class="show-all-wrap">
+    <a class="btn btn-primary btn-show-all" routerLink="/upcoming">Show All Upcoming Releases →</a>
+  </div>
+</app-media-rail>
+
+<app-media-rail heading="Behind the Scenes" ariaLabel="Behind the scenes from ADDABAAZ productions">
+  @for (item of behindTheScenes(); track item.file) {
+    <app-poster-card
+      [item]="item"
+      [folder]="btsFolder"
+      badge="BTS"
+      cardClass="bts-card"
+      fallbackIcon="fa-camera"
+    />
+  }
+
+  <div railFooter class="show-all-wrap">
+    <a class="btn btn-show-all btn-gold" routerLink="/bts">Show All Behind the Scenes →</a>
+  </div>
+</app-media-rail>
+
+@for (row of promoRows(); track $index) {
+  <app-media-rail
+    [heading]="'Promos & Reels ' + ($index + 1)"
+    [ariaLabel]="'Promos and reels part ' + ($index + 1)"
+  >
+    @for (video of row; track video.id) {
+      <app-promo-card [video]="video" />
+    }
+  </app-media-rail>
+}

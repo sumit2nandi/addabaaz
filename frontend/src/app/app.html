@@ -1,0 +1,41 @@
+<div class="topbar">
+  <a class="brand" routerLink="/" aria-label="ADDABAAZ — Home">
+    <img src="images/addabaaz-logo.png" alt="ADDABAAZ" class="logo" />
+    <span class="brand-text" aria-hidden="true">
+      <span class="brand-text-adda">ADDA</span><span class="brand-text-baaz">BAAZ</span>
+    </span>
+  </a>
+
+  <!-- Sign-in / subscribe are not live yet — kept exactly as in the original markup. -->
+  <div class="auth" style="display: none">
+    <button type="button" class="btn btn-ghost" (click)="modal.openAuth('signIn')">Sign In</button>
+    <button type="button" class="btn btn-primary" (click)="modal.openAuth('subscribe')">
+      Subscribe
+    </button>
+  </div>
+
+  <nav class="nav" aria-label="Main navigation">
+    <a
+      routerLink="/"
+      class="nav-link"
+      routerLinkActive="active"
+      [routerLinkActiveOptions]="{ exact: true }"
+      >Home</a
+    >
+    <a routerLink="/about" class="nav-link" routerLinkActive="active">About</a>
+    <a routerLink="/services" class="nav-link" routerLinkActive="active">Services</a>
+    <a routerLink="/contact" class="nav-link" routerLinkActive="active">Contact</a>
+  </nav>
+</div>
+
+<main>
+  <router-outlet />
+</main>
+
+<footer>
+  © {{ year }} ADDABAAZ — All rights reserved. Registered Production Studio, Kolkata, West Bengal.
+</footer>
+
+<app-card-preview />
+<app-poster-preview />
+<app-modal-host />
