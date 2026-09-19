@@ -194,7 +194,7 @@ public class AuthService {
             });
   }
 
-  public void revokeAllFor(UUID userId) {
+  public void revokeAllFor(java.util.UUID userId) {
     for (RefreshToken token : refreshTokens.findByUserIdAndRevokedAtIsNull(userId)) {
       token.setRevokedAt(Instant.now());
       refreshTokens.save(token);
@@ -211,7 +211,7 @@ public class AuthService {
 
   // -------------------------------------------------------------------- helpers
 
-  public AppUser requireById(UUID id) {
+  public AppUser requireById(java.util.UUID id) {
     return users.findById(id).orElseThrow(() -> new NotFoundException("User not found."));
   }
 

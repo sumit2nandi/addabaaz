@@ -8,7 +8,7 @@ spring:
     name: addabaaz-api
 
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/addabaaz?stringtype=unspecified}
+    url: ${DB_URL:jdbc:postgresql:pg-bfb9aed-addabaaz.f.aivencloud.com:26561/addabaaz?stringtype=unspecified}
     username: ${DB_USERNAME:addabaaz}
     password: ${DB_PASSWORD:addabaaz_dev_password}
     hikari:
