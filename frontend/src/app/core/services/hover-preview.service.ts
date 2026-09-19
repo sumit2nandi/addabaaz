@@ -38,16 +38,21 @@ export interface PosterPreviewState extends Omit<PosterPreviewRequest, 'anchor'>
 const CARD_PREVIEW_SIZE = { width: 420, height: 320 };
 const POSTER_PREVIEW_SIZE = { width: 340, height: 480 };
 
-function centerOver(anchor: HTMLElement, width: number, height: number, margin: number) {
+function centerOver(
+  anchor: HTMLElement,
+  width: number,
+  height: number,
+  margin: number,
+  view: Window,
+) {
   const rect = anchor.getBoundingClientRect();
   let left = rect.left + rect.width / 2;
   if (left - width / 2 < margin) left = margin + width / 2;
-  if (left + width / 2 > window.innerWidth - margin) left = window.innerWidth - margin - width / 2;
+  if (left + width / 2 > view.innerWidth - margin) left = view.innerWidth - margin - width / 2;
 
   let top = rect.top + rect.height / 2;
   if (top - height / 2 < margin) top = margin + height / 2;
-  if (top + height / 2 > window.innerHeight - margin)
-    top = window.innerHeight - margin - height / 2;
+  if (top + height / 2 > view.innerHeight - margin) top = view.innerHeight - margin - height / 2;
 
   return { left, top };
 }
@@ -109,7 +114,8 @@ export class HoverPreviewService {
   }
 
   scheduleCardPreview(request: CardPreviewRequest, delay = 400): void {
-    if (!request.youtubeId || !this.supportsHoverPreview()) return;
+    const view = this.document.defaultView;
+    if (!request.youtubeId || !view || !this.supportsHoverPreview()) return;
     this.clearTimeout('cardShowTimer');
     this.clearTimeout('cardHideTimer');
     this.cardShowTimer = setTimeout(() => {
@@ -118,6 +124,7 @@ export class HoverPreviewService {
         CARD_PREVIEW_SIZE.width,
         CARD_PREVIEW_SIZE.height,
         12,
+        view,
       );
       const { anchor, ...rest } = request;
       this._cardPreview.set({ ...rest, left, top, token: ++this.token });
@@ -135,7 +142,8 @@ export class HoverPreviewService {
   }
 
   schedulePosterPreview(request: PosterPreviewRequest, delay = 350): void {
-    if (!request.src || !this.supportsHoverPreview()) return;
+    const view = this.document.defaultView;
+    if (!request.src || !view || !this.supportsHoverPreview()) return;
     this.clearTimeout('posterShowTimer');
     this.clearTimeout('posterHideTimer');
     this.posterShowTimer = setTimeout(() => {
@@ -144,6 +152,7 @@ export class HoverPreviewService {
         POSTER_PREVIEW_SIZE.width,
         POSTER_PREVIEW_SIZE.height,
         14,
+        view,
       );
       const { anchor, ...rest } = request;
       this._posterPreview.set({ ...rest, left, top, token: ++this.token });

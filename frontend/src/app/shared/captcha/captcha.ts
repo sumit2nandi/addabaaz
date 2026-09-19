@@ -1,3 +1,4 @@
+import { DOCUMENT } from '@angular/common';
 import {
   Component,
   DestroyRef,
@@ -31,6 +32,7 @@ const CODE_LENGTH = 5;
 export class Captcha {
   private readonly canvasRef = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
   private readonly destroyRef = inject(DestroyRef);
+  private readonly document = inject(DOCUMENT);
 
   private code = '';
   private renderedWidth = 0;
@@ -43,11 +45,11 @@ export class Captcha {
   constructor() {
     afterNextRender(() => {
       this.draw(true);
-      window.addEventListener('resize', this.onResize);
+      this.document.defaultView?.addEventListener('resize', this.onResize);
     });
 
     this.destroyRef.onDestroy(() => {
-      window.removeEventListener('resize', this.onResize);
+      this.document.defaultView?.removeEventListener('resize', this.onResize);
       if (this.resizeTimer) clearTimeout(this.resizeTimer);
     });
   }
@@ -73,7 +75,7 @@ export class Captcha {
     const context = canvas.getContext('2d');
     if (!context) return;
 
-    const ratio = window.devicePixelRatio || 1;
+    const ratio = this.document.defaultView?.devicePixelRatio || 1;
     canvas.width = Math.round(cssWidth * ratio);
     canvas.height = Math.round(cssHeight * ratio);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);

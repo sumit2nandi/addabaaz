@@ -1,3 +1,4 @@
+import { DOCUMENT } from '@angular/common';
 import {
   Component,
   DestroyRef,
@@ -33,6 +34,7 @@ export class MediaRail {
 
   private readonly viewport = viewChild.required<ElementRef<HTMLElement>>('viewport');
   private readonly destroyRef = inject(DestroyRef);
+  private readonly document = inject(DOCUMENT);
 
   readonly atStart = signal(true);
   readonly atEnd = signal(false);
@@ -50,12 +52,12 @@ export class MediaRail {
       this.observer.observe(element);
       if (element.firstElementChild) this.observer.observe(element.firstElementChild);
 
-      window.addEventListener('resize', this.onResize);
+      this.document.defaultView?.addEventListener('resize', this.onResize);
     });
 
     this.destroyRef.onDestroy(() => {
       this.observer?.disconnect();
-      window.removeEventListener('resize', this.onResize);
+      this.document.defaultView?.removeEventListener('resize', this.onResize);
     });
   }
 
