@@ -1,0 +1,59 @@
+name: Android debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android/**'
+      - 'assets/js/**'
+      - 'assets/css/**'
+      - 'components/**'
+      - 'data/website.xlsx'
+      - 'images/**'
+      - 'UpcomingReleases/**'
+      - 'BTS/**'
+      - 'package*.json'
+      - '.github/workflows/android-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            android/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - run: npm ci
+      - run: npm --prefix android ci
+      - run: npm run validate
+      - run: npm test
+      - name: Test the home-only app
+        working-directory: android
+        run: |
+          npx playwright install --with-deps chromium
+          npm test
+      - name: Build debug APK
+        run: |
+          chmod +x android/native/gradlew
+          npm --prefix android run debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: addabaaz-android-debug
+          path: android/native/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

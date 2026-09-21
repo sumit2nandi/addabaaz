@@ -1,0 +1,22 @@
+{
+  "appId": "in.addabaaz.app",
+  "appName": "ADDABAAZ",
+  "webDir": "www",
+  "server": {
+    "hostname": "app.addabaaz.in",
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#050505",
+    "allowMixedContent": false,
+    "minWebViewVersion": 109,
+    "path": "native"
+  },
+  "plugins": {
+    "SystemBars": {
+      "style": "DARK",
+      "initialViewportFitValueHint": "cover",
+      "insetsHandling": "css"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+/* Only the app uses these rules; the hosted website keeps its navigation. */
+:root { color-scheme: dark; }
+html { -webkit-tap-highlight-color: transparent; }
+body {
+  min-height: 100dvh;
+  padding: var(--safe-area-inset-top, env(safe-area-inset-top)) var(--safe-area-inset-right, env(safe-area-inset-right)) var(--safe-area-inset-bottom, env(safe-area-inset-bottom)) var(--safe-area-inset-left, env(safe-area-inset-left));
+}
+[hidden] { display: none !important; }
+button, a, [role="button"] { touch-action: manipulation; }
+button:focus-visible, a:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
+.btn, .animated-close-btn { min-height: 44px; min-width: 44px; }
+.hero-wrap { margin-top: 0; }
+.hero { padding-top: 64px; }
+.hero-sound-btn { display: none !important; }
+#appBack {
+  position: sticky; top: var(--safe-area-inset-top, env(safe-area-inset-top)); z-index: 65;
+  min-height: 48px; margin: 8px 16px; padding: 10px 18px;
+  background: #18181b; color: white; border: 1px solid #38383d;
+  border-radius: 24px; font: 600 15px var(--font-sans);
+}
+#connectionStatus { padding: 12px 18px; background: #3b2e13; color: #fff2cd; font-size: 13px; line-height: 1.5; }
+.watch-external { display: inline-flex; align-items: center; min-height: 44px; color: #eee; text-underline-offset: 4px; margin-top: 12px; }
+.player-section { padding-top: 12px; }
+.modal-backdrop { padding-top: max(16px, var(--safe-area-inset-top, env(safe-area-inset-top))); padding-bottom: max(16px, var(--safe-area-inset-bottom, env(safe-area-inset-bottom))); }
+.modal { max-height: calc(100dvh - 48px - var(--safe-area-inset-top, env(safe-area-inset-top)) - var(--safe-area-inset-bottom, env(safe-area-inset-bottom))); }
+/* Keep horizontal rails swipeable and give the next tile a small visible edge. */
+@media (max-width: 600px) {
+  .rail-track { gap: 12px; }
+  .rail-track .card { min-width: min(70vw, 248px); width: min(70vw, 248px); }
+  .poster { height: 256px; }
+  .hero-title { overflow-wrap: anywhere; }
+  .row { padding: 24px 16px; }
+  .hero { min-height: 460px; padding-left: 20px; padding-right: 20px; }
+  .section-container { padding-left: 16px; padding-right: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .animate-row { transition: none; }
+}

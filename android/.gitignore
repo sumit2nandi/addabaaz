@@ -1,0 +1,11 @@
+node_modules/
+www/
+test-results/
+playwright-report/
+native/.gradle/
+native/**/build/
+native/local.properties
+native/app/src/main/assets/
+native/capacitor-cordova-android-plugins/
+*.jks
+*.keystore
