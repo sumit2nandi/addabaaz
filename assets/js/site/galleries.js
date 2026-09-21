@@ -36,22 +36,6 @@
       fallbackIcon: 'fa-film'
     });
   }
-    function renderFeaturedUpcoming() {
-    const container = document.getElementById('featuredUpcomingContainer');
-    if (!container) return;
-
-    const item = upcomingReleases.find(row => row.featured === 'yes');
-    if (!item) { container.replaceChildren(); return; }
-    const src = buildMediaUrl(UPCOMING_FOLDER, item.file);
-    container.innerHTML = `
-      <div class="featured-upcoming-card">
-        <img src="${escapeHtml(src)}" alt="${escapeHtml(item.title)}" />
-        <div class="featured-upcoming-overlay"></div>
-        <div class="featured-upcoming-badge">${escapeHtml(item.title)}</div>
-      </div>
-    `;
-  }
-
   function makeBtsCard(item) {
     return makePosterCard(item, {
       folder: BTS_FOLDER,

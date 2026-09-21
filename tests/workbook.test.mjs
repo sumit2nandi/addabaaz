@@ -73,10 +73,8 @@ test('settings, required bindings, media IDs and feature flags are validated', (
   data.Settings.find(row => row.key === 'btsHomeLimit').value = '-2';
   data.Settings.find(row => row.key === 'schemaVersion').value = '2';
   data.Copy.pop();
-  data.Upcoming[1].featured = 'yes';
   assert.match(validateTables(data).join('\n'), /required key is missing/);
   assert.match(validateTables(data).join('\n'), /expected version 1/);
-  assert.match(validateTables(data).join('\n'), /only one featured/);
   assert.match(validateTables(data).join('\n'), /whole number from 0 to 100/);
   data.Episodes[0].youtubeId = 'https://youtu.be/123';
   assert.match(validateTables(data).join('\n'), /11-character YouTube ID/);
@@ -127,4 +125,14 @@ test('all original local image references resolve on disk', async () => {
     ...original.BTS.map(row => settings.btsFolder + row.file)
   ];
   for (const image of images) await fs.access(path.resolve(image));
+});
+
+
+test('multiple featured posters validate and retain workbook order on round trip', async () => {
+  const data = clone();
+  data.Upcoming[1].featured = 'yes';
+  data.Upcoming[3].featured = 'yes';
+  assert.deepEqual(validateTables(data), []);
+  const reread = await readWorkbook(await writeWorkbook(data));
+  assert.deepEqual(reread.Upcoming.filter(row => row.featured === 'yes').map(row => row.file), ['Durga.png', 'POSTER (1).png', 'POSTER (4).png']);
 });

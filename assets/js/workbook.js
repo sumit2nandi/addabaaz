@@ -8,7 +8,7 @@ export const SCHEMA = {
   Shows: { columns: ['key', 'title', 'subtitle', 'description', 'image', 'genre'], required: ['key', 'title'], help: 'One row per show. Keep each key unique. Episodes use this key in their project column. Home cards are ranked by episode views.' },
   Episodes: { columns: videoColumns, required: ['id', 'project', 'title', 'availability', 'kind'], help: 'One row per episode, in playback order. project must match a Shows key. Use an 11-character YouTube ID, not a full URL. Format durations and dates as Text in Excel.' },
   Promos: { columns: videoColumns, required: ['id', 'title', 'availability', 'kind'], help: 'Promotional videos in display order. kind is PROMO or SPECIAL. Duration is text, for example 00:30.' },
-  Upcoming: { columns: ['file', 'title', 'featured', 'home'], required: ['file', 'featured', 'home'], help: 'Poster filename inside upcomingFolder. featured=yes selects the wide featured poster (at most one). home=yes includes a poster in the home rail. Titles are optional.' },
+  Upcoming: { columns: ['file', 'title', 'featured', 'home'], required: ['file', 'featured', 'home'], help: 'Poster filename inside upcomingFolder. Set featured=yes on one or more posters. Multiple featured posters form a slideshow in row order. home=yes includes a poster in the home rail. Titles are optional.' },
   BTS: { columns: ['file', 'title'], required: ['file'], help: 'Behind-the-scenes filenames inside btsFolder, in display order. Upload the image files separately; this workbook does not embed media.' },
   Team: { columns: ['id', 'name', 'role', 'quote', 'image'], required: ['id', 'name'], help: 'Team members in display order. image is a site-relative path or an HTTPS URL. Quotes are optional.' },
   Services: { columns: ['id', 'number', 'title', 'description'], required: ['id', 'title'], help: 'Services in display order. Keep number as text to preserve leading zeroes (01, 02, …).' },
@@ -70,7 +70,6 @@ export function validateTables(tables) {
   tables.Episodes.forEach((row, i) => {
     if (!shows.has(row.project)) issue('Episodes', i + 2, 'project', `unknown show: ${row.project}`);
   });
-  if (tables.Upcoming.filter(row => row.featured === 'yes').length > 1) issue('Upcoming', 0, 'featured', 'only one featured poster is allowed');
   for (const [name, keys] of [['Copy', COPY_KEYS], ['Settings', SETTING_KEYS]]) {
     const actual = new Set(tables[name].map(row => row.key));
     for (const key of keys) if (!actual.has(key)) issue(name, 0, key, 'required key is missing');

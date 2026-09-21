@@ -2,7 +2,7 @@ import { loadPublishedWorkbook, assertValid, PREVIEW_KEY } from './workbook.js';
 import { renderContent, runtimeData } from './site-content.js';
 
 const components = ['navigation', 'home', 'player', 'upcoming', 'bts', 'about', 'services', 'contact', 'video-preview', 'poster-preview', 'modal', 'footer'];
-const scripts = ['helpers', 'hero', 'video-preview', 'galleries', 'poster-preview', 'navigation', 'catalog', 'contact', 'app'];
+const scripts = ['helpers', 'hero', 'video-preview', 'galleries', 'featured-upcoming', 'poster-preview', 'navigation', 'catalog', 'contact', 'app'];
 const status = document.getElementById('siteStatus');
 
 function loadScript(name) {

@@ -154,7 +154,9 @@ test('empty catalogues and unavailable promos fail gracefully', async ({ page })
   const data = structuredClone(original);
   data.Shows = []; data.Episodes = []; data.Upcoming = []; data.BTS = [];
   data.Promos = [{ ...data.Promos[0], availability: 'unavailable' }];
-  await page.addInitScript(({ key, data }) => localStorage.setItem(key, JSON.stringify(data)), { key: PREVIEW_KEY, data });
+  await page.addInitScript(({ key, data }) => {
+    if (window === window.top && location.hostname === '127.0.0.1') localStorage.setItem(key, JSON.stringify(data));
+  }, { key: PREVIEW_KEY, data });
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('/index.html?preview=1');
   await expect(page.locator('#siteStatus')).toContainText('LOCAL PREVIEW');
@@ -198,4 +200,140 @@ test('linked-file save writes Excel and detects external modifications', async (
   await page.getByRole('button', { name: 'Save to linked file', exact: true }).click();
   await expect(page.locator('#status')).toContainText('changed outside this editor');
   expect(await page.evaluate(() => window.testLocalFile.writes)).toBe(1);
+});
+
+async function loadFeaturedPreview(page, count = 3) {
+  const data = structuredClone(original);
+  data.Upcoming.forEach((row, i) => { row.featured = i < count ? 'yes' : 'no'; });
+  data.Upcoming[1].title = 'Second featured <poster> & release';
+  await page.addInitScript(({ key, data }) => {
+    if (window === window.top && location.hostname === '127.0.0.1') localStorage.setItem(key, JSON.stringify(data));
+  }, { key: PREVIEW_KEY, data });
+  await page.goto('/index.html?preview=1');
+  await expect(page.locator('#siteStatus')).toContainText('LOCAL PREVIEW');
+}
+
+test('featured posters support manual slides, keyboard and shared full-size popups', async ({ page }) => {
+  const errors = []; page.on('pageerror', error => errors.push(error.message));
+  await loadFeaturedPreview(page);
+  const featured = page.locator('#featuredUpcomingContainer');
+  const active = featured.locator('.featured-upcoming-card:visible');
+  await expect(featured.locator('.featured-upcoming-card')).toHaveCount(3);
+  await expect(active).toHaveCount(1);
+  await featured.getByRole('button', { name: 'Next featured release', exact: true }).click();
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-1');
+  await expect(active.locator('img')).toHaveAttribute('src', /POSTER%20\(1\)\.png$/);
+  await expect(active.locator('.featured-upcoming-badge')).toHaveText('Second featured <poster> & release');
+  await active.click();
+  await expect(page.locator('#modalBackdrop')).toHaveClass(/show/);
+  await expect(page.locator('#modalContent img')).toHaveAttribute('src', /POSTER%20\(1\)\.png$/);
+  await expect(page.locator('#modalContent .poster-modal-caption')).toHaveText('Second featured <poster> & release');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#modalBackdrop')).not.toHaveClass(/show/);
+  await featured.getByRole('button', { name: 'Show featured release 3:' }).click();
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-2');
+  await active.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-0');
+  await expect(active).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(page.locator('#modalContent img')).toHaveAttribute('src', /Durga.png$/);
+  await page.keyboard.press('Escape');
+  await featured.getByRole('button', { name: 'Previous featured release', exact: true }).click();
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-2');
+  expect(errors).toEqual([]);
+});
+
+test('featured autoplay wraps, pauses on interaction and modal, and cleans up on rerender', async ({ page }) => {
+  await page.clock.install();
+  await loadFeaturedPreview(page);
+  const featured = page.locator('#featuredUpcomingContainer');
+  const counter = featured.locator('.featured-upcoming-counter');
+  await page.mouse.move(0, 0);
+  await page.evaluate(() => renderFeaturedUpcoming());
+  await page.clock.runFor(5100);
+  await expect(counter).toHaveText('2 / 3');
+  await page.clock.runFor(5000);
+  await expect(counter).toHaveText('3 / 3');
+  await page.clock.runFor(5000);
+  await expect(counter).toHaveText('1 / 3');
+
+  await featured.locator('.featured-upcoming-carousel').dispatchEvent('mouseenter');
+  await page.clock.runFor(11000);
+  await expect(counter).toHaveText('1 / 3');
+  await featured.locator('.featured-upcoming-carousel').dispatchEvent('mouseleave');
+  await page.clock.runFor(5100);
+  await expect(counter).toHaveText('2 / 3');
+
+  await page.evaluate(() => openPosterModal('UpcomingReleases/Durga.png', 'Popup'));
+  await page.clock.runFor(11000);
+  await expect(counter).toHaveText('2 / 3');
+  await page.evaluate(() => closeModal());
+  await page.clock.runFor(5100);
+  await expect(counter).toHaveText('3 / 3');
+
+  await featured.getByRole('button', { name: 'Pause featured slideshow' }).focus();
+  await page.clock.runFor(11000);
+  await expect(counter).toHaveText('3 / 3');
+  await page.keyboard.press('Enter');
+  await page.evaluate(() => document.activeElement.blur());
+  await page.mouse.move(0, 0);
+  await page.clock.runFor(11000);
+  await expect(counter).toHaveText('3 / 3');
+  await expect(featured.getByRole('button', { name: 'Play featured slideshow' })).toBeVisible();
+
+  await page.evaluate(() => { renderFeaturedUpcoming(); renderFeaturedUpcoming(); });
+  await page.clock.runFor(5100);
+  await expect(counter).toHaveText('2 / 3');
+  await page.evaluate(() => openTab('aboutTab', null));
+  await page.clock.runFor(11000);
+  await expect(counter).toHaveText('2 / 3');
+  await page.evaluate(() => openTab('homeTab', null));
+  await page.clock.runFor(6000);
+  await expect(counter).toHaveText('3 / 3');
+});
+
+test('zero and single featured items do not show slideshow controls', async ({ page }) => {
+  await loadFeaturedPreview(page, 0);
+  await expect(page.locator('.featured-upcoming-wrap')).toBeHidden();
+  await expect(page.locator('.featured-upcoming-controls')).toHaveCount(0);
+  await expect(page.locator('#comingSoonTrack .upcoming-card')).toHaveCount(10);
+  await page.evaluate(() => { upcomingReleases[0].featured = 'yes'; renderFeaturedUpcoming(); });
+  await expect(page.locator('.featured-upcoming-wrap')).toBeVisible();
+  await expect(page.locator('.featured-upcoming-controls')).toHaveCount(0);
+  const image = page.locator('.featured-upcoming-card');
+  await image.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#modalContent img')).toHaveAttribute('src', /Durga.png$/);
+});
+
+test('featured mobile layout and reduced-motion preference are respected', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.clock.install();
+  await loadFeaturedPreview(page);
+  await page.clock.runFor(11000);
+  await expect(page.locator('.featured-upcoming-counter')).toHaveText('1 / 3');
+  await expect(page.getByRole('button', { name: 'Play featured slideshow' })).toBeVisible();
+  await page.getByRole('button', { name: 'Next featured release', exact: true }).click();
+  await expect(page.locator('.featured-upcoming-counter')).toHaveText('2 / 3');
+  const image = page.locator('.featured-upcoming-card:visible img');
+  await expect(image).toHaveCSS('object-fit', 'contain');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('admin can export and import several featured upcoming items', async ({ page }) => {
+  await page.goto('/admin.html');
+  await expect(page.locator('#workspace')).toBeVisible();
+  await page.locator('#sheetNav').getByRole('button', { name: /^Upcoming/ }).click();
+  await expect(page.locator('#sheetHelp')).toContainText('Multiple featured posters');
+  await page.locator('#rowList button').nth(1).click();
+  await page.locator('#field-featured').selectOption('yes');
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download Excel' }).click();
+  const bytes = await fs.readFile(await (await downloadPromise).path());
+  const data = await readWorkbook(bytes);
+  expect(data.Upcoming.filter(row => row.featured === 'yes')).toHaveLength(2);
+  await page.locator('#fileInput').setInputFiles({ name: 'website.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: bytes });
+  await expect(page.locator('#status')).toContainText('Workbook imported');
 });

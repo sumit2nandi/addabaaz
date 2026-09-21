@@ -52,7 +52,7 @@ Edit **`data/website.xlsx`** directly, save as `.xlsx`, and deploy the updated f
 | **Shows** | `key`, title, subtitle, description, image, genre. Keys must be unique and stable. Episode counts are derived automatically. |
 | **Episodes** | One episode per row. `project` must match a Shows `key`. Row order controls episode order. Includes original IDs, position, YouTube ID, publish date, duration, views, thumbnail, availability, episode number and kind. |
 | **Promos** | Promotional videos and specials, in row order. `kind`: `PROMO` or `SPECIAL`. `availability`: `available` or `unavailable`. |
-| **Upcoming** | Poster filename, optional title, `featured` and `home` (`yes`/`no`). At most one featured poster. `home=yes` includes a poster in the home rail; all rows appear in the full gallery. |
+| **Upcoming** | Poster filename, optional title, `featured` and `home` (`yes`/`no`). Multiple featured posters form a slideshow in row order. `home=yes` includes a poster in the home rail; all rows appear in the full gallery. |
 | **BTS** | Behind-the-scenes filename and optional title, in display order. |
 | **Team** | Team member ID, name, role, quote and image path. |
 | **Services** | Service ID, display number, title and description. |
@@ -68,7 +68,7 @@ Home show cards and the top-three hero slides retain the original view-count ran
 
 - **Add a show:** add a Shows row with a unique `key`, then add Episodes rows whose `project` matches it. Add/upload the poster separately.
 - **Rename a show key:** update matching episode `project` values too. Prefer changing the title without changing the stable key.
-- **Change the featured poster:** set the current Upcoming row's `featured` to `no`, then set the new row to `yes`. Its title becomes the featured badge text.
+- **Choose featured posters:** set `featured=yes` on any number of Upcoming rows. One poster is static; multiple posters rotate every five seconds in workbook row order, with previous/next, dot and pause controls. Click or keyboard-activate an image to open its full-size popup, just like other upcoming posters. Titles become badge text. Autoplay pauses on hover, keyboard focus, hidden browser tabs, other site tabs and open popups; reduced-motion users start with autoplay paused. The `home` flag still controls the separate home rail.
 - **Change a phone number:** search for the old number in Copy. Update both visible text and the corresponding `tel:` or WhatsApp `href` value.
 - **Change contact-form destinations:** update Settings `appsScriptUrl`, or `googleFormAction` and `formField.*`. These are public integration settings, not secrets. The existing cross-origin form integration cannot confirm delivery because it uses opaque `no-cors` responses; test the configured destination separately.
 
@@ -98,7 +98,7 @@ assets/js/
   admin.js                       Editing and file workflows
   site/                          Existing interactions, split by responsibility
     helpers.js, hero.js, navigation.js, catalog.js,
-    galleries.js, video-preview.js, poster-preview.js,
+    galleries.js, featured-upcoming.js, video-preview.js, poster-preview.js,
     contact.js, app.js
 assets/vendor/                   Pinned ExcelJS browser bundle and license
 data/website.xlsx                Single source of website content
