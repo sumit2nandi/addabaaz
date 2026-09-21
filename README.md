@@ -1,6 +1,6 @@
 # ADDABAAZ
 
-A static film-production website with **Excel-powered content** and a browser-based content editor with Google sign-in. No backend, database, build step or subscription is required to host it.
+A static film-production website with **Excel-powered content** and a browser-based content editor without a login requirement. No backend, database, build step or subscription is required to host it.
 
 ## Quick start
 
@@ -11,19 +11,19 @@ npm ci
 npm start
 ```
 
-Open `http://localhost:3000/` for the website or `http://localhost:3000/admin.html` for the editor. Configure Google sign-in below before using the admin; it remains locked until configured. The development server binds to `0.0.0.0` for remote previews. Alternatively, with Python installed:
+Open `http://localhost:3000/` for the website or `http://localhost:3000/admin.html` for the editor. The development server binds to `0.0.0.0` for remote previews. Alternatively, with Python installed:
 
 ```sh
 python3 -m http.server 3000 --bind 0.0.0.0
 ```
 
-Production remains plain static hosting, including GitHub Pages and subdirectory deployments. Publish `index.html`, `admin.html`, `components/`, `assets/`, `config/`, `data/` and the existing media folders together. Node, Python and `node_modules` are **not** needed on the production server.
+Production remains plain static hosting, including GitHub Pages and subdirectory deployments. Publish `index.html`, `admin.html`, `components/`, `assets/`, `data/` and the existing media folders together. Node, Python and `node_modules` are **not** needed on the production server.
 
 ## Editing content
 
 ### With the admin page
 
-1. Open **`admin.html`** and sign in with an allowed Google account. After verification, it loads the published `data/website.xlsx`.
+1. Open **`admin.html`** directly—no Google account, username or password is required. It loads the published `data/website.xlsx`.
 2. Select a worksheet, search for a row, and edit its fields. Add, delete or reorder content rows using the buttons. Copy and Settings keys are fixed; only their values are editable.
 3. Choose **Preview changes** to open an unpublished preview in a new tab. Validation runs first. Previews use this browser's local storage and **never change the regular website**.
 4. Choose **Download Excel** to get the updated `website.xlsx`.
@@ -72,31 +72,9 @@ Home show cards and the top-three hero slides retain the original view-count ran
 - **Change a phone number:** search for the old number in Copy. Update both visible text and the corresponding `tel:` or WhatsApp `href` value.
 - **Change contact-form destinations:** update Settings `appsScriptUrl`, or `googleFormAction` and `formField.*`. These are public integration settings, not secrets. The existing cross-origin form integration cannot confirm delivery because it uses opaque `no-cors` responses; test the configured destination separately.
 
-## Google sign-in setup
+## Admin access
 
-The checked-in `config/admin-auth.json` intentionally has no client ID or allowed accounts. **The admin remains locked until you configure both.** There is no default username/password and no developer bypass.
-
-1. In [Google Cloud Console](https://console.cloud.google.com/), choose/create a project and configure the Google Auth Platform consent screen (Branding/Audience). If the app is in Testing, add the intended accounts as test users.
-2. Create an OAuth client with application type **Web application**. Add these **Authorized JavaScript origins**, as applicable:
-   - `https://sumit2nandi.github.io` for this repository's GitHub Pages site. Do **not** include `/addabaaz/` or `/admin.html`: an origin has no path.
-   - Your exact custom-domain origin, if any.
-   - `http://localhost:3000` (and `http://127.0.0.1:3000` if used) for local development.
-   - An exact HTTPS preview origin if testing on a preview host. Wildcard origins are not supported. If the preview iframe blocks Google sign-in, open the admin in a separate tab or use the published GitHub Pages URL.
-3. Copy the **Web client ID**, which ends in `.apps.googleusercontent.com`, and edit:
-
-   ```json
-   {
-     "clientId": "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com",
-     "allowedEmails": ["your-approved-google-account@example.com"]
-   }
-   ```
-
-   Use the complete ID from Google, not the placeholder above. List each permitted account explicitly. No Google password, client secret, API key or GitHub token belongs in this file. The client ID and email allowlist are public configuration.
-4. Run `npm run version-assets`, deploy the updated files including `config/`, then open `admin.html` in a new tab. Use the official **Sign in with Google** button. An unlisted account is rejected.
-
-The browser checks Google's RSA signature using Google's public keys, audience, issuer, nonce, token expiry, verified email and allowlist before loading editor code. Tokens are kept in memory, not local/session storage. Reloading requires sign-in again. Expiry hides the editor but preserves unsaved edits in the current tab for reauthentication; sign-out warns before discarding edits.
-
-**Hosting limitation:** this is a Google-verified **browser UI gate**, not server-side authorization. Someone can bypass browser code or download public GitHub Pages files directly. It does not protect the workbook's confidentiality or authorize live publishing. Real access control for private files or write APIs requires an authenticated backend/access gateway that verifies identity and authorization on the server. The existing repository/hosting permissions remain the actual publishing control.
+Google sign-in has been removed. The editor opens directly, without an OAuth client ID, allowlist or login screen. It is a public static tool for editing local workbooks. It cannot publish changes or overwrite hosted files; actual publishing still requires access to your repository or hosting account. Never place confidential information or credentials in the public workbook.
 
 ## Deployment and stale-cache troubleshooting
 
@@ -104,8 +82,20 @@ If admin reports `Upcoming / featured: only one featured poster is allowed`, it 
 
 - Confirm GitHub Pages is deploying the intended branch and that its latest build has completed successfully. Updating the repository alone does not mean deployment has finished.
 - Deploy the HTML, JavaScript, CSS, components and workbook together, not just the Excel file. After the deployment completes, hard-refresh `admin.html` (`Ctrl+Shift+R` / `Cmd+Shift+R`), or close and reopen the tab. An already-open editor retains its old JavaScript until reloaded.
-- All browser entry points, transitive module imports, component templates and interaction scripts now use a consistent content-based version query. The editor footer displays its build ID for diagnosis. Workbook and auth-config fetches request uncached data.
+- All browser entry points, transitive module imports, component templates and interaction scripts now use a consistent content-based version query. The editor footer displays its build ID for diagnosis. Workbook fetches request uncached data.
 - After changing runtime files, run **`npm run version-assets`** before committing/deploying. It stamps a new deterministic asset revision and is safe to rerun. Its generated URLs are checked in, so GitHub Pages still needs no build system. This prevents stale JavaScript from being reused once the new HTML is loaded; it cannot force an old open tab to refresh itself.
+
+### Why does the page say “Loading ADDABAAZ…”?
+
+The page reads the Excel workbook and loads section templates before displaying the site, so a brief loading message is normal. It is unrelated to authentication. The startup path now:
+
+- Downloads the Excel reader and application modules concurrently, and waits for the reader before opening the workbook.
+- Downloads interaction scripts in parallel while executing them in their original dependency order.
+- Loads optional Google Fonts and Font Awesome styles without blocking page startup.
+- Catches failed module imports, missing scripts/templates and Excel-reader failures, including failures before application initialization.
+- Times out workbook requests after 20 seconds and overall startup after 25 seconds. Failed startup displays an actionable message and a reload link instead of leaving the loading label indefinitely.
+
+If an error remains after reloading, check the named deployment file or network request. The workbook still needs to be a valid `.xlsx`, and JavaScript must be enabled. The admin keeps Open Excel available if only the published workbook fails, allowing you to import a corrected file locally.
 
 ## Components and maintenance
 
@@ -131,13 +121,12 @@ assets/js/
   site-loader.js                 Loads Excel and HTML components
   site-content.js                Safe copy/team/service/mission rendering
   admin.js                       Editing and file workflows
-  admin-auth.js, google-auth.js   Google sign-in gate and token verification
+  page-bootstrap.js              Async startup, dependency loading, timeout/recovery
   site/                          Existing interactions, split by responsibility
     helpers.js, hero.js, navigation.js, catalog.js,
     galleries.js, featured-upcoming.js, video-preview.js, poster-preview.js,
     contact.js, app.js
 assets/vendor/                   Pinned ExcelJS browser bundle and license
-config/admin-auth.json           Public OAuth client ID and account allowlist
 data/website.xlsx                Single source of website content
 ```
 
@@ -147,7 +136,7 @@ The browser XLSX library is vendored so the workbook does not depend on a runtim
 
 ## Publishing and security
 
-This is a **static local editor with a Google sign-in UI gate**, not a server-side CMS or authorization service. The admin page cannot modify a hosted workbook. A visitor may use the editor on their own downloaded/local copy, but publishing still requires access to your repository or hosting account. Google login does not authorize server writes; there is no client-side password pretending to protect hosted data.
+This is a **static local editor without sign-in**, not a server-side CMS or authorization service. The admin page cannot modify a hosted workbook. A visitor may use the editor on their own downloaded/local copy, but publishing still requires access to your repository or hosting account. There is no client-side password pretending to protect hosted data.
 
 - **The workbook is public. Never put credentials, private contacts, submissions or other secrets in it.**
 - Imported content is validated. Text is rendered as text/escaped HTML, not executable markup. Unsafe URLs, invalid identifiers, formulas, duplicate IDs and orphan episodes are rejected.
@@ -167,4 +156,4 @@ npx playwright install chromium
 npm run test:browser              # Site + admin desktop/mobile browser workflows
 ```
 
-Google login tests use mocked Google endpoints with real RSA-signed test tokens; live Google OAuth must be checked after configuring the real client ID and authorized origins. Browser tests block external resources; they verify local content, interactions and embed URLs, not actual YouTube streaming or Google Form delivery. An existing Chromium executable can be used with `CHROMIUM_PATH=/path/to/chromium npm run test:browser`.
+Startup tests cover blocked scripts, stalled network requests, unavailable fonts/icons and direct admin access. Browser tests block external resources; they verify local content, interactions and embed URLs, not actual YouTube streaming or Google Form delivery. An existing Chromium executable can be used with `CHROMIUM_PATH=/path/to/chromium npm run test:browser`.

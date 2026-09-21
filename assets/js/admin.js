@@ -1,4 +1,4 @@
-import { SCHEMA, PREVIEW_KEY, MAX_FILE_SIZE, loadPublishedWorkbook, readWorkbook, writeWorkbook, assertValid } from './workbook.js?v=9345c48ce964';
+import { SCHEMA, PREVIEW_KEY, MAX_FILE_SIZE, loadPublishedWorkbook, readWorkbook, writeWorkbook, assertValid } from './workbook.js?v=0b2d44c4837f';
 
 const $ = id => document.getElementById(id);
 let tables, currentSheet = 'Shows', selected = 0, dirty = false, fileHandle = null, fileModified = null, busy = false;
@@ -235,8 +235,12 @@ $('saveFileButton').addEventListener('click', () => run(async () => {
   message('Saved to the linked local Excel file. Replace the hosted workbook and deploy to publish.');
 }));
 window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
-run(async () => {
-  if (location.protocol === 'file:') throw new Error('Serve the website over HTTP to use the editor. See README.md.');
-  accept(await loadPublishedWorkbook(), 'data/website.xlsx');
-  message('Published workbook loaded. Select a worksheet to begin editing.');
-});
+export async function start({ signal }) {
+  await run(async () => {
+    if (location.protocol === 'file:') throw new Error('Serve the website over HTTP to use the editor. See README.md.');
+    accept(await loadPublishedWorkbook({ signal }), 'data/website.xlsx');
+    message('Published workbook loaded. Select a worksheet to begin editing.');
+  });
+  // If only the published workbook fails, keep import available for recovery.
+  document.getElementById('loadRecovery').hidden = !!tables;
+}

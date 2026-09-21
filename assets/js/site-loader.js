@@ -1,42 +1,50 @@
-import { loadPublishedWorkbook, assertValid, PREVIEW_KEY } from './workbook.js?v=9345c48ce964';
-import { renderContent, runtimeData } from './site-content.js?v=9345c48ce964';
+import { loadPublishedWorkbook, assertValid, PREVIEW_KEY } from './workbook.js?v=0b2d44c4837f';
+import { renderContent, runtimeData } from './site-content.js?v=0b2d44c4837f';
 
-const ASSET_VERSION = '9345c48ce964';
+const ASSET_VERSION = '0b2d44c4837f';
 const components = ['navigation', 'home', 'player', 'upcoming', 'bts', 'about', 'services', 'contact', 'video-preview', 'poster-preview', 'modal', 'footer'];
 const scripts = ['helpers', 'hero', 'video-preview', 'galleries', 'featured-upcoming', 'poster-preview', 'navigation', 'catalog', 'contact', 'app'];
 const status = document.getElementById('siteStatus');
 
-function loadScript(name) {
+function loadScript(name, signal) {
   return new Promise((resolve, reject) => {
+    signal.throwIfAborted();
     const script = document.createElement('script');
+    // Append every file at once but execute in the original dependency order.
+    script.async = false;
     script.src = `assets/js/site/${name}.js?v=${ASSET_VERSION}`;
-    script.onload = resolve;
-    script.onerror = () => reject(new Error(`Unable to load the ${name} component.`));
+    const clean = () => { script.onload = script.onerror = null; signal.removeEventListener('abort', abort); };
+    const abort = () => { clean(); script.remove(); reject(signal.reason); };
+    script.onload = () => { clean(); resolve(); };
+    script.onerror = () => { clean(); reject(new Error(`Unable to load the ${name} component.`)); };
+    signal.addEventListener('abort', abort, { once: true });
     document.body.append(script);
   });
 }
 
-async function start() {
+export async function start({ signal }) {
   if (location.protocol === 'file:') throw new Error('Please serve this folder over HTTP rather than opening index.html directly. See README.md for instructions.');
   const preview = new URLSearchParams(location.search).get('preview') === '1';
   const contentPromise = preview ? Promise.resolve().then(() => {
     const saved = localStorage.getItem(PREVIEW_KEY);
     if (!saved) throw new Error('No preview data found. Open admin.html and choose Preview changes first.');
     return assertValid(JSON.parse(saved));
-  }) : loadPublishedWorkbook();
+  }) : loadPublishedWorkbook({ signal });
   const [tables, templates] = await Promise.all([
     contentPromise,
     Promise.all(components.map(async name => {
-      const response = await fetch(`components/${name}.html?v=${ASSET_VERSION}`);
+      const response = await fetch(`components/${name}.html?v=${ASSET_VERSION}`, { signal });
       if (!response.ok) throw new Error(`Unable to load the ${name} template (HTTP ${response.status}).`);
       return response.text();
     }))
   ]);
+  signal.throwIfAborted();
   // Only repository-owned templates are parsed as HTML; workbook text is never markup.
   document.getElementById('siteRoot').innerHTML = templates.join('\n');
   renderContent(tables);
   Object.assign(window, runtimeData(tables));
-  for (const script of scripts) await loadScript(script);
+  await Promise.all(scripts.map(name => loadScript(name, signal)));
+  signal.throwIfAborted();
   window.initializeSite();
   if (preview) {
     status.textContent = 'LOCAL PREVIEW — these changes are not published. Close this tab to return to your editor. ';
@@ -47,10 +55,3 @@ async function start() {
     status.append(back);
   } else status.remove();
 }
-
-start().catch(error => {
-  console.error('[ADDABAAZ] Website load failed:', error);
-  document.getElementById('siteRoot').replaceChildren();
-  status.setAttribute('role', 'alert');
-  status.textContent = `The website could not load. ${error.message} Please check the workbook or try reloading.`;
-});

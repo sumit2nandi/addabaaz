@@ -1447,3 +1447,6 @@ body {
 .site-status { padding: 24px; background: #161619; color: #fff; line-height: 1.6; white-space: pre-line; }
 .preview-banner { padding: 12px 24px; background: #573e00; font-size: 14px; }
 .preview-banner a { color: #fff; font-weight: 700; text-decoration: underline; }
+
+#loadRecovery { padding:0 24px 24px; color:var(--text-secondary); }
+#loadRecovery a { color:var(--gold); text-decoration:underline; }

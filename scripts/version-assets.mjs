@@ -11,7 +11,7 @@ async function walk(directory) {
   }
   return files;
 }
-const files = ['index.html', 'admin.html', ...await walk('assets'), ...await walk('components'), ...await walk('config')].sort();
+const files = ['index.html', 'admin.html', ...await walk('assets'), ...await walk('components')].sort();
 const canonical = text => text.replace(/\?v=[\w-]+/g, '').replace(/const ASSET_VERSION = '[^']*';/g, "const ASSET_VERSION = 'VERSION';");
 const contents = await Promise.all(files.map(file => fs.readFile(file, 'utf8')));
 const hash = createHash('sha256');

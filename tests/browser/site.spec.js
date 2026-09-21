@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
-import { mockGoogle } from './google-mock.js';
 import ExcelJS from 'exceljs';
 import { readWorkbook, writeWorkbook, PREVIEW_KEY } from '../../assets/js/workbook.js';
 globalThis.ExcelJS = ExcelJS;
@@ -12,7 +11,6 @@ test.beforeEach(async ({ context }) => {
     if (new URL(route.request().url()).hostname === '127.0.0.1') route.continue();
     else route.abort();
   });
-  await mockGoogle(context);
 });
 
 test('loads original site, all tabs, modals, galleries and playback', async ({ page }) => {

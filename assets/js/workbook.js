@@ -1,4 +1,4 @@
-import { COPY_KEYS } from './copy-keys.js?v=9345c48ce964';
+import { COPY_KEYS } from './copy-keys.js?v=0b2d44c4837f';
 
 export const WORKBOOK_URL = 'data/website.xlsx';
 export const PREVIEW_KEY = 'addabaaz.content-preview.v1';
@@ -117,10 +117,25 @@ export async function readWorkbook(bytes) {
   return assertValid(tables);
 }
 
-export async function loadPublishedWorkbook() {
-  const response = await fetch(WORKBOOK_URL, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`Could not load ${WORKBOOK_URL} (HTTP ${response.status}).`);
-  return readWorkbook(await response.arrayBuffer());
+export async function loadPublishedWorkbook({ signal } = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new Error(`Loading ${WORKBOOK_URL} timed out. Check your connection and try again.`)), 20000);
+  const abort = () => controller.abort(signal.reason);
+  if (signal?.aborted) abort();
+  else signal?.addEventListener('abort', abort, { once: true });
+  try {
+    const response = await fetch(WORKBOOK_URL, { cache: 'no-store', signal: controller.signal });
+    if (!response.ok) throw new Error(`Could not load ${WORKBOOK_URL} (HTTP ${response.status}).`);
+    const tables = await readWorkbook(await response.arrayBuffer());
+    controller.signal.throwIfAborted();
+    return tables;
+  } catch (error) {
+    if (controller.signal.aborted) throw controller.signal.reason;
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener('abort', abort);
+  }
 }
 
 export async function writeWorkbook(tables) {

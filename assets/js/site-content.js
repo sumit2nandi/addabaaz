@@ -1,4 +1,4 @@
-import { pairs } from './workbook.js?v=9345c48ce964';
+import { pairs } from './workbook.js?v=0b2d44c4837f';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
