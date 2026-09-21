@@ -15,7 +15,7 @@ const clone = () => structuredClone(original);
 test('workbook contains all migrated sections and original media', () => {
   assert.deepEqual(validateTables(original), []);
   assert.deepEqual(Object.fromEntries(Object.entries(original).map(([name, rows]) => [name, rows.length])), {
-    Shows: 4, Episodes: 35, Promos: 158, Upcoming: 14, BTS: 19, Team: 9, Services: 6, Missions: 10, Copy: 111, Settings: 11
+    Shows: 4, Episodes: 35, Promos: 158, Upcoming: 15, BTS: 19, Team: 9, Services: 6, Missions: 10, Copy: 111, Settings: 11
   });
   assert.equal(original.Shows[0].title, 'শহীদ (Shahid)');
   assert.equal(original.Episodes[0].duration, '15:48');
@@ -130,8 +130,7 @@ test('all original local image references resolve on disk', async () => {
 
 test('multiple featured posters validate and retain workbook order on round trip', async () => {
   const data = clone();
-  data.Upcoming[1].featured = 'yes';
-  data.Upcoming[3].featured = 'yes';
+  data.Upcoming.forEach((row, index) => { row.featured = [0, 1, 3].includes(index) ? 'yes' : 'no'; });
   assert.deepEqual(validateTables(data), []);
   const reread = await readWorkbook(await writeWorkbook(data));
   assert.deepEqual(reread.Upcoming.filter(row => row.featured === 'yes').map(row => row.file), ['Durga.png', 'POSTER (1).png', 'POSTER (4).png']);

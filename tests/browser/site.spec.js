@@ -43,7 +43,7 @@ test('loads original site, all tabs, modals, galleries and playback', async ({ p
   await expect(page.locator('#homeTab')).toBeVisible();
   await page.getByRole('button', { name: 'Show All Upcoming Releases' }).click();
   await expect(page.locator('#upcomingTab')).toBeVisible();
-  await expect(page.locator('#upcomingGrid .upcoming-card')).toHaveCount(14);
+  await expect(page.locator('#upcomingGrid .upcoming-card')).toHaveCount(original.Upcoming.length);
   await page.locator('#upcomingGrid .upcoming-card').first().click();
   await expect(page.locator('#modalContent img')).toHaveAttribute('src', /Durga.png/);
   await page.keyboard.press('Escape');
@@ -123,7 +123,7 @@ test('a changed published workbook drives site content and settings', async ({ p
   await expect(page.locator('[data-show-key="shahid"]')).toContainText('Workbook-driven show');
   await expect(page.locator('.team-name').first()).toHaveText('Workbook-driven team');
   await expect(page.locator('.service-card h4').first()).toHaveText('Workbook-driven service');
-  await expect(page.locator('.featured-upcoming-badge')).toHaveText('New featured release');
+  await expect(page.locator('#featured-upcoming-slide-0 .featured-upcoming-badge')).toHaveText('New featured release');
   await expect(page.locator('#btsTrack .upcoming-card')).toHaveCount(2);
 });
 
@@ -398,7 +398,9 @@ test('admin can export and import several featured upcoming items', async ({ pag
   await page.getByRole('button', { name: 'Download Excel' }).click();
   const bytes = await fs.readFile(await (await downloadPromise).path());
   const data = await readWorkbook(bytes);
-  expect(data.Upcoming.filter(row => row.featured === 'yes')).toHaveLength(2);
+  const expected = structuredClone(original.Upcoming);
+  expected[1].featured = 'yes';
+  expect(data.Upcoming).toEqual(expected);
   await page.locator('#fileInput').setInputFiles({ name: 'website.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: bytes });
   await expect(page.locator('#status')).toContainText('Workbook imported');
 });
