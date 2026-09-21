@@ -1,0 +1,18 @@
+<div class="tab-content" id="playerTab">
+<div class="player-section">
+<div class="video-container" id="videoPlayerBox"></div>
+<div class="player-details">
+<h2 data-copy="player.playerTitle.text" id="playerTitle"></h2>
+<div class="sub" data-copy="player.playerSub.text" id="playerSub"></div>
+<p data-copy="player.playerDesc.text" id="playerDesc"></p>
+</div>
+<div class="episodes-section" id="episodesSection">
+<h3 data-copy="player.epListTitle.text" id="epListTitle"></h3>
+<div class="rail" style="margin:0;">
+<div class="arrow arrow-left disabled" data-copy="player.epArrowLeft.text" id="epArrowLeft" onclick="scrollRail('epViewport', -1)"></div>
+<div class="rail-viewport" id="epViewport"><div class="rail-track" id="episodesTrack"></div></div>
+<div class="arrow arrow-right" data-copy="player.epArrowRight.text" id="epArrowRight" onclick="scrollRail('epViewport', 1)"></div>
+</div>
+</div>
+</div>
+</div>

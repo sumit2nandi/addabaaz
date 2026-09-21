@@ -1,0 +1,102 @@
+<div class="tab-content" id="contactTab">
+<section class="section-container">
+<div class="section-header">
+<div class="section-tag" data-copy="contact.section-tag.text"></div>
+<h2 class="section-title" data-copy="contact.section-title.text"></h2>
+<div class="section-subtitle" data-copy="contact.section-subtitle.text"></div>
+</div>
+<div class="contact-grid">
+<div class="contact-form">
+<h3 data-copy="contact.h3.text" style="margin:0 0 24px;font-size:20px;"></h3>
+<form id="projectForm" novalidate="" onsubmit="handleFormSubmit(event)">
+<div class="form-group">
+<label data-copy="contact.label.text" for="name"></label>
+<input data-copy-placeholder="contact.name.placeholder" id="name" name="name" required="" type="text"/>
+</div>
+<div class="form-group">
+<label data-copy="contact.label.text.2" for="email"></label>
+<input data-copy-placeholder="contact.email.placeholder" id="email" name="email" required="" type="email"/>
+</div>
+<div class="form-group">
+<label for="phone"><span data-copy="contact.label.text.3"></span><span data-copy="contact.span.text" style="text-transform:none;letter-spacing:0;"></span></label>
+<input data-copy-placeholder="contact.phone.placeholder" id="phone" name="phone" type="tel"/>
+</div>
+<div class="form-group">
+<label data-copy="contact.label.text.4" for="message"></label>
+<textarea data-copy-placeholder="contact.message.placeholder" id="message" name="message" required=""></textarea>
+</div>
+<div class="form-group">
+<label data-copy="contact.label.text.5" for="captchaAnswer"></label>
+<div class="captcha-row">
+<canvas class="captcha-canvas" data-copy-aria-label="contact.captchaCanvas.aria-label" data-copy-title="contact.captchaCanvas.title" id="captchaCanvas" onclick="refreshCaptcha()"></canvas>
+<input autocapitalize="characters" autocomplete="off" data-copy-placeholder="contact.captchaAnswer.placeholder" id="captchaAnswer" maxlength="6" name="captcha" required="" spellcheck="false" type="text"/>
+<button class="captcha-refresh" data-copy-aria-label="contact.captcha-refresh.aria-label" data-copy-title="contact.captcha-refresh.title" onclick="refreshCaptcha()" type="button">
+<i class="fas fa-rotate-right"></i>
+</button>
+</div>
+<div class="captcha-error" id="captchaError" role="alert"></div>
+</div>
+<button class="btn btn-primary" data-copy="contact.submitBtn.text" id="submitBtn" style="width:100%; padding:14px;" type="submit"></button>
+<div class="form-status" id="formStatus" role="status"></div>
+<div class="form-note" data-copy="contact.form-note.text"></div>
+</form>
+</div>
+<div class="contact-details">
+<div class="contact-info-block">
+<h4 data-copy="contact.h4.text"></h4>
+<a class="contact-line" data-copy-href="contact.contact-line.href">
+<i class="fas fa-envelope"></i><span data-copy="contact.span.text.2"></span>
+</a>
+<a class="contact-line" data-copy-href="contact.contact-line.href.2">
+<i class="fas fa-phone-volume"></i><span data-copy="contact.span.text.3"></span>
+</a>
+</div>
+<div class="contact-info-block">
+<h4 data-copy="contact.h4.text.2"></h4>
+<a class="contact-line" data-copy-href="contact.contact-line.href.3">
+<i class="fas fa-phone"></i><span data-copy="contact.span.text.4"></span>
+</a>
+<a class="contact-line" data-copy-href="contact.contact-line.href.4">
+<i class="fas fa-phone"></i><span data-copy="contact.span.text.5"></span>
+</a>
+</div>
+<div class="contact-info-block">
+<h4 data-copy="contact.h4.text.3"></h4>
+<a class="contact-line whatsapp" data-copy-href="contact.contact-line-whatsapp.href" rel="noopener noreferrer" target="_blank">
+<i class="fab fa-whatsapp"></i><span data-copy="contact.span.text.6"></span>
+</a>
+</div>
+<div class="contact-info-block">
+<h4 data-copy="contact.h4.text.4"></h4>
+<a class="contact-line maps" data-copy-aria-label="contact.contact-line-maps.aria-label" data-copy-href="contact.contact-line-maps.href" data-copy-title="contact.contact-line-maps.title" rel="noopener noreferrer" target="_blank">
+<i aria-hidden="true" class="gmaps-badge">
+<svg aria-hidden="true" focusable="false" viewbox="0 0 24 24">
+<defs>
+<clippath id="gmapsPinClip">
+<path d="M12 1.6c-3.86 0-7 3.14-7 7 0 5.25 7 13.8 7 13.8s7-8.55 7-13.8c0-3.86-3.14-7-7-7z"></path>
+</clippath>
+</defs>
+<g clip-path="url(#gmapsPinClip)">
+<rect fill="#34A853" height="12" width="12" x="0" y="0"></rect>
+<rect fill="#4285F4" height="12" width="12" x="12" y="0"></rect>
+<rect fill="#FBBC04" height="12" width="12" x="0" y="12"></rect>
+<rect fill="#EA4335" height="12" width="12" x="12" y="12"></rect>
+</g>
+<circle cx="12" cy="8.6" fill="#ffffff" r="3.3"></circle>
+</svg>
+</i>
+<span><span data-copy="contact.span.text.7"></span><br/><span data-copy="contact.span.text.8"></span><br/><span data-copy="contact.span.text.9"></span></span>
+</a>
+</div>
+<div class="contact-info-block">
+<h4 data-copy="contact.h4.text.5"></h4>
+<div class="social-row">
+<a class="social-link" data-copy-href="contact.social-link.href" rel="noopener noreferrer" target="_blank"><i class="fab fa-facebook-f"></i> <span data-copy="contact.span.text.10"></span></a>
+<a class="social-link" data-copy-href="contact.social-link.href.2" rel="noopener noreferrer" target="_blank"><i class="fab fa-instagram"></i> <span data-copy="contact.span.text.11"></span></a>
+<a class="social-link" data-copy-href="contact.social-link.href.3" rel="noopener noreferrer" target="_blank"><i class="fab fa-youtube"></i> <span data-copy="contact.span.text.12"></span></a>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>

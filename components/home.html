@@ -1,0 +1,47 @@
+<div class="tab-content active show" id="homeTab">
+<header class="hero-wrap" role="banner">
+<div class="hero-slide-thumb" data-slide-thumb="0"></div>
+<div class="hero-slide-thumb" data-slide-thumb="1"></div>
+<div class="hero-slide-thumb" data-slide-thumb="2"></div>
+<div class="hero-bg-container" id="heroBgContainer"></div>
+<div class="hero-overlay"></div>
+<div class="hero"><div class="hero-left" id="heroContent"></div></div>
+<div class="hero-dots" id="heroDots"></div>
+</header>
+<section class="row animate-row" data-copy-aria-label="home.row-animate-row.aria-label">
+<h3 data-copy="home.h3.text"></h3>
+<div class="rail"><div class="arrow arrow-left disabled" data-copy="home.arrow-arrow-left-disabled.text" onclick="scrollRail('allShowsViewport',-1)"></div><div class="rail-viewport" id="allShowsViewport"><div class="rail-track" id="allShowsTrack"></div></div><div class="arrow arrow-right" data-copy="home.arrow-arrow-right.text" onclick="scrollRail('allShowsViewport',1)"></div></div>
+</section>
+<!-- ================= COMING SOON ================= -->
+<section class="row animate-row" data-copy-aria-label="home.comingSoonSection.aria-label" id="comingSoonSection">
+<h3 data-copy="home.h3.text.2"></h3>
+<!-- Row 1 : Featured Poster -->
+<div class="featured-upcoming-wrap">
+<div id="featuredUpcomingContainer"></div>
+</div>
+<!-- Row 2 : Existing Carousel -->
+<div class="rail">
+<div class="arrow arrow-left disabled" data-copy="home.arrow-arrow-left-disabled.text.2" onclick="scrollRail('comingSoonViewport',-1)"></div>
+<div class="rail-viewport" id="comingSoonViewport"><div class="rail-track" id="comingSoonTrack"></div></div>
+<div class="arrow arrow-right" data-copy="home.arrow-arrow-right.text.2" onclick="scrollRail('comingSoonViewport',1)"></div>
+</div>
+<div class="show-all-wrap">
+<button class="btn btn-primary btn-show-all" data-copy="home.btn-btn-primary-btn-show-all.text" onclick="openTab('upcomingTab', null)" type="button"></button>
+</div>
+</section>
+<!-- ============================================== -->
+<!-- ================= BEHIND THE SCENES ================= -->
+<section class="row animate-row" data-copy-aria-label="home.btsSection.aria-label" id="btsSection">
+<h3 data-copy="home.h3.text.3"></h3>
+<div class="rail">
+<div class="arrow arrow-left disabled" data-copy="home.arrow-arrow-left-disabled.text.3" onclick="scrollRail('btsViewport',-1)"></div>
+<div class="rail-viewport" id="btsViewport"><div class="rail-track" id="btsTrack"></div></div>
+<div class="arrow arrow-right" data-copy="home.arrow-arrow-right.text.3" onclick="scrollRail('btsViewport',1)"></div>
+</div>
+<div class="show-all-wrap">
+<button class="btn btn-show-all btn-gold" data-copy="home.btn-btn-show-all-btn-gold.text" onclick="openTab('btsTab', null)" type="button"></button>
+</div>
+</section>
+<!-- ===================================================== -->
+<div id="promoRowsContainer"></div>
+</div>

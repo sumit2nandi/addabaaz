@@ -1,0 +1,19 @@
+{
+  "name": "addabaaz",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "http-server . -a 0.0.0.0 -p 3000 -c-1",
+    "vendor": "node scripts/vendor.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "playwright test",
+    "validate": "node scripts/validate-content.mjs"
+  },
+  "dependencies": {
+    "exceljs": "4.4.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "http-server": "14.1.1"
+  }
+}
