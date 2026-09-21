@@ -1,4 +1,4 @@
-import { pairs } from './workbook.js?v=f6ed6ee8481c';
+import { pairs } from './workbook.js?v=6fbd4bccb8bf';
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -13,7 +13,14 @@ export function renderContent(tables) {
   for (const attr of ['href', 'src', 'alt', 'title', 'aria-label', 'placeholder']) {
     document.querySelectorAll(`[data-copy-${attr}]`).forEach(node => {
       const value = copy[node.getAttribute(`data-copy-${attr}`)] ?? '';
-      if (value) node.setAttribute(attr, value);
+      // Keep the editable original logo path in Excel, but serve small UI copies.
+      // Custom branding paths are left untouched.
+      let displayValue = value;
+      if (value === 'images/addabaaz-logo.png') {
+        if (attr === 'src' && node.matches('img.logo')) displayValue = 'images/addabaaz-logo-small.webp';
+        if (attr === 'href' && node.matches('link[rel="icon"], link[rel="apple-touch-icon"]')) displayValue = 'images/addabaaz-icon.png';
+      }
+      if (value) node.setAttribute(attr, displayValue);
       else node.removeAttribute(attr);
     });
   }

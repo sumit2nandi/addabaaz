@@ -68,7 +68,7 @@ test('startup errors keep a readable recovery screen rather than animating away'
 });
 
 test('missing logo falls back to the brand name without blocking the page', async ({ page }) => {
-  await page.route('**/images/addabaaz-logo.png', route => route.abort());
+  await page.route('**/images/addabaaz-logo-small.webp', route => route.abort());
   let release;
   const hold = new Promise(resolve => { release = resolve; });
   await page.route('**/data/website.xlsx', async route => { await hold; await route.continue(); });

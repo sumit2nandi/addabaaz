@@ -402,3 +402,31 @@ test('admin can export and import several featured upcoming items', async ({ pag
   await page.locator('#fileInput').setInputFiles({ name: 'website.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: bytes });
   await expect(page.locator('#status')).toContainText('Workbook imported');
 });
+
+test('promo posters use lazy images and retain their hover preview artwork', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#siteSplash')).toHaveCount(0);
+  const images = page.locator('#promoRowsContainer .poster img');
+  await expect(images).toHaveCount(158);
+  expect(await images.evaluateAll(nodes => nodes.every(node => node.loading === 'lazy' && node.decoding === 'async'))).toBe(true);
+  const card = page.locator('#promoRowsContainer .card').first();
+  const src = await card.locator('img').getAttribute('src');
+  await card.scrollIntoViewIfNeeded();
+  // Let the entrance transition finish before hover; scrolling dismisses previews.
+  await expect(page.locator('#promoRowsContainer .animate-row').first()).toHaveCSS('opacity', '1');
+  await card.hover();
+  await expect(page.locator('#cardPreview')).toHaveClass(/show/);
+  await expect(page.locator('#cardPreview .card-preview-video')).toHaveCSS('background-image', `url("${src}")`);
+});
+
+test('optimized branding does not override custom workbook logo paths', async ({ page }) => {
+  const tables = structuredClone(original);
+  for (const row of tables.Copy) {
+    if (row.value === 'images/addabaaz-logo.png') row.value = 'images/Sumit.png';
+  }
+  const writeBytes = await writeWorkbook(tables);
+  await page.route('**/data/website.xlsx', route => route.fulfill({ body: Buffer.from(writeBytes) }));
+  await page.goto('/');
+  await expect(page.locator('img.logo')).toHaveAttribute('src', 'images/Sumit.png');
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', 'images/Sumit.png');
+});

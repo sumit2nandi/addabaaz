@@ -128,7 +128,9 @@
   }
 
   function closeModal() {
-    document.getElementById('modalBackdrop').classList.remove('show');
+    const backdrop = document.getElementById('modalBackdrop');
+    if (!backdrop) return;
+    backdrop.classList.remove('show');
     const modalEl = document.querySelector('.modal');
     if (modalEl) modalEl.classList.remove('poster-modal');
   }

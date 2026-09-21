@@ -121,7 +121,10 @@
 
     const videoBox = preview.querySelector('.card-preview-video');
     const posterEl = card.querySelector('.poster');
-    videoBox.style.backgroundImage = posterEl ? posterEl.style.backgroundImage : 'none';
+    const posterImage = posterEl && posterEl.querySelector('img');
+    videoBox.style.backgroundImage = posterImage
+      ? 'url("' + (posterImage.currentSrc || posterImage.src) + '")'
+      : (posterEl ? posterEl.style.backgroundImage : 'none');
 
     const originParam = (location.origin && location.origin !== 'null')
       ? '&origin=' + encodeURIComponent(location.origin)

@@ -1,7 +1,8 @@
 /* Small, async entry point. Unlike a static module entry, it can report failed
    module imports and does not wait for optional external stylesheets. */
 (() => {
-  const ASSET_VERSION = 'f6ed6ee8481c';
+  const ASSET_VERSION = '6fbd4bccb8bf';
+  const EXCEL_ASSET_VERSION = '7e49da68588e';
   const script = document.currentScript;
   const admin = script.dataset.page === 'admin';
   const status = document.getElementById(admin ? 'status' : 'siteStatus');
@@ -14,7 +15,7 @@
   function loadExcelReader() {
     return new Promise((resolve, reject) => {
       const library = document.createElement('script');
-      library.src = assetUrl('../vendor/exceljs.min.js');
+      library.src = new URL(`../vendor/exceljs.min.js?v=${EXCEL_ASSET_VERSION}`, script.src).href;
       library.async = true;
       const clean = () => { library.onload = library.onerror = null; signal.removeEventListener('abort', abort); };
       const abort = () => { clean(); library.remove(); reject(signal.reason); };
@@ -57,14 +58,14 @@
   async function initialize() {
     if (location.protocol === 'file:') throw new Error('Serve this folder over HTTP rather than opening the HTML file directly. See README.md.');
     if (admin) document.getElementById('adminBuild').textContent = ASSET_VERSION;
-    // Module parsing and downloading the Excel library run concurrently. The app
-    // starts only after BOTH finish, avoiding a race with window.ExcelJS.
-    const [, app] = await Promise.all([
-      loadExcelReader(),
-      import(assetUrl(admin ? 'admin.js' : 'site-loader.js'))
-    ]);
-    signal.throwIfAborted();
-    await app.start({ signal });
+    // Start content/network work without waiting for the large Excel library.
+    // Workbook parsing awaits readerReady; a reader failure still fails startup.
+    const readerReady = loadExcelReader();
+    const appReady = import(assetUrl(admin ? 'admin.js' : 'site-loader.js')).then(app => {
+      signal.throwIfAborted();
+      return app.start({ signal, readerReady });
+    });
+    await Promise.all([readerReady, appReady]);
     signal.throwIfAborted();
   }
 

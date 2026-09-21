@@ -26,7 +26,8 @@
       '" data-preview-title="' + escapeHtml(v.title) +
       '" data-preview-meta="' + escapeHtml((v.duration || '') + ' • ' + badge) +
       '" onclick="playStandalone(\'' + v.id + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();playStandalone(\'' + v.id + '\')}">' +
-      '<div class="poster" style="background-image:url(\'' + escapeHtml(thumb) + '\')">' +
+      '<div class="poster">' +
+        '<img class="catalog-poster-image" src="' + escapeHtml(thumb) + '" alt="" loading="lazy" decoding="async" onerror="this.style.display=\'none\';" />' +
         '<div class="kind-badge">' + badge + '</div>' +
         '<div class="play-overlay"><div class="play-btn">▶</div></div>' +
       '</div>' +

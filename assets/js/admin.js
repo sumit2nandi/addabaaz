@@ -1,7 +1,8 @@
-import { SCHEMA, PREVIEW_KEY, MAX_FILE_SIZE, loadPublishedWorkbook, readWorkbook, writeWorkbook, assertValid } from './workbook.js?v=f6ed6ee8481c';
+import { SCHEMA, PREVIEW_KEY, MAX_FILE_SIZE, loadPublishedWorkbook, readWorkbook, writeWorkbook, assertValid } from './workbook.js?v=6fbd4bccb8bf';
 
 const $ = id => document.getElementById(id);
 let tables, currentSheet = 'Shows', selected = 0, dirty = false, fileHandle = null, fileModified = null, busy = false;
+let startupSignal;
 const fixed = () => SCHEMA[currentSheet].fixed;
 
 function message(text, error = false) {
@@ -14,10 +15,11 @@ function setDirty(value) {
   $('saveState').textContent = dirty ? 'Unsaved changes · not published' : 'Workbook ready · local editor';
 }
 function refreshActions() {
-  for (const id of ['downloadButton', 'previewButton']) $(id).disabled = busy || !tables;
-  $('saveFileButton').disabled = busy || !tables || !fileHandle;
-  for (const id of ['importButton', 'linkButton', 'reloadButton']) $(id).disabled = busy;
-  $('workspace').inert = busy;
+  const locked = busy || !globalThis.ExcelJS?.Workbook || startupSignal?.aborted;
+  for (const id of ['downloadButton', 'previewButton']) $(id).disabled = locked || !tables;
+  $('saveFileButton').disabled = locked || !tables || !fileHandle;
+  for (const id of ['importButton', 'linkButton', 'reloadButton']) $(id).disabled = locked;
+  $('workspace').inert = !!locked;
 }
 async function run(action) {
   if (busy) return;
@@ -235,10 +237,18 @@ $('saveFileButton').addEventListener('click', () => run(async () => {
   message('Saved to the linked local Excel file. Replace the hosted workbook and deploy to publish.');
 }));
 window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
-export async function start({ signal }) {
+export async function start({ signal, readerReady }) {
+  startupSignal = signal;
   await run(async () => {
     if (location.protocol === 'file:') throw new Error('Serve the website over HTTP to use the editor. See README.md.');
-    accept(await loadPublishedWorkbook({ signal }), 'data/website.xlsx');
+    // Even when the workbook fails early, import must wait for a usable reader.
+    const [content, reader] = await Promise.allSettled([
+      loadPublishedWorkbook({ signal, readerReady }), readerReady
+    ]);
+    signal.throwIfAborted();
+    if (reader.status === 'rejected') throw reader.reason;
+    if (content.status === 'rejected') throw content.reason;
+    accept(content.value, 'data/website.xlsx');
     message('Published workbook loaded. Select a worksheet to begin editing.');
   });
   // If only the published workbook fails, keep import available for recovery.

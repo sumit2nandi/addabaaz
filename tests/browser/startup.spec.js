@@ -73,6 +73,8 @@ test('stalled script dependency times out rather than leaving the startup label'
   await page.route('**/assets/js/copy-keys.js*', () => { requested = true; });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect.poll(() => requested).toBe(true);
+  // Module preloads can start before the async bootstrap installs its deadline.
+  await expect(page.locator('script[src*="exceljs.min.js"]')).toHaveCount(1);
   await page.clock.runFor(26000);
   await expect(page.locator('#siteStatus')).toContainText('Loading took too long');
   await expect(page.locator('#loadRecovery')).toBeVisible();
@@ -106,4 +108,69 @@ test('browser entrypoints and transitive imports request versioned assets', asyn
   const assets = requests.filter(url => /\/assets\/.*\.(js|css)(\?|$)|\/components\/.*\.html/.test(url));
   expect(assets.length).toBeGreaterThan(15);
   for (const url of assets) expect(new URL(url).searchParams.get('v'), url).toMatch(/^[a-f0-9]{12}$/);
+});
+
+for (const path of ['/', '/admin.html']) {
+  test(`${path} downloads content before Excel is ready but never parses it early`, async ({ page }) => {
+    const finished = [], errors = [];
+    let libraryRequests = 0, release;
+    const hold = new Promise(resolve => { release = resolve; });
+    page.on('requestfinished', request => finished.push(request.url()));
+    page.on('pageerror', error => errors.push(error.message));
+    await page.addInitScript(() => {
+      const original = window.fetch;
+      window.fetch = function(url, options) {
+        if (String(url).includes('website.xlsx')) window.workbookCacheMode = options?.cache;
+        return original.call(this, url, options);
+      };
+    });
+    await page.route('**/assets/vendor/exceljs.min.js*', async route => {
+      libraryRequests++;
+      await hold;
+      await route.continue();
+    });
+    await page.goto(path, { waitUntil: 'domcontentloaded' });
+    await expect.poll(() => finished.some(url => url.endsWith('/data/website.xlsx'))).toBe(true);
+    expect(await page.evaluate(() => window.workbookCacheMode)).toBe('no-store');
+    expect(await page.evaluate(() => typeof window.ExcelJS)).toBe('undefined');
+    if (path === '/') {
+      await expect.poll(() => finished.some(url => url.includes('/components/navigation.html'))).toBe(true);
+      await expect.poll(() => finished.some(url => url.includes('/assets/js/site/app.js'))).toBe(true);
+      await expect(page.locator('#siteRoot')).toBeEmpty();
+      await expect(page.locator('#siteSplash')).toBeVisible();
+      // Early scripts must tolerate keyboard input before templates are inserted.
+      await page.keyboard.press('Escape');
+    } else {
+      await expect(page.locator('#importButton')).toBeDisabled();
+    }
+    release();
+    if (path === '/') await expect(page.locator('#siteSplash')).toHaveCount(0);
+    else await expect(page.locator('#workspace')).toBeVisible();
+    expect(libraryRequests).toBe(1); // Preload and script must share one download.
+    expect(errors).toEqual([]);
+  });
+}
+
+test('built-in branding never fetches the megabyte original logo', async ({ page }) => {
+  const requests = []; page.on('request', request => requests.push(request.url()));
+  await page.goto('/');
+  await expect(page.locator('#siteSplash')).toHaveCount(0);
+  await expect(page.locator('img.logo')).toHaveAttribute('src', 'images/addabaaz-logo-small.webp');
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', 'images/addabaaz-icon.png');
+  expect(requests.some(url => url.includes('/images/addabaaz-logo.png'))).toBe(false);
+});
+
+test('admin workbook recovery cannot enable import before the reader is available', async ({ page }) => {
+  let release;
+  const hold = new Promise(resolve => { release = resolve; });
+  await page.route('**/assets/vendor/exceljs.min.js*', async route => { await hold; await route.continue(); });
+  await page.route('**/data/website.xlsx', route => route.fulfill({ status: 404, body: 'missing workbook' }));
+  const response = page.waitForResponse('**/data/website.xlsx');
+  await page.goto('/admin.html', { waitUntil: 'domcontentloaded' });
+  await response;
+  await expect(page.locator('#importButton')).toBeDisabled();
+  release();
+  await expect(page.locator('#status')).toContainText('HTTP 404');
+  await expect(page.locator('#importButton')).toBeEnabled();
+  await expect(page.locator('#loadRecovery')).toBeVisible();
 });

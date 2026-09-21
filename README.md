@@ -91,7 +91,10 @@ The page reads the Excel workbook and loads section templates before displaying 
 
 Reduced-motion users get a static logo and an immediate reveal. A failed logo image falls back to an ADDABAAZ wordmark, and startup errors replace the pulse with readable error/reload instructions rather than animating them away. The startup path:
 
-- Downloads the Excel reader and application modules concurrently, and waits for the reader before opening the workbook.
+- Preloads the Excel reader and application modules. Workbook bytes, page templates and interaction scripts download concurrently with the reader; only XLSX parsing waits for it.
+- Versions ExcelJS by its own content hash, so ordinary site updates do not invalidate the unchanged library in browser caches. The workbook is still fetched fresh (`no-store`).
+- Uses a ~19 KB WebP logo for the splash/header instead of the ~1 MB original, plus a small PNG favicon.
+- Lazy-loads promo thumbnails near the viewport rather than fetching all 158 upfront; hover previews still show the matching artwork.
 - Downloads interaction scripts in parallel while executing them in their original dependency order.
 - Loads optional Google Fonts and Font Awesome styles without blocking page startup.
 - Catches failed module imports, missing scripts/templates and Excel-reader failures, including failures before application initialization.
@@ -136,6 +139,18 @@ data/website.xlsx                Single source of website content
 Content changes need **only the workbook**. Layout changes belong in components/CSS; behavior changes belong in the relevant JavaScript file. Template `data-copy` / `data-copy-href` / similar attributes map to Copy worksheet keys. New template bindings must be added both to `copy-keys.js` and to the workbook; tests check that these remain in sync. Dynamic UI controls and validation messages are application code, not catalogue content.
 
 The browser XLSX library is vendored so the workbook does not depend on a runtime CDN. `npm run vendor` restores the checked-in ExcelJS 4.4.0 bundle from the locked dependency. Keep its license with the bundle. Existing Google Fonts, Font Awesome, YouTube and Google Forms integrations still need internet access.
+
+### Optimized branding images
+
+The original `images/addabaaz-logo.png` is preserved. When Copy uses that default path for the navigation logo or icons, the website serves the small UI derivatives. Custom workbook image paths are not changed. The splash and editor use the small copies directly.
+
+If you replace the original artwork, regenerate and deploy both derivatives too (Pillow is only a developer dependency, not needed to view or edit the site):
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install Pillow
+.venv/bin/python scripts/optimize-branding.py
+```
 
 ## Publishing and security
 
