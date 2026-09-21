@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" data-app="ios">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; frame-src https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="theme-color" content="#050505">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>ADDABAAZ</title>
+  <link rel="icon" href="assets/logo.webp">
+  <link rel="stylesheet" href="assets/site.css">
+  <link rel="stylesheet" href="assets/splash.css">
+  <link rel="stylesheet" href="assets/mobile.css">
+  <link rel="preload" as="image" href="assets/logo.webp">
+</head>
+<body class="site-loading">
+  <div id="siteSplash" class="site-splash">
+    <div class="splash-content">
+      <div class="splash-brand" aria-hidden="true"><img class="splash-logo" src="assets/logo.webp" width="220" height="220" alt=""></div>
+      <div id="siteStatus" class="site-status" role="status" aria-live="polite">Opening ADDABAAZ…</div>
+      <div id="loadRecovery" hidden><p>Close and reopen the app, or <a href="">try again</a>.</p></div>
+    </div>
+  </div>
+  <div id="connectionStatus" role="status" hidden>You’re offline. Browse saved posters and shows; connect to watch videos.</div>
+  <button id="appBack" type="button" aria-label="Back to home" hidden>← Back</button>
+  <main id="siteRoot" aria-busy="true" inert><!-- APP_COMPONENTS --></main>
+  <noscript>This app needs JavaScript enabled in WKWebView.</noscript>
+  <script src="assets/app.js" defer onerror="document.getElementById('siteSplash').classList.add('has-error');document.getElementById('siteStatus').textContent='The app could not start. Please reopen or reinstall it.';document.getElementById('loadRecovery').hidden=false;"></script>
+</body>
+</html>

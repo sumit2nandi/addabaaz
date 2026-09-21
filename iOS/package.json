@@ -1,0 +1,33 @@
+{
+  "name": "addabaaz-ios",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build-mobile.mjs",
+    "preview": "npm run build && http-server www -a 0.0.0.0 -p 3002 -c-1",
+    "sync": "npm run build && cap sync ios",
+    "open": "npm run sync && cap open ios",
+    "simulator": "npm run sync && node scripts/build-simulator.mjs",
+    "test": "npm run build && playwright test --project=chromium",
+    "test:webkit": "npm run build && playwright test --project=webkit",
+    "icons": "node scripts/ios-icons.mjs"
+  },
+  "dependencies": {
+    "@capacitor/app": "8.1.1",
+    "@capacitor/browser": "8.0.4",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/ios": "8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2",
+    "@playwright/test": "1.56.1",
+    "esbuild": "0.28.2",
+    "exceljs": "4.4.0",
+    "http-server": "14.1.1",
+    "sharp": "0.35.4"
+  }
+}

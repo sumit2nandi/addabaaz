@@ -1,0 +1,21 @@
+{
+  "appId": "in.addabaaz.app",
+  "appName": "ADDABAAZ",
+  "webDir": "www",
+  "server": {
+    "hostname": "app.addabaaz.in",
+    "iosScheme": "capacitor"
+  },
+  "ios": {
+    "path": "native",
+    "backgroundColor": "#050505",
+    "contentInset": "never",
+    "allowsLinkPreview": false,
+    "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "SystemBars": {
+      "style": "DARK"
+    }
+  }
+}
