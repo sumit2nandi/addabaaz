@@ -85,9 +85,11 @@ If admin reports `Upcoming / featured: only one featured poster is allowed`, it 
 - All browser entry points, transitive module imports, component templates and interaction scripts now use a consistent content-based version query. The editor footer displays its build ID for diagnosis. Workbook fetches request uncached data.
 - After changing runtime files, run **`npm run version-assets`** before committing/deploying. It stamps a new deterministic asset revision and is safe to rerun. Its generated URLs are checked in, so GitHub Pages still needs no build system. This prevents stale JavaScript from being reused once the new HTML is loaded; it cannot force an old open tab to refresh itself.
 
-### Why does the page say “Loading ADDABAAZ…”?
+### Opening logo and loading recovery
 
-The page reads the Excel workbook and loads section templates before displaying the site, so a brief loading message is normal. It is unrelated to authentication. The startup path now:
+The page reads the Excel workbook and loads section templates before displaying the site. During this time, a centered ADDABAAZ logo gently pulses over a dimmed, blurred page; the loading sentence is only announced to screen readers, not displayed at the top. After successful initialization, the logo zooms/fades out and the overlay dissolves over 650 ms. There is no artificial minimum waiting time. The page stays non-interactive until the reveal completes.
+
+Reduced-motion users get a static logo and an immediate reveal. A failed logo image falls back to an ADDABAAZ wordmark, and startup errors replace the pulse with readable error/reload instructions rather than animating them away. The startup path:
 
 - Downloads the Excel reader and application modules concurrently, and waits for the reader before opening the workbook.
 - Downloads interaction scripts in parallel while executing them in their original dependency order.
@@ -114,6 +116,7 @@ components/
   footer.html
 assets/css/
   site.css                       Original website styling
+  splash.css                     Centered loading logo, reveal and error states
   admin.css                      Responsive editor styling
 assets/js/
   workbook.js                    Shared schema, validation and XLSX I/O

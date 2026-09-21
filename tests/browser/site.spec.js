@@ -61,7 +61,7 @@ test('admin edits, previews privately, downloads and reimports Excel', async ({ 
   await page.getByRole('button', { name: 'Preview changes' }).click();
   const preview = await popupPromise;
   await expect(preview.locator('#allShowsTrack .card')).toHaveCount(3);
-  await expect(preview.locator('#siteStatus')).toContainText('LOCAL PREVIEW');
+  await expect(preview.locator('#previewBanner')).toContainText('LOCAL PREVIEW');
   const updatedCard = preview.locator('[data-show-key="shahid"]');
   await expect(updatedCard).toContainText('পরিবর্তিত title');
   await updatedCard.focus();
@@ -159,7 +159,8 @@ test('empty catalogues and unavailable promos fail gracefully', async ({ page })
   }, { key: PREVIEW_KEY, data });
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('/index.html?preview=1');
-  await expect(page.locator('#siteStatus')).toContainText('LOCAL PREVIEW');
+  await expect(page.locator('#previewBanner')).toContainText('LOCAL PREVIEW');
+  await expect(page.locator('#siteSplash')).toHaveCount(0);
   await expect(page.locator('#allShowsTrack .card')).toHaveCount(0);
   await expect(page.locator('#comingSoonSection')).toBeHidden();
   await page.locator('#promoRowsContainer .card').press('Enter');
@@ -210,7 +211,8 @@ async function loadFeaturedPreview(page, count = 3) {
     if (window === window.top && location.hostname === '127.0.0.1') localStorage.setItem(key, JSON.stringify(data));
   }, { key: PREVIEW_KEY, data });
   await page.goto('/index.html?preview=1');
-  await expect(page.locator('#siteStatus')).toContainText('LOCAL PREVIEW');
+  await expect(page.locator('#previewBanner')).toContainText('LOCAL PREVIEW');
+  await expect(page.locator('#siteSplash')).toHaveCount(0);
 }
 
 test('featured posters have banner dots, keyboard navigation and shared popups without transport buttons', async ({ page }) => {

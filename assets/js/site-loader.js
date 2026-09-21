@@ -1,10 +1,9 @@
-import { loadPublishedWorkbook, assertValid, PREVIEW_KEY } from './workbook.js?v=0b2d44c4837f';
-import { renderContent, runtimeData } from './site-content.js?v=0b2d44c4837f';
+import { loadPublishedWorkbook, assertValid, PREVIEW_KEY } from './workbook.js?v=f6ed6ee8481c';
+import { renderContent, runtimeData } from './site-content.js?v=f6ed6ee8481c';
 
-const ASSET_VERSION = '0b2d44c4837f';
+const ASSET_VERSION = 'f6ed6ee8481c';
 const components = ['navigation', 'home', 'player', 'upcoming', 'bts', 'about', 'services', 'contact', 'video-preview', 'poster-preview', 'modal', 'footer'];
 const scripts = ['helpers', 'hero', 'video-preview', 'galleries', 'featured-upcoming', 'poster-preview', 'navigation', 'catalog', 'contact', 'app'];
-const status = document.getElementById('siteStatus');
 
 function loadScript(name, signal) {
   return new Promise((resolve, reject) => {
@@ -47,11 +46,16 @@ export async function start({ signal }) {
   signal.throwIfAborted();
   window.initializeSite();
   if (preview) {
+    const status = document.createElement('div');
+    status.id = 'previewBanner';
+    status.inert = true;
+    status.className = 'site-status preview-banner';
+    status.setAttribute('role', 'status');
     status.textContent = 'LOCAL PREVIEW — these changes are not published. Close this tab to return to your editor. ';
-    status.classList.add('preview-banner');
     const back = document.createElement('a');
     back.href = 'index.html';
     back.textContent = 'View published website';
     status.append(back);
-  } else status.remove();
+    document.body.insertBefore(status, document.getElementById('siteRoot'));
+  }
 }

@@ -1,7 +1,7 @@
 /* Small, async entry point. Unlike a static module entry, it can report failed
    module imports and does not wait for optional external stylesheets. */
 (() => {
-  const ASSET_VERSION = '0b2d44c4837f';
+  const ASSET_VERSION = 'f6ed6ee8481c';
   const script = document.currentScript;
   const admin = script.dataset.page === 'admin';
   const status = document.getElementById(admin ? 'status' : 'siteStatus');
@@ -29,6 +29,31 @@
     });
   }
 
+  function dismissSplash() {
+    const splash = document.getElementById('siteSplash');
+    const root = document.getElementById('siteRoot');
+    return new Promise(resolve => {
+      let fallback;
+      const finish = () => {
+        clearTimeout(fallback);
+        splash?.removeEventListener('animationend', onEnd);
+        splash?.remove();
+        document.body.classList.remove('site-loading');
+        root.inert = false;
+        const preview = document.getElementById('previewBanner');
+        if (preview) preview.inert = false;
+        root.setAttribute('aria-busy', 'false');
+        resolve();
+      };
+      const onEnd = event => { if (event.target === splash) finish(); };
+      if (!splash || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { finish(); return; }
+      splash.addEventListener('animationend', onEnd);
+      splash.classList.add('is-leaving');
+      // Recover even if a stylesheet or animation event is blocked/interrupted.
+      fallback = setTimeout(finish, 850);
+    });
+  }
+
   async function initialize() {
     if (location.protocol === 'file:') throw new Error('Serve this folder over HTTP rather than opening the HTML file directly. See README.md.');
     if (admin) document.getElementById('adminBuild').textContent = ASSET_VERSION;
@@ -50,10 +75,17 @@
       reject(error);
     }, 25000);
   });
-  Promise.race([initialize(), deadline]).catch(error => {
+  Promise.race([initialize(), deadline]).then(() => {
+    clearTimeout(timeout);
+    if (!admin) return dismissSplash();
+  }).catch(error => {
     controller.abort(error);
     console.error('[ADDABAAZ] Startup failed:', error);
-    if (!admin) document.getElementById('siteRoot').replaceChildren();
+    if (!admin) {
+      document.getElementById('siteRoot').replaceChildren();
+      document.getElementById('siteRoot').setAttribute('aria-busy', 'false');
+      document.getElementById('siteSplash')?.classList.add('has-error');
+    }
     else {
       document.getElementById('saveState').textContent = 'Editor could not start';
       document.querySelectorAll('#editorShell button').forEach(button => { button.disabled = true; });
