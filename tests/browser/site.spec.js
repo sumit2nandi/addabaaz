@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
+import { mockGoogle } from './google-mock.js';
 import ExcelJS from 'exceljs';
 import { readWorkbook, writeWorkbook, PREVIEW_KEY } from '../../assets/js/workbook.js';
 globalThis.ExcelJS = ExcelJS;
@@ -11,6 +12,7 @@ test.beforeEach(async ({ context }) => {
     if (new URL(route.request().url()).hostname === '127.0.0.1') route.continue();
     else route.abort();
   });
+  await mockGoogle(context);
 });
 
 test('loads original site, all tabs, modals, galleries and playback', async ({ page }) => {
@@ -213,14 +215,15 @@ async function loadFeaturedPreview(page, count = 3) {
   await expect(page.locator('#siteStatus')).toContainText('LOCAL PREVIEW');
 }
 
-test('featured posters support manual slides, keyboard and shared full-size popups', async ({ page }) => {
+test('featured posters have banner dots, keyboard navigation and shared popups without transport buttons', async ({ page }) => {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await loadFeaturedPreview(page);
   const featured = page.locator('#featuredUpcomingContainer');
-  const active = featured.locator('.featured-upcoming-card:visible');
+  const active = featured.locator('.featured-upcoming-card.active');
   await expect(featured.locator('.featured-upcoming-card')).toHaveCount(3);
   await expect(active).toHaveCount(1);
-  await featured.getByRole('button', { name: 'Next featured release', exact: true }).click();
+  await expect(featured.getByRole('button', { name: /^(Previous|Next|Pause|Play) featured/ })).toHaveCount(0);
+  await featured.getByRole('button', { name: 'Show featured release 2:' }).click();
   await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-1');
   await expect(active.locator('img')).toHaveAttribute('src', /POSTER%20\(1\)\.png$/);
   await expect(active.locator('.featured-upcoming-badge')).toHaveText('Second featured <poster> & release');
@@ -229,9 +232,7 @@ test('featured posters support manual slides, keyboard and shared full-size popu
   await expect(page.locator('#modalContent img')).toHaveAttribute('src', /POSTER%20\(1\)\.png$/);
   await expect(page.locator('#modalContent .poster-modal-caption')).toHaveText('Second featured <poster> & release');
   await page.keyboard.press('Escape');
-  await expect(page.locator('#modalBackdrop')).not.toHaveClass(/show/);
   await featured.getByRole('button', { name: 'Show featured release 3:' }).click();
-  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-2');
   await active.focus();
   await page.keyboard.press('ArrowRight');
   await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-0');
@@ -239,69 +240,105 @@ test('featured posters support manual slides, keyboard and shared full-size popu
   await page.keyboard.press('Space');
   await expect(page.locator('#modalContent img')).toHaveAttribute('src', /Durga.png$/);
   await page.keyboard.press('Escape');
-  await featured.getByRole('button', { name: 'Previous featured release', exact: true }).click();
+  await active.focus();
+  await page.keyboard.press('ArrowLeft');
   await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-2');
+  await expect(featured.locator('.featured-upcoming-card:not(.active)').first()).toHaveAttribute('inert', '');
+  await expect(featured.locator('.featured-upcoming-card:not(.active)').first()).toHaveAttribute('aria-hidden', 'true');
   expect(errors).toEqual([]);
 });
 
-test('featured autoplay wraps, pauses on interaction and modal, and cleans up on rerender', async ({ page }) => {
+test('featured autoplay loops continuously after the last dot and while hovered', async ({ page }) => {
   await page.clock.install();
   await loadFeaturedPreview(page);
   const featured = page.locator('#featuredUpcomingContainer');
-  const counter = featured.locator('.featured-upcoming-counter');
+  const active = featured.locator('.featured-upcoming-card.active');
   await page.mouse.move(0, 0);
   await page.evaluate(() => renderFeaturedUpcoming());
+  for (const next of [1, 2, 0, 1, 2, 0]) {
+    await page.clock.runFor(5100);
+    await expect(active).toHaveAttribute('id', `featured-upcoming-slide-${next}`);
+  }
+  // Selecting the final dot with a pointer must not leave autoplay paused by focus.
+  await featured.getByRole('button', { name: 'Show featured release 3:' }).click();
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-2');
   await page.clock.runFor(5100);
-  await expect(counter).toHaveText('2 / 3');
-  await page.clock.runFor(5000);
-  await expect(counter).toHaveText('3 / 3');
-  await page.clock.runFor(5000);
-  await expect(counter).toHaveText('1 / 3');
-
-  await featured.locator('.featured-upcoming-carousel').dispatchEvent('mouseenter');
-  await page.clock.runFor(11000);
-  await expect(counter).toHaveText('1 / 3');
-  await featured.locator('.featured-upcoming-carousel').dispatchEvent('mouseleave');
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-0');
+  await featured.hover();
   await page.clock.runFor(5100);
-  await expect(counter).toHaveText('2 / 3');
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-1');
 
   await page.evaluate(() => openPosterModal('UpcomingReleases/Durga.png', 'Popup'));
   await page.clock.runFor(11000);
-  await expect(counter).toHaveText('2 / 3');
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-1');
   await page.evaluate(() => closeModal());
   await page.clock.runFor(5100);
-  await expect(counter).toHaveText('3 / 3');
-
-  await featured.getByRole('button', { name: 'Pause featured slideshow' }).focus();
-  await page.clock.runFor(11000);
-  await expect(counter).toHaveText('3 / 3');
-  await page.keyboard.press('Enter');
-  await page.evaluate(() => document.activeElement.blur());
-  await page.mouse.move(0, 0);
-  await page.clock.runFor(11000);
-  await expect(counter).toHaveText('3 / 3');
-  await expect(featured.getByRole('button', { name: 'Play featured slideshow' })).toBeVisible();
-
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-2');
   await page.evaluate(() => { renderFeaturedUpcoming(); renderFeaturedUpcoming(); });
   await page.clock.runFor(5100);
-  await expect(counter).toHaveText('2 / 3');
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-1');
   await page.evaluate(() => openTab('aboutTab', null));
   await page.clock.runFor(11000);
-  await expect(counter).toHaveText('2 / 3');
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-1');
   await page.evaluate(() => openTab('homeTab', null));
   await page.clock.runFor(6000);
-  await expect(counter).toHaveText('3 / 3');
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-2');
 });
 
-test('zero and single featured items do not show slideshow controls', async ({ page }) => {
+async function dragFeatured(page, direction = -1) {
+  const stage = page.locator('.featured-upcoming-slides');
+  await stage.scrollIntoViewIfNeeded();
+  const box = await stage.boundingBox();
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  await page.mouse.move(x - direction * 80, y);
+  await page.mouse.down();
+  await page.mouse.move(x + direction * 80, y, { steps: 8 });
+  await page.mouse.up();
+}
+
+test('mouse dragging wraps in both directions without opening a popup, then autoplay resumes', async ({ page }) => {
+  await page.clock.install();
+  await loadFeaturedPreview(page);
+  const active = page.locator('.featured-upcoming-card.active');
+  await dragFeatured(page, 1); // first -> last
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-2');
+  await expect(page.locator('#modalBackdrop')).not.toHaveClass(/show/);
+  await dragFeatured(page, -1); // last -> first
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-0');
+  await expect(page.locator('#modalBackdrop')).not.toHaveClass(/show/);
+  await page.clock.runFor(5100);
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-1');
+  await active.click();
+  await expect(page.locator('#modalContent img')).toHaveAttribute('src', /POSTER%20\(1\)\.png$/);
+});
+
+test('featured posters crossfade with the same timing as the banner, not display swaps', async ({ page }) => {
+  await loadFeaturedPreview(page);
+  const next = page.locator('#featured-upcoming-slide-1');
+  const previous = page.locator('#featured-upcoming-slide-0');
+  await expect(next).toHaveCSS('opacity', '0');
+  await expect(next).toHaveCSS('transition-duration', '0.9s');
+  await page.getByRole('button', { name: 'Show featured release 2:' }).click();
+  await expect(next).toHaveClass(/active/);
+  await page.waitForFunction(() => {
+    const current = Number(getComputedStyle(document.getElementById('featured-upcoming-slide-1')).opacity);
+    const old = Number(getComputedStyle(document.getElementById('featured-upcoming-slide-0')).opacity);
+    return current > 0 && current < 1 && old > 0 && old < 1;
+  });
+  await expect(previous).toHaveCSS('display', 'block');
+  await expect(next).toHaveCSS('opacity', '1');
+  await expect(previous).toHaveCSS('opacity', '0');
+});
+
+test('zero and single featured items do not show slideshow dots', async ({ page }) => {
   await loadFeaturedPreview(page, 0);
   await expect(page.locator('.featured-upcoming-wrap')).toBeHidden();
-  await expect(page.locator('.featured-upcoming-controls')).toHaveCount(0);
+  await expect(page.locator('.featured-upcoming-dots')).toHaveCount(0);
   await expect(page.locator('#comingSoonTrack .upcoming-card')).toHaveCount(10);
   await page.evaluate(() => { upcomingReleases[0].featured = 'yes'; renderFeaturedUpcoming(); });
   await expect(page.locator('.featured-upcoming-wrap')).toBeVisible();
-  await expect(page.locator('.featured-upcoming-controls')).toHaveCount(0);
-  const image = page.locator('.featured-upcoming-card');
+  await expect(page.locator('.featured-upcoming-dots')).toHaveCount(0);
+  const image = page.locator('.featured-upcoming-card.active');
   await image.focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('#modalContent img')).toHaveAttribute('src', /Durga.png$/);
@@ -312,14 +349,42 @@ test('featured mobile layout and reduced-motion preference are respected', async
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.clock.install();
   await loadFeaturedPreview(page);
+  const active = page.locator('.featured-upcoming-card.active');
   await page.clock.runFor(11000);
-  await expect(page.locator('.featured-upcoming-counter')).toHaveText('1 / 3');
-  await expect(page.getByRole('button', { name: 'Play featured slideshow' })).toBeVisible();
-  await page.getByRole('button', { name: 'Next featured release', exact: true }).click();
-  await expect(page.locator('.featured-upcoming-counter')).toHaveText('2 / 3');
-  const image = page.locator('.featured-upcoming-card:visible img');
-  await expect(image).toHaveCSS('object-fit', 'contain');
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-0');
+  await page.getByRole('button', { name: 'Show featured release 2:' }).click();
+  await expect(active).toHaveAttribute('id', 'featured-upcoming-slide-1');
+  await expect(active).toHaveCSS('transition-duration', '0s');
+  await expect(active.locator('img')).toHaveCSS('object-fit', 'contain');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test.describe('touch featured carousel', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+  test('touch swipes wrap without a popup; taps still open the current poster', async ({ page }) => {
+    await loadFeaturedPreview(page);
+    const stage = page.locator('.featured-upcoming-slides');
+    const active = page.locator('.featured-upcoming-card.active');
+    await stage.scrollIntoViewIfNeeded();
+    await active.tap();
+    await expect(page.locator('#modalBackdrop')).toHaveClass(/show/);
+    await page.evaluate(() => closeModal());
+    await expect(page.locator('#modalBackdrop')).toBeHidden();
+    await expect(stage).toHaveCSS('touch-action', 'pan-y pinch-zoom');
+    const box = await stage.boundingBox();
+    const x = box.x + box.width / 2, y = box.y + box.height / 2;
+    const cdp = await page.context().newCDPSession(page);
+    for (const [direction, result] of [[1, 2], [-1, 0]]) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x - direction * 70, y }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + direction * 70, y }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await expect(active).toHaveAttribute('id', `featured-upcoming-slide-${result}`);
+      await expect(page.locator('#modalBackdrop')).not.toHaveClass(/show/);
+    }
+    await expect(active).toHaveCSS('opacity', '1');
+    await active.tap();
+    await expect(page.locator('#modalContent img')).toHaveAttribute('src', /Durga.png$/);
+  });
 });
 
 test('admin can export and import several featured upcoming items', async ({ page }) => {

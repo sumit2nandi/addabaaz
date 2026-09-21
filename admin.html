@@ -9,15 +9,27 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tiro+Bangla&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/admin.css">
+  <link rel="stylesheet" href="assets/css/admin.css?v=9345c48ce964">
 </head>
 <body>
   <header class="admin-header">
     <a href="index.html" class="admin-brand"><img src="images/addabaaz-logo.png" alt=""><span>ADDA<span class="accent">BAAZ</span><small>CONTENT STUDIO</small></span></a>
-    <div class="header-state"><span id="dirtyIndicator" class="state-dot"></span><span id="saveState">Loading workbook…</span></div>
+    <div class="header-state" id="headerState" hidden><span id="dirtyIndicator" class="state-dot"></span><span id="saveState">Loading workbook…</span></div>
+    <div id="accountControls" class="account-controls" hidden><span id="signedInEmail"></span><button id="signOutButton" type="button">Sign out</button></div>
     <a href="index.html" target="_blank" rel="noopener" class="text-link">View website ↗</a>
   </header>
-  <main>
+  <section id="loginPanel" class="login-panel" aria-labelledby="loginTitle">
+    <p class="eyebrow">ADDABAAZ CONTENT STUDIO</p>
+    <h1 id="loginTitle">Admin sign-in</h1>
+    <p class="muted">Use your approved Google account to edit website content.</p>
+    <div id="googleSignIn" class="google-sign-in"></div>
+    <button id="googleLoading" type="button" disabled>Sign in with Google</button>
+    <p id="authStatus" class="status" role="status" aria-live="polite">Loading Google sign-in configuration…</p>
+    <p class="auth-notice">This sign-in gates the editor interface only. GitHub Pages files remain public, and publishing still requires repository or hosting access.</p>
+    <p class="muted">First-time setup: configure your Google Web client ID and allowed emails in <code>config/admin-auth.json</code>. See <a href="README.md#google-sign-in-setup">setup instructions</a>. If Google blocks a popup in an embedded preview, open this page in its own browser tab.</p>
+    <noscript>JavaScript is required for Google sign-in and the editor.</noscript>
+  </section>
+  <main id="editorShell" hidden inert>
     <section class="intro">
       <div><p class="eyebrow">YOUR STORIES. ONE WORKBOOK.</p><h1>Website content</h1><p class="muted">Update your catalogue and studio details without editing code.</p></div>
       <div class="file-actions">
@@ -52,10 +64,10 @@
       <div class="file-actions"><button id="linkButton" type="button">Link local workbook</button><button id="saveFileButton" type="button" disabled>Save to linked file</button></div>
       <p id="fileSupport" class="muted"></p>
     </section>
-    <details class="help"><summary>How to edit and publish</summary><ol><li>Select a worksheet and row. Changes are held in this page until you save or download. Required fields are marked with an asterisk.</li><li>Use a show's <code>key</code> in each episode's <code>project</code> field. Keep IDs unique and use letters, numbers, underscores or hyphens.</li><li>Use plain text in Excel, including durations and dates. Keep sheet names and column headers unchanged. Do not use formulas. The workbook includes a Read Me sheet.</li><li>Upload new images separately to the website's image folders, then enter their paths or filenames. An Excel file does not upload images.</li><li>Preview and check your changes. Download as <code>website.xlsx</code>, replace <code>data/website.xlsx</code>, and deploy the website. Keep the previous version as a backup.</li><li>This is a static editor, not an authenticated admin service. Anyone can download the public workbook, but this page gives them no permission to modify your hosted files. Never put secrets or private information in the workbook.</li></ol></details>
+    <details class="help"><summary>How to edit and publish</summary><ol><li>Select a worksheet and row. Changes are held in this page until you save or download. Required fields are marked with an asterisk.</li><li>Use a show's <code>key</code> in each episode's <code>project</code> field. Keep IDs unique and use letters, numbers, underscores or hyphens.</li><li>Use plain text in Excel, including durations and dates. Keep sheet names and column headers unchanged. Do not use formulas. The workbook includes a Read Me sheet.</li><li>Upload new images separately to the website's image folders, then enter their paths or filenames. An Excel file does not upload images.</li><li>Preview and check your changes. Download as <code>website.xlsx</code>, replace <code>data/website.xlsx</code>, and deploy the website. Keep the previous version as a backup.</li><li>Google sign-in gates this static editor’s interface, not its public files or hosted storage. Anyone can download the public workbook, but this page gives them no permission to modify your hosted files. Never put secrets or private information in the workbook.</li></ol></details>
   </main>
-  <footer>ADDABAAZ · Content Studio <span>Excel-powered. Static-host friendly.</span></footer>
-  <script src="assets/vendor/exceljs.min.js" defer></script>
-  <script type="module" src="assets/js/admin.js"></script>
+  <footer>ADDABAAZ · Content Studio <span>Excel-powered. Static-host friendly. · Build <span id="adminBuild"></span></span></footer>
+  <script src="assets/vendor/exceljs.min.js?v=9345c48ce964" defer></script>
+  <script type="module" src="assets/js/admin-auth.js?v=9345c48ce964"></script>
 </body>
 </html>

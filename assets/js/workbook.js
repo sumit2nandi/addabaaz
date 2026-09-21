@@ -1,4 +1,4 @@
-import { COPY_KEYS } from './copy-keys.js';
+import { COPY_KEYS } from './copy-keys.js?v=9345c48ce964';
 
 export const WORKBOOK_URL = 'data/website.xlsx';
 export const PREVIEW_KEY = 'addabaaz.content-preview.v1';

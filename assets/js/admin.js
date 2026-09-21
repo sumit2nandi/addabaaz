@@ -1,4 +1,4 @@
-import { SCHEMA, PREVIEW_KEY, MAX_FILE_SIZE, loadPublishedWorkbook, readWorkbook, writeWorkbook, assertValid } from './workbook.js';
+import { SCHEMA, PREVIEW_KEY, MAX_FILE_SIZE, loadPublishedWorkbook, readWorkbook, writeWorkbook, assertValid } from './workbook.js?v=9345c48ce964';
 
 const $ = id => document.getElementById(id);
 let tables, currentSheet = 'Shows', selected = 0, dirty = false, fileHandle = null, fileModified = null, busy = false;

@@ -1,6 +1,7 @@
-import { loadPublishedWorkbook, assertValid, PREVIEW_KEY } from './workbook.js';
-import { renderContent, runtimeData } from './site-content.js';
+import { loadPublishedWorkbook, assertValid, PREVIEW_KEY } from './workbook.js?v=9345c48ce964';
+import { renderContent, runtimeData } from './site-content.js?v=9345c48ce964';
 
+const ASSET_VERSION = '9345c48ce964';
 const components = ['navigation', 'home', 'player', 'upcoming', 'bts', 'about', 'services', 'contact', 'video-preview', 'poster-preview', 'modal', 'footer'];
 const scripts = ['helpers', 'hero', 'video-preview', 'galleries', 'featured-upcoming', 'poster-preview', 'navigation', 'catalog', 'contact', 'app'];
 const status = document.getElementById('siteStatus');
@@ -8,7 +9,7 @@ const status = document.getElementById('siteStatus');
 function loadScript(name) {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = `assets/js/site/${name}.js`;
+    script.src = `assets/js/site/${name}.js?v=${ASSET_VERSION}`;
     script.onload = resolve;
     script.onerror = () => reject(new Error(`Unable to load the ${name} component.`));
     document.body.append(script);
@@ -26,7 +27,7 @@ async function start() {
   const [tables, templates] = await Promise.all([
     contentPromise,
     Promise.all(components.map(async name => {
-      const response = await fetch(`components/${name}.html`);
+      const response = await fetch(`components/${name}.html?v=${ASSET_VERSION}`);
       if (!response.ok) throw new Error(`Unable to load the ${name} template (HTTP ${response.status}).`);
       return response.text();
     }))
