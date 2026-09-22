@@ -8,8 +8,8 @@
   },
   "scripts": {
     "build": "node scripts/build-mobile.mjs",
-    "preview": "npm run build && http-server www -a 0.0.0.0 -p 3001 -c-1",
-    "sync": "npm run build && cap sync android",
+    "preview": "npm run build && node scripts/preview.mjs",
+    "sync": "node scripts/build-mobile.mjs --native && cap sync android",
     "open": "npm run sync && cap open android",
     "debug": "npm run sync && cd native && ./gradlew assembleDebug",
     "test": "npm run build && playwright test",
@@ -24,8 +24,11 @@
     "@capacitor/cli": "8.5.2",
     "@playwright/test": "1.56.1",
     "esbuild": "0.28.2",
-    "http-server": "14.1.1",
-    "sharp": "0.35.4",
-    "exceljs": "4.4.0"
+    "express": "5.1.0",
+    "http-proxy-middleware": "3.0.7",
+    "sharp": "0.35.4"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
   }
 }

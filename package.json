@@ -3,18 +3,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "http-server . -a 0.0.0.0 -p 3000 -c-1",
-    "vendor": "node scripts/vendor.mjs",
-    "test": "node --test tests/*.test.mjs",
+    "start": "npm --prefix backend start",
+    "dev": "npm --prefix frontend start",
+    "setup": "npm --prefix backend ci && npm --prefix frontend ci",
+    "test": "node scripts/check-syntax.mjs && node --test tests/*.test.mjs && npm --prefix backend test",
     "test:browser": "playwright test",
     "validate": "node scripts/validate-content.mjs",
     "version-assets": "node scripts/version-assets.mjs"
   },
-  "dependencies": {
-    "exceljs": "4.4.0"
-  },
   "devDependencies": {
     "@playwright/test": "1.56.1",
-    "http-server": "14.1.1"
+    "exceljs": "4.4.0"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
   }
 }

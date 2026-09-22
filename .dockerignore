@@ -1,0 +1,17 @@
+.git
+**/node_modules
+**/.env
+.env
+**/test-results
+**/playwright-report
+**/build
+**/www
+android
+iOS
+tests
+backups
+
+.env*
+**/.env*
+**/*.pem
+**/*.key

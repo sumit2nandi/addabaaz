@@ -1,23 +1,17 @@
 name: Android debug APK
-
 on:
   workflow_dispatch:
   push:
     paths:
       - 'android/**'
-      - 'assets/js/**'
-      - 'assets/css/**'
-      - 'components/**'
-      - 'data/website.xlsx'
-      - 'images/**'
-      - 'UpcomingReleases/**'
-      - 'BTS/**'
+      - 'frontend/**'
+      - 'shared/**'
+      - 'backend/**'
+      - 'tests/support/**'
       - 'package*.json'
       - '.github/workflows/android-build.yml'
-
 permissions:
   contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -30,28 +24,37 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
+            backend/package-lock.json
             android/package-lock.json
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-      - uses: android-actions/setup-android@v3
-      - name: Install Android SDK
-        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
-      - run: npm ci
-      - run: npm --prefix android ci
-      - run: npm run validate
-      - run: npm test
-      - name: Test the home-only app
+      - run: npm ci && npm --prefix backend ci && npm --prefix android ci
+      - run: npm run validate && npm test
+      - name: Test the home-only API client
         working-directory: android
         run: |
           npx playwright install --with-deps chromium
           npm test
+      - name: Native configuration notice
+        if: ${{ vars.API_BASE_URL == '' }}
+        run: echo '::notice::Set repository variable API_BASE_URL to the deployed HTTPS backend to enable native builds. Interface tests still run.'
+      - uses: actions/setup-java@v4
+        if: ${{ vars.API_BASE_URL != '' }}
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        if: ${{ vars.API_BASE_URL != '' }}
+      - name: Install Android SDK
+        if: ${{ vars.API_BASE_URL != '' }}
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - name: Build debug APK
+        if: ${{ vars.API_BASE_URL != '' }}
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
         run: |
           chmod +x android/native/gradlew
           npm --prefix android run debug
       - uses: actions/upload-artifact@v4
+        if: ${{ vars.API_BASE_URL != '' }}
         with:
           name: addabaaz-android-debug
           path: android/native/app/build/outputs/apk/debug/app-debug.apk

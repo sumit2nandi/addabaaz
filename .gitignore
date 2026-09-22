@@ -3,3 +3,10 @@ node_modules/
 test-results/
 playwright-report/
 .DS_Store
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+backups/
+backend/media/.cache/

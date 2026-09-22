@@ -1,177 +1,78 @@
-# ADDABAAZ
+# ADDABAAZ — website, Android, iOS and MySQL API
 
-A static film-production website with **Excel-powered content** and a browser-based content editor without a login requirement. No backend, database, build step or subscription is required to host it.
+The **Node.js/Express backend is now the live content source for all three clients**. MySQL stores the complete catalogue, page copy, settings and contact inquiries. Media files are hosted by the backend, with their paths stored in MySQL (not database BLOBs).
 
-## Quick start
+```text
+backend/    Node API, MySQL schema, import tools, private seed and public media
+frontend/   Website HTML, CSS, templates and JavaScript
+android/    Home-only Capacitor Android app and native project
+iOS/        Home-only Capacitor iPhone/iPad app and native project
+shared/     Schema, runtime mapping, API client and mobile build helpers
+```
 
-Serve the repository over HTTP; do not double-click the HTML files (`file://` blocks template/workbook loading).
+The existing content is preserved in `backend/seed/website.xlsx`: Shows, Episodes, Promos, Upcoming, BTS, Team, Services, Missions, Copy and Settings. The import preserves IDs, ordering, Bengali text and display strings. **Excel is an import format, not the runtime database.** The old public editor and Google login are not used. Content writes require a server-only admin token.
+
+## Run with Docker (recommended)
+
+Requires Docker Engine with Compose. From the repository root:
+
+```sh
+cp .env.example .env
+# Edit .env: independently generate MYSQL_PASSWORD, MYSQL_ROOT_PASSWORD and
+# ADMIN_TOKEN using `openssl rand -hex 32`. Do not commit .env.
+docker compose up --build -d
+# First run only, after the schema is ready:
+docker compose exec backend npm run import
+```
+
+Open `http://localhost:3000`. The same server provides the website, `/api` and `/media`. An empty database intentionally shows an initialization error until imported. Schema migration runs on container startup; **content is never automatically reimported on restart**.
+
+MySQL is not published to a host port. Named volumes preserve the database and uploaded media. Do not run `docker compose down -v` unless intentionally deleting both. Back up both volumes before upgrading or replacing content.
+
+## Run without Docker
+
+Requires Node **22+** and a MySQL **8.4** database/user with schema creation and data permissions:
 
 ```sh
 npm ci
+npm run setup
+cp backend/.env.example backend/.env
+# Set DB_* and a random ADMIN_TOKEN in backend/.env.
+npm --prefix backend run migrate
+npm --prefix backend run import
 npm start
 ```
 
-Open `http://localhost:3000/` for the website or `http://localhost:3000/admin.html` for the editor. The development server binds to `0.0.0.0` for remote previews. Alternatively, with Python installed:
+The website is at port 3000. For a separate frontend dev server, run `npm run dev` in another terminal (port 5173). Its `/api` and `/media` proxy to the backend. `BACKEND_URL` configures the **Node proxy only**, not the user's browser.
+
+## Client API configuration
+
+- **Website on the backend:** no URL changes. `frontend/assets/js/api-config.js` defaults to same-origin requests.
+- **Separately hosted website:** set `window.ADDABAAZ_API_BASE_URL` in that public configuration file to the deployed HTTPS API origin, and allow the website's origin in backend `CORS_ORIGINS`. Serve frontend directories at `/`, plus the allowlisted shared modules at `/shared/` (see `frontend/README.md`).
+- **Android/iOS:** set `API_BASE_URL=https://your-api-host.example` when running native `sync`, `debug`, `simulator` or `open` commands. These commands refuse an absent/non-HTTPS URL. Set the GitHub Actions repository variable `API_BASE_URL` to enable native CI builds. Never put `ADMIN_TOKEN` or database credentials in client config.
+- Allow native origins `https://app.addabaaz.in` and `capacitor://app.addabaaz.in` in backend CORS. These are virtual WebView origins, not the API hostname.
+
+Clients fetch the current revision on launch/reload; mobile has **Refresh content**. Content edits do not require rebuilding an installed app. Interface or API-origin changes still require rebuilding. No catalogue/workbook is packaged as a silent offline fallback: connection failures show a retry screen. Android/iOS retain Home-only navigation, the branded splash, swipeable looping posters and YouTube fallback.
+
+See [backend deployment/API instructions](backend/README.md), [website](frontend/README.md), [Android](android/README.md) and [iOS](iOS/README.md).
+
+## Verify
 
 ```sh
-python3 -m http.server 3000 --bind 0.0.0.0
-```
-
-Production remains plain static hosting, including GitHub Pages and subdirectory deployments. Publish `index.html`, `admin.html`, `components/`, `assets/`, `data/` and the existing media folders together. Node, Python and `node_modules` are **not** needed on the production server.
-
-## Editing content
-
-### With the admin page
-
-1. Open **`admin.html`** directly—no Google account, username or password is required. It loads the published `data/website.xlsx`.
-2. Select a worksheet, search for a row, and edit its fields. Add, delete or reorder content rows using the buttons. Copy and Settings keys are fixed; only their values are editable.
-3. Choose **Preview changes** to open an unpublished preview in a new tab. Validation runs first. Previews use this browser's local storage and **never change the regular website**.
-4. Choose **Download Excel** to get the updated `website.xlsx`.
-5. Back up the previous workbook, replace **`data/website.xlsx`** in the repository/hosting files, and deploy as usual. Reload the website to see the published content.
-
-**Open Excel** imports an existing `.xlsx` workbook. It does not grant permission to overwrite that file. In supported Chromium browsers over HTTPS (or localhost), **Link local workbook** lets you open an existing file and **Save to linked file** writes directly back to it after permission and confirmation. External file changes are checked before overwriting. In other browsers, or when file access is blocked by an embedded preview, use import/download instead.
-
-Edits stay in memory until downloaded or saved. Leaving with unsaved changes triggers a browser warning. Preview snapshots remain in local storage until replaced or browser site data is cleared; normal visitors do not load them. A downloaded file is not automatically deployed.
-
-### With Excel or LibreOffice
-
-Edit **`data/website.xlsx`** directly, save as `.xlsx`, and deploy the updated file. The workbook has frozen header rows, filters, and a **Read Me** worksheet.
-
-- Preserve sheet names, column headers, and Copy/Settings keys. Columns may be reordered; data rows may be added, removed and reordered.
-- Keep cells formatted as **Text**, especially durations (`00:30`), leading-zero numbers (`01`), YouTube IDs and ISO dates (`2026-09-14T13:30:04Z`). Do not use date/time cells, formulas, rich-text cells or Excel hyperlink objects; paste URLs as plain text.
-- Use plain text, not HTML. Bengali and other Unicode text are preserved.
-- Empty optional cells and empty catalogue worksheets are supported. Required fields and relationships are validated before rendering, importing, saving or previewing.
-- Limits: 10 MB per workbook, 5,000 data rows per sheet, 16,000 characters per cell. Only `.xlsx` is supported, not `.xls`, `.xlsm` or CSV.
-- Exports rebuild the supported content sheets and Read Me. Custom Excel formatting, unrelated worksheets and unsupported objects are not preserved; keep a backup.
-- Images/videos are not embedded in Excel. Upload new images to the site separately. YouTube videos use their 11-character IDs, not full watch URLs.
-
-## Workbook reference
-
-| Worksheet | Content / conventions |
-| --- | --- |
-| **Shows** | `key`, title, subtitle, description, image, genre. Keys must be unique and stable. Episode counts are derived automatically. |
-| **Episodes** | One episode per row. `project` must match a Shows `key`. Row order controls episode order. Includes original IDs, position, YouTube ID, publish date, duration, views, thumbnail, availability, episode number and kind. |
-| **Promos** | Promotional videos and specials, in row order. `kind`: `PROMO` or `SPECIAL`. `availability`: `available` or `unavailable`. |
-| **Upcoming** | Poster filename, optional title, `featured` and `home` (`yes`/`no`). Multiple featured posters form a slideshow in row order. `home=yes` includes a poster in the home rail; all rows appear in the full gallery. |
-| **BTS** | Behind-the-scenes filename and optional title, in display order. |
-| **Team** | Team member ID, name, role, quote and image path. |
-| **Services** | Service ID, display number, title and description. |
-| **Missions** | Mission ID, language (`en` or `bn`) and text. |
-| **Copy** | Template-bound titles, navigation, page copy, contact text, contact/social links, form labels, metadata, branding and footer. Keys identify the component and field. |
-| **Settings** | Schema version, image folders, homepage limits and public inquiry-form endpoints/field IDs. |
-
-Images for Shows and Team are relative to the site root, e.g. `images/Team/Deep.png`, or HTTP(S) URLs. Upcoming and BTS use a **filename only**, resolved against `upcomingFolder` and `btsFolder` in Settings (folders must end in `/`). Spaces, parentheses and Bengali filenames work. Media paths used in CSS cannot contain quote characters.
-
-Home show cards and the top-three hero slides retain the original view-count ranking. Shows without episodes are retained in the workbook but are not displayed in the home show rail. The `position` column is preserved metadata, not a sort override. Video availability does not verify the actual availability on YouTube.
-
-### Common changes
-
-- **Add a show:** add a Shows row with a unique `key`, then add Episodes rows whose `project` matches it. Add/upload the poster separately.
-- **Rename a show key:** update matching episode `project` values too. Prefer changing the title without changing the stable key.
-- **Choose featured posters:** set `featured=yes` on any number of Upcoming rows. One poster is static; multiple posters crossfade smoothly every five seconds in workbook row order, looping from the last poster to the first indefinitely. Swipe on touchscreens, drag left/right with a mouse, use the keyboard arrow keys, or choose a gold slide marker, just like the homepage banner. There are no previous/next or play/pause buttons. Click or keyboard-activate an image to open its full-size popup, just like other upcoming posters. Titles become badge text. Autoplay continues after swipes and pointer clicks (including at the last poster); it pauses during a drag, keyboard focus, hidden browser tabs, other site tabs and open popups. Reduced-motion users get manual navigation without autoplay or fades. The `home` flag still controls the separate home rail.
-- **Change a phone number:** search for the old number in Copy. Update both visible text and the corresponding `tel:` or WhatsApp `href` value.
-- **Change contact-form destinations:** update Settings `appsScriptUrl`, or `googleFormAction` and `formField.*`. These are public integration settings, not secrets. The existing cross-origin form integration cannot confirm delivery because it uses opaque `no-cors` responses; test the configured destination separately.
-
-## Admin access
-
-Google sign-in has been removed. The editor opens directly, without an OAuth client ID, allowlist or login screen. It is a public static tool for editing local workbooks. It cannot publish changes or overwrite hosted files; actual publishing still requires access to your repository or hosting account. Never place confidential information or credentials in the public workbook.
-
-## Deployment and stale-cache troubleshooting
-
-If admin reports `Upcoming / featured: only one featured poster is allowed`, it is running the older validator. The current validator permits multiple featured rows.
-
-- Confirm GitHub Pages is deploying the intended branch and that its latest build has completed successfully. Updating the repository alone does not mean deployment has finished.
-- Deploy the HTML, JavaScript, CSS, components and workbook together, not just the Excel file. After the deployment completes, hard-refresh `admin.html` (`Ctrl+Shift+R` / `Cmd+Shift+R`), or close and reopen the tab. An already-open editor retains its old JavaScript until reloaded.
-- All browser entry points, transitive module imports, component templates and interaction scripts now use a consistent content-based version query. The editor footer displays its build ID for diagnosis. Workbook fetches request uncached data.
-- After changing runtime files, run **`npm run version-assets`** before committing/deploying. It stamps a new deterministic asset revision and is safe to rerun. Its generated URLs are checked in, so GitHub Pages still needs no build system. This prevents stale JavaScript from being reused once the new HTML is loaded; it cannot force an old open tab to refresh itself.
-
-### Opening logo and loading recovery
-
-The page reads the Excel workbook and loads section templates before displaying the site. During this time, a centered ADDABAAZ logo gently pulses over a dimmed, blurred page; the loading sentence is only announced to screen readers, not displayed at the top. After successful initialization, the logo zooms/fades out and the overlay dissolves over 650 ms. There is no artificial minimum waiting time. The page stays non-interactive until the reveal completes.
-
-Reduced-motion users get a static logo and an immediate reveal. A failed logo image falls back to an ADDABAAZ wordmark, and startup errors replace the pulse with readable error/reload instructions rather than animating them away. The startup path:
-
-- Preloads the Excel reader and application modules. Workbook bytes, page templates and interaction scripts download concurrently with the reader; only XLSX parsing waits for it.
-- Versions ExcelJS by its own content hash, so ordinary site updates do not invalidate the unchanged library in browser caches. The workbook is still fetched fresh (`no-store`).
-- Uses a ~19 KB WebP logo for the splash/header instead of the ~1 MB original, plus a small PNG favicon.
-- Lazy-loads promo thumbnails near the viewport rather than fetching all 158 upfront; hover previews still show the matching artwork.
-- Downloads interaction scripts in parallel while executing them in their original dependency order.
-- Loads optional Google Fonts and Font Awesome styles without blocking page startup.
-- Catches failed module imports, missing scripts/templates and Excel-reader failures, including failures before application initialization.
-- Times out workbook requests after 20 seconds and overall startup after 25 seconds. Failed startup displays an actionable message and a reload link instead of leaving the loading label indefinitely.
-
-If an error remains after reloading, check the named deployment file or network request. The workbook still needs to be a valid `.xlsx`, and JavaScript must be enabled. The admin keeps Open Excel available if only the published workbook fails, allowing you to import a corrected file locally.
-
-## Components and maintenance
-
-```text
-index.html                       Small site shell and bootstrap
-admin.html                       Standalone content editor
-components/
-  navigation.html                Header and navigation
-  home.html                      Hero and home rails
-  player.html                    Video player and episodes
-  upcoming.html, bts.html         Full galleries
-  about.html, services.html       Studio information
-  contact.html                   Inquiry form and contact layout
-  video-preview.html             Hover video preview
-  poster-preview.html, modal.html
-  footer.html
-assets/css/
-  site.css                       Original website styling
-  splash.css                     Centered loading logo, reveal and error states
-  admin.css                      Responsive editor styling
-assets/js/
-  workbook.js                    Shared schema, validation and XLSX I/O
-  copy-keys.js                   Stable text/attribute binding names
-  site-loader.js                 Loads Excel and HTML components
-  site-content.js                Safe copy/team/service/mission rendering
-  admin.js                       Editing and file workflows
-  page-bootstrap.js              Async startup, dependency loading, timeout/recovery
-  site/                          Existing interactions, split by responsibility
-    helpers.js, hero.js, navigation.js, catalog.js,
-    galleries.js, featured-upcoming.js, video-preview.js, poster-preview.js,
-    contact.js, app.js
-assets/vendor/                   Pinned ExcelJS browser bundle and license
-data/website.xlsx                Single source of website content
-```
-
-Content changes need **only the workbook**. Layout changes belong in components/CSS; behavior changes belong in the relevant JavaScript file. Template `data-copy` / `data-copy-href` / similar attributes map to Copy worksheet keys. New template bindings must be added both to `copy-keys.js` and to the workbook; tests check that these remain in sync. Dynamic UI controls and validation messages are application code, not catalogue content.
-
-The browser XLSX library is vendored so the workbook does not depend on a runtime CDN. `npm run vendor` restores the checked-in ExcelJS 4.4.0 bundle from the locked dependency. Keep its license with the bundle. Existing Google Fonts, Font Awesome, YouTube and Google Forms integrations still need internet access.
-
-### Optimized branding images
-
-The original `images/addabaaz-logo.png` is preserved. When Copy uses that default path for the navigation logo or icons, the website serves the small UI derivatives. Custom workbook image paths are not changed. The splash and editor use the small copies directly.
-
-If you replace the original artwork, regenerate and deploy both derivatives too (Pillow is only a developer dependency, not needed to view or edit the site):
-
-```sh
-python3 -m venv .venv
-.venv/bin/pip install Pillow
-.venv/bin/python scripts/optimize-branding.py
-```
-
-## Publishing and security
-
-This is a **static local editor without sign-in**, not a server-side CMS or authorization service. The admin page cannot modify a hosted workbook. A visitor may use the editor on their own downloaded/local copy, but publishing still requires access to your repository or hosting account. There is no client-side password pretending to protect hosted data.
-
-- **The workbook is public. Never put credentials, private contacts, submissions or other secrets in it.**
-- Imported content is validated. Text is rendered as text/escaped HTML, not executable markup. Unsafe URLs, invalid identifiers, formulas, duplicate IDs and orphan episodes are rejected.
-- Only use workbooks from trusted editors. File and row limits are not a complete defense against malicious compressed archives.
-- A broken/missing workbook produces a visible error; the website does not silently fall back to outdated hardcoded content.
-- For instant authenticated publishing from the browser, add a server-side storage API with real authentication, authorization, backups and concurrency handling. Do not put a repository token or hosting credential into this static admin page.
-- Deploy the workbook and templates together when changing the schema. Serve `.xlsx` normally and avoid long-lived immutable caching for `data/website.xlsx`; fetches request fresh data.
-
-## Tests
-
-```sh
-npm ci
-npm run version-assets           # Refresh cache-busting revisions after runtime edits
-npm run validate                 # Check an edited workbook before publishing
-npm test                         # Schema, references, media paths, XLSX round trips
+npm test                         # workbook/schema + isolated API tests
+npm run validate                 # validates the preserved migration workbook
 npx playwright install chromium
-npm run test:browser              # Site + admin desktop/mobile browser workflows
+npm run test:browser              # website + API-loading/splash/interactions
+npm --prefix android ci
+npm --prefix android test
+npm --prefix iOS ci
+npm --prefix iOS test             # Chromium interface checks, not native iOS
 ```
 
-Startup tests cover blocked scripts, stalled network requests, unavailable fonts/icons and direct admin access. Browser tests block external resources; they verify local content, interactions and embed URLs, not actual YouTube streaming or Google Form delivery. An existing Chromium executable can be used with `CHROMIUM_PATH=/path/to/chromium npm run test:browser`.
+Browser/API unit tests use a clearly isolated in-memory test repository. Production always uses MySQL. `npm --prefix backend run test:mysql` exercises actual SQL migration, persistence, revisions, ordering and rollback; it **requires a disposable database with a name ending `_test`** and deletes its content. `.github/workflows/backend-test.yml` supplies MySQL 8.4 in CI. No client browser test proves device behavior or unrestricted YouTube streaming.
+
+Dependencies are locked. The `uuid@11.1.1` override keeps the CommonJS `v4` API used by ExcelJS/Xcode tooling while avoiding the vulnerable older versions. Re-run import/round-trip/native synchronization tests when updating it.
+
+## Deployment boundary
+
+**A push does not deploy Node or create a production database. GitHub Pages alone cannot run this application.** Deploy the backend and MySQL, run the one-time import, configure HTTPS/CORS and the client API origin before switching public traffic or building release apps. No production host or credentials are included. Never expose database ports or the admin token to browser/mobile code. Use a HTTPS reverse proxy, restrict admin access and keep independent backups. Native signing/store distribution remains a separate step.

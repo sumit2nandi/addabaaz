@@ -1,7 +1,7 @@
-import { loadPublishedWorkbook, assertValid, PREVIEW_KEY } from './workbook.js?v=6fbd4bccb8bf';
-import { renderContent, runtimeData } from './site-content.js?v=6fbd4bccb8bf';
+import { loadContent } from '/shared/api-client.js';
+import { renderContent, runtimeData } from './site-content.js?v=367f9decdeb8';
 
-const ASSET_VERSION = '6fbd4bccb8bf';
+const ASSET_VERSION = '367f9decdeb8';
 const components = ['navigation', 'home', 'player', 'upcoming', 'bts', 'about', 'services', 'contact', 'video-preview', 'poster-preview', 'modal', 'footer'];
 const scripts = ['helpers', 'hero', 'video-preview', 'galleries', 'featured-upcoming', 'poster-preview', 'navigation', 'catalog', 'contact', 'app'];
 
@@ -21,14 +21,9 @@ function loadScript(name, signal) {
   });
 }
 
-export async function start({ signal, readerReady }) {
+export async function start({ signal }) {
   if (location.protocol === 'file:') throw new Error('Please serve this folder over HTTP rather than opening index.html directly. See README.md for instructions.');
-  const preview = new URLSearchParams(location.search).get('preview') === '1';
-  const contentPromise = preview ? Promise.resolve().then(() => {
-    const saved = localStorage.getItem(PREVIEW_KEY);
-    if (!saved) throw new Error('No preview data found. Open admin.html and choose Preview changes first.');
-    return assertValid(JSON.parse(saved));
-  }) : loadPublishedWorkbook({ signal, readerReady });
+  const contentPromise = loadContent({ baseUrl: window.ADDABAAZ_API_BASE_URL, signal }).then(data => data.tables);
   // Download code and content concurrently. Scripts only define functions/listeners;
   // initialization still waits until templates, validated data and every script exist.
   const scriptsReady = Promise.all(scripts.map(name => loadScript(name, signal)));
@@ -41,7 +36,7 @@ export async function start({ signal, readerReady }) {
     }))
   ]).then(([tables, templates]) => {
     signal.throwIfAborted();
-    // Only repository-owned templates are parsed as HTML; workbook text is never markup.
+    // Only repository-owned templates are parsed as HTML; API text is never markup.
     document.getElementById('siteRoot').innerHTML = templates.join('\n');
     renderContent(tables);
     Object.assign(window, runtimeData(tables));
@@ -49,17 +44,4 @@ export async function start({ signal, readerReady }) {
   await Promise.all([contentReady, scriptsReady]);
   signal.throwIfAborted();
   window.initializeSite();
-  if (preview) {
-    const status = document.createElement('div');
-    status.id = 'previewBanner';
-    status.inert = true;
-    status.className = 'site-status preview-banner';
-    status.setAttribute('role', 'status');
-    status.textContent = 'LOCAL PREVIEW — these changes are not published. Close this tab to return to your editor. ';
-    const back = document.createElement('a');
-    back.href = 'index.html';
-    back.textContent = 'View published website';
-    status.append(back);
-    document.body.insertBefore(status, document.getElementById('siteRoot'));
-  }
 }

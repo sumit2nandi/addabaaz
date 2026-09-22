@@ -11,20 +11,17 @@
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Tiro+Bangla:ital@0;1&amp;display=swap" rel="stylesheet" media="print" onload="this.media='all'"/>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet" media="print" onload="this.media='all'"/>
-<link href="assets/css/site.css?v=6fbd4bccb8bf" rel="stylesheet"/>
-<link href="assets/css/splash.css?v=6fbd4bccb8bf" rel="stylesheet"/>
-<link rel="preload" as="image" href="images/addabaaz-logo-small.webp" fetchpriority="high"/>
-<link rel="preload" as="script" href="assets/vendor/exceljs.min.js?v=7e49da68588e"/>
-<link rel="modulepreload" href="assets/js/site-loader.js?v=6fbd4bccb8bf"/>
-<link rel="modulepreload" href="assets/js/site-content.js?v=6fbd4bccb8bf"/>
-<link rel="modulepreload" href="assets/js/workbook.js?v=6fbd4bccb8bf"/>
-<link rel="modulepreload" href="assets/js/copy-keys.js?v=6fbd4bccb8bf"/>
+<link href="assets/css/site.css?v=367f9decdeb8" rel="stylesheet"/>
+<link href="assets/css/splash.css?v=367f9decdeb8" rel="stylesheet"/>
+<link rel="preload" as="image" href="/media/images/addabaaz-logo-small.webp" fetchpriority="high"/>
+<link rel="modulepreload" href="assets/js/site-loader.js?v=367f9decdeb8"/>
+<link rel="modulepreload" href="assets/js/site-content.js?v=367f9decdeb8"/>
 </head>
 <body class="site-loading">
   <div id="siteSplash" class="site-splash">
     <div class="splash-content">
       <div class="splash-brand" aria-hidden="true">
-        <img class="splash-logo" src="images/addabaaz-logo-small.webp" width="220" height="220" alt="" fetchpriority="high" onerror="this.hidden=true; this.nextElementSibling.hidden=false;"/>
+        <img class="splash-logo" src="/media/images/addabaaz-logo-small.webp" width="220" height="220" alt="" fetchpriority="high" onerror="this.hidden=true; this.nextElementSibling.hidden=false;"/>
         <span class="splash-wordmark" hidden>ADDA<span>BAAZ</span></span>
       </div>
       <div id="siteStatus" class="site-status" role="status" aria-live="polite">Loading ADDABAAZ…</div>
@@ -33,6 +30,7 @@
   </div>
   <noscript><style>.site-splash { display:none !important; } body.site-loading { overflow:auto; }</style>This website needs JavaScript to load its content. Please enable JavaScript.</noscript>
   <main id="siteRoot" aria-busy="true" inert></main>
-  <script src="assets/js/page-bootstrap.js?v=6fbd4bccb8bf" data-page="site" async onerror="document.getElementById('siteSplash').classList.add('has-error'); document.getElementById('siteRoot').setAttribute('aria-busy','false'); document.getElementById('siteStatus').textContent='The website startup script could not load. Check your connection and reload.'; document.getElementById('loadRecovery').hidden=false;"></script>
+  <script src="assets/js/api-config.js?v=367f9decdeb8"></script>
+  <script src="assets/js/page-bootstrap.js?v=367f9decdeb8" data-page="site" async onerror="document.getElementById('siteSplash').classList.add('has-error'); document.getElementById('siteRoot').setAttribute('aria-busy','false'); document.getElementById('siteStatus').textContent='The website startup script could not load. Check your connection and reload.'; document.getElementById('loadRecovery').hidden=false;"></script>
 </body>
 </html>

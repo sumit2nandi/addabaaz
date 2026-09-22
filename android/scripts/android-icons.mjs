@@ -5,7 +5,7 @@ import sharp from 'sharp';
 
 const appRoot = fileURLToPath(new URL('..', import.meta.url));
 const resources = path.join(appRoot, 'native/app/src/main/res');
-const source = path.resolve(appRoot, '../images/addabaaz-logo.png');
+const source = path.resolve(appRoot, '../backend/media/images/addabaaz-logo.png');
 const densities = { mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 };
 async function branded(width, height, size, output, transparent = false) {
   const logo = await sharp(source).resize(size, size, { fit: 'contain', background: '#050505' }).png().toBuffer();

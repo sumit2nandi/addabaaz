@@ -1,4 +1,4 @@
-// Stable template bindings. Values live only in data/website.xlsx.
+// Stable template bindings. Values are stored in MySQL; the workbook is a migration/import format.
 export const COPY_KEYS = [
   "navigation.brand-text-adda.text",
   "navigation.brand-text-baaz.text",

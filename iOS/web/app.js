@@ -1,3 +1,4 @@
+import { loadContent } from '../shared/api-client.js';
 import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
@@ -85,16 +86,9 @@ new MutationObserver(() => {
 }).observe(document.getElementById('videoPlayerBox'), { childList: true });
 
 async function startApp() {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
-  let data;
-  try {
-    const response = await fetch('content.json', { signal: controller.signal });
-    if (!response.ok) throw new Error('The bundled catalogue is missing. Please reinstall the app.');
-    data = await response.json();
-    if (data.schemaVersion !== 1 || !data.runtime || !data.copy) throw new Error('Unsupported app content. Please update the app.');
-  } finally { clearTimeout(timeout); }
-  // Text and attributes were validated from Excel at build time, not evaluated as HTML.
+  if (Capacitor.isNativePlatform() && !__API_BASE_URL__) throw new Error('This app has no API server configured. Please install a configured build.');
+  const data = await loadContent({ baseUrl: __API_BASE_URL__, view: 'home' });
+  // Public API text is rendered as text, never evaluated as HTML.
   for (const node of root.querySelectorAll('[data-copy]')) node.textContent = data.copy[node.dataset.copy] ?? '';
   for (const attr of ['aria-label', 'title']) {
     for (const node of root.querySelectorAll(`[data-copy-${attr}]`)) {
@@ -104,6 +98,11 @@ async function startApp() {
   }
   Object.assign(window, data.runtime);
   initializeSite();
+  const refresh = document.createElement('button');
+  refresh.className = 'btn';
+  refresh.textContent = 'Refresh content';
+  refresh.addEventListener('click', () => location.reload());
+  document.getElementById('homeTab').append(refresh);
   const finish = () => {
     if (ready) return;
     ready = true;

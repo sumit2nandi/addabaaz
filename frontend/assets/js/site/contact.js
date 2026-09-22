@@ -132,29 +132,14 @@
     setStatus('', '');
 
     try {
-      if (FORM_CONFIG.appsScriptUrl) {
-        await fetch(FORM_CONFIG.appsScriptUrl, {
-          method: 'POST', mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
-        });
-      } else if (FORM_CONFIG.googleFormAction && FORM_CONFIG.googleFormFields.name) {
-        const f = FORM_CONFIG.googleFormFields;
-        const body = new URLSearchParams();
-        body.append(f.name, name);
-        body.append(f.email, email);
-        if (f.phone) body.append(f.phone, phone);
-        body.append(f.message, message);
-        await fetch(FORM_CONFIG.googleFormAction, {
-          method: 'POST', mode: 'no-cors',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: body.toString()
-        });
-      } else {
-        throw new Error('Inquiry form is not connected.');
-      }
+      const response = await fetch((window.ADDABAAZ_API_BASE_URL || '') + '/api/v1/inquiries', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, phone, message }),
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!response.ok) throw new Error('The inquiry service could not save your message.');
 
-      setStatus('Your submission was sent. If you do not hear back, please contact us directly.', 'success');
+      setStatus('Your inquiry was saved. We will get back to you.', 'success');
       document.getElementById('projectForm').reset();
       generateCaptcha(true);
     } catch (err) {

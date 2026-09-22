@@ -9,7 +9,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     await page.setViewportSize(viewport);
     let release;
     const hold = new Promise(resolve => { release = resolve; });
-    await page.route('**/data/website.xlsx', async route => { await hold; await route.continue(); });
+    await page.route('**/api/v1/content*', async route => { await hold; await route.continue(); });
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     const splash = page.locator('#siteSplash');
     await expect(splash).toBeVisible();
@@ -57,7 +57,7 @@ test('logo animates away only after all application scripts have initialized', a
 });
 
 test('startup errors keep a readable recovery screen rather than animating away', async ({ page }) => {
-  await page.route('**/data/website.xlsx', route => route.fulfill({ status: 404, body: 'missing' }));
+  await page.route('**/api/v1/content*', route => route.fulfill({ status: 404, body: 'missing' }));
   await page.goto('/');
   await expect(page.locator('#siteSplash')).toHaveClass(/has-error/);
   await expect(page.locator('#siteSplash')).not.toHaveClass(/is-leaving/);
@@ -71,7 +71,7 @@ test('missing logo falls back to the brand name without blocking the page', asyn
   await page.route('**/images/addabaaz-logo-small.webp', route => route.abort());
   let release;
   const hold = new Promise(resolve => { release = resolve; });
-  await page.route('**/data/website.xlsx', async route => { await hold; await route.continue(); });
+  await page.route('**/api/v1/content*', async route => { await hold; await route.continue(); });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('.splash-wordmark')).toBeVisible();
   await expect(page.locator('.splash-wordmark')).toHaveText('ADDABAAZ');
@@ -84,7 +84,7 @@ test('reduced-motion skips logo animation and releases the page', async ({ page 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   let release;
   const hold = new Promise(resolve => { release = resolve; });
-  await page.route('**/data/website.xlsx', async route => { await hold; await route.continue(); });
+  await page.route('**/api/v1/content*', async route => { await hold; await route.continue(); });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('.splash-brand')).toHaveCSS('animation-name', 'none');
   release();

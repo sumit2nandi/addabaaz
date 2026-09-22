@@ -1,103 +1,42 @@
 # ADDABAAZ for iOS
 
-A separate **iPhone and iPad** application using Capacitor 8 / WKWebView, with the same home-only content as the Android app. The website and `/android` project are not modified by this project.
+Separate Capacitor 8 iPhone/iPad project in `/iOS`, with **Home only and no top menu**. Keeps shows/episodes, promos, featured looping/swipeable posters, upcoming/BTS galleries, safe-area layout, branded native/web splash, in-app Back and Safari View Controller YouTube fallback. There is no Android hardware-back/exit behavior.
 
-## Included
+The interface is packaged; **content and artwork load from Node/MySQL** on launch or Refresh content. A catalogue/workbook is not bundled. Offline launch shows recovery controls, not a stale snapshot. Content-only changes require no new app release.
 
-- Home hero, shows/episodes, featured upcoming slideshow, upcoming and BTS galleries, promos and reels.
-- **No top navigation menu**, About, Services, Contact or admin editor.
-- In-app Back control on detail/player/gallery screens; modal close controls. There is no Android-style hardware-back listener or programmatic app exit on iOS.
-- Dark appearance, branded opaque App Store icon, centered native launch artwork and animated web splash.
-- Portrait/landscape layouts and safe-area padding for iPhone cutouts, the home indicator and iPad.
-- Inline YouTube player with an **Open on YouTube** fallback using Safari View Controller on iOS; backgrounding sends a pause command. Embedding/region/referrer restrictions may still prevent particular videos playing inline.
-- Bundled catalogue and local artwork available offline. YouTube videos and remote thumbnails require internet. Hero video does not autoplay/download in the feed.
+## Preview and test
 
-## Layout
-
-```text
-iOS/
-  package.json, package-lock.json  Independent dependencies and commands
-  capacitor.config.json           Native iOS configuration
-  web/                            iOS interface and lifecycle integration
-  scripts/                        Content build, icons and simulator build
-  tests/, playwright.config.js    Chromium and WebKit browser checks
-  native/App/App.xcodeproj         Xcode project, shared App scheme
-  native/App/CapApp-SPM/           Swift Package Manager integration
-  www/                            Generated web bundle (ignored)
-  build/                          Generated simulator output (ignored)
-```
-
-Clone the **whole repository**: the build reads the website's existing workbook, media, templates and interactions from the parent directory. It writes only inside `/iOS`. No dependency on `/android` is required. The only iOS-related file outside this folder is `.github/workflows/ios-build.yml`, where GitHub requires workflows to live.
-
-## Browser preview
-
-From the repository root:
+Clone the entire repository: frontend templates/interactions, shared API/build helpers and backend branding are build inputs. All iOS-specific dependencies/native files remain here. Start the real backend using the root README, then:
 
 ```sh
 cd iOS
 npm ci
-npm run preview
+npm run preview  # port 3002; /api and /media proxy to BACKEND_URL (default port 3000)
 ```
 
-Preview port: **3002**. This is the app's web interface, not an iOS simulator. All remaining commands below are run from `iOS/` unless noted otherwise.
+Install root/backend dependencies for tests. `npm test` runs Chromium interface tests with an isolated test API fixture. `npm run test:webkit` uses Playwright WebKit (`npx playwright install webkit` first). Neither is an actual device/WKWebView test. External requests are blocked in tests, so video URLs/navigation are checked, not live streaming.
 
-## Run in Xcode
+## Build on macOS
 
-Requirements: **Node 22+**, a Mac with **Xcode 26+** (and a compatible macOS version), the iOS SDK/simulator runtime, and network access for Swift packages. Deployment target: **iOS/iPadOS 15+**. Test the oldest supported OS as well as the latest before distributing.
+Requires Node 22+, Xcode **26+**, command line tools, Swift Package Manager access and an iOS 15+ simulator/device. From this folder:
 
 ```sh
-npm ci
+export API_BASE_URL=https://your-api-host.example  # use your deployed HTTPS backend
 npm run sync
 npm run open
-```
-
-Open `native/App/App.xcodeproj`, use the shared **App** scheme, select an iPhone or iPad simulator and press **Run**. This project uses **Swift Package Manager**, not CocoaPods. Allow Xcode to resolve Capacitor and plugin packages. Do not manually edit the generated `CapApp-SPM/Package.swift`; `npm run sync` updates it.
-
-### Command-line simulator build
-
-```sh
+# Unsigned simulator build:
 npm run simulator
-# Output: build/simulator/Build/Products/Debug-iphonesimulator/App.app
-
-# Boot a matching simulator in Xcode/Simulator first:
-xcrun simctl install booted build/simulator/Build/Products/Debug-iphonesimulator/App.app
-xcrun simctl launch booted in.addabaaz.app
+# build/simulator/Build/Products/Debug-iphonesimulator/App.app
 ```
 
-The unsigned simulator `.app` **cannot be installed on a physical iPhone** and is not an IPA. No Apple signing credentials are needed for simulator compilation. Linux/Windows can build and test the web interface but cannot compile the native iOS app.
+API configuration is mandatory for native sync/build; empty, local and non-HTTPS origins are rejected. Backend CORS must allow `capacitor://app.addabaaz.in`, the virtual WKWebView origin (not the API hostname). No ATS cleartext exception, `server.url`, admin token or DB credentials belong in the app. The API host is public configuration.
 
-### GitHub build
+The native project is `native/App/App.xcodeproj`. In Xcode select the App target and an available simulator. `.github/workflows/ios-build.yml` runs WebKit checks and, with repository variable **API_BASE_URL** configured, an unsigned simulator build. Its artifact is not an installable signed IPA. `npm run icons` regenerates the opaque App Store icon/native launch artwork from backend branding.
 
-The **iOS simulator app** workflow runs on relevant pushes and uploads `addabaaz-ios-simulator`. Download the artifact and unzip `ADDABAAZ-simulator.zip` on a Mac, then install `App.app` in a compatible simulator. Manual **Run workflow** is available when the workflow exists on the repository's default branch.
+Changing content needs only a client refresh/relaunch. Changing UI or API origin needs sync/rebuild/distribution and an increased build/version. Generated `www`, copied assets and build products are ignored.
 
-It runs the web tests in WebKit and compiles an unsigned simulator app. It does not run physical-device tests, sign an IPA, upload to TestFlight or publish to the App Store. A workflow file is not proof of a successful native build; check the run result and artifact.
+## Device/App Store release
 
-## Install on a device / TestFlight / App Store
+Select your Apple team and signing/provisioning in Xcode; confirm bundle ID `in.addabaaz.app`, archive for a physical device and distribute through your account. Keep certificates, keys, profiles and passwords outside Git. Complete media rights, privacy/App Privacy declarations, SDK privacy-manifest review and store listing; approval is not guaranteed for a website-based app.
 
-1. In Xcode, select **App → Signing & Capabilities**, choose your Apple development team and enable automatic signing. Confirm or change bundle ID `in.addabaaz.app` to an identifier your team owns.
-2. Connect a device, enable Developer Mode if requested, and select it as the run destination. A personal team can have limited local-development provisioning; App Store/TestFlight distribution requires Apple Developer Program membership.
-3. Increase build/version numbers in the Xcode target for updates. Choose a physical/generic iOS destination and **Product → Archive**, then use Organizer to validate and distribute with your team's signing setup.
-4. Complete your store listing, media rights, privacy policy and App Privacy declarations, including embedded YouTube/Safari behavior. Review SDK privacy manifests/required-reason APIs and Apple's current minimum-functionality guidelines before submission. Approval is not guaranteed for a website-based app.
-5. **Never commit** certificates, private keys, provisioning profiles, API keys or passwords. These are ignored where applicable. No signing credentials are stored in this project and none are needed in chat.
-
-## Content updates and security
-
-The build validates `../data/website.xlsx`, exports only public home/detail display data, optimizes local images to WebP (max 1440px) and bundles the interface. The installed app is a **content snapshot**. A website-only workbook update will not update installed iOS apps: rerun `npm run sync`, rebuild and distribute a new version. Live catalogue updates are not configured.
-
-The generated app excludes the workbook, ExcelJS, admin editor, form configuration and non-home sections. Public display data can still be extracted from an application bundle. **This does not secure the separate website's workbook/admin or a public repository.** Do not put secrets in the content.
-
-The virtual origin `capacitor://app.addabaaz.in` serves packaged files inside WKWebView; it is not a backend or DNS requirement. No HTTP App Transport Security exception is enabled, and the interface only embeds HTTPS YouTube frames. The custom native origin can affect YouTube referrer/embedding checks; use the external playback fallback and verify real videos on a device.
-
-Run `npm run icons` after changing the original logo, then rebuild. The App Store icon is deliberately opaque (no alpha channel); iOS supplies its rounded mask.
-
-## Verification
-
-```sh
-npm test                      # Build + Chromium mobile browser tests
-npx playwright install webkit
-npm run test:webkit           # WebKit browser tests (still not WKWebView on a device)
-```
-
-Use `CHROMIUM_PATH=/path/to/chromium npm test` for an existing Chromium executable. Tests block external services; they verify local rendering, safe-area layout, navigation and embed URLs, **not actual YouTube streaming**.
-
-This Linux development environment cannot run Xcode. WebKit installation was also blocked by its browser-download network connection. Chromium checks and Capacitor asset/plugin synchronization can be verified locally; native compilation and WKWebView behavior require the macOS workflow or Xcode. Before release test actual iPhone/iPad devices: portrait/landscape, safe areas, back/close controls, full-screen video, offline launch, background/resume, audio and external YouTube fallback.
+Verify real iPhone/iPad devices: cutouts/home-indicator safe areas, portrait/landscape, modal/back controls, fullscreen video/audio, offline/reconnect, background pause and external YouTube fallback. WKWebView's custom origin can affect inline YouTube referrer/embedding checks. Linux cannot compile Xcode projects or establish device behavior.

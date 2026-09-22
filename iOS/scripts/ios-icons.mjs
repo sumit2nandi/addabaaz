@@ -5,7 +5,7 @@ import sharp from 'sharp';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const assets = path.join(root, 'native/App/App/Assets.xcassets');
-const source = path.resolve(root, '../images/addabaaz-logo.png');
+const source = path.resolve(root, '../backend/media/images/addabaaz-logo.png');
 // App Store icons must be opaque. iOS supplies the rounded icon mask itself.
 await sharp(source).resize(1024, 1024, { fit: 'contain', background: '#050505' })
   .flatten({ background: '#050505' }).removeAlpha().png()

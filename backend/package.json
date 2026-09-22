@@ -1,0 +1,31 @@
+{
+  "name": "addabaaz-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "migrate": "node --env-file-if-exists=.env scripts/migrate.js",
+    "import": "node --env-file-if-exists=.env scripts/import-workbook.js",
+    "test": "node --test test/*.test.js",
+    "test:mysql": "node --env-file-if-exists=.env --test test/mysql.integration.js"
+  },
+  "dependencies": {
+    "cors": "2.8.5",
+    "exceljs": "4.4.0",
+    "express": "5.1.0",
+    "express-rate-limit": "8.7.0",
+    "file-type": "21.3.4",
+    "helmet": "8.1.0",
+    "mysql2": "3.24.4"
+  },
+  "devDependencies": {
+    "supertest": "7.1.4"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
+  }
+}

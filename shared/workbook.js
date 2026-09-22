@@ -1,7 +1,5 @@
-import { COPY_KEYS } from './copy-keys.js?v=6fbd4bccb8bf';
+import { COPY_KEYS } from './copy-keys.js';
 
-export const WORKBOOK_URL = 'data/website.xlsx';
-export const PREVIEW_KEY = 'addabaaz.content-preview.v1';
 export const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const videoColumns = ['id', 'position', 'title', 'youtubeId', 'publishDate', 'duration', 'views', 'thumbnail', 'availability', 'project', 'episode', 'kind'];
 export const SCHEMA = {
@@ -117,33 +115,6 @@ export async function readWorkbook(bytes) {
   return assertValid(tables);
 }
 
-export async function loadPublishedWorkbook({ signal, readerReady = Promise.resolve() } = {}) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(new Error(`Loading ${WORKBOOK_URL} timed out. Check your connection and try again.`)), 20000);
-  const abort = () => controller.abort(signal.reason);
-  if (signal?.aborted) abort();
-  else signal?.addEventListener('abort', abort, { once: true });
-  try {
-    const download = fetch(WORKBOOK_URL, { cache: 'no-store', signal: controller.signal }).then(response => {
-      if (!response.ok) throw new Error(`Could not load ${WORKBOOK_URL} (HTTP ${response.status}).`);
-      return response.arrayBuffer();
-    });
-    const [bytes] = await Promise.all([download, readerReady]);
-    controller.signal.throwIfAborted();
-    const tables = await readWorkbook(bytes);
-    controller.signal.throwIfAborted();
-    return tables;
-  } catch (error) {
-    if (controller.signal.aborted) throw controller.signal.reason;
-    // A reader failure must also cancel a workbook download still in flight.
-    controller.abort(error);
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-    signal?.removeEventListener('abort', abort);
-  }
-}
-
 export async function writeWorkbook(tables) {
   assertValid(tables);
   const workbook = new globalThis.ExcelJS.Workbook();
@@ -152,8 +123,8 @@ export async function writeWorkbook(tables) {
   guide.columns = [{ header: 'Section', key: 'section', width: 24 }, { header: 'Instructions', key: 'instructions', width: 110 }];
   guide.addRows([
     { section: 'Getting started', instructions: 'Edit data rows, not sheet names or column headers. Save as website.xlsx. Format cells as Text to preserve dates, durations, Bengali text and leading zeroes. No formulas or embedded images.' },
-    { section: 'Publishing', instructions: 'Replace data/website.xlsx in the hosted website and deploy. Admin edits, previews and downloads do not publish automatically. Never store secrets in this public workbook.' },
-    { section: 'Media', instructions: 'Upload images to the site separately. Paths are relative to index.html. Existing filenames with spaces and Bengali characters are supported.' },
+    { section: 'Publishing', instructions: 'Import this workbook with the trusted backend import CLI. MySQL is the live source of truth. Do not store secrets here.' },
+    { section: 'Media', instructions: 'Upload images to the site separately. Paths are relative to backend/media. Existing filenames with spaces and Bengali characters are supported.' },
     ...Object.entries(SCHEMA).map(([section, schema]) => ({ section, instructions: schema.help }))
   ]);
   for (const [name, schema] of Object.entries(SCHEMA)) {

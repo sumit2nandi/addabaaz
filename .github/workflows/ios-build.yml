@@ -1,26 +1,19 @@
 name: iOS simulator app
-
 on:
   workflow_dispatch:
   push:
     paths:
       - 'iOS/**'
-      - 'assets/js/**'
-      - 'assets/css/**'
-      - 'components/**'
-      - 'data/website.xlsx'
-      - 'images/**'
-      - 'UpcomingReleases/**'
-      - 'BTS/**'
+      - 'frontend/**'
+      - 'shared/**'
+      - 'backend/**'
+      - 'tests/support/**'
       - '.github/workflows/ios-build.yml'
-
 permissions:
   contents: read
-
 concurrency:
   group: ios-build-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   simulator:
     runs-on: macos-15
@@ -34,24 +27,36 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: iOS/package-lock.json
-      - uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-      - name: Check Xcode
-        run: |
-          xcodebuild -version
-          python3 -c 'import subprocess; v=subprocess.check_output(["xcodebuild","-version"],text=True).split()[1]; assert int(v.split(".")[0]) >= 26, "Capacitor 8 requires Xcode 26+"'
-      - run: npm ci
+          cache-dependency-path: |
+            iOS/package-lock.json
+            backend/package-lock.json
+      - run: npm ci && npm --prefix ../backend ci
       - name: Browser checks on WebKit
         run: |
           npx playwright install webkit
           npm run test:webkit
+      - name: Native configuration notice
+        if: ${{ vars.API_BASE_URL == '' }}
+        run: echo '::notice::Set repository variable API_BASE_URL to the deployed HTTPS backend to enable simulator builds. Interface tests still run.'
+      - uses: maxim-lobanov/setup-xcode@v1
+        if: ${{ vars.API_BASE_URL != '' }}
+        with:
+          xcode-version: latest-stable
+      - name: Check Xcode
+        if: ${{ vars.API_BASE_URL != '' }}
+        run: |
+          xcodebuild -version
+          python3 -c 'import subprocess; v=subprocess.check_output(["xcodebuild","-version"],text=True).split()[1]; assert int(v.split(".")[0]) >= 26, "Capacitor 8 requires Xcode 26+"'
       - name: Build unsigned simulator app
+        if: ${{ vars.API_BASE_URL != '' }}
+        env:
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
         run: npm run simulator
       - name: Package simulator artifact
+        if: ${{ vars.API_BASE_URL != '' }}
         run: ditto -c -k --sequesterRsrc --keepParent build/simulator/Build/Products/Debug-iphonesimulator/App.app build/ADDABAAZ-simulator.zip
       - uses: actions/upload-artifact@v4
+        if: ${{ vars.API_BASE_URL != '' }}
         with:
           name: addabaaz-ios-simulator
           path: iOS/build/ADDABAAZ-simulator.zip

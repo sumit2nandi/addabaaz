@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import ExcelJS from 'exceljs';
-import { SCHEMA, readWorkbook, writeWorkbook, validateTables, validUrl, MAX_FILE_SIZE } from '../assets/js/workbook.js';
-import { runtimeData } from '../assets/js/site-content.js';
-import { COPY_KEYS } from '../assets/js/copy-keys.js';
+import { SCHEMA, readWorkbook, writeWorkbook, validateTables, validUrl, MAX_FILE_SIZE } from '../shared/workbook.js';
+import { runtimeData } from '../shared/runtime-data.js';
+import { COPY_KEYS } from '../shared/copy-keys.js';
 
 globalThis.ExcelJS = ExcelJS;
-const source = await fs.readFile(new URL('../data/website.xlsx', import.meta.url));
+const source = await fs.readFile(new URL('../backend/seed/website.xlsx', import.meta.url));
 const original = await readWorkbook(source);
 const clone = () => structuredClone(original);
 
@@ -107,7 +107,7 @@ test('bad files, missing sheets, formulas and wrong headers have actionable erro
 });
 
 test('template bindings and workbook keys stay in sync', async () => {
-  const root = new URL('../', import.meta.url);
+  const root = new URL('../frontend/', import.meta.url);
   const files = ['index.html', ...(await fs.readdir(new URL('components/', root))).map(name => `components/${name}`)];
   const used = [];
   for (const file of files) {
@@ -124,7 +124,7 @@ test('all original local image references resolve on disk', async () => {
     ...original.Upcoming.map(row => settings.upcomingFolder + row.file),
     ...original.BTS.map(row => settings.btsFolder + row.file)
   ];
-  for (const image of images) await fs.access(path.resolve(image));
+  for (const image of images) await fs.access(path.resolve('backend/media', image));
 });
 
 

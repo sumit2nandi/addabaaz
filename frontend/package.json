@@ -1,0 +1,12 @@
+{
+  "name": "addabaaz-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node dev-server.mjs"
+  },
+  "dependencies": {
+    "express": "5.1.0",
+    "http-proxy-middleware": "3.0.7"
+  }
+}

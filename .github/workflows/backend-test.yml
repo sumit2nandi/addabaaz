@@ -1,0 +1,79 @@
+name: Backend MySQL and website tests
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'shared/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'package*.json'
+      - 'playwright.config.js'
+      - 'compose.yaml'
+      - '.github/workflows/backend-test.yml'
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: addabaaz_test
+          MYSQL_USER: addabaaz_test
+          MYSQL_PASSWORD: ephemeral-ci-only
+          MYSQL_ROOT_PASSWORD: ephemeral-ci-root-only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: addabaaz_test
+      DB_USER: addabaaz_test
+      DB_PASSWORD: ephemeral-ci-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+      - run: npm ci && npm run setup
+      - run: npm run validate && npm test
+      - name: Real MySQL transaction and persistence checks
+        run: npm --prefix backend run test:mysql
+      - name: Production database import and HTTP smoke test
+        env:
+          ADMIN_TOKEN: ephemeral-ci-only-admin-token-at-least-32-characters
+        run: |
+          npm --prefix backend run import -- --replace
+          node backend/src/server.js > /tmp/addabaaz-api.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" || true' EXIT
+          curl --fail --retry 10 --retry-connrefused --retry-delay 1 http://127.0.0.1:3000/api/v1/content > /tmp/web.json
+          curl --fail http://127.0.0.1:3000/api/v1/content?view=home > /tmp/home.json
+          node --input-type=module -e 'import fs from "node:fs"; import assert from "node:assert/strict"; const web=JSON.parse(fs.readFileSync("/tmp/web.json")); const home=JSON.parse(fs.readFileSync("/tmp/home.json")); assert.equal(web.revision,home.revision); assert.equal(web.tables.Promos.length,158); assert.equal(home.runtime.promoVideos.length,158);'
+          kill "$pid" || true
+          wait "$pid" || true
+      - name: Website browser tests (isolated fixture API)
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:browser
+      - name: Dependency audit
+        run: npm audit && npm --prefix backend audit && npm --prefix frontend audit
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: website-test-traces
+          path: test-results/
+          retention-days: 7

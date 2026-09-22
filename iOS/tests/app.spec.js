@@ -1,7 +1,9 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 
-const content = JSON.parse(await fs.readFile('www/content.json', 'utf8'));
+import { original } from '../../tests/support/fixture.js';
+import { publicPayload } from '../../backend/src/content.js';
+const content = publicPayload({ tables: original, revision: 1, updatedAt: '2026-09-22T00:00:00.000Z' }, 'home');
 test.beforeEach(async ({ context }) => {
   await context.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
 });
@@ -20,6 +22,7 @@ test('home feed works without a top menu, non-home sections or Excel requests', 
   await expect(page.locator('#allShowsTrack .card')).toHaveCount(3);
   await expect(page.locator('#promoRowsContainer .card')).toHaveCount(content.runtime.promoVideos.length);
   await expect(page.locator('#featuredUpcomingContainer .featured-upcoming-card')).toHaveCount(content.runtime.upcomingReleases.filter(row => row.featured === 'yes').length);
+  expect(requests.some(url => url.includes('/api/v1/content?view=home'))).toBe(true);
   expect(requests.some(url => /\.xlsx|exceljs|admin\.html|contact\.html/.test(url))).toBe(false);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(errors).toEqual([]);
@@ -48,25 +51,25 @@ test('home galleries and posters remain accessible without a navigation menu', a
   await expect(page.locator('#upcomingGrid .upcoming-card')).toHaveCount(content.runtime.upcomingReleases.length);
   await page.locator('#upcomingGrid .upcoming-card').first().tap();
   await expect(page.locator('#modalBackdrop')).toHaveClass(/show/);
-  await expect(page.locator('#modalContent img')).toHaveAttribute('src', /^media\/.*\.webp$/);
+  await expect(page.locator('#modalContent img')).toHaveAttribute('src', /\/media\/UpcomingReleases\//);
   await page.locator('.animated-close-btn').tap();
   await expect(page.locator('#modalBackdrop')).not.toHaveClass(/show/);
   await page.getByRole('button', { name: 'Back to home' }).tap();
   await expect(page.locator('#homeTab')).toHaveClass(/active/);
 });
 
-test('offline status is explicit and local artwork is bundled', async ({ page }) => {
+test('offline status is explicit', async ({ page }) => {
   await page.addInitScript(() => Object.defineProperty(navigator, 'onLine', { get: () => false }));
   await open(page);
   await expect(page.locator('#connectionStatus')).toBeVisible();
-  await expect(page.locator('#connectionStatus')).toContainText('connect to watch videos');
+  await expect(page.locator('#connectionStatus')).toContainText('Reconnect to load the latest content');
   expect(await page.locator('.featured-upcoming-card.active img').evaluate(image => image.complete && image.naturalWidth > 0)).toBe(true);
 });
 
-test('missing bundled content shows retry instead of an endless splash', async ({ page }) => {
-  await page.route('**/content.json', route => route.fulfill({ status: 404, body: 'missing' }));
+test('unavailable API shows retry instead of bundled stale content', async ({ page }) => {
+  await page.route('**/api/v1/content*', route => route.fulfill({ status: 404, body: 'missing' }));
   await page.goto('/');
-  await expect(page.locator('#siteStatus')).toContainText('catalogue is missing');
+  await expect(page.locator('#siteStatus')).toContainText('HTTP 404');
   await expect(page.locator('#loadRecovery')).toBeVisible();
   await expect(page.locator('#siteRoot')).toHaveAttribute('inert', '');
 });
@@ -89,7 +92,7 @@ test('landscape and narrow layouts keep content inside the viewport', async ({ p
 });
 
 test('distribution is allowlisted and contains no private editing files', async ({ request }) => {
-  for (const name of ['admin.html', 'data/website.xlsx', 'assets/vendor/exceljs.min.js', 'components/contact.html']) {
+  for (const name of ['content.json', 'admin.html', 'data/website.xlsx', 'assets/vendor/exceljs.min.js', 'components/contact.html']) {
     expect((await request.get(`/${name}`)).status()).toBe(404);
   }
   expect(content.runtime).not.toHaveProperty('FORM_CONFIG');
@@ -137,4 +140,25 @@ test('the iOS project has no Android platform dependency or exit behavior', asyn
   expect(pkg.dependencies).toHaveProperty('@capacitor/ios');
   expect(pkg.dependencies).not.toHaveProperty('@capacitor/android');
   expect(entry).not.toMatch(/backButton|exitApp/);
+});
+
+test('refresh loads an updated backend revision without rebuilding the app', async ({ page, request }) => {
+  const headers = { Authorization: 'Bearer test-only-ephemeral-admin-token-not-for-production' };
+  const state = await (await request.get('http://127.0.0.1:3000/api/v1/admin/content', { headers })).json();
+  const changed = structuredClone(state.tables);
+  changed.Copy.find(row => row.key === 'home.h3.text').value = 'Fresh backend content বাংলা';
+  await open(page);
+  const response = await request.put('http://127.0.0.1:3000/api/v1/admin/content', {
+    headers: { ...headers, 'If-Match': `"${state.revision}"` }, data: { tables: changed }
+  });
+  expect(response.status()).toBe(200);
+  try {
+    await page.getByRole('button', { name: 'Refresh content' }).tap();
+    await expect(page.locator('[data-copy="home.h3.text"]')).toHaveText('Fresh backend content বাংলা');
+  } finally {
+    const update = await response.json();
+    await request.put('http://127.0.0.1:3000/api/v1/admin/content', {
+      headers: { ...headers, 'If-Match': `"${update.revision}"` }, data: { tables: state.tables }
+    });
+  }
 });

@@ -15,9 +15,8 @@ export default defineConfig({
       args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     } : {}
   },
-  webServer: {
-    command: 'npx http-server www -a 0.0.0.0 -p 3001 -c-1',
-    url: 'http://127.0.0.1:3001',
-    reuseExistingServer: !process.env.CI
-  }
+  webServer: [
+    { command: 'node ../tests/support/server.js', url: 'http://127.0.0.1:3000', reuseExistingServer: !process.env.CI },
+    { command: 'node scripts/preview.mjs', url: 'http://127.0.0.1:3001', reuseExistingServer: !process.env.CI }
+  ]
 });
