@@ -30,6 +30,8 @@ test('contact submission saves through the backend and checks success', async ({
   await page.locator('#name').fill('Visitor'); await page.locator('#email').fill('visitor@example.com');
   await page.locator('#message').fill('I would like to discuss a project.');
   await page.locator('#captchaAnswer').fill(await page.evaluate(() => captchaText));
+  // A valid configured origin may include a trailing slash.
+  await page.evaluate(() => { window.ADDABAAZ_API_BASE_URL = location.origin + '/'; });
   const response = page.waitForResponse('**/api/v1/inquiries');
   await page.locator('#submitBtn').click();
   expect((await response).status()).toBe(201);

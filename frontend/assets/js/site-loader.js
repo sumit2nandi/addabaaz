@@ -1,7 +1,7 @@
 import { loadContent } from '/shared/api-client.js';
-import { renderContent, runtimeData } from './site-content.js?v=367f9decdeb8';
+import { renderContent, runtimeData } from './site-content.js?v=04539462fb7a';
 
-const ASSET_VERSION = '367f9decdeb8';
+const ASSET_VERSION = '04539462fb7a';
 const components = ['navigation', 'home', 'player', 'upcoming', 'bts', 'about', 'services', 'contact', 'video-preview', 'poster-preview', 'modal', 'footer'];
 const scripts = ['helpers', 'hero', 'video-preview', 'galleries', 'featured-upcoming', 'poster-preview', 'navigation', 'catalog', 'contact', 'app'];
 

@@ -32,3 +32,16 @@ test('invalid API versions and HTTP failures are explicit errors', async () => {
     await assert.rejects(loadContent({ baseUrl: 'https://api.example.com' }), /HTTP 503/);
   } finally { globalThis.fetch = saved; }
 });
+test('timeout stays actionable on older WebViews without AbortSignal.reason', async () => {
+  const originalController = globalThis.AbortController;
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.AbortController = class extends originalController {
+      constructor() { super(); Object.defineProperty(this.signal, 'reason', { get: () => undefined }); }
+    };
+    globalThis.fetch = (_url, { signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('Legacy fetch aborted')), { once: true });
+    });
+    await assert.rejects(loadContent({ baseUrl: 'https://api.example.com', timeoutMs: 1 }), /too long/);
+  } finally { globalThis.AbortController = originalController; globalThis.fetch = originalFetch; }
+});

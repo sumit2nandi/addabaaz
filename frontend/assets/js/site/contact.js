@@ -132,7 +132,7 @@
     setStatus('', '');
 
     try {
-      const response = await fetch((window.ADDABAAZ_API_BASE_URL || '') + '/api/v1/inquiries', {
+      const response = await fetch(new URL('/api/v1/inquiries', window.ADDABAAZ_API_BASE_URL || location.origin).href, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, phone, message }),
         signal: AbortSignal.timeout(15000)

@@ -1,7 +1,7 @@
 /* Small, async entry point. Unlike a static module entry, it can report failed
    module imports and does not wait for optional external stylesheets. */
 (() => {
-  const ASSET_VERSION = '367f9decdeb8';
+  const ASSET_VERSION = '04539462fb7a';
   const script = document.currentScript;
   const status = document.getElementById('siteStatus');
   const recovery = document.getElementById('loadRecovery');

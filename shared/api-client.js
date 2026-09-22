@@ -8,9 +8,13 @@ export function apiOrigin(baseUrl = '') {
 export async function loadContent({ baseUrl = '', view = 'web', signal, timeoutMs = 15000 } = {}) {
   const origin = apiOrigin(baseUrl);
   const controller = new AbortController();
-  const abort = () => controller.abort(signal.reason);
+  let abortReason;
+  const abort = () => { abortReason = signal.reason || new Error('Content loading was cancelled.'); controller.abort(abortReason); };
   if (signal?.aborted) abort(); else signal?.addEventListener('abort', abort, { once: true });
-  const timer = setTimeout(() => controller.abort(new Error('The content service took too long to respond.')), timeoutMs);
+  const timer = setTimeout(() => {
+    abortReason = new Error('The content service took too long to respond.');
+    controller.abort(abortReason);
+  }, timeoutMs);
   try {
     const response = await fetch(`${origin}/api/v1/content?view=${view}`, { signal: controller.signal, cache: 'no-store' });
     if (!response.ok) throw new Error(`Content service unavailable (HTTP ${response.status}). Check your connection and try again.`);
@@ -32,7 +36,7 @@ export async function loadContent({ baseUrl = '', view = 'web', signal, timeoutM
     }
     return data;
   } catch (error) {
-    if (controller.signal.aborted) throw controller.signal.reason;
+    if (controller.signal.aborted) throw controller.signal.reason || abortReason || error;
     throw error;
   } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
 }
