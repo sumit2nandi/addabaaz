@@ -1,3 +1,4 @@
+// The page frame: top navigation, mobile bottom tabs, profile menu and footer. It is drawn once; only the <main> area changes between pages.
 import { app } from '../app.js';
 import { go } from '../router.js';
 import { html, $, $$, el } from '../util.js';
@@ -6,6 +7,7 @@ import { avatar } from './components.js';
 import { CONFIG } from '../config.js';
 import { mayLeaveKids } from './parental.js';
 
+// Menu definitions: [path, label] for the top bar, and [path, label, icon] for the mobile tab bar.
 const NAV = [
   ['/', 'Home', 'home'], ['/shows', 'Shows', 'shows'], ['/reels', 'Reels', 'reels'],
   ['/upcoming', 'Coming Soon', 'upcoming'], ['/gallery', 'Behind the Scenes', 'gallery'], ['/list', 'My List', 'list'],
@@ -13,6 +15,7 @@ const NAV = [
 const STUDIO = [['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact']];
 const TABS = [['/', 'Home', 'home'], ['/shows', 'Shows', 'tv'], ['/reels', 'Reels', 'reels'], ['/search', 'Search', 'search'], ['/account', 'Me', 'user']];
 
+// Which top-level menu item a URL belongs to (so "/watch/…" highlights the right tab).
 const section = (path) => {
   if (path === '/' ) return 'home';
   const seg = path.split('/')[1];
@@ -20,6 +23,7 @@ const section = (path) => {
     about: 'studio', services: 'studio', contact: 'studio', search: 'search', account: 'account', profiles: 'account', plans: 'account', billing: 'account', signin: 'account', signup: 'account' }[seg] || '';
 };
 
+// Draw the frame and hook up menus and the search box.
 export function renderShell() {
   $('#topbar').innerHTML = html`
     <a class="brand" href="#/" aria-label="ADDABAAZ home"><img src="media/icons/logo-96.webp" alt="" width="36" height="36"><span class="brand-text"><b>ADDA</b><i>BAAZ</i></span></a>
@@ -42,6 +46,7 @@ export function renderShell() {
   });
 }
 
+// The avatar dropdown: switch profile, account, sign in/out. Re-drawn when the user or profile changes.
 export function renderProfileMenu() {
   const u = app.user; const wrap = $('#profileWrap'); if (!wrap) return;
   const p = u.profile;
@@ -60,6 +65,7 @@ export function renderProfileMenu() {
     </div>`.s;
 }
 
+// Open/close dropdowns on click, and close them on outside click or Escape. Leaving a Kids profile asks for the PIN first.
 function wireMenus() {
   const closeAll = () => $$('.menu').forEach((m) => { m.hidden = true; m.parentElement.querySelector('[aria-expanded]')?.setAttribute('aria-expanded', 'false'); });
   document.addEventListener('click', (e) => {
@@ -76,6 +82,7 @@ function wireMenus() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(); });
 }
 
+// Highlight the current section in the nav after each navigation.
 export function markActive({ path }) {
   const sec = section(path);
   $$('#topbar [data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === sec));

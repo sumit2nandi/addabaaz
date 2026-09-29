@@ -1,3 +1,5 @@
+// YouTube player adapter. Loads the IFrame API on demand and wraps it in the shared player interface (see players/index.js). Falls back to a plain iframe if the API is blocked.
+// The IFrame API script is loaded once and shared.
 let apiPromise = null;
 export function loadYouTube() {
   if (window.YT?.Player) return Promise.resolve(window.YT);
@@ -15,8 +17,10 @@ export function loadYouTube() {
   return apiPromise;
 }
 
+// YouTube needs the page origin for the postMessage handshake, but native apps run on non-http origins.
 const httpOrigin = () => (/^https?:$/.test(location.protocol) ? location.origin : undefined);
 
+// Creates the player and a timer that reports playback position (used for Continue Watching and analytics).
 export async function createYouTubePlayer(container, videoId, { start = 0, autoplay = true, muted = false, onProgress, onEnded, onState } = {}) {
   container.innerHTML = '';
   const mount = document.createElement('div');
@@ -59,6 +63,7 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
   };
 }
 
+// Last-resort embed with no API (no progress tracking).
 function plainIframe(container, videoId, start, autoplay) {
   const o = httpOrigin();
   container.innerHTML = `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=${autoplay ? 1 : 0}&playsinline=1&rel=0&modestbranding=1&start=${Math.floor(start)}${o ? '&origin=' + encodeURIComponent(o) : ''}" title="Video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;

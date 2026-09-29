@@ -1,3 +1,4 @@
+// Photo viewer for the Behind-the-scenes gallery.
 import { html, $, esc } from '../util.js';
 import { icon } from '../icons.js';
 
@@ -20,6 +21,7 @@ export function openLightbox(items, startId) {
     cap.textContent = `${g.group} · ${i + 1} / ${items.length}`;
     [items[(i + 1) % items.length], items[(i - 1 + items.length) % items.length]].forEach((x) => { new Image().src = x.imageLg || x.image; });
   };
+  // The browser Back button closes the lightbox (a history entry is pushed while open).
   let popped = false;
   const onPop = () => { popped = true; close(); };
   const close = () => { if (root.isConnected === false) return; window.removeEventListener('popstate', onPop); if (!popped) { popped = true; history.back(); } root.remove(); document.body.classList.remove('no-scroll'); document.removeEventListener('keydown', key); prevFocus?.focus?.(); };
@@ -29,6 +31,7 @@ export function openLightbox(items, startId) {
   };
   document.addEventListener('keydown', key);
   root.addEventListener('click', (e) => { if (e.target.closest('.lb-close') || e.target === root) close(); else if (e.target.closest('.lb-next')) show(i + 1); else if (e.target.closest('.lb-prev')) show(i - 1); });
+  // Touch swipe: remember where the finger went down, compare on release.
   let x0 = null;
   root.addEventListener('pointerdown', (e) => { x0 = e.clientX; });
   root.addEventListener('pointerup', (e) => { if (x0 != null && Math.abs(e.clientX - x0) > 50) show(i + (e.clientX < x0 ? 1 : -1)); x0 = null; });

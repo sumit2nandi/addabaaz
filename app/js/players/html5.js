@@ -1,3 +1,4 @@
+// hls.js (needed for HLS in browsers without native support) is downloaded only when an HLS video is played.
 let hlsPromise = null;
 const loadHls = () => hlsPromise || (hlsPromise = new Promise((res, rej) => {
   const s = document.createElement('script');
@@ -23,6 +24,7 @@ async function attachSubtitles(v, tracks = []) {
   v.textTracks.addEventListener?.('change', () => { const on = [...v.textTracks].find((tt) => tt.mode === 'showing'); try { localStorage.setItem('ab.subLang', on ? on.language : 'off'); } catch { /* ignore */ } });
 }
 
+// Plays MP4 or HLS (premium videos from R2) in a <video> element and returns the same controller interface as the YouTube player (play, pause, seek, destroy…).
 export async function createHtml5Player(container, video, { start = 0, autoplay = true, muted = false, onProgress, onEnded, onState } = {}) {
   container.innerHTML = '';
   const v = document.createElement('video');
@@ -57,6 +59,7 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
   }
   if (autoplay) v.play().catch(() => { /* needs a tap – native controls are visible */ });
   await Promise.race([subs, new Promise((r) => setTimeout(r, 1500))]);   // give small subtitle files a moment so the first cue isn't missed
+  // Casting support: Remote Playback API where available, AirPlay on Safari.
   const remote = v.remote, airplay = typeof v.webkitShowPlaybackTargetPicker === 'function';
   return {
     engine: type,

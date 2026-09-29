@@ -1,3 +1,4 @@
+// Parental-PIN helpers: actions that need the PIN (profile changes, leaving a Kids profile) go through here.
 import { pinPrompt } from './dialog.js';
 
 /** Runs `fn`; if the server wants the parental PIN, asks for it (verifying it with the server) and tries once more. */

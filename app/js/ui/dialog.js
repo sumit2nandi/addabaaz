@@ -1,3 +1,4 @@
+// Modal dialogs built on the native <dialog> element (focus trap and Esc key come for free).
 import { html, $ } from '../util.js';
 import { icon } from '../icons.js';
 
