@@ -5,11 +5,15 @@ import { hashPassword, verifyPassword, signToken } from './auth.js';
 import { endpointHash } from './push.js';
 import * as mail from './emails.js';
 
+// Small shared helpers for this file.
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// Reset / verification tokens are random strings sent by e-mail; only their SHA-256 hash is stored, so a database leak cannot be used to reset accounts.
 const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
 const newToken = () => crypto.randomBytes(32).toString('base64url');
 const HOUR = 3600_000;
+// Password rule: 8-128 characters.
 const passwordOk = (p) => typeof p === 'string' && p.length >= 8 && p.length <= 128;
+// A do-nothing middleware, used instead of a rate limiter in tests.
 const noop = (_q, _s, n) => n();
 
 /**
@@ -17,7 +21,10 @@ const noop = (_q, _s, n) => n();
  * viewing (ratings, comments, playback sessions / device limit, analytics), push subscriptions, refund requests and
  * the client error log. `public(api)` registers routes that need no sign-in; `authed(api)` those behind the session check.
  */
+// Returns helper functions plus two route registrars, `public(api)` and `authed(api)`, which app.js calls
+// (before and after the authentication middleware respectively). Behaviour limits come from `options` or environment variables.
 export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rate = true, publicUser, notDisabled, userFromRequest, plans = [], options = {} }) {
+  // Tunable limits: screens at once, refund window, reports needed to hide a comment, comment rate, whether an e-mail must be verified before commenting/buying.
   const cfg = {
     supportEmail: options.supportEmail ?? process.env.SUPPORT_EMAIL ?? '',
     streamLimit: options.streamLimit ?? (Number(process.env.STREAM_LIMIT) || 2),
@@ -27,12 +34,17 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
     commentsPer10Min: options.commentsPer10Min ?? 5,
     requireVerifiedForActions: options.requireVerified ?? mailer.provider === 'smtp',    // without SMTP nobody could ever verify
   };
+  // Builds a per-IP rate limiter (or a no-op when rate limiting is turned off).
   const limit = (name, max, ms) => (rate ? rateLimit(name, max, ms) : noop);
   const authLimit = limit('auth2', 20, 60_000);
+  // With no SMTP configured (development) print the mail's link to the console so flows can still be tested.
   const devLog = (msg) => { if (mailer.provider === 'none' && process.env.NODE_ENV !== 'production') console.log(`[mail:dev] ${msg}`); };
+  // Fire-and-forget: a mail failure is logged but never breaks the request.
   const sendMail = (to, built, note) => { devLog(note); mailer.send({ to, ...built }).catch((e) => console.warn('[mail] send failed:', e.message)); };
+  // Builds the `{ token, user }` response used after password changes.
   const sessionFor = (user, sv = user.sessionVersion || 0) => ({ token: signToken(user.id, secret, undefined, sv), user: publicUser(user) });
 
+  // Creates a 3-day one-time token and mails the confirmation link. Returns false if already verified.
   async function sendVerification(user) {
     if (user.emailVerifiedAt) return false;
     const token = newToken();
@@ -42,6 +54,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
     return true;
   }
 
+  // Throws 403 `email_unverified` when verification is required (only when SMTP is configured) and the user has not confirmed yet.
   const requireVerified = (user) => { if (cfg.requireVerifiedForActions && !user.emailVerifiedAt) throw new HttpError(403, 'email_unverified', 'Please confirm your email address first — we sent you a link. You can resend it from Account.'); };
 
   /** Server-checked parental PIN with lock-out. Used by the /me/pin endpoints and by profile changes (header X-Parental-Pin). */
@@ -53,8 +66,10 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
     await db.accounts.pinFailed(user.id, 5, 15 * 60_000);
     throw new HttpError(403, 'pin_invalid', 'Incorrect PIN.');
   }
+  // Guard for actions a child must not do (profile changes): the parental PIN must arrive in the `X-Parental-PIN` header.
   const requirePin = async (req) => { if (req.user.hasPin) { if (!req.get('x-parental-pin')) throw new HttpError(403, 'pin_required', 'Enter your parental PIN.'); await checkPin(req.user, req.get('x-parental-pin')); } };
 
+  // Identifies the calling device for the simultaneous-streams limit: the app sends `X-Device-Id`; otherwise we fall back to a hash of the IP + browser.
   const deviceOf = (req) => {
     const id = String(req.get('x-device-id') || '').replace(/[^\w.-]/g, '').slice(0, 64) || `ip-${sha256(req.ip).slice(0, 16)}`;
     const ua = String(req.get('user-agent') || '');
@@ -62,11 +77,13 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
     return { id, label };
   };
 
+  // What the module exposes to app.js.
   return {
     cfg, sendVerification, requireVerified, requirePin, checkPin, deviceOf,
 
     /** Registered by app.js after the sign-in step of signup: sends the confirmation email. */
     public(api) {
+      // Password reset step 1: always answers 202 (so nobody can discover which e-mails have accounts), and sends at most one mail a minute per account.
       api.post('/auth/forgot', authLimit, wrap(async (req, res) => {
         const email = String(req.body?.email || '').trim().toLowerCase();
         if (!EMAIL.test(email) || email.length > 254) throw bad('Please enter a valid email address.', 'invalid_email');
@@ -82,6 +99,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         }
         res.status(202).json({ ok: true });                            // same answer whether or not the account exists
       }));
+      // Password reset step 2: spends the one-time token, sets the new password and signs every other device out.
       api.post('/auth/reset', authLimit, wrap(async (req, res) => {
         const { token, password } = req.body || {};
         if (!passwordOk(password)) throw bad('Password must be 8–128 characters.', 'weak_password');
@@ -93,6 +111,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         sendMail(user.email, mail.passwordChangedEmail({ name: user.name, siteUrl, supportEmail: cfg.supportEmail }), `password changed for ${user.email}`);
         res.json({ ...sessionFor({ ...user, emailVerifiedAt: user.emailVerifiedAt || new Date().toISOString() }, sv), profiles: await db.profiles.list(uid) });
       }));
+      // E-mail verification: the link in the welcome mail lands here.
       api.post('/auth/verify', authLimit, wrap(async (req, res) => {
         const token = req.body?.token;
         const uid = typeof token === 'string' && token.length >= 20 && token.length <= 200 ? await db.authTokens.consume(sha256(token), 'verify') : null;
@@ -102,6 +121,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       }));
 
       /* analytics (aggregate counters only — no personal data) */
+      // Anonymous play counters for the admin analytics page. Seconds are capped so a client cannot inflate numbers.
       api.post('/events/play', limit('events', 120, 60_000), wrap(async (req, res) => {
         const { videoId, event, seconds } = req.body || {};
         const v = typeof videoId === 'string' ? await catalog.video(videoId) : null;
@@ -110,6 +130,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         await db.playStats.record(v.id, v.showId, { play: event === 'start', seconds: event === 'progress' ? secs : 0 });
         res.sendStatus(204);
       }));
+      // Browser error reports (rate limited, stored for the admin Errors page).
       api.post('/client-errors', limit('clienterr', 20, 60_000), wrap(async (req, res) => {
         const b = req.body || {};
         if (typeof b.message === 'string' && b.message) await db.errors.add({ source: 'client', message: b.message, stack: b.stack, url: b.url, userAgent: req.get('user-agent') });
@@ -117,10 +138,12 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       }));
 
       /* ratings & comments: public reads */
+      // Public like/dislike totals for a show or video.
       api.get('/ratings/:type/:id', wrap(async (req, res) => {
         if (!['show', 'video'].includes(req.params.type)) throw new HttpError(404, 'not_found', 'Unknown item.');
         res.set('Cache-Control', 'public, max-age=30'); res.json(await db.ratings.counts(req.params.type, req.params.id));
       }));
+      // Public comment list, newest first, paged with `before`. If the reader is signed in, their own comments are flagged so the UI can offer Delete.
       api.get('/videos/:id/comments', wrap(async (req, res) => {
         if (!(await catalog.video(req.params.id))) throw new HttpError(404, 'not_found', 'Unknown video.');
         const before = req.query.before ? Date.parse(String(req.query.before)) : null;
@@ -131,17 +154,21 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       }));
 
       /* push config */
+      // Tells the browser whether push is enabled and the public VAPID key it needs to subscribe.
       api.get('/push/config', (_req, res) => res.json({ enabled: push.configured, publicKey: push.publicKey || null }));
     },
 
+    // Routes that require a signed-in user (`req.user` is set by app.js).
     authed(api) {
       /* --- account --- */
+      // Re-send the verification mail (at most once a minute).
       api.post('/me/verify/resend', authLimit, wrap(async (req, res) => {
         if (req.user.emailVerifiedAt) return res.json({ verified: true });
         const last = await db.authTokens.lastIssuedAt(req.user.id, 'verify');
         if (last && Date.now() - last.getTime() < 60_000) throw new HttpError(429, 'too_soon', 'We just sent one — please wait a minute before asking again.');
         await sendVerification(req.user); res.status(202).json({ ok: true });
       }));
+      // Change password: needs the current one (unless the account was created via Google/Facebook and has none). All other sessions are signed out.
       api.post('/me/password', authLimit, wrap(async (req, res) => {
         const { currentPassword, newPassword } = req.body || {};
         if (!passwordOk(newPassword)) throw bad('Password must be 8–128 characters.', 'weak_password');
@@ -150,9 +177,11 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         sendMail(req.user.email, mail.passwordChangedEmail({ name: req.user.name, siteUrl, supportEmail: cfg.supportEmail }), `password changed for ${req.user.email}`);
         res.json(sessionFor(req.user, sv));
       }));
+      // "Sign out of all devices".
       api.post('/me/sessions/revoke', authLimit, wrap(async (req, res) => { const sv = await db.accounts.bumpSessions(req.user.id); res.json(sessionFor(req.user, sv)); }));
 
       /* --- parental PIN --- */
+      // Set or change the parental PIN (4-6 digits, stored hashed). Changing needs the current PIN. Five wrong tries lock it for 15 minutes.
       api.put('/me/pin', authLimit, wrap(async (req, res) => {
         const { pin, currentPin } = req.body || {};
         if (typeof pin !== 'string' || !/^\d{4,6}$/.test(pin)) throw bad('The PIN must be 4–6 digits.', 'invalid_pin');
@@ -163,8 +192,10 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       api.delete('/me/pin', authLimit, wrap(async (req, res) => { await checkPin(req.user, req.body?.pin); await db.accounts.setPin(req.user.id, null); res.sendStatus(204); }));
 
       /* --- devices & playback sessions --- */
+      // Devices that have played recently, with a way to remove one.
       api.get('/me/devices', wrap(async (req, res) => res.json({ devices: (await db.playback.devices(req.user.id, cfg.heartbeatWindowSec)).map((d) => ({ ...d, current: d.deviceId === deviceOf(req).id })), streamLimit: cfg.streamLimit })));
       api.delete('/me/devices/:id', wrap(async (req, res) => { await db.playback.forget(req.user.id, req.params.id); res.sendStatus(204); }));
+      // The player pings this every ~30 s while playing; it keeps this device's "seat" and enforces the plan's screen limit.
       api.post('/playback/heartbeat', limit('hb', 30, 60_000), wrap(async (req, res) => {
         const v = typeof req.body?.videoId === 'string' ? await catalog.video(req.body.videoId) : null;
         if (!v) throw new HttpError(404, 'not_found', 'Unknown video.');
@@ -176,8 +207,10 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       api.post('/playback/stop', wrap(async (req, res) => { await db.playback.stop(req.user.id, deviceOf(req).id); res.sendStatus(204); }));
 
       /* --- ratings --- */
+      // Ratings belong to a profile; make sure it is the caller's.
       const profileOf = async (req) => { const p = await db.profiles.get(req.params.pid, req.user.id); if (!p) throw new HttpError(404, 'not_found', 'Profile not found.'); return p; };
       api.get('/profiles/:pid/ratings', wrap(async (req, res) => { const p = await profileOf(req); res.json({ ratings: await db.ratings.mine(p.id) }); }));
+      // Thumbs up (1) or down (-1) for a show or video; returns updated totals.
       api.put('/profiles/:pid/ratings/:type/:id', wrap(async (req, res) => {
         const p = await profileOf(req), { type, id } = req.params, value = req.body?.value;
         if (!['show', 'video'].includes(type) || ![1, -1].includes(value)) throw bad('value must be 1 (like) or -1 (dislike).');
@@ -187,6 +220,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       api.delete('/profiles/:pid/ratings/:type/:id', wrap(async (req, res) => { const p = await profileOf(req); await db.ratings.clear(p.id, req.params.type, req.params.id); res.json(await db.ratings.counts(req.params.type, req.params.id)); }));
 
       /* --- comments (signed in; verified email when email is configured) --- */
+      // Post a comment. Sanitised (control characters removed), max 1000 chars, at most one link, and a per-user rate cap to limit spam.
       api.post('/videos/:id/comments', limit('comment', 30, 10 * 60_000), wrap(async (req, res) => {
         if (!(await catalog.video(req.params.id))) throw new HttpError(404, 'not_found', 'Unknown video.');
         requireVerified(req.user);
@@ -200,11 +234,13 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         await db.comments.add(c);
         res.status(201).json({ comment: { id: c.id, author, body, createdAt: new Date().toISOString(), mine: true } });
       }));
+      // Users can delete only their own comments.
       api.delete('/comments/:id', wrap(async (req, res) => {
         const c = await db.comments.byId(req.params.id);
         if (!c || c.userId !== req.user.id) throw new HttpError(404, 'not_found', 'Comment not found.');
         await db.comments.remove(c.id); res.sendStatus(204);
       }));
+      // Report a comment; enough reports hide it automatically until an admin reviews it.
       api.post('/comments/:id/report', limit('report', 20, 60_000), wrap(async (req, res) => {
         const c = await db.comments.byId(req.params.id); if (!c || c.status !== 'visible') throw new HttpError(404, 'not_found', 'Comment not found.');
         if (c.userId === req.user.id) throw bad('You can’t report your own comment.');
@@ -212,6 +248,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       }));
 
       /* --- push subscriptions --- */
+      // Store this browser's push subscription (only https endpoints are accepted) with the user's notification preferences.
       api.post('/push/subscribe', wrap(async (req, res) => {
         if (!push.configured) throw new HttpError(501, 'push_not_configured', 'Notifications aren’t enabled on this server.');
         const s = req.body?.subscription, prefs = req.body?.prefs || {};
@@ -227,6 +264,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       api.post('/push/unsubscribe', wrap(async (req, res) => { if (typeof req.body?.endpoint === 'string') await db.push.remove(req.user.id, endpointHash(req.body.endpoint)); res.sendStatus(204); }));
 
       /* --- refund requests: the customer asks, an admin decides (admin console → Payments → Refund requests) --- */
+      // Viewer-initiated refund request. Only paid, unrefunded Razorpay payments inside the refund window qualify, one open request at a time. An admin decides in the console.
       api.post('/payments/:id/refund-request', limit('refreq', 10, 60 * 60_000), wrap(async (req, res) => {
         const p = await db.payments.byId(req.params.id);
         if (!p || p.userId !== req.user.id) throw new HttpError(404, 'not_found', 'Payment not found.');
