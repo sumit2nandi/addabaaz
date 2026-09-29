@@ -1,12 +1,15 @@
 /* Keeps <title>, description, canonical, robots, Open Graph / Twitter tags and JSON-LD in step with the page shown
  * (the server writes the same tags into the first HTML response — see seo/meta.js). Browser only. */
+// Find a <head> element or create it.
 const ensure = (selector, make) => document.head.querySelector(selector) || document.head.appendChild(make());
 const meta = (attr, key) => ensure(`meta[${attr}="${key}"]`, () => { const m = document.createElement('meta'); m.setAttribute(attr, key); return m; });
+// Set a meta tag's content, or remove the tag when the value is empty.
 const set = (attr, key, value) => {
   if (value == null || value === '') { document.head.querySelector(`meta[${attr}="${key}"]`)?.remove(); return; }
   meta(attr, key).setAttribute('content', value);
 };
 
+// Update everything in <head> for the page being shown: title, description, robots, canonical, social cards and JSON-LD.
 export function applyHead(m, { canonical = true } = {}) {
   document.title = m.title;
   set('name', 'description', m.description); set('name', 'robots', m.robots);

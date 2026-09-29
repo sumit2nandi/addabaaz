@@ -11,6 +11,7 @@ import { html, $ } from './util.js';
 import { icon } from './icons.js';
 import { isNative } from './platform.js';
 
+// Loads a third-party SDK script once; rejects with 'blocked' if it cannot load (ad blockers, offline).
 const loaded = {};
 const loadScript = (key, src) => loaded[key] || (loaded[key] = new Promise((res, rej) => {
   const s = document.createElement('script'); s.src = src; s.async = true;
@@ -26,6 +27,7 @@ async function initGoogle(clientId, onCredential) {
 }
 
 /* ---------- web: Facebook ---------- */
+// Facebook JS SDK initialisation (once).
 let fbReady = null;
 function initFacebook({ appId, version = 'v21.0' }) {
   return fbReady || (fbReady = new Promise((res, rej) => {
@@ -36,6 +38,7 @@ function initFacebook({ appId, version = 'v21.0' }) {
 const facebookWeb = (FB) => new Promise((res, rej) => FB.login((r) => (r.authResponse?.accessToken ? res(r.authResponse.accessToken) : rej(Object.assign(new Error('cancelled'), { cancelled: true }))), { scope: 'public_profile,email' }));
 
 /* ---------- web: Apple ---------- */
+// Sign in with Apple on the web: popup flow; the name is only provided on first authorisation.
 async function appleWeb({ clientId }) {
   await loadScript('apple', 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js');
   window.AppleID.auth.init({ clientId, scope: 'name email', redirectURI: location.origin, usePopup: true });
@@ -46,6 +49,7 @@ async function appleWeb({ clientId }) {
 }
 
 /* ---------- native (Capacitor) ---------- */
+// Native apps use the Capacitor social-login plugin; it is initialised once with the ids from the server.
 let nativeInit = false;
 function nativePlugin(providers) {
   const SL = window.Capacitor?.Plugins?.SocialLogin;
@@ -56,6 +60,7 @@ function nativePlugin(providers) {
     ...(providers.facebook ? { facebook: { appId: providers.facebook.appId, clientToken: providers.facebook.clientToken } } : {}),
   }).then(() => { nativeInit = true; }) };
 }
+// Native flow: get an ID token (Google/Apple) or access token (Facebook) from the platform SDK; user cancellation is flagged, not treated as an error.
 async function nativeCredential(provider, providers) {
   const { SL, ready } = nativePlugin(providers); await ready;
   try {
@@ -65,6 +70,7 @@ async function nativeCredential(provider, providers) {
   } catch (e) { if (/cancel/i.test(`${e?.code} ${e?.message}`)) e.cancelled = true; throw e; }
 }
 
+// Brand logos for the buttons.
 const FB_LOGO = html`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M22 12a10 10 0 1 0-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.5 1.49-3.89 3.78-3.89 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.78l-.44 2.89h-2.34v6.99A10 10 0 0 0 22 12z"/></svg>`;
 const APPLE_LOGO = html`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>`;
 const G_LOGO = html`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285F4" d="M22.5 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h5.9a5.05 5.05 0 0 1-2.19 3.31v2.75h3.55c2.08-1.91 3.24-4.73 3.24-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.55-2.75c-.98.66-2.24 1.06-3.73 1.06-2.87 0-5.3-1.94-6.17-4.55H2.16v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.83 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.16a11 11 0 0 0 0 9.88l3.67-2.84z"/><path fill="#EA4335" d="M12 5.35c1.62 0 3.06.56 4.21 1.65l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.16 7.06L5.83 9.9C6.7 7.29 9.13 5.35 12 5.35z"/></svg>`;
@@ -75,6 +81,7 @@ const G_LOGO = html`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden=
  * @param {(msg:string) => void} onError
  * @returns {boolean} whether any button was rendered
  */
+// Google on the web uses Google's own rendered button; the others are ours.
 export function mountSocialButtons(box, providers, { signup = false, onCredential, onError }) {
   const wanted = ['google', 'facebook', 'apple'].filter((p) => providers?.[p]);
   if (!wanted.length) return false;

@@ -4,11 +4,15 @@
 import { html, $ } from './util.js';
 import { openDialog } from './ui/dialog.js';
 
+// Where the visitor's choice is stored: 'all' (analytics allowed) or 'essential' (only what the site needs).
 const KEY = 'ab.consent';
+// The Google Analytics measurement id (only present if the site owner configured one).
 export const gaId = () => document.querySelector('meta[name="ab:ga4"]')?.content || window.ADDABAAZ_ENV?.GA4_ID || '';
 export const getConsent = () => { try { return localStorage.getItem(KEY); } catch { return null; } };   // 'all' | 'essential' | null (not asked yet)
+// Analytics is loaded at most once, and only after explicit consent.
 let gaLoaded = false;
 
+// Load Google Analytics 4 on demand. No request goes to Google before this runs.
 function loadGa() {
   const id = gaId(); if (!id || gaLoaded || getConsent() !== 'all' || !/^G-[A-Z0-9]+$/.test(id)) return;
   gaLoaded = true;
@@ -20,6 +24,7 @@ function loadGa() {
 /** Page views for single-page navigation (called on every route change). */
 export function trackPage() { if (gaLoaded && window.gtag) window.gtag('event', 'page_view', { page_path: location.pathname + location.search + location.hash, page_title: document.title }); }
 
+// Save the choice. Choosing 'essential' also removes any analytics cookies already set.
 export function setConsent(v) {
   try { localStorage.setItem(KEY, v); } catch { /* private mode */ }
   document.getElementById('consentBar')?.remove();
@@ -27,6 +32,7 @@ export function setConsent(v) {
   else if (gaLoaded) { document.cookie.split(';').forEach((c) => { const n = c.split('=')[0].trim(); if (/^_ga/.test(n)) document.cookie = `${n}=; Max-Age=0; path=/; domain=${location.hostname}`; }); window[`ga-disable-${gaId()}`] = true; }
 }
 
+// The "Privacy choices" dialog (opened from the footer).
 export function openConsentDialog() {
   const on = getConsent() === 'all', hasGa = !!gaId();
   const { el, close } = openDialog(html`<h2>Privacy choices</h2>
@@ -41,6 +47,7 @@ export function openConsentDialog() {
 }
 
 /** Shows the bar once, only when there is something optional to consent to. */
+// Bar shown once at first visit, only if analytics is configured.
 export function initConsent() {
   document.addEventListener('click', (e) => { if (e.target.closest('[data-consent-open]')) { e.preventDefault(); openConsentDialog(); } });
   if (getConsent() === 'all') loadGa();

@@ -1,4 +1,6 @@
+// Inline SVG icon set (no icon font or network request). Use `icon('play', { size: 20 })` inside html`...` templates.
 import { raw } from './util.js';
+// Each icon is just the inner SVG markup on a 24x24 grid; stroke/fill colour follows the text colour (currentColor).
 const P = {
   play: '<polygon points="6 3 20 12 6 21 6 3" fill="currentColor"/>',
   pause: '<rect x="6" y="4" width="4" height="16" fill="currentColor"/><rect x="14" y="4" width="4" height="16" fill="currentColor"/>',

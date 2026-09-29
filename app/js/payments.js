@@ -1,5 +1,6 @@
 /* Razorpay Checkout (web). The API creates the order and later verifies the signature;
  * this file only opens the payment window. Card / UPI / netbanking details never touch our servers. */
+// The Razorpay script is loaded only when someone actually starts a payment.
 let loading = null;
 const load = () => loading ||= new Promise((res, rej) => {
   if (window.Razorpay) return res();
@@ -9,6 +10,7 @@ const load = () => loading ||= new Promise((res, rej) => {
 });
 
 /** @param order the /payments/checkout response → resolves { razorpay_order_id, razorpay_payment_id, razorpay_signature } */
+// Opens the payment window. Resolves with the payment result to verify on the server; rejects with `cancelled: true` if the window was closed.
 export async function openCheckout(order) {
   await load();
   return new Promise((resolve, reject) => {

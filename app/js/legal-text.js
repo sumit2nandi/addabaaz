@@ -1,11 +1,15 @@
 /* Privacy Policy, Terms of Use and Refund Policy — plain data (no DOM), shared by the browser view and the server's crawlable HTML.
  * This is a good-faith TEMPLATE written for the way this app works. It is not legal advice: have a lawyer review and adjust it
  * before you go live (see docs/COMPLIANCE.md). Names, address and e-mail come from the studio profile (data/studio.json / admin console). */
+// Date shown as "Last updated"; change it whenever the text changes.
 export const LEGAL_UPDATED = '2026-09-29';
+// URL -> document id.
 export const LEGAL_PAGES = { '/privacy': 'privacy', '/terms': 'terms', '/refunds': 'refunds' };
 
+// Business address from the studio profile, with a default.
 const ADDRESS = (st) => (st.address || []).join(', ') || 'Kolkata, West Bengal, India';
 
+// Builds one legal document as { title, intro, sections: [[heading, [paragraphs]]] }, filled with the studio's name, e-mail and address.
 export function legalDoc(slug, { studio = {}, refundDays = 7 } = {}) {
   const name = studio.name || 'ADDABAAZ', email = studio.email || 'office@addabaaz.in', address = ADDRESS(studio);
   const contact = `Write to us at ${email} or at ${address}.`;

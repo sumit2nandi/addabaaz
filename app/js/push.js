@@ -2,9 +2,11 @@
  * launches you set reminders for, optional announcements); this file only manages the browser side of the subscription. */
 import { app } from './app.js';
 
+// Helpers: convert the server's public VAPID key to bytes, and detect browser support.
 const b64ToBytes = (s) => { const p = '='.repeat((4 - (s.length % 4)) % 4), raw = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); };
 export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && !window.Capacitor?.isNativePlatform?.() && /^https?:$/.test(location.protocol);
 
+// The service worker registration owns the push subscription.
 const registration = async () => { const r = await navigator.serviceWorker.getRegistration(); return r || (await navigator.serviceWorker.ready); };
 async function currentSubscription() { try { return await (await registration()).pushManager.getSubscription(); } catch { return null; } }
 
@@ -18,6 +20,7 @@ export async function pushState() {
   return { supported: true, enabled: true, permission: Notification.permission, subscribed: !!(sub && prefs), prefs: prefs || { episodes: true, launches: true, news: false } };
 }
 
+// Ask permission, subscribe this browser to push, and send the subscription to the server.
 export async function enablePush(prefs = {}) {
   const u = app.user, cfg = await u.remote.pushConfig();
   if (!cfg.enabled || !cfg.publicKey) throw new Error('Notifications aren’t enabled on this server.');
@@ -28,6 +31,7 @@ export async function enablePush(prefs = {}) {
   await u.remote.pushSubscribe(sub.toJSON(), prefs);
   return sub.endpoint;
 }
+// Unsubscribe on the server and in the browser.
 export async function disablePush() {
   const sub = await currentSubscription(); if (!sub) return;
   await app.user.remote?.pushUnsubscribe(sub.endpoint).catch(() => {});
@@ -38,6 +42,7 @@ export async function setPushPrefs(prefs) { const sub = await currentSubscriptio
 export async function detachPush() { const sub = await currentSubscription(); if (sub) await app.user.remote?.pushUnsubscribe(sub.endpoint).catch(() => {}); }
 
 /** After sign-in: if this browser already allowed notifications, attach its subscription to the account that just signed in. */
+// Runs on sign-in so a returning user's browser is linked to their account again.
 export function initPush() {
   if (!pushSupported()) return;
   const relink = async () => {
