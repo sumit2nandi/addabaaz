@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createBackup, pruneBackups, backupName, uploadBackup } from '../server/src/backup.js';
 
+// Settings: where backups go, the optional encryption passphrase, and the uploads folder to include.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dir = path.resolve(process.env.BACKUP_DIR || path.join(root, 'backups')), pass = process.env.BACKUP_PASSPHRASE || '';
 const uploadDir = path.resolve(process.env.UPLOAD_DIR || path.join(root, 'uploads'));

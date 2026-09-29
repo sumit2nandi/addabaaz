@@ -9,18 +9,22 @@ import { createDb } from '../server/src/db.js';
 import { migrate } from '../server/src/migrate.js';
 import { checkCatalog } from '../server/src/catalog-schema.js';
 
+// Locations of the JSON files the catalog is exported to / imported from.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const [cmd, ...flags] = process.argv.slice(2);
 const cat = path.join(root, 'data/catalog.json'), stu = path.join(root, 'data/studio.json');
+// Only two commands exist: export and import.
 if (!['export', 'import'].includes(cmd)) { console.error('Usage: catalog-cli.mjs export | import --force'); process.exit(2); }
 const db = await createDb();
 try {
   await migrate(db);
+  // EXPORT: write the catalog stored in MySQL out as JSON (for static hosting, the mobile bundle or version control).
   if (cmd === 'export') {
     const { catalog, studio } = await db.catalog.snapshot();
     if (!catalog.shows.length && !catalog.videos.length) { console.error('The database catalog is empty — nothing exported.'); process.exit(1); }
     fs.writeFileSync(cat, JSON.stringify(catalog, null, 1) + '\n'); if (studio) fs.writeFileSync(stu, JSON.stringify(studio, null, 1) + '\n');
     console.log(`✔ wrote data/catalog.json (${catalog.shows.length} shows, ${catalog.videos.length} videos, ${catalog.upcoming.length} upcoming, ${catalog.gallery.length} photos) and data/studio.json`);
+  // IMPORT: replace the database catalog with the JSON files. Destructive, so it needs --force and the files must pass the same validation the admin console uses.
   } else {
     if (!flags.includes('--force')) { console.error('This REPLACES the catalog in MySQL with the JSON files. Re-run with --force.'); process.exit(1); }
     const data = JSON.parse(fs.readFileSync(cat, 'utf8')), studio = JSON.parse(fs.readFileSync(stu, 'utf8'));

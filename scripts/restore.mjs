@@ -3,6 +3,7 @@
  *   --check   only verify the file (decrypt, checksum row counts) — changes nothing
  *   --force   required to actually REPLACE the database content and uploaded files
  * Env: BACKUP_PASSPHRASE (if encrypted), UPLOAD_DIR, DB_* / DATABASE_URL. The schema is migrated first. */
+// Restore command: verifies a backup file and (with --force) replaces the database content with it.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDb } from '../server/src/db.js';

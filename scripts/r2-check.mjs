@@ -2,10 +2,12 @@
 // Reads the same R2_* environment variables as the server (export them or use `node --env-file=.env`).
 import { createR2 } from '../server/src/r2.js';
 
+// Uses the same R2_* variables as the server.
 const r2 = createR2();
 if (!r2.configured) { console.error('R2 is not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_BUCKET.'); process.exit(1); }
 const key = process.argv[2];
 if (!key) { console.error('Usage: npm run r2:check -- <object key>   (e.g. premium/shahid-ep6/video.mp4)'); process.exit(1); }
+// HEAD request through a presigned URL: proves the credentials work and the object exists, without downloading it.
 const h = await r2.head(key).catch((e) => ({ status: 0, error: e.message }));
 if (h.status === 200) console.log(`✔ ${key} is readable (${h.type || 'unknown type'}, ${h.size ? (h.size / 1048576).toFixed(1) + ' MB' : 'size unknown'})`);
 else {

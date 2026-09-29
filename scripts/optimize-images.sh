@@ -5,6 +5,7 @@
 #
 #   media/<group>/<slug>-sm.webp   grid / rail cards   (400px wide)
 #   media/<group>/<slug>-lg.webp   detail / lightbox   (1200px wide)
+# Stop at the first error, treat unset variables as errors, and fail a pipeline if any part fails.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -13,6 +14,7 @@ slug() { # "UTTRAN BTS (16).png" -> "uttran-bts-16"
   echo "$b" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g'
 }
 
+# render <source> <folder> <name> <small width> <large width> [quality]: writes -sm / -lg WebP files; `${w}x>` only ever shrinks (never enlarges) an image.
 render() { # src group slug small large [quality]
   local src="$1" group="$2" name="$3" sm="$4" lg="$5" q="${6:-78}"
   mkdir -p "media/$group"

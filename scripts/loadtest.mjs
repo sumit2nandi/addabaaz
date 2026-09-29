@@ -10,12 +10,15 @@
  * ⚠ The numbers depend on the machine running the test, the network in between and the database size — treat them as a way to
  *   compare before/after a change and to find the knee of the curve, not as a capacity promise. */
 const args = Object.fromEntries(process.argv.slice(2).reduce((a, x, i, arr) => (x.startsWith('--') ? [...a, [x.slice(2), arr[i + 1] && !arr[i + 1].startsWith('--') ? arr[i + 1] : true]] : a), []));
+// Settings from the command line. A public-looking domain is refused unless --i-know is passed (protects production).
 const BASE = String(args.url || 'http://localhost:3000').replace(/\/$/, ''), API = BASE + '/api/v1';
 const USERS = Number(args.users) || 25, SECONDS = Number(args.seconds) || 15, SCENARIO = args.scenario === 'browse' ? 'browse' : 'mixed';
 if (/\.(in|com|org|net)\b/.test(new URL(BASE).hostname) && !args['i-know']) { console.error('That looks like a public site. Load-test a staging copy, or pass --i-know if you really mean it.'); process.exit(2); }
 
+// Bookkeeping: latency samples and status-code counts per endpoint.
 const lat = new Map(), status = new Map(); let total = 0, bytes = 0, netErrors = 0;
 const rec = (name, ms, code) => { (lat.get(name) || lat.set(name, []).get(name)).push(ms); const k = `${name} ${code}`; status.set(k, (status.get(k) || 0) + 1); total++; };
+// Makes one request, timing it and recording the outcome; never throws.
 async function hit(name, method, url, { token, body } = {}) {
   const t0 = performance.now();
   try {
@@ -26,11 +29,13 @@ async function hit(name, method, url, { token, body } = {}) {
 }
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
+// Read the catalog once to know which videos to request.
 const cat = (await (await fetch(API + '/catalog')).json().catch(() => null));
 if (!cat?.videos?.length) { console.error('Could not read', API + '/catalog — is the server up?'); process.exit(1); }
 const eps = cat.videos.filter((v) => v.kind === 'episode'), free = eps.filter((v) => v.access !== 'premium');
 const stop = Date.now() + SECONDS * 1000;
 
+// Scenario `browse`: a visitor who is not signed in, hitting a weighted mix of public pages and APIs with think time in between.
 async function anonymous() {
   while (Date.now() < stop) {
     const v = pick(free.length ? free : eps), r = Math.random();
@@ -43,6 +48,7 @@ async function anonymous() {
     await new Promise((r2) => setTimeout(r2, 20 + Math.random() * 80));       // think time
   }
 }
+// Scenario `mixed` (20% of users): sign up, then save progress, read the library and rate videos.
 async function viewer(n) {
   const email = `loadtest+${Date.now().toString(36)}${n}@example.invalid`;
   const s = await hit('POST /auth/signup', 'POST', API + '/auth/signup', { body: { name: 'Load Test', email, password: 'loadtest-pass-1' } });
@@ -58,6 +64,7 @@ async function viewer(n) {
     await new Promise((r2) => setTimeout(r2, 50 + Math.random() * 150));
   }
 }
+// Run all virtual users concurrently, then print a latency table (p50 / p95 / p99) and any 429 or 5xx problems.
 console.log(`Load test: ${USERS} virtual users × ${SECONDS}s against ${BASE}  (scenario: ${SCENARIO})`);
 const t0 = performance.now();
 await Promise.all([...Array(USERS)].map((_, i) => (SCENARIO === 'mixed' && i % 5 === 0 ? viewer(i) : anonymous())));
