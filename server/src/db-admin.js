@@ -1,18 +1,28 @@
+// Queries that power the admin console: the database-backed catalog (shows, videos, upcoming, gallery),
+// the audit log, user and message management, and the dashboard numbers.
+// JSON columns may arrive as text or as objects; normalise.
 const json = (v) => (v == null ? null : typeof v === 'string' ? JSON.parse(v) : v);
+// Builds a `%text%` pattern for LIKE and escapes %, _ and \ so a search for "50%" is literal.
 const like = (s) => `%${String(s).replace(/[\\%_]/g, (c) => '\\' + c)}%`;
+// Maps API collection names (plural) to the `type` column in catalog_items, and back.
 const DB_TYPE = { shows: 'show', videos: 'video', upcoming: 'upcoming', gallery: 'gallery' };
 const PLURAL = Object.fromEntries(Object.entries(DB_TYPE).map(([k, v]) => [v, k]));
+// Calendar date in India time (UTC+5:30); dashboard charts are grouped by IST days.
 const istDay = (d) => new Date(d.getTime() + 330 * 60_000).toISOString().slice(0, 10);
 
 /** Admin-console queries: database-backed catalog, audit log, user/message management, dashboard numbers. Mixed into createDb(). */
 export function adminDb({ q, tx, self, iso }) {
+  // Every catalog write increments a version number; the public catalog cache uses it to know when to reload.
   const bump = (t) => t.query("UPDATE catalog_meta SET n = n + 1, at = UTC_TIMESTAMP(3) WHERE k = 'version'");
 
+  // ---- Catalog: each item is stored as a JSON document in `catalog_items` (type, id, position) ----
   const catalog = {
+    // Current catalog version (0 when empty).
     async version() { return Number((await q("SELECT n FROM catalog_meta WHERE k = 'version'"))[0]?.n ?? 0); },
     /** Everything in the shape of data/catalog.json (+ `studio`), each list in its stored order. */
     async snapshot() {
       const rows = await q('SELECT type, doc, updated_at FROM catalog_items ORDER BY type, position, id');
+      // Rebuild the same structure as data/catalog.json from the rows.
       const out = { schema: 1, updatedAt: null, shows: [], videos: [], upcoming: [], gallery: [] }; let studio = null, latest = 0;
       for (const r of rows) {
         latest = Math.max(latest, r.updated_at.getTime());
@@ -37,11 +47,13 @@ export function adminDb({ q, tx, self, iso }) {
         return true;
       });
     },
+    // Fetch one document, or null.
     async get(key, id) { const r = (await q('SELECT doc FROM catalog_items WHERE type = ? AND id = ?', [DB_TYPE[key], id]))[0]; return r ? json(r.doc) : null; },
     /** Creates (`create`) or replaces one document. Returns 'created' | 'updated' | null (update of a missing id). Throws ER_DUP_ENTRY on create of an existing id. */
     async put(key, id, doc, { create = false } = {}) {
       const type = DB_TYPE[key];
       return tx(async (t) => {
+        // New items go to the end of their list; existing ones are replaced in place.
         if (create) {
           const [{ next }] = await t.query('SELECT COALESCE(MAX(position), -1) + 1 AS next FROM catalog_items WHERE type = ?', [type]);
           await t.query('INSERT INTO catalog_items (type, id, position, doc) VALUES (?,?,?,?)', [type, id, next, JSON.stringify(doc)]);
@@ -53,6 +65,7 @@ export function adminDb({ q, tx, self, iso }) {
         return create ? 'created' : 'updated';
       });
     },
+    // The studio/about page content is a single document stored as type 'studio'.
     async putStudio(doc) {
       return tx(async (t) => {
         await t.query("INSERT INTO catalog_items (type, id, position, doc) VALUES ('studio', 'main', 0, ?) ON DUPLICATE KEY UPDATE doc = VALUES(doc), updated_at = UTC_TIMESTAMP(3)", [JSON.stringify(doc)]);
@@ -65,6 +78,7 @@ export function adminDb({ q, tx, self, iso }) {
       return tx(async (t) => {
         if (!(await t.query('DELETE FROM catalog_items WHERE type = ? AND id = ?', [type, id])).affectedRows) return null;
         const gone = [id]; let videos = 0;
+        // Deleting an item also removes viewers' saved references to it. Deleting a show with `cascade` removes its episodes as well.
         if (key === 'shows') {
           await t.query('DELETE FROM list_items WHERE item_type = ? AND item_id = ?', ['show', id]);
           if (cascade) {
@@ -83,6 +97,7 @@ export function adminDb({ q, tx, self, iso }) {
       const type = DB_TYPE[key];
       return tx(async (t) => {
         const existing = (await t.query('SELECT id FROM catalog_items WHERE type = ? ORDER BY position, id FOR UPDATE', [type])).map((r) => r.id);
+        // Ignore unknown/duplicate ids, then append anything not mentioned so nothing gets lost.
         const known = new Set(existing), first = ids.filter((i, n) => known.has(i) && ids.indexOf(i) === n);
         const order = [...first, ...existing.filter((i) => !first.includes(i))];
         for (let i = 0; i < order.length; i++) await t.query('UPDATE catalog_items SET position = ? WHERE type = ? AND id = ?', [i, type, order[i]]);
@@ -93,6 +108,7 @@ export function adminDb({ q, tx, self, iso }) {
     async countVideosOf(showId) { return (await q("SELECT COUNT(*) AS n FROM catalog_items WHERE type = 'video' AND JSON_UNQUOTE(JSON_EXTRACT(doc, '$.showId')) = ?", [showId]))[0].n; },
   };
 
+  // ---- Audit log: who did what in the admin console ----
   const audit = {
     async add({ actorId = null, actor, action, target = null, meta = null, ip = null }) {
       await q('INSERT INTO admin_audit (actor_id, actor, action, target, meta, ip) VALUES (?,?,?,?,?,?)', [actorId, String(actor).slice(0, 254), action, target && String(target).slice(0, 200), meta ? JSON.stringify(meta) : null, ip]);
@@ -106,17 +122,21 @@ export function adminDb({ q, tx, self, iso }) {
     },
   };
 
+  // ---- User management ----
   const mapUserRow = (r) => ({
     id: r.id, email: r.email, name: r.name, createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabledAt: iso(r.disabled_at),
     planId: r.plan_id && r.expires_at && r.expires_at.getTime() > Date.now() ? r.plan_id : 'free', expiresAt: iso(r.expires_at), planSource: r.provider || null,
     profiles: r.profiles ?? undefined, providers: r.providers ? r.providers.split(',') : [],
   });
+  // SQL snippets for the filter tabs in the Users page (a fixed allow-list, never user input).
   const USER_FILTERS = {
     all: '1=1', paid: "s.plan_id <> 'free' AND s.expires_at > UTC_TIMESTAMP(3)", free: "(s.user_id IS NULL OR s.plan_id = 'free' OR s.expires_at <= UTC_TIMESTAMP(3))",
     expiring: "s.plan_id <> 'free' AND s.expires_at > UTC_TIMESTAMP(3) AND s.expires_at <= UTC_TIMESTAMP(3) + INTERVAL 7 DAY", expired: "s.plan_id <> 'free' AND s.expires_at <= UTC_TIMESTAMP(3)",
     admin: 'u.is_admin = 1', disabled: 'u.disabled_at IS NOT NULL',
   };
+  // Exposed as `db.adminUsers`.
   const adminUsers = {
+    // Search + filter + pagination in one query; `total` is returned for the pager.
     async list({ q: search = '', filter = 'all', limit = 25, offset = 0 } = {}) {
       const where = [USER_FILTERS[filter] || USER_FILTERS.all], args = [];
       if (search) { where.push('(u.email LIKE ? OR u.name LIKE ?)'); args.push(like(search), like(search)); }
@@ -141,10 +161,12 @@ export function adminDb({ q, tx, self, iso }) {
       if (sets.length) await q(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, [...vals, id]);
     },
     async countAdmins() { return (await q('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1 AND disabled_at IS NULL'))[0].n; },
+    // Used by the `npm run admin` command line to grant/revoke admin rights.
     async setAdminByEmail(email, isAdmin) { return (await q('UPDATE users SET is_admin = ? WHERE email = ?', [isAdmin ? 1 : 0, email])).affectedRows === 1; },
     async admins() { return (await q('SELECT id, email, name FROM users WHERE is_admin = 1 ORDER BY created_at')).map((r) => ({ id: r.id, email: r.email, name: r.name })); },
   };
 
+  // ---- Contact-form inbox ----
   const messages = {
     async list({ status = 'open', limit = 30, offset = 0 } = {}) {
       const where = status === 'open' ? 'WHERE handled_at IS NULL' : status === 'handled' ? 'WHERE handled_at IS NOT NULL' : '';
@@ -157,10 +179,12 @@ export function adminDb({ q, tx, self, iso }) {
     async openCount() { return (await q('SELECT COUNT(*) AS n FROM contact_messages WHERE handled_at IS NULL'))[0].n; },
   };
 
+  // ---- Dashboard numbers (all times converted to IST for month/day boundaries) ----
   const stats = {
     async overview(now = new Date()) {
       const ist = new Date(now.getTime() + 330 * 60_000);
       const monthStart = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), 1) - 330 * 60_000);
+      // Run all the dashboard queries in parallel: users, subscribers, revenue, refunds, daily revenue, daily signups, inbox, recent payments/users.
       const [[u], [s], [rev], [refunds], daily, signups, msgs, recentPayments, recentUsers] = await Promise.all([
         q("SELECT COUNT(*) AS total, SUM(created_at >= UTC_TIMESTAMP(3) - INTERVAL 7 DAY) AS week, SUM(created_at >= UTC_TIMESTAMP(3) - INTERVAL 30 DAY) AS month FROM users"),
         q("SELECT SUM(plan_id <> 'free' AND expires_at > UTC_TIMESTAMP(3)) AS active, SUM(plan_id <> 'free' AND expires_at > UTC_TIMESTAMP(3) AND expires_at <= UTC_TIMESTAMP(3) + INTERVAL 7 DAY) AS expiring, SUM(plan_id <> 'free' AND expires_at > UTC_TIMESTAMP(3) AND provider = 'admin') AS comped FROM subscriptions"),
@@ -173,6 +197,7 @@ export function adminDb({ q, tx, self, iso }) {
         q('SELECT id, email, name, created_at FROM users ORDER BY created_at DESC LIMIT 6'),
       ]);
       const dmap = new Map(daily.map((r) => [r.d.toISOString().slice(0, 10), r])), smap = new Map(signups.map((r) => [r.d.toISOString().slice(0, 10), r.n]));
+      // Build a continuous 30-day series so days with no sales still appear (as zero).
       const days = [];
       for (let i = 29; i >= 0; i--) { const d = istDay(new Date(now.getTime() - i * 86_400_000)); days.push({ date: d, paise: Number(dmap.get(d)?.paise || 0), payments: Number(dmap.get(d)?.n || 0), signups: Number(smap.get(d) || 0) }); }
       return {
@@ -186,5 +211,6 @@ export function adminDb({ q, tx, self, iso }) {
     },
   };
 
+  // Merged into the main `db` object by db.js.
   return { catalog, audit, adminUsers, messages, stats };
 }
