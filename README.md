@@ -48,7 +48,7 @@ media/               optimised WebP artwork + app icons (generated)
 server/              REST API + static file server (Express), MySQL layer, SQL migrations, tests
 mobile/              Capacitor config for Android & iOS
 scripts/             optimize-images.sh, validate-catalog.mjs, build-www.mjs
-docs/                ARCHITECTURE.md · ADMIN.md · AUTH.md · PREMIUM.md · DATABASE.md · MOBILE.md · CONTENT.md · openapi.yaml
+docs/                ARCHITECTURE.md · SEO.md · ADMIN.md · AUTH.md · PREMIUM.md · DATABASE.md · MOBILE.md · CONTENT.md · openapi.yaml
 BTS/, UpcomingReleases/, images/, resources/   original artwork (untouched) & native icon/splash masters
 ```
 
@@ -56,6 +56,7 @@ BTS/, UpcomingReleases/, images/, resources/   original artwork (untouched) & na
 
 - [Architecture & roadmap](docs/ARCHITECTURE.md) — how the pieces fit, how to go to production, what to add next
 - [Sign-in: email, Google, Facebook](docs/AUTH.md) — who must log in, provider setup, native apps
+- [Google search (SEO)](docs/SEO.md) — crawlable URLs, sitemap, structured data, go-live checklist
 - [Admin console](docs/ADMIN.md) — `/admin`: content, users, payments, refunds, coupons, audit log
 - [Billing: GST invoices, coupons, refunds, emails](docs/BILLING.md) — setup, admin API, sales register
 - [Premium video on Cloudflare R2](docs/PREMIUM.md) — bucket, upload, catalog entry, access rules, Razorpay payments, security

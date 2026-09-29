@@ -2,7 +2,7 @@
 
 ```
 ┌────────────────────────────── one web bundle ──────────────────────────────┐
-│  index.html + app/  (vanilla ES modules, hash router, no build step)        │
+│  index.html + app/  (vanilla ES modules, History/hash router, no build step)        │
 │                                                                             │
 │  views/*  ──►  User service ──► LocalAdapter   (localStorage, guest/offline)│
 │     │            (profiles, list,  RemoteAdapter  (REST API, signed in)     │
@@ -26,7 +26,7 @@
 - **Adapters, not conditionals.** `User` never knows where data lives; `LocalAdapter`/`RemoteAdapter` implement one interface (`data/adapters.js`). Adding Supabase/Firebase = one more adapter. While signed out the app keeps using the local adapter, and sign-up migrates the guest's list/progress into the new account.
 - **Optimistic writes.** UI state changes instantly; the adapter call follows (playback progress is sampled about every 5 s, debounced ~4 s before it is sent to the API, and flushed immediately on pause/end/leave).
 - **Player abstraction.** `players/index.js` exposes `createPlayer(container, video, opts)`; the engine is chosen from `video.source.type` (`youtube | mp4 | hls`). Moving titles to your own CDN is a data change, not a code change.
-- **Hash routing** (`#/show/shahid`). Works on any static host and inside WebViews with zero server config, and deep links map 1:1 to app routes. Trade-off: weaker SEO for inner pages — see roadmap.
+- **Two URL styles, one router.** On the website served by the Node server, pages have real URLs (`/show/shahid`, History API) and the server answers each with the app shell plus that page's metadata and content, so Google can index it ([SEO.md](SEO.md)). Static hosting and the Capacitor apps have no such server and keep hash URLs (`#/show/shahid`); the server tells the app which mode to use with `<meta name="ab:routing">`. Old `/#/…` links are converted automatically.
 - **No framework/build step.** Small (~200 KB of unminified JS, views loaded on demand), trivially deployable, easy for the studio team to edit. `html` tagged templates escape all interpolations by default.
 - **MySQL for user data, JSON for content.** Accounts, profiles, My List, progress, reminders, subscriptions and contact messages live in MySQL (`server/migrations/*.sql`, accessed only through `server/src/db.js`). The catalog stays in `data/catalog.json` so editors need no database access and static hosting keeps working; tables reference catalog ids by value.
 - **Content as data.** `data/catalog.json` is the single source of truth, served both as a static file and by the API; a validator guards it.
@@ -58,7 +58,7 @@ Free content never needs an account. Titles marked `access: "premium"` require o
 3. **Social login** (Google/Apple; Apple is mandatory in iOS apps that offer other social logins) and email verification / password reset (needs an email provider).
 4. **Push notifications** for reminders and new episodes (FCM/APNs).
 5. **Admin CMS** (or headless CMS: Sanity/Strapi/Directus) generating `catalog.json`, plus a YouTube Data API sync job to import new uploads automatically.
-6. **SEO:** prerender `/show/:id` & `/watch/:id` pages (static generation from the catalog) with `VideoObject`/`TVSeries` JSON-LD and clean URLs.
+6. ~~**SEO**~~ done — see [SEO.md](SEO.md).
 7. **Analytics & recommendations** (watch-time events → "Because you watched…"), A/B tests on the hero.
 8. **i18n:** Bengali/English UI toggle (strings are already isolated in views).
 9. **Scale-out:** move rate limiting to Redis/edge, add read replicas / a managed MySQL with automated backups, and a `devices` table for push tokens.

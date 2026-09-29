@@ -1,0 +1,177 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { Catalog } from '../../app/js/data/catalog.js';
+import { matchRoute } from '../../app/js/routes.js';
+import { pageMeta, absUrl, clip, showFullName, videoIndexable, videoDescription, SITE, TYPE_LABEL } from '../../app/js/seo/meta.js';
+import { esc, fmtDuration } from '../../app/js/util.js';
+
+/**
+ * Search-engine support for the website served by this server:
+ *  - every page URL (/show/shahid …) returns the app shell with that page's <title>, description, canonical URL, Open Graph /
+ *    Twitter tags and JSON-LD already in the HTML, plus a plain-text copy of the page content (headings, links, images with
+ *    alt text) — so crawlers and link-preview bots that don't run JavaScript still see it. The app then takes over.
+ *  - correct status codes (real 404 for unknown pages, 301 for renamed/duplicate URLs), robots.txt, sitemap.xml.
+ * The metadata itself comes from app/js/seo/meta.js, which the browser also uses, so both always agree.
+ */
+
+const A = (href, text) => `<a href="${esc(href)}">${esc(text)}</a>`;
+const li = (href, text, extra = '') => `<li>${A(href, text)}${extra ? ` — ${esc(extra)}` : ''}</li>`;
+const enc = encodeURIComponent;
+const jsonForHtml = (o) => JSON.stringify(o).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+const showName = (s) => s.titleEn || s.title;
+
+/** Origin used in canonical URLs, the sitemap and structured data. PUBLIC_SITE_URL wins; otherwise what the request said. */
+export function siteOrigin(req, configured) {
+  if (configured) return configured.replace(/\/+$/, '');
+  return `${req.protocol}://${req.get('host')}`;
+}
+
+/** The visible-to-crawlers copy of a page (kept visually hidden: the real page is drawn by the app). */
+export function bodyHtml(m, { view, params }, cat, studio, plans) {
+  const h1 = (t) => `<h1>${esc(t)}</h1>`;
+  const intro = (t, d = m.description) => `${h1(t)}<p>${esc(d)}</p>`;
+  const nav = `<nav aria-label="Site">${[['/', 'Home'], ['/shows', 'All shows'], ['/reels', 'Reels'], ['/upcoming', 'Coming soon'], ['/gallery', 'Behind the scenes'], ['/plans', 'Plans'], ['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact']].map(([h, t]) => A(h, t)).join(' · ')}</nav>`;
+  const showList = (list) => `<ul>${list.map((s) => li(`/show/${s.id}`, showFullName(s), s.tagline)).join('')}</ul>`;
+  const epList = (list) => `<ul>${list.map((v) => li(`/watch/${v.id}`, `${v.kind === 'episode' && v.episode ? `EP ${v.episode}: ` : ''}${cat.displayTitle(v)}`, fmtDuration(v.duration))).join('')}</ul>`;
+  let b = '';
+  switch (view) {
+    case 'home': {
+      const latest = [...cat.allEpisodes()].sort((a, c) => c.publishedAt.localeCompare(a.publishedAt)).slice(0, 12);
+      b = `${intro('ADDABAAZ — Bengali web series, comedy and originals')}<h2>Shows</h2>${showList(cat.shows)}<h2>Latest episodes</h2>${epList(latest)}` +
+        (cat.upcoming.length ? `<h2>Coming soon</h2><ul>${cat.upcoming.map((u) => li(`/soon/${u.id}`, showFullName(u), u.note)).join('')}</ul>` : ''); break;
+    }
+    case 'browse': b = `${intro('All shows')}${showList(cat.shows)}`; break;
+    case 'show': {
+      const s = cat.show(params.id), eps = cat.episodes(s.id), extras = cat.extras(s.id).filter(videoIndexable);
+      b = `${h1(showFullName(s))}<p>${esc(s.tagline || '')}</p><p>${esc(s.description || '')}</p>` +
+        `<p>${esc(TYPE_LABEL[s.type] || 'Show')}${(s.genres || []).length ? ` · ${esc(s.genres.join(', '))}` : ''}${s.year ? ` · ${esc(s.year)}` : ''}${(s.cast || []).length ? ` · Starring ${esc(s.cast.join(', '))}` : ''}</p>` +
+        (eps.length ? `<h2>Episodes</h2>${epList(eps)}` : '') + (extras.length ? `<h2>Trailers and clips</h2>${epList(extras)}` : ''); break;
+    }
+    case 'watch': case 'reels': {
+      const v = cat.video(params.id), s = cat.show(v.showId), eps = s ? cat.episodes(s.id) : [], i = eps.findIndex((e) => e.id === v.id);
+      b = `${h1(cat.displayTitle(v))}<p>${esc(videoDescription(v, s, cat))}</p>` + (s ? `<p>From ${A(`/show/${s.id}`, showFullName(s))}</p>` : '') +
+        (i > 0 ? `<p>Previous: ${A(`/watch/${eps[i - 1].id}`, cat.displayTitle(eps[i - 1]))}</p>` : '') + (i >= 0 && i < eps.length - 1 ? `<p>Next: ${A(`/watch/${eps[i + 1].id}`, cat.displayTitle(eps[i + 1]))}</p>` : ''); break;
+    }
+    case 'upcoming': b = `${intro('Coming soon')}<ul>${cat.upcoming.map((u) => li(`/soon/${u.id}`, showFullName(u), u.note)).join('')}</ul>`; break;
+    case 'soon': { const u = cat.soon(params.id); b = `${intro(`${showFullName(u)} — coming soon`)}<p>${esc(u.note || '')}</p>${cat.show(u.showId) ? `<p>${A(`/show/${u.showId}`, 'Watch the show')}</p>` : ''}`; break; }
+    case 'gallery': b = `${intro('Behind the scenes')}` + cat.gallery.map((g) => `<figure><img src="${esc(g.image)}" alt="${esc(g.caption || `Behind the scenes of ${g.group} — ADDABAAZ production`)}" loading="lazy" width="400" height="300"></figure>`).join(''); break;
+    case 'plans': b = `${intro('Plans and pricing')}<ul>${(plans || []).map((p) => `<li>${esc(p.name)} — ${p.priceINR ? `₹${p.priceINR} per ${esc(p.interval)}` : 'free'}: ${esc((p.features || []).join('; '))}</li>`).join('')}</ul>`; break;
+    case 'studio': {
+      const st = studio?.studio || {}, path = m.canonical;
+      b = intro(path === '/contact' ? 'Contact ADDABAAZ' : path === '/services' ? 'Our services' : 'About ADDABAAZ') +
+        (path === '/services' ? `<ul>${(studio?.services || []).map((x) => `<li><strong>${esc(x.title)}</strong> ${esc(x.text || x.description || '')}</li>`).join('')}</ul>` : '') +
+        (path === '/about' ? `<ul>${(studio?.missionEn || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '') +
+        (path === '/contact' ? `<address>${(st.address || []).map(esc).join(', ')}<br>${st.email ? A(`mailto:${st.email}`, st.email) : ''}<br>${(st.phones || []).map(esc).join(', ')}</address>` : ''); break;
+    }
+    default: b = m.status === 404 ? `${h1('Page not found')}<p>${A('/', 'Go to the ADDABAAZ home page')}</p>` : h1(m.title.replace(/ — ADDABAAZ$/, ''));
+  }
+  return `<div class="sr-only" id="seo-content">${nav}${b}</div>`;
+}
+
+export function createSeo({ catalog, root, plans, origin: configuredOrigin = '', indexable = false, verification = {}, staticDir = root }) {
+  const indexFile = path.join(root, 'index.html');
+  let tpl = null, tplMtime = 0, preloads = null;
+  const template = () => {
+    const mt = fs.statSync(indexFile).mtimeMs;
+    if (!tpl || mt !== tplMtime) { tpl = fs.readFileSync(indexFile, 'utf8'); tplMtime = mt; preloads = null; }
+    return tpl;
+  };
+  /** URLs of main.js and everything it imports statically — preloaded so the app starts without a request waterfall. */
+  const modulePreloads = () => {
+    if (preloads) return preloads;
+    const seen = new Set(), walk = (rel) => {
+      if (seen.has(rel)) return; seen.add(rel);
+      let src = ''; try { src = fs.readFileSync(path.join(root, rel), 'utf8'); } catch { return; }
+      for (const m of src.matchAll(/(?:import|export)\s[^'"`;]*?from\s*['"](\.[^'"]+)['"]|^\s*import\s*['"](\.[^'"]+)['"]/gm)) {
+        const spec = m[1] || m[2]; walk(path.posix.normalize(path.posix.join(path.posix.dirname(rel), spec)));
+      }
+    };
+    walk('app/js/main.js');
+    return (preloads = [...seen].filter((f) => f.endsWith('.js')));
+  };
+
+  let catCache = { version: null, cat: null };
+  const view = async () => {
+    const snap = await catalog.get();
+    if (catCache.version !== snap.version || !catCache.cat) catCache = { version: snap.version, cat: new Catalog(snap.catalog) };
+    return { cat: catCache.cat, studio: snap.studio, snap };
+  };
+  const originOf = (req) => siteOrigin(req, configuredOrigin);
+
+  const headHtml = (m, origin, path_) => {
+    const url = m.canonical ? origin + m.canonical : null;
+    const robots = indexable ? m.robots : 'noindex,nofollow';
+    const tags = [
+      '<base href="/">',
+      `<title>${esc(m.title)}</title>`,
+      `<meta name="description" content="${esc(m.description)}">`,
+      `<meta name="robots" content="${esc(robots)}">`,
+      url ? `<link rel="canonical" href="${esc(url)}">` : '',
+      '<meta property="og:site_name" content="ADDABAAZ"><meta property="og:locale" content="en_IN">',
+      `<meta property="og:type" content="${esc(m.ogType)}">`,
+      `<meta property="og:title" content="${esc(m.title)}">`,
+      `<meta property="og:description" content="${esc(m.description)}">`,
+      url ? `<meta property="og:url" content="${esc(url)}">` : '',
+      `<meta property="og:image" content="${esc(m.image)}">`,
+      m.imageAlt ? `<meta property="og:image:alt" content="${esc(m.imageAlt)}">` : '',
+      '<meta name="twitter:card" content="summary_large_image">',
+      `<meta name="twitter:title" content="${esc(m.title)}">`,
+      `<meta name="twitter:description" content="${esc(m.description)}">`,
+      `<meta name="twitter:image" content="${esc(m.image)}">`,
+      '<meta name="ab:routing" content="history">',
+      verification.google ? `<meta name="google-site-verification" content="${esc(verification.google)}">` : '',
+      verification.bing ? `<meta name="msvalidate.01" content="${esc(verification.bing)}">` : '',
+      ...modulePreloads().map((f) => `<link rel="modulepreload" href="/${esc(f)}">`),
+      m.status === 200 && /^\/(show|soon)\//.test(path_) && m.image.startsWith(origin + '/') ? `<link rel="preload" as="image" href="${esc(m.image.slice(origin.length))}" fetchpriority="high">` : '',
+      m.jsonld?.length ? `<script type="application/ld+json" id="ld-page">${jsonForHtml(m.jsonld)}</script>` : '',
+    ];
+    return tags.filter(Boolean).join('\n');
+  };
+
+  const footerLinks = (html) => html.replace(/(<footer[\s\S]*?<\/footer>)/, (f) => f.replace(/href="#\/([^"]*)"/g, 'href="/$1"'));
+
+  /** Render the shell for a path. Returns { status, headers, body } or { redirect }. */
+  async function render(req) {
+    const origin = originOf(req);
+    const urlPath = req.path;
+    // one URL per page: no trailing slash, no /index.html
+    if (urlPath === '/index.html') return { redirect: '/' + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '') };
+    if (urlPath.length > 1 && urlPath.endsWith('/')) return { redirect: urlPath.replace(/\/+$/, '') + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '') };
+    const { cat, studio } = await view();
+    const query = req.query || {};
+    const m = pageMeta({ path: urlPath, query, cat, studio, origin, plans });
+    if (m.redirect) return { redirect: m.redirect, status: m.status };
+    const route = (m.status === 200 && matchRoute(urlPath)) || { view: '404', params: {} };
+    let html = template();
+    html = html.replace(/<!--seo:head-->[\s\S]*?<!--\/seo:head-->/, () => headHtml(m, origin, urlPath));
+    html = html.replace(/<!--seo:body--><!--\/seo:body-->/, () => bodyHtml(m, route, cat, studio, plans));
+    html = footerLinks(html);
+    const robotsHeader = !indexable || m.robots.startsWith('noindex') ? { 'X-Robots-Tag': 'noindex' } : {};
+    return { status: m.status, body: html, headers: { 'Content-Type': 'text/html; charset=utf-8', ...robotsHeader, ...(m.status === 200 ? { 'Cache-Control': 'public, max-age=0, must-revalidate' } : { 'Cache-Control': 'no-cache' }) } };
+  }
+
+  const robotsTxt = (req) => indexable
+    ? `User-agent: *\nDisallow: /admin\nDisallow: /api/\n\nSitemap: ${originOf(req)}/sitemap.xml\n`
+    : 'User-agent: *\nDisallow: /\n';
+
+  async function sitemapXml(req) {
+    const origin = originOf(req), { cat } = await view();
+    const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
+    const url = (p, { lastmod, extra = '' } = {}) => `<url><loc>${esc(origin + p)}</loc>${lastmod ? `<lastmod>${day(lastmod)}</lastmod>` : ''}${extra}</url>`;
+    const newest = (list) => list.map((v) => v.publishedAt).filter(Boolean).sort().at(-1);
+    const out = [url('/', { lastmod: newest(cat.videos) })];
+    for (const p of ['/shows', '/upcoming', '/gallery', '/plans', '/about', '/services', '/contact']) out.push(url(p));
+    for (const s of cat.shows) out.push(url(`/show/${s.id}`, { lastmod: newest(cat.videos.filter((v) => v.showId === s.id)) }));
+    for (const u of cat.upcoming) out.push(url(`/soon/${u.id}`));
+    for (const v of cat.videos) {
+      if (!videoIndexable(v)) continue;
+      const show = cat.show(v.showId), meta = pageMeta({ path: `/watch/${v.id}`, cat, origin });
+      const thumb = absUrl(origin, cat.thumb(v));
+      const vid = thumb ? `<video:video><video:thumbnail_loc>${esc(thumb)}</video:thumbnail_loc><video:title>${esc(clip(cat.displayTitle(v) + (show ? ` — ${showName(show)}` : ''), 100))}</video:title><video:description>${esc(clip(meta.description, 2000))}</video:description>${v.source?.type === 'youtube' ? `<video:player_loc>${esc(`https://www.youtube.com/embed/${v.source.id}`)}</video:player_loc>` : ''}<video:duration>${Math.max(1, Math.round(v.duration || 0))}</video:duration><video:publication_date>${esc(v.publishedAt)}</video:publication_date>${v.access === 'premium' ? '<video:requires_subscription>yes</video:requires_subscription>' : ''}</video:video>` : '';
+      out.push(url(`/watch/${v.id}`, { lastmod: v.publishedAt, extra: vid }));
+    }
+    return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">\n${out.join('\n')}\n</urlset>\n`;
+  }
+
+  return { render, robotsTxt, sitemapXml, indexable, origin: originOf, modulePreloads };
+}

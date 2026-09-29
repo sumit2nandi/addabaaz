@@ -78,10 +78,10 @@ function show(input, ctx) {
 }
 
 function video(input, ctx) {
-  const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access'], 'A video', ctx);
+  const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'description', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access'], 'A video', ctx);
   r.id(); r.oneOf('kind', KINDS, { req: true }); r.str('showId', { max: 64, pattern: ID, nullable: true }); ref(r, ctx, 'showId', [ctx.showIds, ctx.upcomingIds].filter(Boolean));
   r.int('episode', { min: 1, max: 100000, nullable: true }); if (r.out.kind && r.out.kind !== 'episode') r.out.episode = null;
-  r.str('title', { req: true, max: 300 }); r.str('shortTitle', { max: 120 });
+  r.str('title', { req: true, max: 300 }); r.str('shortTitle', { max: 120 }); r.str('description', { max: 500 });
   const s = r.src.source;
   if (!s || typeof s !== 'object' || Array.isArray(s)) r.errors.push('source is required.');
   else {

@@ -1,4 +1,5 @@
 import { app } from '../app.js';
+import { go } from '../router.js';
 import { html, $, fmtDuration, fmtViews, fmtDate, timeAgo, fmtRuntime } from '../util.js';
 import { icon } from '../icons.js';
 import { rail, enhanceRails, showCard, videoCard, reelCard, listBtn, img, showMeta, toast } from '../ui/components.js';
@@ -18,7 +19,7 @@ export function epRow(v, { current = false } = {}) {
 export default async function showView(ctx) {
   const cat = app.catalog, u = app.user;
   const s = cat.show(ctx.params.id);
-  if (!s) { if (cat.soon(ctx.params.id)) { location.replace('#/soon/' + ctx.params.id); return; } throw new Error('This show does not exist.'); }
+  if (!s) { if (cat.soon(ctx.params.id)) { go('/soon/' + ctx.params.id, { replace: true }); return; } throw new Error('This show does not exist.'); }
   const eps = cat.episodes(s.id), extras = cat.extras(s.id);
   const latest = cat.latestEpisode(s.id);
   const t = u.resumeTarget(cat, s.id);

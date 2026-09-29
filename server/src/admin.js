@@ -48,6 +48,7 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
     const dbUp = await db.ping().then(() => true, () => false);
     let uploads = false; try { fs.mkdirSync(uploadDir, { recursive: true }); fs.accessSync(uploadDir, fs.constants.W_OK); uploads = true; } catch { /* not writable */ }
     const prod = env.NODE_ENV === 'production';
+    const indexing = env.ALLOW_INDEXING ? /^(1|true|yes)$/i.test(env.ALLOW_INDEXING) : prod;
     const item = (id, label, ok, detail, level = 'warn') => ({ id, label, ok, detail, level: ok ? 'ok' : level });
     res.json({ checks: [
       item('db', 'Database', dbUp, dbUp ? 'MySQL is reachable.' : 'MySQL is not reachable.', 'error'),
@@ -59,7 +60,8 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
       item('google', 'Google sign-in', !!social.verifiers?.google, social.verifiers?.google ? 'Enabled.' : 'Not configured (optional).', 'info'),
       item('facebook', 'Facebook sign-in', !!social.verifiers?.facebook, social.verifiers?.facebook ? 'Enabled.' : 'Not configured (optional).', 'info'),
       item('uploads', 'Image uploads', uploads, uploads ? `Saved to ${uploadDir}${prod ? ' — make sure this folder is on a persistent volume.' : ''}` : `Cannot write to ${uploadDir}.`),
-      item('site', 'Public site URL', !!env.PUBLIC_SITE_URL, env.PUBLIC_SITE_URL ? env.PUBLIC_SITE_URL : 'PUBLIC_SITE_URL is not set — links in emails will be wrong.', 'info'),
+      item('site', 'Public site URL', !!env.PUBLIC_SITE_URL, env.PUBLIC_SITE_URL ? env.PUBLIC_SITE_URL : 'PUBLIC_SITE_URL is not set — links in emails, canonical URLs and the sitemap fall back to the address of each request. Set it to your https address (no trailing slash).', prod ? 'warn' : 'info'),
+      item('indexing', 'Google indexing', indexing, indexing ? 'Search engines may index the site: robots.txt and /sitemap.xml are live.' : 'Search engines are told NOT to index this site (robots.txt disallows all). That is right for staging; on the live site set NODE_ENV=production or ALLOW_INDEXING=true.', prod ? 'warn' : 'info'),
       item('admins', 'Administrators', (await db.adminUsers.countAdmins()) > 0, `${await db.adminUsers.countAdmins()} admin account(s).`, 'warn'),
     ] });
   }));

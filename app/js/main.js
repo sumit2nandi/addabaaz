@@ -5,7 +5,8 @@ import { loadCatalog } from './data/catalog.js';
 import { ApiClient, detectApi } from './data/api.js';
 import { LocalAdapter, RemoteAdapter } from './data/adapters.js';
 import { User } from './data/user.js';
-import { Router, parseHash } from './router.js';
+import { Router, parseLocation, currentPath, replaceUrl, go } from './router.js';
+import { HISTORY } from './mode.js';
 import { renderShell, renderProfileMenu, markActive } from './ui/shell.js';
 import { syncButtons, scrollRail, toast } from './ui/components.js';
 import { initPlatform } from './platform.js';
@@ -13,6 +14,8 @@ import { initPlatform } from './platform.js';
 initPlatform();
 
 async function boot() {
+  // Old shared links (/#/show/shahid) → the real URL (/show/shahid) on the website.
+  if (HISTORY && location.hash.startsWith('#/')) history.replaceState(null, '', location.hash.slice(1));
   const base = CONFIG.apiBase;
   const useApi = await detectApi(base);
   app.api = useApi ? new ApiClient(base === 'off' ? '' : base) : null;
@@ -32,8 +35,8 @@ async function boot() {
   app.user.on('account', renderProfileMenu);
   window.addEventListener('ab:unauthorized', () => { app.user.signOut().then(() => toast('Your session expired. Please sign in again.')); });
 
-  if (app.user.needsProfileChoice() && parseHash().path !== '/profiles') {
-    location.replace('#/profiles?next=' + encodeURIComponent(location.hash.replace(/^#/, '') || '/'));
+  if (app.user.needsProfileChoice() && parseLocation().path !== '/profiles') {
+    replaceUrl('/profiles?next=' + encodeURIComponent(currentPath()));
   }
   router.start();
   networkStatus();
@@ -50,7 +53,7 @@ function wireGlobalActions() {
     if (lb) {
       e.preventDefault(); e.stopPropagation();
       const [type, ...rest] = lb.dataset.list.split(':'); const id = rest.join(':');
-      if (!app.user.profile) { toast('Choose a profile first.'); location.hash = '#/profiles'; return; }
+      if (!app.user.profile) { toast('Choose a profile first.'); go('/profiles'); return; }
       const added = await app.user.toggleList(type, id);
       toast(added ? 'Added to My List' : 'Removed from My List', { action: 'Undo', onAction: () => app.user.toggleList(type, id) });
       return;

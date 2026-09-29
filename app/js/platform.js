@@ -1,5 +1,6 @@
 /* Native-shell hooks. Everything here is a no-op in a normal browser, so the same
  * bundle runs on the web, in a PWA and inside Capacitor (Android / iOS). */
+import { HISTORY } from './mode.js';
 export const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform?.());
 export const platform = isNative ? window.Capacitor.getPlatform() : 'web';
 
@@ -21,7 +22,8 @@ export function initPlatform() {
   // Custom-scheme / universal links: addabaaz://show/shahid  ->  #/show/shahid
   P.App?.addListener?.('appUrlOpen', ({ url }) => {
     try {
-      const u = new URL(url); const path = (u.hash.replace(/^#/, '') || (u.host + u.pathname)).replace(/^\/?/, '/');
+      const u = new URL(url);
+      const path = /^https?:$/.test(u.protocol) ? u.pathname + u.search : (u.hash.replace(/^#/, '') || (u.host + u.pathname)).replace(/^\/?/, '/');
       if (path.length > 1) location.hash = '#' + path;
     } catch { /* ignore malformed links */ }
   });
@@ -29,4 +31,5 @@ export function initPlatform() {
 
 /** Where a shareable public URL for a route lives (native apps share the website URL). */
 export const PUBLIC_URL = 'https://addabaaz.in/';
-export const shareUrl = (hashPath) => (isNative ? PUBLIC_URL : location.origin + location.pathname) + '#' + hashPath;
+/** Website (server) → real URL; static hosting → hash URL; native apps share the public website's URL. */
+export const shareUrl = (path) => (isNative ? PUBLIC_URL.replace(/\/$/, '') + path : HISTORY ? location.origin + path : location.origin + location.pathname + '#' + path);

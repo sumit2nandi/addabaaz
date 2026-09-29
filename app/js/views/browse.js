@@ -1,4 +1,5 @@
 import { app } from '../app.js';
+import { replaceUrl } from '../router.js';
 import { html, $, $$ } from '../util.js';
 import { icon } from '../icons.js';
 import { showCard, videoCard, sectionHeader, showMeta, emptyState } from '../ui/components.js';
@@ -21,7 +22,7 @@ export default async function browse(ctx) {
   const sync = () => {
     const q = new URLSearchParams(); if (st.view !== 'shows') q.set('view', st.view);
     if (st.genre) q.set('genre', st.genre); if (st.show) q.set('show', st.show); if (st.sort !== 'new') q.set('sort', st.sort);
-    history.replaceState(history.state, '', '#/shows' + (q.toString() ? '?' + q : ''));
+    replaceUrl('/shows' + (q.toString() ? '?' + q : ''));
   };
   const chip = (label, key, value) => html`<button type="button" class="chip-btn ${st[key] === value ? 'active' : ''}" data-f="${key}" data-v="${value}">${label}</button>`;
 

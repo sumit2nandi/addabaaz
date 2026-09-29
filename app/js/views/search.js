@@ -1,4 +1,5 @@
 import { app } from '../app.js';
+import { replaceUrl } from '../router.js';
 import { html, $, debounce, storage, store } from '../util.js';
 import { icon } from '../icons.js';
 import { showCard, videoCard, reelCard, soonCard, emptyState } from '../ui/components.js';
@@ -25,7 +26,7 @@ export default async function search(ctx) {
   };
   const run = () => {
     const term = q.value.trim(); clr.hidden = !term;
-    history.replaceState(history.state, '', '#/search' + (term ? '?q=' + encodeURIComponent(term) : ''));
+    replaceUrl('/search' + (term ? '?q=' + encodeURIComponent(term) : ''));
     if (!term) return idle();
     const r = cat.search(term);
     const eps = r.videos.filter((v) => v.kind === 'episode'), reels = r.videos.filter((v) => v.kind !== 'episode');

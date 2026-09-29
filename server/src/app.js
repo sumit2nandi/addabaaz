@@ -14,6 +14,8 @@ import { createBilling, billingConfigFromEnv } from './billing.js';
 import { STATES } from './gst.js';
 import { HttpError, bad, wrap, rateLimit } from './http.js';
 import { createCatalogStore } from './catalog.js';
+import { createSeo } from './seo.js';
+import compression from 'compression';
 import { createAdminRouter } from './admin.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -44,6 +46,7 @@ export function createApp({
   social = socialFromEnv(),                                   // { config, verifiers: { google?, facebook? } }
   publicApiUrl = process.env.PUBLIC_API_URL || '',            // absolute base for HLS URLs when behind a proxy
   streamTtl = Number(process.env.STREAM_URL_TTL) || 6 * 3600, // seconds a signed video URL stays valid
+  seo = {},                                                    // search-engine options: { siteUrl, indexable, compress, googleVerification, bingVerification } (env defaults below)
 } = {}) {
   if (!db) throw new Error('createApp: a database (createDb()) is required');
   const production = process.env.NODE_ENV === 'production';
@@ -55,7 +58,17 @@ export function createApp({
 
   const app = express();
   app.disable('x-powered-by');
+  const seoCfg = {
+    siteUrl: seo.siteUrl ?? process.env.PUBLIC_SITE_URL ?? '',     // https://addabaaz.in — canonical URLs, sitemap and structured data use it
+    // Only the real production site should be indexed: staging/preview copies would compete with it (duplicate content).
+    indexable: seo.indexable ?? (process.env.ALLOW_INDEXING ? /^(1|true|yes)$/i.test(process.env.ALLOW_INDEXING) : production),
+    compress: seo.compress ?? !/^(1|true|yes)$/i.test(process.env.DISABLE_COMPRESSION || ''),
+    google: seo.googleVerification ?? process.env.GOOGLE_SITE_VERIFICATION ?? '',
+    bing: seo.bingVerification ?? process.env.BING_SITE_VERIFICATION ?? '',
+  };
+  if (seoCfg.compress) app.use(compression({ filter: (req, res) => !/event-stream/.test(res.getHeader('Content-Type') || '') && compression.filter(req, res) }));
   app.set('trust proxy', process.env.TRUST_PROXY ? Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY : false);
+  app.use(['/api', '/admin', '/data'], (_req, res, next) => { res.set('X-Robots-Tag', 'noindex, nofollow'); next(); });   // machine endpoints and the admin console never belong in search results
   app.use((req, res, next) => {
     res.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'SAMEORIGIN' });
     const origin = req.headers.origin;
@@ -356,17 +369,37 @@ export function createApp({
   /* ---------- static site (same origin => the web app auto-detects this API) ---------- */
   if (serveStatic) {
     const opts = (maxAge) => ({ maxAge, index: false, dotfiles: 'ignore' });
-    app.get(['/', '/index.html'], (_q, res) => res.sendFile(path.join(ROOT, 'index.html')));
-    app.get('/manifest.webmanifest', (_q, res) => res.sendFile(path.join(ROOT, 'manifest.webmanifest')));
+    const seoSvc = createSeo({ catalog, root: ROOT, plans: PLANS, origin: seoCfg.siteUrl, indexable: seoCfg.indexable, verification: { google: seoCfg.google, bing: seoCfg.bing } });
+    app.get('/robots.txt', (req, res) => res.type('text/plain').set('Cache-Control', 'public, max-age=3600').send(seoSvc.robotsTxt(req)));
+    app.get('/sitemap.xml', wrap(async (req, res) => { res.type('application/xml').set('Cache-Control', 'public, max-age=3600').send(await seoSvc.sitemapXml(req)); }));
+    // The web app manifest: on this server the app uses real URLs, so an installed app should open on "/" rather than "/#/".
+    app.get('/manifest.webmanifest', (_q, res) => {
+      try { const m = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.webmanifest'), 'utf8')); m.start_url = '/'; m.scope = '/'; res.type('application/manifest+json').send(JSON.stringify(m)); }
+      catch { res.sendFile(path.join(ROOT, 'manifest.webmanifest')); }
+    });
     app.get('/sw.js', (_q, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(path.join(ROOT, 'sw.js')); });
     app.use('/app', express.static(path.join(ROOT, 'app'), { ...opts(0), etag: true }));
     app.use('/data', express.static(path.join(ROOT, 'data'), opts(60_000)));
-    app.use('/media', express.static(path.join(ROOT, 'media'), opts(86_400_000)));
+    app.use('/media', express.static(path.join(ROOT, 'media'), opts(7 * 86_400_000)));
     app.use('/uploads', express.static(uploadDir, { maxAge: '365d', immutable: true, index: false, dotfiles: 'ignore' }));   // admin-uploaded images (content-hash names)
     // The admin console: its own page + scripts, never cached, locked down with a strict CSP (no inline script, no framing).
     const adminHeaders = (_q, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'self'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" }); next(); };
     app.get(['/admin', '/admin/'], adminHeaders, (_q, res) => res.sendFile(path.join(ROOT, 'admin/index.html')));
     app.use('/admin', adminHeaders, express.static(path.join(ROOT, 'admin'), { index: false, dotfiles: 'ignore', etag: true }));
+
+    // Every other GET is a page of the web app (/, /show/shahid …). Unknown pages get a REAL 404 status (with the app shell, so
+    // people still see the site) — otherwise search engines index every mistyped URL as a "soft 404".
+    app.get('*', async (req, res, next) => {
+      if (req.path !== '/index.html' && (/^\/(api|app|data|media|uploads|admin)(\/|$)/.test(req.path) || /\.[a-z0-9]{1,8}$/i.test(req.path))) return res.status(404).type('text/plain').send('Not found');
+      try {
+        const r = await seoSvc.render(req);
+        if (r.redirect) return res.redirect(r.status || 301, r.redirect);
+        res.status(r.status).set(r.headers).send(r.body);
+      } catch (e) {
+        console.error('[seo] page render failed:', e.message);
+        res.status(503).set({ 'Cache-Control': 'no-store', 'Retry-After': '30' }).sendFile(path.join(ROOT, 'index.html'));   // 503, not 200: never let a crawler index a broken page
+      }
+    });
   }
 
   app.use((err, _req, res, _next) => {

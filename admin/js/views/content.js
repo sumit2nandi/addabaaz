@@ -30,7 +30,8 @@ export default async function content(root, [section], ctx) {
     { k: 'access', label: 'Access', type: 'select', options: ACCESS, dflt: 'free' },
     { k: 'language', label: 'Language' }, { k: 'year', label: 'Year', type: 'number', min: 1900, max: 2100 },
     { k: 'genres', label: 'Genres', type: 'tags', wide: true }, { k: 'cast', label: 'Cast', type: 'tags', wide: true },
-    { k: 'tagline', label: 'Tagline', wide: true, max: 300 }, { k: 'description', label: 'Description', type: 'textarea', req: true, wide: true },
+    { k: 'tagline', label: 'Tagline', wide: true, max: 300, help: 'One line. Shown under the title and used in Google results — about 60–120 characters works best.' },
+    { k: 'description', label: 'Description', type: 'textarea', req: true, wide: true, help: 'Google shows roughly the first 155 characters — put the hook first, and name the show, genre and language.' },
     { k: 'featured', label: 'Feature on the home page (needs at least one episode)', type: 'bool', wide: true },
     { k: 'poster', label: 'Poster (card)', type: 'image', req: true, maxWidth: 700, wide: true }, { k: 'posterLg', label: 'Poster (large / hero)', type: 'image', maxWidth: 1600, wide: true },
   ];
@@ -55,7 +56,7 @@ export default async function content(root, [section], ctx) {
         <td><strong>${s.titleEn || s.title}</strong>${s.titleEn ? html`<br><small class="muted bn">${s.title}</small>` : ''}${s.featured ? html` ${badge('featured', 'gold')}` : ''}</td>
         <td>${s.type}<br><small class="muted">${s.status}</small></td><td>${videosOf(s.id).length}</td><td>${s.access === 'premium' ? badge('premium', 'gold') : badge('free')}</td>
         <td class="end nowrap">${orderBtns(s.id, i, data.shows.length)}</td>
-        <td class="end nowrap"><a class="icon-btn" href="/#/show/${s.id}" target="_blank" rel="noopener" title="View on site">${icon('external', 16)}</a><button class="icon-btn" data-edit="${s.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${s.id}" title="Delete">${icon('trash', 16)}</button></td></tr>`)}</tbody></table>` : empty('No shows yet.')}</div>`.s;
+        <td class="end nowrap"><a class="icon-btn" href="/show/${s.id}" target="_blank" rel="noopener" title="View on site">${icon('external', 16)}</a><button class="icon-btn" data-edit="${s.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${s.id}" title="Delete">${icon('trash', 16)}</button></td></tr>`)}</tbody></table>` : empty('No shows yet.')}</div>`.s;
     $('#new').onclick = () => editShow(null);
     $$('[data-edit]', root).forEach((b) => b.onclick = () => editShow(data.shows.find((s) => s.id === b.dataset.edit)));
     $$('[data-del]', root).forEach((b) => b.onclick = () => deleteShow(data.shows.find((s) => s.id === b.dataset.del)));
@@ -88,6 +89,7 @@ export default async function content(root, [section], ctx) {
     { k: 'kind', label: 'Kind', type: 'select', options: KINDS, dflt: 'episode' },
     { k: 'showId', label: 'Show', type: 'select', options: showOptions() },
     { k: 'title', label: 'Title', req: true, wide: true, max: 300 }, { k: 'shortTitle', label: 'Short title (optional, shown on cards)', wide: true, max: 120 },
+    { k: 'description', label: 'Description for Google (optional)', type: 'textarea', wide: true, max: 500, help: 'One or two sentences about this video (120–155 characters is ideal). Episodes get an automatic description from their show if this is empty; reels are kept out of Google unless you write one.' },
     { k: 'episode', label: 'Episode number', type: 'number', min: 1, help: 'Episodes only.' },
     { k: 'access', label: 'Access', type: 'select', options: ACCESS, dflt: 'free', help: 'Premium needs the video hosted in R2.' },
     sourceField(),
@@ -144,7 +146,7 @@ export default async function content(root, [section], ctx) {
       ${pageRows.map((v) => html`<tr><td class="thumb wide">${thumb(v) ? html`<img src="${thumb(v)}" alt="" loading="lazy">` : ''}</td>
         <td class="title-cell"><strong class="clip">${v.shortTitle || v.title}</strong><br>${badge(v.kind === 'episode' && v.episode ? `EP ${v.episode}` : v.kind)} ${v.access === 'premium' ? badge('premium', 'gold') : ''} ${v.source.type === 'r2' ? badge('R2') : ''}</td>
         <td>${showTitle(v.showId) || html`<span class="muted">—</span>`}</td><td>${fmtDur(v.duration)}</td><td class="small">${fmtDT(v.publishedAt)}</td><td class="end">${v.views.toLocaleString('en-IN')}</td>
-        <td class="end nowrap"><a class="icon-btn" href="/#/watch/${v.id}" target="_blank" rel="noopener" title="Open on site">${icon('external', 16)}</a><button class="icon-btn" data-edit="${v.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${v.id}" title="Delete">${icon('trash', 16)}</button></td></tr>`)}</tbody></table>` : empty('No videos match.')}</div>
+        <td class="end nowrap"><a class="icon-btn" href="/watch/${v.id}" target="_blank" rel="noopener" title="Open on site">${icon('external', 16)}</a><button class="icon-btn" data-edit="${v.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${v.id}" title="Delete">${icon('trash', 16)}</button></td></tr>`)}</tbody></table>` : empty('No videos match.')}</div>
       ${pager({ total: rows.length, offset: F.offset, limit: PAGE })}`.s;
     $$('[data-edit]', root).forEach((b) => b.onclick = () => editVideo(data.videos.find((v) => v.id === b.dataset.edit)));
     $$('[data-del]', root).forEach((b) => b.onclick = async () => {

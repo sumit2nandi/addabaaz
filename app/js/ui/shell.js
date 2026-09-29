@@ -1,4 +1,5 @@
 import { app } from '../app.js';
+import { go } from '../router.js';
 import { html, $, $$, el } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar } from './components.js';
@@ -36,7 +37,7 @@ export function renderShell() {
   wireMenus();
   window.addEventListener('scroll', () => $('#topbar').classList.toggle('scrolled', window.scrollY > 24), { passive: true });
   document.addEventListener('keydown', (e) => {
-    if (e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName)) { e.preventDefault(); location.hash = '#/search'; }
+    if (e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName)) { e.preventDefault(); go('/search'); }
   });
 }
 
@@ -68,7 +69,7 @@ function wireMenus() {
     }
     const sw = e.target.closest('[data-switch-profile]');
     if (sw) { app.user.selectProfile(sw.dataset.switchProfile).then(() => location.reload()); return; }
-    if (e.target.closest('[data-signout]')) { app.user.signOut().then(() => { location.hash = '#/'; }); }
+    if (e.target.closest('[data-signout]')) { app.user.signOut().then(() => { go('/'); }); }
     if (!e.target.closest('.menu') || e.target.closest('a.menu-item, a')) closeAll();
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(); });

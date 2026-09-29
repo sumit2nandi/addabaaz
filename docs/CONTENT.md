@@ -19,6 +19,7 @@ Append to `videos`:
   "kind": "episode",                // episode | trailer | reel | clip
   "episode": 6,                     // episodes only — drives ordering, "Next: EP 07", autoplay
   "title": "Full YouTube title…",   // the UI derives a short display title; add "shortTitle" to override
+  "description": "…",              // optional, 1–2 sentences for Google (reels stay out of search results without one)
   "source": { "type": "youtube", "id": "dQw4w9WgXcQ" },
   "duration": 905,                  // seconds
   "publishedAt": "2026-10-04T13:30:00Z",

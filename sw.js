@@ -5,10 +5,10 @@
  * - YouTube thumbnails: stale-while-revalidate (opaque responses allowed)
  * - /api/*, /admin/*, YouTube player, analytics: never intercepted
  * Bump VERSION (or run `npm run build:www`, which stamps it) to force a refresh. */
-const VERSION = 'v2.4.0';
+const VERSION = 'v2.5.0';
 const SHELL = `ab-shell-${VERSION}`, DATA = `ab-data-${VERSION}`, MEDIA = `ab-media-${VERSION}`, THUMBS = `ab-thumbs-${VERSION}`;
 const PRECACHE = ['./', 'index.html', 'manifest.webmanifest', 'app/env.js', 'app/css/styles.css', 'app/js/main.js', 'app/js/app.js', 'app/js/config.js', 'app/js/util.js', 'app/js/icons.js',
-  'app/js/router.js', 'app/js/platform.js', 'app/js/social.js', 'app/js/payments.js', 'app/js/data/catalog.js', 'app/js/data/api.js', 'app/js/data/adapters.js', 'app/js/data/user.js',
+  'app/js/router.js', 'app/js/mode.js', 'app/js/routes.js', 'app/js/seo/meta.js', 'app/js/seo/head.js', 'app/js/platform.js', 'app/js/social.js', 'app/js/payments.js', 'app/js/data/catalog.js', 'app/js/data/api.js', 'app/js/data/adapters.js', 'app/js/data/user.js',
   'app/js/ui/shell.js', 'app/js/ui/components.js', 'app/js/ui/dialog.js', 'app/js/ui/lightbox.js', 'app/js/views/home.js', 'app/js/views/show.js', 'app/js/views/watch.js',
   'app/js/players/index.js', 'app/js/players/youtube.js', 'app/js/players/html5.js', 'data/catalog.json', 'data/studio.json', 'media/icons/icon-192.png', 'media/icons/logo-96.webp'];
 
@@ -42,7 +42,8 @@ self.addEventListener('fetch', (e) => {
   if (url.origin === location.origin) {
     if (url.pathname.includes('/api/') || url.pathname === '/admin' || url.pathname.startsWith('/admin/')) return;   // the admin console is never cached or shadowed by the app shell
     if (url.pathname.startsWith('/uploads/')) return e.respondWith(cacheFirst(req, MEDIA));   // admin uploads have content-hash names
-    if (req.mode === 'navigate') return e.respondWith(networkFirst(new Request('./'), SHELL).catch(() => caches.match('./').then((r) => r || caches.match('index.html'))));
+    // Pages: ask the server for the real URL (it answers /show/x with that page's HTML and the right status); offline → the cached app shell.
+    if (req.mode === 'navigate') return e.respondWith(fetch(req).catch(() => caches.match('./').then((r) => r || caches.match('index.html'))));
     if (url.pathname.includes('/data/')) return e.respondWith(networkFirst(req, DATA));
     if (url.pathname.includes('/media/')) return e.respondWith(cacheFirst(req, MEDIA));
     return e.respondWith(swr(req, SHELL));
