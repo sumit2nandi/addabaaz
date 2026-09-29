@@ -603,7 +603,7 @@ Full guidance on writing titles and descriptions that rank is in `docs/SEO.md`.
 
 ## 12. Android and iOS apps
 
-The apps are the website inside a native shell (Capacitor). Requirements: **Android** — Android Studio (SDK 35), JDK 21; **iOS** — a Mac with Xcode 16+ and CocoaPods; store accounts (Google Play $25 once, Apple Developer $99/year).
+The apps are the website inside a native shell (Capacitor). Requirements: **Android** — Android Studio (SDK 36), JDK 21; **iOS** — a Mac with Xcode 16+ and CocoaPods; store accounts (Google Play $25 once, Apple Developer $99/year).
 
 ```bash
 npm install                                            # repo root
@@ -612,7 +612,7 @@ cd mobile && npm install
 npx cap add android
 npx cap add ios                                        # macOS only
 npm run assets                                         # icons + splash from ../resources
-npm run sync
+npm run sync                                           # also raises the Android build to API 36 / Gradle plugin 8.9.1
 npm run open:android                                   # or open:ios
 ```
 
@@ -720,6 +720,7 @@ Prints requests per second and p50/p95/p99 latency per endpoint. The numbers dep
 | Hostinger: `Too many connections` / `max_user_connections` | Lower `DB_POOL_SIZE` (try `3`–`5`). |
 | Hostinger: SQL syntax errors on the first start | The database is probably MariaDB and hit something the app doesn't support there. Copy the exact error from the **Runtime logs** and send it to whoever maintains the code — it is a small fix in `server/migrations/` or `server/src/db*.js`. Ask Hostinger support which engine/version your database runs. |
 | `ER_ACCESS_DENIED_ERROR` / `Unknown database` | Wrong credentials, or the database doesn't exist — create it, or start once with `DB_CREATE=true`. |
+| Android Studio build: `androidx.browser:browser:1.9.0 requires Android Gradle plugin 8.9.1 or higher` / `requires … compile against version 36 or later` | The generated Android project is older than its libraries. In `mobile/` run `npm run android:patch` (raises the Android Gradle Plugin to 8.9.1 and compileSdk/targetSdk to 36; it also runs on every `npm run sync`), install **Android 16 (API 36)** in Android Studio → SDK Manager, then **File → Sync Project with Gradle Files**. API 36 is also what Google Play requires for new apps and updates since 31 Aug 2026. |
 | `npm test`: nearly every test fails with `MySQL is not reachable` | Start MySQL, or set `TEST_DATABASE_URL`. |
 | Server refuses to start: JWT secret | `NODE_ENV=production` requires `JWT_SECRET`. |
 | Server refuses to start: GSTIN invalid | Fix `GSTIN` (15 characters, valid state code and check character) or leave it empty. |

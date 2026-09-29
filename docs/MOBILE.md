@@ -7,7 +7,7 @@ The apps are the web app running inside a native WebView via **Capacitor 7** —
 | | Android | iOS |
 |---|---|---|
 | OS | Win / macOS / Linux | **macOS only** |
-| Tools | Android Studio (SDK 35), JDK 21 | Xcode 16+, CocoaPods |
+| Tools | Android Studio (SDK 36), JDK 21 | Xcode 16+, CocoaPods |
 | Store account | Google Play Console ($25 once) | Apple Developer Program ($99/yr) |
 
 ## First-time setup
@@ -50,6 +50,7 @@ The data contract is the REST API + `catalog.json` (see `openapi.yaml`), so a Sw
 
 | Symptom | Fix |
 |---|---|
+| Gradle error: `androidx.browser:browser:1.9.0 requires Android Gradle plugin 8.9.1 or higher` / `compile against version 36 or later` | The generated Android project is older than the libraries. Run `npm run android:patch` in `mobile/` (it raises the Android Gradle Plugin to 8.9.1 and compileSdk/targetSdk to 36 - it also runs on every `npm run sync`), install **Android 16 (API 36)** in Android Studio → SDK Manager, then File → Sync Project with Gradle Files. API 36 is also what Google Play requires for new apps and updates since 31 Aug 2026. |
 | YouTube "Error 153 / video unavailable" in iOS | Make sure `iosScheme` is `https` and `server.hostname` is set, then `npx cap sync` |
 | White screen after update | `npm run build:www` before `cap sync` (the apps embed `../www`) |
 | Can't reach API from Android emulator | Use `https://` and a real hostname (cleartext is blocked); for local dev use `adb reverse` or a tunnel |

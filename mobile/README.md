@@ -10,3 +10,5 @@ npx cap add android && npx cap add ios  # once (generates native projects — gi
 npm run assets                          # icons + splash from ../resources
 npm run sync && npm run open:android    # Android Studio  (open:ios → Xcode, macOS only)
 ```
+
+`npm run sync` also runs `scripts/patch-android.mjs`, which raises the generated Android project to Android Gradle Plugin 8.9.1 and compileSdk/targetSdk 36 (needed by current libraries and by Google Play). Already-generated project? Run `npm run android:patch`.
