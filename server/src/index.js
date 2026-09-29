@@ -3,13 +3,18 @@
 // All settings come from environment variables - see .env.example and SETUP.md.
 import { createApp } from './app.js';
 import { createDb } from './db.js';
+import { dbConfigFromEnv } from './config.js';
 import { migrate } from './migrate.js';
 import { runScheduledJobs } from './jobs.js';
 
 // Listen port (PORT, default 3000).
 const port = Number(process.env.PORT) || 3000;
+// Work out where the database settings come from and log it (host, database and user only - never the password),
+// so a wrong or leftover DATABASE_URL is easy to spot in the host's runtime log.
+const dbConfig = dbConfigFromEnv();
+console.log(`[db] settings from ${process.env.DATABASE_URL ? 'DATABASE_URL' : 'DB_* variables'}: ${dbConfig.user}@${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`);
 // Connect to MySQL (creating the database first when DB_CREATE=true) and stop early with a clear message if it is unreachable.
-const db = await createDb({ ensureDatabase: process.env.DB_CREATE === 'true' });
+const db = await createDb({ config: dbConfig, ensureDatabase: process.env.DB_CREATE === 'true' });
 try { await db.ping(); }
 catch (e) { console.error(`Cannot connect to MySQL (${e.code || e.message}). Check DATABASE_URL / DB_* settings — see .env.example.`); process.exit(1); }
 if (process.env.DB_MIGRATE !== 'false') {                       // set DB_MIGRATE=false to run `npm run db:migrate` as a separate deploy step
