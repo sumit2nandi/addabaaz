@@ -10,8 +10,17 @@
 export function dbConfigFromEnv(env = process.env) {
   let cfg;
   // Preferred form: a single connection URL. Credentials are URL-decoded so special characters work.
+  let u = null;
   if (env.DATABASE_URL) {
-    const u = new URL(env.DATABASE_URL);
+    try { u = new URL(env.DATABASE_URL); }
+    catch {
+      // A malformed URL (typically an unescaped special character in the password). Fall back to the separate DB_* settings when
+      // they are present, otherwise stop with a message that says what to fix (never echo the URL: it contains the password).
+      if (!env.DB_HOST && !env.DB_NAME && !env.DB_USER) throw new Error('DATABASE_URL is not a valid URL. Use the form mysql://user:password@host:3306/database (URL-encode special characters in the password: @ -> %40, # -> %23, : -> %3A, / -> %2F), or remove it and set DB_HOST, DB_PORT, DB_NAME, DB_USER and DB_PASSWORD instead.');
+      console.warn('[db] DATABASE_URL is not a valid URL - ignoring it and using DB_HOST / DB_NAME / DB_USER / DB_PASSWORD. Remove DATABASE_URL to silence this warning.');
+    }
+  }
+  if (u) {
     cfg = { host: u.hostname, port: Number(u.port) || 3306, user: decodeURIComponent(u.username), password: decodeURIComponent(u.password), database: u.pathname.replace(/^\//, '') };
   // Fallback: individual DB_* variables, defaulting to a local MySQL.
   } else {
