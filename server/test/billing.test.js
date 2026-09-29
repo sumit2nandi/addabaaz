@@ -68,7 +68,7 @@ const call = async (method, p, body, token, { url = root, raw, admin } = {}) => 
   return { status: r.status, body: json, text, buf, headers: r.headers };
 };
 let emailN = 0;
-const signup = async (email = `u${++emailN}@example.com`) => ({ ...(await call('POST', '/auth/signup', { name: 'Pay Er', email, password: 'password123' })).body, email });
+const signup = async (email = `u${++emailN}@example.com`) => { const b = (await call('POST', '/auth/signup', { name: 'Pay Er', email, password: 'password123' })).body; await db.accounts.markVerified(b.user.id); return { ...b, email }; };   // (buying needs a confirmed email when SMTP is on)
 const stream = (t) => call('POST', '/videos/prem/stream', null, t);
 const adm = (method, p, body) => call(method, '/admin' + p, body, null, { admin: ADMIN });
 const MH = { state: 'Maharashtra' }, KA = { state: '29' };

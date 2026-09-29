@@ -421,7 +421,7 @@ export function createApp({
     });
   }
 
-  app.use((err, _req, res, _next) => {
+  app.use((err, req, res, _next) => {
     if (err.type === 'entity.parse.failed') err = bad('Invalid JSON body.', 'invalid_json');
     if (err.type === 'entity.too.large') err = new HttpError(413, 'too_large', 'Request too large.');
     const status = err.status || 500;

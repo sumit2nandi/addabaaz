@@ -48,7 +48,7 @@ const call = async (method, p, body, token, url = root, raw) => {
   const text = await r.text(); let json = null; try { json = text ? JSON.parse(text) : null; } catch { /* */ }
   return { status: r.status, body: json };
 };
-const signup = async (email) => (await call('POST', '/auth/signup', { name: 'Pay Er', email, password: 'password123' })).body;
+const signup = async (email) => { const b = (await call('POST', '/auth/signup', { name: 'Pay Er', email, password: 'password123' })).body; await db.accounts.markVerified(b.user.id); return b; };
 const stream = (token) => call('POST', '/videos/prem/stream', null, token);
 const checkout = (token, planId = 'plus-monthly') => call('POST', '/payments/checkout', { planId }, token);
 const goodSig = (o, p) => hmac(KEY_SECRET, `${o}|${p}`);
