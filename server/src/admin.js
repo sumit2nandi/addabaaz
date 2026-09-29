@@ -4,7 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { HttpError, bad, wrap, rateLimit } from './http.js';
 import { isDuplicate } from './db.js';
-import { verifyToken } from './auth.js';
+import { verifyToken, sessionValid } from './auth.js';
 import { PLANS, paidPlan } from './plans.js';
 import { validate, TYPES } from './catalog-schema.js';
 import { saveImage, videoKey } from './uploads.js';
@@ -31,7 +31,7 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
     const payload = verifyToken(got, secret);
     if (!payload || payload.aud || !payload.sub) throw new HttpError(401, 'unauthorized', 'Please sign in.');
     const user = await db.users.byId(String(payload.sub));
-    if (!user) throw new HttpError(401, 'unauthorized', 'Please sign in.');
+    if (!user || !sessionValid(payload, user)) throw new HttpError(401, 'unauthorized', 'Please sign in.');
     if (user.disabledAt) throw new HttpError(403, 'account_disabled', 'This account is disabled.');
     if (!user.isAdmin) throw new HttpError(403, 'forbidden', 'This account is not an administrator.');
     if (Date.now() / 1000 - payload.iat > sessionHours * 3600) throw new HttpError(401, 'admin_session_expired', `For security, admin sessions last ${sessionHours} hours — please sign in again.`);

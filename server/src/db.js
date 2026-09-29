@@ -2,6 +2,7 @@ import mysql from 'mysql2/promise';
 import { dbConfigFromEnv } from './config.js';
 import { billingDb } from './db-billing.js';
 import { adminDb } from './db-admin.js';
+import { extraDb } from './db-extra.js';
 
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
 export const isDuplicate = (e) => e?.code === 'ER_DUP_ENTRY';
@@ -42,8 +43,8 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
     } catch (e) { await c.rollback().catch(() => {}); throw e; } finally { c.release(); }
   }
 
-  const userRow = (r) => r && { id: r.id, email: r.email, name: r.name, passwordHash: r.password_hash, createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabledAt: iso(r.disabled_at) };
-  const profileRow = (r) => ({ id: r.id, name: r.name, color: r.color });
+  const userRow = (r) => r && { id: r.id, email: r.email, name: r.name, passwordHash: r.password_hash, createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabledAt: iso(r.disabled_at), emailVerifiedAt: iso(r.email_verified_at), sessionVersion: r.session_version || 0, hasPin: !!r.parental_pin_hash };
+  const profileRow = (r) => ({ id: r.id, name: r.name, color: r.color, ...(r.kids ? { kids: true } : {}) });
 
   const self = {
     pool,
@@ -85,24 +86,24 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
     },
 
     profiles: {
-      async list(userId) { return (await q('SELECT id, name, color FROM profiles WHERE user_id = ? ORDER BY created_at, id', [userId])).map(profileRow); },
-      async get(id, userId) { const r = (await q('SELECT id, name, color FROM profiles WHERE id = ? AND user_id = ?', [id, userId]))[0]; return r ? profileRow(r) : null; },
+      async list(userId) { return (await q('SELECT id, name, color, kids FROM profiles WHERE user_id = ? ORDER BY created_at, id', [userId])).map(profileRow); },
+      async get(id, userId) { const r = (await q('SELECT id, name, color, kids FROM profiles WHERE id = ? AND user_id = ?', [id, userId]))[0]; return r ? profileRow(r) : null; },
       /** Enforces the per-user limit under a row lock so concurrent requests can't exceed it. Returns null at the limit. */
-      async create(userId, { id, name }, max, palette) {
+      async create(userId, { id, name, kids = false }, max, palette) {
         return tx(async (t) => {
           await t.query('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId]);
           const [{ n }] = await t.query('SELECT COUNT(*) AS n FROM profiles WHERE user_id = ?', [userId]);
           if (n >= max) return null;
           const color = n % palette;
-          await t.query('INSERT INTO profiles (id, user_id, name, color) VALUES (?,?,?,?)', [id, userId, name, color]);
-          return { id, name, color };
+          await t.query('INSERT INTO profiles (id, user_id, name, color, kids) VALUES (?,?,?,?,?)', [id, userId, name, color, kids ? 1 : 0]);
+          return { id, name, color, ...(kids ? { kids: true } : {}) };
         });
       },
       async update(id, patch) {
         const sets = [], vals = [];
-        for (const k of ['name', 'color']) if (patch[k] !== undefined) { sets.push(`${k} = ?`); vals.push(patch[k]); }
+        for (const k of ['name', 'color', 'kids']) if (patch[k] !== undefined) { sets.push(`${k} = ?`); vals.push(k === 'kids' ? (patch[k] ? 1 : 0) : patch[k]); }
         if (sets.length) await q(`UPDATE profiles SET ${sets.join(', ')} WHERE id = ?`, [...vals, id]);
-        return profileRow((await q('SELECT id, name, color FROM profiles WHERE id = ?', [id]))[0]);
+        return profileRow((await q('SELECT id, name, color, kids FROM profiles WHERE id = ?', [id]))[0]);
       },
       /** Removes a profile unless it's the user's last one. Returns false when refused. */
       async remove(id, userId) {
@@ -252,6 +253,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       async count() { return (await q('SELECT COUNT(*) AS n FROM contact_messages'))[0].n; },
     },
   };
+  Object.assign(self, extraDb({ q, tx, self, iso }));         // reset/verify tokens, ratings, comments, push, analytics…
   Object.assign(self, billingDb({ q, tx, self, iso }));      // coupons, invoices, refunds
   Object.assign(self, adminDb({ q, tx, self, iso }));        // catalog, audit log, admin user/message queries, dashboard numbers
   return self;

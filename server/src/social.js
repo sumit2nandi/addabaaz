@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { createAppleVerifier } from './apple.js';
 
 /**
  * Server-side verification of social sign-in credentials. The client obtains a credential from the provider
@@ -84,6 +85,11 @@ export function socialFromEnv(env = process.env) {
   if (env.FACEBOOK_APP_ID && env.FACEBOOK_APP_SECRET) {
     out.verifiers.facebook = createFacebookVerifier({ appId: env.FACEBOOK_APP_ID.trim(), appSecret: env.FACEBOOK_APP_SECRET.trim(), version: env.FACEBOOK_GRAPH_VERSION || 'v21.0' });
     out.config.facebook = { appId: env.FACEBOOK_APP_ID.trim(), version: env.FACEBOOK_GRAPH_VERSION || 'v21.0', ...(env.FACEBOOK_CLIENT_TOKEN ? { clientToken: env.FACEBOOK_CLIENT_TOKEN.trim() } : {}) };
+  }
+  const appleIds = [env.APPLE_CLIENT_ID, env.APPLE_SERVICE_ID].map((s) => (s || '').trim()).filter(Boolean);
+  if (appleIds.length) {
+    out.verifiers.apple = createAppleVerifier({ clientIds: appleIds });
+    out.config.apple = { clientId: (env.APPLE_SERVICE_ID || env.APPLE_CLIENT_ID).trim(), ...(env.APPLE_CLIENT_ID ? { bundleId: env.APPLE_CLIENT_ID.trim() } : {}) };
   }
   return out;
 }

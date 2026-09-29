@@ -21,7 +21,9 @@ export function signJwt(claims, secret, ttl = TTL_SECONDS) {
   const body = `${b64(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${b64(JSON.stringify({ ...claims, iat: now, exp: now + ttl }))}`;
   return `${body}.${crypto.createHmac('sha256', secret).update(body).digest('base64url')}`;
 }
-export const signToken = (userId, secret, ttl = TTL_SECONDS) => signJwt({ sub: userId }, secret, ttl);
+/** Session token. `sv` is the user's session_version: bumping it (password reset, "sign out everywhere") invalidates every older token. */
+export const signToken = (userId, secret, ttl = TTL_SECONDS, sv = 0) => signJwt({ sub: userId, ...(sv ? { sv } : {}) }, secret, ttl);
+export const sessionValid = (payload, user) => (payload.sv || 0) === (user.sessionVersion || 0);
 /** Returns the claims of a valid, unexpired token, else null. */
 export function verifyToken(token, secret) {
   const parts = String(token || '').split('.');

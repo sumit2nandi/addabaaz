@@ -5,7 +5,7 @@ const day = (iso) => new Date(iso).toLocaleDateString('en-IN', { timeZone: 'Asia
 const inr = (paise) => `Rs. ${rupees(paise)}`;
 
 /** Every email is { subject, text, html }. Plain-text first; the HTML is the same content in a simple, client-safe layout. */
-function layout({ subject, paragraphs, button, footer }) {
+export function layout({ subject, paragraphs, button, footer }) {
   const text = [...paragraphs, button ? `${button.label}: ${button.url}` : null, footer].filter(Boolean).join('\n\n');
   const html = `<!doctype html><html><body style="margin:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#111">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
@@ -74,5 +74,47 @@ export function expiringEmail(o) {
     subject: `Your ADDABAAZ Plus ends on ${day(o.expiresAt)}`,
     paragraphs: [hello(o.name), `Your ${o.planName} plan ends on ${day(o.expiresAt)}. After that, premium videos will be locked again. Plans don’t renew automatically — renew any time and the new time is added after your current plan ends.`],
     button: { label: 'Renew now', url: o.renewUrl }, footer: help(o),
+  });
+}
+
+/* ---------- account emails ---------- */
+export function resetPasswordEmail(o) {
+  return layout({
+    subject: 'Reset your ADDABAAZ password',
+    paragraphs: [hello(o.name), 'We received a request to reset your password. The link below works for 1 hour and can be used once.', 'If you didn’t ask for this, ignore this email — your password stays the same.'],
+    button: { label: 'Choose a new password', url: o.url }, footer: help(o),
+  });
+}
+export function verifyEmailEmail(o) {
+  return layout({
+    subject: 'Confirm your email for ADDABAAZ',
+    paragraphs: [hello(o.name), 'Please confirm this is your email address. The link works for 3 days.'],
+    button: { label: 'Confirm my email', url: o.url }, footer: help(o),
+  });
+}
+export function passwordChangedEmail(o) {
+  return layout({
+    subject: 'Your ADDABAAZ password was changed',
+    paragraphs: [hello(o.name), 'Your password was just changed and you were signed out of your other devices.', 'If this wasn’t you, reset your password now and contact us.'],
+    button: { label: 'Reset password', url: `${o.siteUrl}/forgot` }, footer: help(o),
+  });
+}
+export function refundRequestEmail(o) {
+  return layout({
+    subject: `Refund request from ${o.email}`,
+    paragraphs: [`${o.email} asked for a refund of ${inr(o.amountPaise)} (${o.planName}, paid ${day(o.paidAt)}).`, o.reason ? `Reason: ${o.reason}` : 'No reason given.', 'Review it in the admin console → Payments → Refund requests.'],
+    button: { label: 'Open admin console', url: `${o.siteUrl}/admin/#/refunds` },
+  });
+}
+export function refundDeclinedEmail(o) {
+  return layout({
+    subject: 'About your ADDABAAZ refund request',
+    paragraphs: [hello(o.name), `We reviewed your refund request for ${o.planName} and can’t refund this payment.`, o.note ? `Note from our team: ${o.note}` : null, 'Your plan and access are unchanged.'].filter(Boolean), footer: help(o),
+  });
+}
+export function refundRequestReceivedEmail(o) {
+  return layout({
+    subject: 'We received your refund request',
+    paragraphs: [hello(o.name), `We have your refund request for ${o.planName} (${inr(o.amountPaise)}). We’ll review it and email you the outcome, usually within 2 working days.`], footer: help(o),
   });
 }

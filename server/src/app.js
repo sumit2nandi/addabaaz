@@ -4,7 +4,9 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { isDuplicate } from './db.js';
-import { hashPassword, verifyPassword, signToken, signJwt, verifyToken } from './auth.js';
+import { hashPassword, verifyPassword, signToken, signJwt, verifyToken, sessionValid } from './auth.js';
+import { createFeatures } from './features.js';
+import { pushFromEnv } from './push.js';
 import { createR2 } from './r2.js';
 import { socialFromEnv, SocialError } from './social.js';
 import { PLANS, paidPlan } from './plans.js';
@@ -46,6 +48,8 @@ export function createApp({
   social = socialFromEnv(),                                   // { config, verifiers: { google?, facebook? } }
   publicApiUrl = process.env.PUBLIC_API_URL || '',            // absolute base for HLS URLs when behind a proxy
   streamTtl = Number(process.env.STREAM_URL_TTL) || 6 * 3600, // seconds a signed video URL stays valid
+  push = pushFromEnv(db),                                     // Web Push (VAPID keys from env; tests inject a fake sender)
+  features: featureOptions = {},                              // limits: { streamLimit, refundWindowDays, reportsToHide … } (env defaults)
   seo = {},                                                    // search-engine options: { siteUrl, indexable, compress, googleVerification, bingVerification } (env defaults below)
 } = {}) {
   if (!db) throw new Error('createApp: a database (createDb()) is required');
@@ -103,8 +107,9 @@ export function createApp({
   }));
 
   const authLimit = rate ? rateLimit('auth', 20, 60_000) : (_q, _s, n) => n();
-  const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, ...(u.isAdmin ? { isAdmin: true } : {}) });
+  const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, emailVerified: !!u.emailVerifiedAt, ...(u.isAdmin ? { isAdmin: true } : {}) });
   const notDisabled = (u) => { if (u.disabledAt) throw new HttpError(403, 'account_disabled', 'This account has been disabled. Please contact support.'); return u; };
+  const features = createFeatures({ db, secret, mailer, push, catalog, siteUrl: billing.config.siteUrl, rate, publicUser, notDisabled, userFromRequest: (req) => userFromRequest(req), plans: PLANS, options: featureOptions });
 
   api.post('/auth/signup', authLimit, wrap(async (req, res) => {
     const { name = '', email = '', password = '' } = req.body || {};
@@ -119,6 +124,7 @@ export function createApp({
       const ex = await db.users.byEmail(user.email);
       throw new HttpError(409, 'email_taken', ex && !ex.passwordHash ? 'This email is already registered — use “Continue with Google/Facebook” to sign in.' : 'An account with this email already exists.');
     }
+    features.sendVerification({ ...user, emailVerifiedAt: null }).catch((e) => console.warn('[auth] verification email failed:', e.message));
     res.status(201).json({ token: signToken(user.id, secret), user: publicUser(user), profiles: [profile] });
   }));
   api.post('/auth/login', authLimit, wrap(async (req, res) => {
@@ -128,21 +134,22 @@ export function createApp({
     const ok = user?.passwordHash ? verifyPassword(String(password), user.passwordHash) : (verifyPassword(String(password), 'scrypt$00$00'), false);   // social-only accounts have no password
     if (!ok) throw new HttpError(401, 'invalid_credentials', 'Incorrect email or password.');
     notDisabled(user);
-    res.json({ token: signToken(user.id, secret), user: publicUser(user) });
+    res.json({ token: signToken(user.id, secret, undefined, user.sessionVersion), user: publicUser(user) });
   }));
 
   /* ---------- social sign-in ---------- */
   api.get('/auth/providers', (_req, res) => res.json({ password: true, ...social.config }));
+  const LABEL = { google: 'Google', facebook: 'Facebook', apple: 'Apple' };
   async function socialSignIn(provider, credential) {
     const verifier = social.verifiers?.[provider];
-    if (!verifier) throw new HttpError(501, 'provider_not_configured', `${provider === 'google' ? 'Google' : 'Facebook'} sign-in isn’t enabled on this server.`);
+    if (!verifier) throw new HttpError(501, 'provider_not_configured', `${LABEL[provider]} sign-in isn’t enabled on this server.`);
     let claims;
     try { claims = await verifier(credential); }
     catch (e) { if (e instanceof SocialError) throw new HttpError(e.code === 'provider_unavailable' ? 503 : 401, e.code, e.message); throw e; }
     const ident = { provider, subject: claims.subject, email: claims.email };
     let user = await db.identities.userFor(provider, claims.subject), isNew = false;
     if (!user) {
-      if (!claims.email) throw bad(`${provider === 'google' ? 'Google' : 'Facebook'} didn’t share an email address. Please sign up with email instead.`, 'email_required');
+      if (!claims.email) throw bad(`${LABEL[provider]} didn’t share an email address. Please sign up with email instead.`, 'email_required');
       if (!claims.emailVerified) throw bad('Your email address isn’t verified with the provider.', 'email_unverified');
       user = await db.users.byEmail(claims.email);
       if (user) await db.identities.link(user.id, ident);              // same verified email → same person: link the provider
@@ -161,16 +168,19 @@ export function createApp({
     if (!user) throw new HttpError(500, 'server_error', 'Something went wrong.');
     notDisabled(user);
     await db.identities.touch(provider, claims.subject);
-    return { token: signToken(user.id, secret), user: publicUser(user), profiles: await db.profiles.list(user.id), isNew };
+    if (!user.emailVerifiedAt) await db.accounts.markVerified(user.id);           // the provider already verified this address
+    return { token: signToken(user.id, secret, undefined, user.sessionVersion), user: publicUser({ ...user, emailVerifiedAt: user.emailVerifiedAt || true }), profiles: await db.profiles.list(user.id), isNew };
   }
   api.post('/auth/google', authLimit, wrap(async (req, res) => res.json(await socialSignIn('google', req.body?.idToken))));
   api.post('/auth/facebook', authLimit, wrap(async (req, res) => res.json(await socialSignIn('facebook', req.body?.accessToken))));
+  api.post('/auth/apple', authLimit, wrap(async (req, res) => res.json(await socialSignIn('apple', { identityToken: req.body?.identityToken, name: req.body?.name }))));
+  features.public(api);           // password reset, email verification, analytics, public ratings/comments
 
   /* ---------- premium video (Cloudflare R2) ---------- */
   const userFromRequest = async (req) => {
     const h = req.headers.authorization || '';
     const payload = h.startsWith('Bearer ') ? verifyToken(h.slice(7), secret) : null;
-    const u = payload && !payload.aud && payload.sub ? await db.users.byId(String(payload.sub)) : null; return u && !u.disabledAt ? u : null;      // media/other scoped tokens are not sessions
+    const u = payload && !payload.aud && payload.sub ? await db.users.byId(String(payload.sub)) : null; return u && !u.disabledAt && sessionValid(payload, u) ? u : null;      // media/other scoped tokens are not sessions
   };
   const findVideo = (id) => catalog.video(id);
   const originOf = (req) => (publicApiUrl || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
@@ -184,6 +194,9 @@ export function createApp({
       const user = await userFromRequest(req);
       if (!user) throw new HttpError(401, 'login_required', 'Please sign in to watch premium videos.');
       if ((await db.subscriptions.get(user.id)).planId === 'free') throw new HttpError(402, 'subscription_required', 'Subscribe to ADDABAAZ Plus to watch this video.');   // premium = signed in AND paid
+      const dev = features.deviceOf(req);                                  // screens-at-once limit (premium playback only)
+      const seat = await db.playback.touch(user.id, dev.id, dev.label, v.id, { limit: features.cfg.streamLimit, windowSec: features.cfg.heartbeatWindowSec });
+      if (!seat.ok) throw new HttpError(429, 'stream_limit', `Your plan allows ${features.cfg.streamLimit} screens at once. Stop playback on another device to continue.`);
       req.user = user;
     }
     if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video storage is not configured on this server.');
@@ -247,17 +260,18 @@ export function createApp({
     const h = req.headers.authorization || '';
     const payload = h.startsWith('Bearer ') ? verifyToken(h.slice(7), secret) : null;
     const user = payload && !payload.aud && await db.users.byId(String(payload.sub));
-    if (!user) throw new HttpError(401, 'unauthorized', 'Please sign in.');
+    if (!user || !sessionValid(payload, user)) throw new HttpError(401, 'unauthorized', 'Please sign in.');
     notDisabled(user);
     req.user = user; next();
   }));
+  features.authed(api);           // account security, PIN, devices, ratings, comments, push, refund requests
   const ownProfile = async (req) => {
     const p = await db.profiles.get(req.params.pid, req.user.id);
     if (!p) throw new HttpError(404, 'not_found', 'Profile not found.');
     return p;
   };
 
-  api.get('/me', wrap(async (req, res) => res.json({ user: publicUser(req.user), hasPassword: !!req.user.passwordHash, providers: await db.identities.providersOf(req.user.id), profiles: await db.profiles.list(req.user.id), subscription: await db.subscriptions.get(req.user.id) })));
+  api.get('/me', wrap(async (req, res) => res.json({ user: publicUser(req.user), hasPassword: !!req.user.passwordHash, hasPin: !!req.user.hasPin, providers: await db.identities.providersOf(req.user.id), profiles: await db.profiles.list(req.user.id), subscription: await db.subscriptions.get(req.user.id) })));
   api.patch('/me', wrap(async (req, res) => {
     const n = req.body?.name; if (typeof n !== 'string' || !n.trim() || n.length > 60) throw bad('Please enter your name.');
     await db.users.rename(req.user.id, n.trim()); res.json({ user: publicUser({ ...req.user, name: n.trim() }) });
@@ -271,20 +285,24 @@ export function createApp({
   const cleanProfile = (b, partial = false) => {
     const out = {};
     if (!partial || b.name !== undefined) { if (typeof b.name !== 'string' || !b.name.trim() || b.name.length > 24) throw bad('Profile name must be 1–24 characters.'); out.name = b.name.trim(); }
+    if (b.kids !== undefined) { if (typeof b.kids !== 'boolean') throw bad('kids must be true or false.'); out.kids = b.kids; }
     if (b.color !== undefined) { if (!Number.isInteger(b.color) || b.color < 0 || b.color >= PALETTE) throw bad('Invalid colour.'); out.color = b.color; }
     return out;
   };
   api.get('/profiles', wrap(async (req, res) => res.json({ profiles: await db.profiles.list(req.user.id) })));
   api.post('/profiles', wrap(async (req, res) => {
-    const { name } = cleanProfile(req.body || {});
-    const profile = await db.profiles.create(req.user.id, { id: crypto.randomUUID(), name }, MAX_PROFILES, PALETTE);
+    await features.requirePin(req);
+    const { name, kids } = cleanProfile(req.body || {});
+    const profile = await db.profiles.create(req.user.id, { id: crypto.randomUUID(), name, kids }, MAX_PROFILES, PALETTE);
     if (!profile) throw new HttpError(409, 'profile_limit', `You can have up to ${MAX_PROFILES} profiles.`);
     res.status(201).json({ profile });
   }));
   api.patch('/profiles/:pid', wrap(async (req, res) => {
+    await features.requirePin(req);
     const p = await ownProfile(req); res.json({ profile: await db.profiles.update(p.id, cleanProfile(req.body || {}, true)) });
   }));
   api.delete('/profiles/:pid', wrap(async (req, res) => {
+    await features.requirePin(req);
     const p = await ownProfile(req);
     if (!(await db.profiles.remove(p.id, req.user.id))) throw new HttpError(409, 'last_profile', 'At least one profile is required.');
     res.sendStatus(204);
@@ -326,6 +344,7 @@ export function createApp({
 
   /** Step 1: start a purchase. Razorpay → returns the order for Checkout (coupon + GST billing details applied). Demo provider → activates immediately. */
   api.post('/payments/checkout', payLimit, wrap(async (req, res) => {
+    features.requireVerified(req.user);
     const plan = paidPlan(req.body?.planId);
     if (!plan) throw bad('Choose a paid plan.', 'unknown_plan');
     if (payments.provider === 'none') throw new HttpError(501, 'payments_not_configured', 'Payments are not configured on this server.');
@@ -406,10 +425,12 @@ export function createApp({
     if (err.type === 'entity.parse.failed') err = bad('Invalid JSON body.', 'invalid_json');
     if (err.type === 'entity.too.large') err = new HttpError(413, 'too_large', 'Request too large.');
     const status = err.status || 500;
-    if (status >= 500 && !(err instanceof HttpError)) console.error(err);   // expected 5xx (provider down, storage off) are not logged as crashes
+    if (status >= 500 && !(err instanceof HttpError)) { console.error(err); db.errors.add({ source: 'server', message: `${req.method} ${req.path}: ${err.message}`, stack: err.stack, url: req.originalUrl, userAgent: req.get('user-agent') }).catch(() => {}); }   // expected 5xx (provider down, storage off) are not logged as crashes
     res.status(status).json({ error: { code: err.code || 'server_error', message: status === 500 ? 'Something went wrong.' : err.message } });
   });
   app.db = db;
+  app.locals.push = push;
+  app.locals.features = features;
   app.locals.catalog = catalog;
   app.locals.billing = billing;          // exposed for jobs (expiry reminders) and tests
   return app;
