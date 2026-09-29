@@ -4,6 +4,7 @@ import { Catalog } from '../../app/js/data/catalog.js';
 import { matchRoute } from '../../app/js/routes.js';
 import { pageMeta, absUrl, clip, showFullName, videoIndexable, videoDescription, SITE, TYPE_LABEL } from '../../app/js/seo/meta.js';
 import { esc, fmtDuration } from '../../app/js/util.js';
+import { legalDoc, LEGAL_PAGES, LEGAL_UPDATED } from '../../app/js/legal-text.js';
 
 /**
  * Search-engine support for the website served by this server:
@@ -30,7 +31,7 @@ export function siteOrigin(req, configured) {
 export function bodyHtml(m, { view, params }, cat, studio, plans) {
   const h1 = (t) => `<h1>${esc(t)}</h1>`;
   const intro = (t, d = m.description) => `${h1(t)}<p>${esc(d)}</p>`;
-  const nav = `<nav aria-label="Site">${[['/', 'Home'], ['/shows', 'All shows'], ['/reels', 'Reels'], ['/upcoming', 'Coming soon'], ['/gallery', 'Behind the scenes'], ['/plans', 'Plans'], ['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact']].map(([h, t]) => A(h, t)).join(' · ')}</nav>`;
+  const nav = `<nav aria-label="Site">${[['/', 'Home'], ['/shows', 'All shows'], ['/reels', 'Reels'], ['/upcoming', 'Coming soon'], ['/gallery', 'Behind the scenes'], ['/plans', 'Plans'], ['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact'], ['/privacy', 'Privacy Policy'], ['/terms', 'Terms of Use'], ['/refunds', 'Refund Policy']].map(([h, t]) => A(h, t)).join(' · ')}</nav>`;
   const showList = (list) => `<ul>${list.map((s) => li(`/show/${s.id}`, showFullName(s), s.tagline)).join('')}</ul>`;
   const epList = (list) => `<ul>${list.map((v) => li(`/watch/${v.id}`, `${v.kind === 'episode' && v.episode ? `EP ${v.episode}: ` : ''}${cat.displayTitle(v)}`, fmtDuration(v.duration))).join('')}</ul>`;
   let b = '';
@@ -55,6 +56,10 @@ export function bodyHtml(m, { view, params }, cat, studio, plans) {
     case 'upcoming': b = `${intro('Coming soon')}<ul>${cat.upcoming.map((u) => li(`/soon/${u.id}`, showFullName(u), u.note)).join('')}</ul>`; break;
     case 'soon': { const u = cat.soon(params.id); b = `${intro(`${showFullName(u)} — coming soon`)}<p>${esc(u.note || '')}</p>${cat.show(u.showId) ? `<p>${A(`/show/${u.showId}`, 'Watch the show')}</p>` : ''}`; break; }
     case 'gallery': b = `${intro('Behind the scenes')}` + cat.gallery.map((g) => `<figure><img src="${esc(g.image)}" alt="${esc(g.caption || `Behind the scenes of ${g.group} — ADDABAAZ production`)}" loading="lazy" width="400" height="300"></figure>`).join(''); break;
+    case 'legal': {
+      const d = legalDoc(LEGAL_PAGES[m.canonical], { studio: studio?.studio });
+      b = `${h1(d.title)}<p>Last updated ${esc(LEGAL_UPDATED)}.</p><p>${esc(d.intro)}</p>` + d.sections.map(([h, ps]) => `<h2>${esc(h)}</h2>${ps.map((t) => `<p>${esc(t)}</p>`).join('')}`).join(''); break;
+    }
     case 'plans': b = `${intro('Plans and pricing')}<ul>${(plans || []).map((p) => `<li>${esc(p.name)} — ${p.priceINR ? `₹${p.priceINR} per ${esc(p.interval)}` : 'free'}: ${esc((p.features || []).join('; '))}</li>`).join('')}</ul>`; break;
     case 'studio': {
       const st = studio?.studio || {}, path = m.canonical;
@@ -120,6 +125,7 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
       `<meta name="twitter:image" content="${esc(m.image)}">`,
       '<meta name="ab:routing" content="history">',
       verification.google ? `<meta name="google-site-verification" content="${esc(verification.google)}">` : '',
+      /^G-[A-Z0-9]+$/.test(verification.ga4 || '') ? `<meta name="ab:ga4" content="${esc(verification.ga4)}">` : '',
       verification.bing ? `<meta name="msvalidate.01" content="${esc(verification.bing)}">` : '',
       ...modulePreloads().map((f) => `<link rel="modulepreload" href="/${esc(f)}">`),
       m.status === 200 && /^\/(show|soon)\//.test(path_) && m.image.startsWith(origin + '/') ? `<link rel="preload" as="image" href="${esc(m.image.slice(origin.length))}" fetchpriority="high">` : '',
@@ -160,7 +166,7 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
     const url = (p, { lastmod, extra = '' } = {}) => `<url><loc>${esc(origin + p)}</loc>${lastmod ? `<lastmod>${day(lastmod)}</lastmod>` : ''}${extra}</url>`;
     const newest = (list) => list.map((v) => v.publishedAt).filter(Boolean).sort().at(-1);
     const out = [url('/', { lastmod: newest(cat.videos) })];
-    for (const p of ['/shows', '/upcoming', '/gallery', '/plans', '/about', '/services', '/contact']) out.push(url(p));
+    for (const p of ['/shows', '/upcoming', '/gallery', '/plans', '/about', '/services', '/contact', '/privacy', '/terms', '/refunds']) out.push(url(p));
     for (const s of cat.shows) out.push(url(`/show/${s.id}`, { lastmod: newest(cat.videos.filter((v) => v.showId === s.id)) }));
     for (const u of cat.upcoming) out.push(url(`/soon/${u.id}`));
     for (const v of cat.videos) {

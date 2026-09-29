@@ -69,6 +69,7 @@ export function createApp({
     compress: seo.compress ?? !/^(1|true|yes)$/i.test(process.env.DISABLE_COMPRESSION || ''),
     google: seo.googleVerification ?? process.env.GOOGLE_SITE_VERIFICATION ?? '',
     bing: seo.bingVerification ?? process.env.BING_SITE_VERIFICATION ?? '',
+    ga4: seo.ga4 ?? process.env.GA4_MEASUREMENT_ID ?? '',          // optional Google Analytics 4 — loads only after the visitor accepts analytics
   };
   if (seoCfg.compress) app.use(compression({ filter: (req, res) => !/event-stream/.test(res.getHeader('Content-Type') || '') && compression.filter(req, res) }));
   app.set('trust proxy', process.env.TRUST_PROXY ? Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY : false);
@@ -388,7 +389,7 @@ export function createApp({
   /* ---------- static site (same origin => the web app auto-detects this API) ---------- */
   if (serveStatic) {
     const opts = (maxAge) => ({ maxAge, index: false, dotfiles: 'ignore' });
-    const seoSvc = createSeo({ catalog, root: ROOT, plans: PLANS, origin: seoCfg.siteUrl, indexable: seoCfg.indexable, verification: { google: seoCfg.google, bing: seoCfg.bing } });
+    const seoSvc = createSeo({ catalog, root: ROOT, plans: PLANS, origin: seoCfg.siteUrl, indexable: seoCfg.indexable, verification: { google: seoCfg.google, bing: seoCfg.bing, ga4: seoCfg.ga4 } });
     app.get('/robots.txt', (req, res) => res.type('text/plain').set('Cache-Control', 'public, max-age=3600').send(seoSvc.robotsTxt(req)));
     app.get('/sitemap.xml', wrap(async (req, res) => { res.type('application/xml').set('Cache-Control', 'public, max-age=3600').send(await seoSvc.sitemapXml(req)); }));
     // The web app manifest: on this server the app uses real URLs, so an installed app should open on "/" rather than "/#/".

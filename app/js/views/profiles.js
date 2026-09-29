@@ -6,6 +6,7 @@ import { avatar, toast } from '../ui/components.js';
 import { avatarColor, AVATAR_COUNT } from '../data/user.js';
 import { openDialog, confirmDialog } from '../ui/dialog.js';
 import { go } from '../router.js';
+import { withPin, mayLeaveKids } from '../ui/parental.js';
 
 export default async function profiles(ctx) {
   const u = app.user; const manage = ctx.query.manage === '1';
@@ -18,7 +19,7 @@ export default async function profiles(ctx) {
       <img class="profiles-logo" src="media/icons/icon-96.png" alt="ADDABAAZ" width="64" height="64">
       <h1>${manage ? 'Manage profiles' : 'Who’s watching?'}</h1>
       <div class="profile-grid">
-        ${u.profiles.map((p) => html`<button type="button" class="profile-tile" data-pid="${p.id}">${avatar(p, { size: 116, cls: 'xl' })}${manage ? html`<span class="edit-badge">${icon('edit', { size: 18 })}</span>` : ''}<span>${p.name}</span></button>`)}
+        ${u.profiles.map((p) => html`<button type="button" class="profile-tile" data-pid="${p.id}">${avatar(p, { size: 116, cls: 'xl' })}${manage ? html`<span class="edit-badge">${icon('edit', { size: 18 })}</span>` : ''}<span>${p.name}${p.kids ? html` <em class="pill">Kids</em>` : ''}</span></button>`)}
         ${u.profiles.length < CONFIG.maxProfiles ? html`<button type="button" class="profile-tile add" data-add><span class="avatar xl add-av" style="width:116px;height:116px">${icon('plus', { size: 44 })}</span><span>Add profile</span></button>` : ''}
       </div>
       ${manage ? html`<a class="btn btn-ghost btn-lg" href="#/account">Done</a>` : html`<a class="btn btn-ghost" href="#/profiles?manage=1">Manage profiles</a>`}
@@ -34,6 +35,7 @@ export default async function profiles(ctx) {
       <form id="pf" class="form" novalidate>
         <div class="avatar-preview" id="ap">${avatar({ name: p?.name || 'A', color }, { size: 84 })}</div>
         <label>Name<input name="name" maxlength="24" required value="${p?.name || ''}" autocomplete="off" placeholder="e.g. Rupa"></label>
+        <label class="check"><input type="checkbox" name="kids" ${p?.kids ? 'checked' : ''}><span>Kids profile — shows only titles rated for children, and can’t post comments</span></label>
         <div class="swatches" role="radiogroup" aria-label="Colour">${Array.from({ length: AVATAR_COUNT }, (_, i) => html`<button type="button" role="radio" aria-checked="${i === color}" class="swatch ${i === color ? 'on' : ''}" data-c="${i}" style="background:${avatarColor(i)}" aria-label="Colour ${i + 1}"></button>`)}</div>
         <div class="form-status" id="pfs" role="alert"></div>
         <div class="row end">${p && u.profiles.length > 1 ? html`<button type="button" class="btn btn-danger" id="del">Delete</button>` : ''}<button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" type="submit">Save</button></div>
@@ -44,13 +46,14 @@ export default async function profiles(ctx) {
     $('#pf', el).addEventListener('submit', async (e) => {
       e.preventDefault(); const name = nameEl.value.trim();
       if (!name) { $('#pfs', el).textContent = 'Please enter a name.'; return; }
-      try { p ? await u.updateProfile(p.id, { name, color }) : await u.createProfile({ name, color }); close(); toast(p ? 'Profile updated' : 'Profile added'); }
-      catch (err) { $('#pfs', el).textContent = err.message; }
+      const kids = $('[name=kids]', el).checked;
+      try { await withPin(u, () => (p ? u.updateProfile(p.id, { name, color, kids }) : u.createProfile({ name, color, kids }))); close(); toast(p ? 'Profile updated' : 'Profile added'); }
+      catch (err) { if (!err.cancelled) $('#pfs', el).textContent = err.message; }
     });
     $('#del', el)?.addEventListener('click', async () => {
       close();
       if (await confirmDialog({ title: `Delete “${p.name}”?`, text: 'Their My List and watch history will be removed.', confirm: 'Delete', danger: true })) {
-        try { await u.deleteProfile(p.id); toast('Profile deleted'); } catch (err) { toast(err.message); }
+        try { await withPin(u, () => u.deleteProfile(p.id)); toast('Profile deleted'); } catch (err) { if (!err.cancelled) toast(err.message); }
       }
     });
   };
@@ -60,6 +63,7 @@ export default async function profiles(ctx) {
     const t = e.target.closest('[data-pid]'); if (!t) return;
     const p = u.profiles.find((x) => x.id === t.dataset.pid);
     if (manage) return form(p);
+    if (!(await mayLeaveKids(u, p))) return;
     await u.selectProfile(p.id);
     go(next.startsWith('/profiles') ? '/' : next, { replace: true });
   });

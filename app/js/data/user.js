@@ -17,6 +17,8 @@ export class User extends Emitter {
   lib = { list: [], progress: {}, reminders: [] };
   subscription = { planId: 'free', status: 'active' };
   prefs = { autoplayNext: true, ...storage('ab.prefs', {}) };
+  ratings = {};                // this profile's thumbs: 'show:shahid' → 1 | -1 (signed-in only)
+  pin = null;                  // the parental PIN, kept in memory once the viewer has entered it (never stored)
   #progressTimers = new Map();
 
   /** `local` always exists (guest / offline). `remote` is optional and is used while signed in. */
@@ -25,6 +27,7 @@ export class User extends Emitter {
   get mode() { return this.remote ? 'remote' : 'local'; }
   get supportsAuth() { return !!this.remote; }
   get profile() { return this.profiles.find((p) => p.id === this.activeId) || null; }
+  get isKids() { return !!this.profile?.kids; }
 
   async init() {
     let s = this.remote ? await this.remote.init().catch(() => null) : null;
@@ -58,6 +61,11 @@ export class User extends Emitter {
     if (r.isNew && local && this.profile) await this.#migrate(local);
     return r;
   }
+  /** Reset-password link: the server signs the person in and sign-out-everywhere has already happened. */
+  async resetPassword(token, password) { const r = await this.remote.resetPassword(token, password); await this.#afterAuth(r); return r; }
+  async changePassword(cur, next) { await this.remote.changePassword(cur, next); }
+  async signOutEverywhere() { await this.remote.signOutEverywhere(); }
+  async refreshAccount() { const s = await this.remote.init(); if (s.account) { this.account = s.account; this.emit('account'); } }
   providers() { return this.remote ? this.remote.providers() : Promise.resolve({ password: false }); }
   /** Can this viewer play `video` right now?  'ok' | 'login' (sign in first) | 'plan' (signed in but no active Plus plan) | 'unavailable' (no accounts in local mode) */
   gateFor(video) {
@@ -78,7 +86,9 @@ export class User extends Emitter {
     this.emit('account'); this.emit('profile');
   }
   async signOut() {
+    try { if (this.account) await (await import('../push.js')).detachPush(); } catch { /* best effort */ }
     await this.remote?.signOut();
+    this.pin = null; this.ratings = {};
     this.account = null; this.activeId = null; this.lib = { list: [], progress: {}, reminders: [] };
     sessionStorage.removeItem('ab.profileChosen'); localStorage.removeItem('ab.activeProfile');
     const s = await this.local.init();               // fall back to the device-only guest profile(s)
@@ -104,25 +114,57 @@ export class User extends Emitter {
   /* ---------- profiles ---------- */
   async selectProfile(id, { silent = false } = {}) {
     this.activeId = id; store('ab.activeProfile', id); sessionStorage.setItem('ab.profileChosen', '1');
-    this.lib = { list: [], progress: {}, reminders: [] };
+    this.lib = { list: [], progress: {}, reminders: [] }; this.ratings = {};
     try { this.lib = await this.adapter.loadLibrary(id); } catch (e) { console.warn('[user] library load failed', e); }
+    if (this.account && this.remote) this.ratings = await this.remote.myRatings(id).catch(() => ({}));
     if (!silent) { this.emit('profile'); this.emit('library'); }
   }
-  async createProfile({ name, color }) {
+  async createProfile({ name, color, kids = false }) {
     if (this.profiles.length >= CONFIG.maxProfiles) throw new Error(`You can have up to ${CONFIG.maxProfiles} profiles.`);
-    const p = await this.adapter.createProfile({ name: name.trim().slice(0, 24), color: color ?? this.profiles.length });
+    const p = await this.adapter.createProfile({ name: name.trim().slice(0, 24), color: color ?? this.profiles.length, kids }, this.pin);
     this.profiles.push(p); this.emit('profile'); return p;
   }
   async updateProfile(id, patch) {
-    const p = await this.adapter.updateProfile(id, patch);
+    const p = await this.adapter.updateProfile(id, patch, this.pin);
     this.profiles = this.profiles.map((x) => (x.id === id ? p : x)); this.emit('profile'); return p;
   }
   async deleteProfile(id) {
     if (this.profiles.length <= 1) throw new Error('At least one profile is required.');
-    await this.adapter.deleteProfile(id);
+    await this.adapter.deleteProfile(id, this.pin);
     this.profiles = this.profiles.filter((p) => p.id !== id);
     if (this.activeId === id) { this.activeId = null; localStorage.removeItem('ab.activeProfile'); sessionStorage.removeItem('ab.profileChosen'); }
     this.emit('profile');
+  }
+
+  /** Parental PIN: verify with the server (5 wrong tries lock it for 15 minutes) and remember it for this tab. */
+  get hasPin() { return !!this.account?.hasPin; }
+  async verifyPin(pin) { await this.remote.verifyPin(pin); this.pin = pin; }
+  async setPin(pin) { await this.remote.setPin(pin, this.pin || undefined); this.pin = pin; this.account = { ...this.account, hasPin: true }; this.emit('account'); }
+  async removePin(pin) { await this.remote.removePin(pin); this.pin = null; this.account = { ...this.account, hasPin: false }; this.emit('account'); }
+
+  /* ---------- thumbs & recommendations ---------- */
+  ratingOf(type, id) { return this.ratings[`${type}:${id}`] || 0; }
+  /** value: 1 (like) | -1 (dislike) | 0 (clear). Returns the new public counts { up, down }. */
+  async rate(type, id, value) {
+    if (!this.activeId || !this.account) throw new Error('Sign in to rate.');
+    const was = this.ratings[`${type}:${id}`] || 0;
+    if (value) this.ratings[`${type}:${id}`] = value; else delete this.ratings[`${type}:${id}`];
+    try { return await this.remote.rate(this.activeId, type, id, value); } catch (e) { if (was) this.ratings[`${type}:${id}`] = was; else delete this.ratings[`${type}:${id}`]; throw e; }
+  }
+  /** "Because you watched …": shows in the genres of what this profile watched or liked, that it hasn't started yet. Computed on the device from the library. */
+  recommendations(catalog, n = 12) {
+    const seenShows = new Map();      // showId → weight
+    for (const [vid, p] of Object.entries(this.lib.progress)) { const v = catalog.video(vid); if (v?.showId && p.position >= CONFIG.resumeMinSeconds) seenShows.set(v.showId, Math.max(seenShows.get(v.showId) || 0, p.updatedAt || '1')); }
+    for (const it of this.lib.list) if (it.type === 'show') seenShows.set(it.id, seenShows.get(it.id) || it.addedAt || '1');
+    for (const [k, v] of Object.entries(this.ratings)) { if (v > 0 && k.startsWith('show:')) seenShows.set(k.slice(5), seenShows.get(k.slice(5)) || 'z'); }
+    const anchors = [...seenShows.entries()].filter(([id]) => catalog.show(id)).sort((a, b) => String(b[1]).localeCompare(String(a[1])));
+    if (!anchors.length) return null;
+    const disliked = new Set(Object.entries(this.ratings).filter(([, v]) => v < 0).map(([k]) => k.replace(/^show:/, '')));
+    const pool = catalog.shows.filter((s) => !seenShows.has(s.id) && !disliked.has(s.id));
+    const [anchorId] = anchors[0], anchor = catalog.show(anchorId), g = new Set(anchor.genres || []);
+    const scored = pool.map((s) => ({ s, sc: (s.genres || []).filter((x) => g.has(x)).length })).sort((a, b) => b.sc - a.sc);
+    const items = scored.filter((x) => x.sc > 0).concat(scored.filter((x) => !x.sc)).slice(0, n).map((x) => x.s);
+    return items.length ? { because: anchor, items } : null;
   }
 
   /* ---------- My List ---------- */

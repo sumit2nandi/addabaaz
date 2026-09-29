@@ -22,6 +22,13 @@ export class Catalog {
     this._genres = [...new Set(this.shows.flatMap((s) => s.genres || []))].sort();
   }
 
+  /** A Catalog with only the titles a Kids profile may see: rated U or 7+ (a video without its own rating inherits its show's; unrated = hidden). */
+  kidsView() {
+    const ok = (r) => r === 'U' || r === '7+';
+    const shows = this.shows.filter((s) => ok(s.rating)), showIds = new Set(shows.map((s) => s.id));
+    const videos = this.videos.filter((v) => ok(v.rating || (v.showId && showIds.has(v.showId) ? this._show.get(v.showId).rating : null)));
+    const k = new Catalog({ ...this.data, shows, videos, upcoming: [], gallery: [] }); k.kids = true; return k;
+  }
   show(id) { return this._show.get(id); }
   video(id) { return this._video.get(id); }
   soon(id) { return this._soon.get(id); }

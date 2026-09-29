@@ -23,8 +23,10 @@ export default async function auth(ctx) {
       ${signup ? html`<label>Your name<input name="name" autocomplete="name" required maxlength="60" placeholder="Full name"></label>` : ''}
       <label>Email<input name="email" type="email" autocomplete="email" required placeholder="name@example.com" inputmode="email"></label>
       <label>Password<span class="pw"><input name="password" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" required minlength="8" placeholder="${signup ? 'At least 8 characters' : 'Your password'}"><button type="button" class="icon-btn" id="pwt" aria-label="Show password">${icon('eye', { size: 18 })}</button></span></label>
+      ${signup ? '' : html`<a class="forgot-link" href="#/forgot">Forgot password?</a>`}
       <div class="form-status" id="as" role="alert"></div>
       <button class="btn btn-primary btn-lg block" type="submit" id="asub">${signup ? 'Create account' : 'Sign in'}</button>
+      ${signup ? html`<p class="fine">By creating an account you agree to our <a href="#/terms">Terms</a> and <a href="#/privacy">Privacy Policy</a>.</p>` : ''}
       <p class="switch-auth">${signup ? html`Already have an account? <a href="#/signin?next=${encodeURIComponent(next)}">Sign in</a>` : html`New to ADDABAAZ? <a href="#/signup?next=${encodeURIComponent(next)}">Create an account</a>`}</p>
       <a class="skip" href="#/">Continue without an account</a>
     </form></div>`.s;

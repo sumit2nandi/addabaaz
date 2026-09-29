@@ -8,6 +8,7 @@ import { go } from '../router.js';
 import { listBtn, videoCard, rail, enhanceRails, metaLine, toast, img } from '../ui/components.js';
 import { epRow } from './show.js';
 import { shareUrl, isNative } from '../platform.js';
+import { mountRating, mountComments } from './engage.js';
 
 export default async function watch(ctx) {
   const cat = app.catalog, u = app.user;
@@ -40,12 +41,15 @@ export default async function watch(ctx) {
             ${show ? listBtn('show', show.id, { label: 'Add show to My List', cls: 'btn btn-ghost' }) : ''}
             ${listBtn('video', v.id, { label: 'Save video', cls: 'btn btn-ghost' })}
             ${next ? html`<a class="btn btn-ghost" href="#/watch/${next.id}">${icon('next', { size: 18 })} Next: ${cat.label(next)}</a>` : ''}
+            <span id="rateBox" class="rate-box"></span>
+            <button type="button" class="btn btn-ghost" id="castBtn" hidden>${icon('cast', { size: 18 })} Cast</button>
             <button type="button" class="btn btn-ghost" id="shareBtn">${icon('share', { size: 18 })} Share</button>
             <label class="switch" title="Play the next episode automatically"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span><span>Autoplay next</span></label>
           </div>
           ${show ? html`<p class="watch-desc">${show.description}</p>` : ''}
           <details class="orig-title"><summary>Original title</summary><p class="bn">${v.title}</p></details>
         </div>
+        <div id="commentsBox"></div>
         ${rail({ title: 'More from ADDABAAZ', items: cat.latestEpisodes(10).filter((x) => x.id !== v.id).map((x) => videoCard(x)), cls: 'r-video mobile-only' })}
       </div>
       <aside class="watch-side" aria-label="${v.kind === 'episode' ? 'Episodes' : 'Up next'}">${sideList}</aside>
@@ -59,6 +63,8 @@ export default async function watch(ctx) {
     if (r === 'copied') toast('Link copied');
   });
 
+  mountRating($('#rateBox', ctx.root), { type: 'video', id: v.id, label: 'this video' });
+  mountComments($('#commentsBox', ctx.root), { video: v });
   const msg = $('#playerMsg', ctx.root), slot = $('#playerSlot', ctx.root);
   const wall = (kind) => {
     msg.hidden = false; slot.innerHTML = '';
@@ -88,6 +94,27 @@ export default async function watch(ctx) {
     msg.innerHTML = html`${icon('wifioff', { size: 40 })}<h2>Can’t play this video here</h2><p>${code === 101 || code === 150 || code === 153 ? 'The owner restricted embedded playback.' : 'Check your connection and try again.'}</p><div class="row"><button class="btn btn-primary" id="retry">Try again</button>${yt ? html`<a class="btn btn-ghost" href="${yt}" target="_blank" rel="noopener">Open on YouTube</a>` : ''}</div>`.s;
     $('#retry', msg).onclick = () => { msg.hidden = true; startPlayer(); };
   };
+  const limitWall = (text) => {
+    if (ctl) { try { ctl.pause(); } catch { /* ignore */ } }
+    msg.hidden = false;
+    msg.innerHTML = html`${icon('tv', { size: 40 })}<h2>Too many screens</h2><p>${text || 'Your plan allows a limited number of screens at once. Stop playback on another device to continue here.'}</p><div class="row"><button class="btn btn-primary" id="retry">Try again</button><a class="btn btn-ghost" href="#/account">Manage devices</a></div>`.s;
+    $('#retry', msg).onclick = () => { msg.hidden = true; startPlayer(); };
+  };
+  /* Screens-at-once seat (premium only) and first-party play statistics (plays and watch time, no personal data). */
+  const premium = v.access === 'premium', api = u.remote;
+  let beat = null, tick = null, playedAt = 0, started = false;
+  const flushWatch = () => { if (playedAt && api) { const secs = Math.round((Date.now() - playedAt) / 1000); playedAt = Date.now(); if (secs > 0) api.playEvent(v.id, 'progress', secs); } };
+  const onPlaying = () => {
+    if (!api) return;
+    if (!started) { started = true; api.playEvent(v.id, 'start'); }
+    if (!playedAt) playedAt = Date.now();
+    if (!tick) tick = setInterval(flushWatch, 30_000);
+    if (premium && u.account && !beat) {
+      const hb = () => api.heartbeat(v.id).catch((e) => { if (e.status === 429) { clearInterval(beat); beat = null; limitWall(e.message); } });
+      beat = setInterval(hb, 30_000);
+    }
+  };
+  const onIdle = (stop) => { flushWatch(); playedAt = 0; clearInterval(tick); tick = null; clearInterval(beat); beat = null; if (stop && premium && u.account && api) api.stopPlayback().catch(() => {}); };
   const showNextUp = () => {
     const box = $('#nextUp', ctx.root);
     let n = CONFIG.autoplayCountdown;
@@ -108,13 +135,15 @@ export default async function watch(ctx) {
         start, autoplay: true,
         onProgress: (t, d) => persist(t, d),
         onEnded: () => { u.saveProgress(v.id, lastD || v.duration, lastD || v.duration, { flush: true }); if (next && u.pref('autoplayNext')) showNextUp(); },
-        onState: (s, code) => { if (s === 'error') failed(code); },
+        onState: (s, code) => { if (s === 'playing') onPlaying(); else if (s === 'paused') onIdle(false); else if (s === 'ended') onIdle(true); else if (s === 'error') { onIdle(true); failed(code); } },
       });
       if (dead) ctl.destroy();
+      if (ctl.castSupported?.()) { const cb = $('#castBtn', ctx.root); cb.hidden = false; cb.onclick = () => ctl.cast().catch((e) => { if (e?.name !== 'NotAllowedError') toast('No cast devices found nearby.'); }); }
     } catch (e) {
       console.warn(e);
       if (e instanceof ApiError && e.status === 401) return wall('login');       // session expired or never signed in
       if (e instanceof ApiError && e.status === 402) return wall('plan');
+      if (e instanceof ApiError && e.code === 'stream_limit') return limitWall(e.message);
       failed();
     }
   }
@@ -124,7 +153,7 @@ export default async function watch(ctx) {
   document.addEventListener('visibilitychange', onHide);
   window.addEventListener('pagehide', onHide);
   ctx.onCleanup(() => {
-    dead = true; clearInterval(countdown);
+    dead = true; clearInterval(countdown); onIdle(true);
     document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', onHide);
     if (ctl) { const t = ctl.time(); if (t > 0) u.saveProgress(v.id, t, ctl.duration() || v.duration, { flush: true }); ctl.destroy(); }
   });

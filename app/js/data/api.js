@@ -1,5 +1,13 @@
 import { storage, store } from '../util.js';
 
+/** A random id for this browser/app install: lets the server count how many screens are watching and list "your devices". */
+export const deviceId = () => { try { let d = localStorage.getItem('ab.device'); if (!d) { d = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join(''); localStorage.setItem('ab.device', d); } return d; } catch { return 'anon'; } };
+export const deviceLabel = () => {
+  const ua = navigator.userAgent, os = /iPhone|iPad/.test(ua) ? 'iPhone / iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'Device';
+  const app = window.Capacitor?.isNativePlatform?.() ? 'app' : /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'browser';
+  return `${os} · ${app}`;
+};
+
 export class ApiError extends Error {
   constructor(status, message, code) { super(message); this.status = status; this.code = code; }
 }
@@ -8,19 +16,19 @@ export class ApiError extends Error {
 export class ApiClient {
   constructor(base) { this.base = base; this.token = storage('ab.token', null); }
   setToken(t) { this.token = t; if (t) store('ab.token', t); else localStorage.removeItem('ab.token'); }
-  async req(method, path, body, { signal } = {}) {
+  async req(method, path, body, { signal, headers = {}, quiet401 = false } = {}) {
     let res;
     try {
       res = await fetch(`${this.base}/api/v1${path}`, {
         method, signal,
-        headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) },
+        headers: { 'X-Device-Id': deviceId(), 'X-Device-Label': deviceLabel(), ...(body ? { 'Content-Type': 'application/json' } : {}), ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}), ...headers },
         body: body ? JSON.stringify(body) : undefined,
       });
     } catch (e) { throw new ApiError(0, 'You appear to be offline.', 'network'); }
     if (res.status === 204) return null;
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      if (res.status === 401 && this.token) { this.setToken(null); window.dispatchEvent(new CustomEvent('ab:unauthorized')); }
+      if (res.status === 401 && this.token && !quiet401) { this.setToken(null); window.dispatchEvent(new CustomEvent('ab:unauthorized')); }
       throw new ApiError(res.status, data.error?.message || data.message || `Request failed (${res.status})`, data.error?.code);
     }
     return data;
@@ -34,10 +42,14 @@ export class ApiClient {
     return res.blob();
   }
   get(p, o) { return this.req('GET', p, null, o); }
-  post(p, b) { return this.req('POST', p, b ?? {}); }
-  put(p, b) { return this.req('PUT', p, b ?? {}); }
-  patch(p, b) { return this.req('PATCH', p, b ?? {}); }
-  del(p) { return this.req('DELETE', p); }
+  post(p, b, o) { return this.req('POST', p, b ?? {}, o); }
+  put(p, b, o) { return this.req('PUT', p, b ?? {}, o); }
+  patch(p, b, o) { return this.req('PATCH', p, b ?? {}, o); }
+  del(p, b, o) { return this.req('DELETE', p, b, o); }
+  /** Fire-and-forget POST that survives page unloads (analytics, error reports, "stopped watching"). */
+  beacon(path, body) {
+    try { fetch(`${this.base}/api/v1${path}`, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId(), ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) }, body: JSON.stringify(body ?? {}) }).catch(() => {}); } catch { /* ignore */ }
+  }
 }
 
 /** Returns true when a compatible ADDABAAZ API answers at `base` ('' = same origin). */

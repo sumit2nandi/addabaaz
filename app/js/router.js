@@ -101,7 +101,7 @@ export class Router {
         await mod.default(ctx);
       }
     } catch (err) {
-      console.error('[router]', err);
+      console.error('[router]', err); import('./errors.js').then((m) => m.reportClientError(err, { where: 'router' })).catch(() => {});
       div.innerHTML = errorView(err);
     }
     clearTimeout(skeleton);

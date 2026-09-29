@@ -6,6 +6,7 @@ import { avatar, toast, sectionHeader } from '../ui/components.js';
 import { confirmDialog } from '../ui/dialog.js';
 import { go } from '../router.js';
 import { platform } from '../platform.js';
+import { accountExtras } from './account-extra.js';
 
 export default async function account(ctx) {
   const u = app.user;
@@ -14,16 +15,18 @@ export default async function account(ctx) {
   const plan = u.subscription?.planId || 'free';
   const link = (href, ic, label, sub = '') => html`<a class="row-link" href="${href}">${icon(ic, { size: 22 })}<span><b>${label}</b>${sub ? html`<small>${sub}</small>` : ''}</span>${icon('right', { size: 18, cls: 'chev' })}</a>`;
 
+  const extras = accountExtras();
   ctx.root.innerHTML = html`<div class="page page-narrow">
     ${sectionHeader({ tag: 'You', title: 'Account & settings' })}
+    ${extras.html}
     <section class="card-panel who">
       ${p ? avatar(p, { size: 64 }) : ''}
       <div><h2>${u.account ? u.account.name : p ? p.name : 'Guest'}</h2>
-        <p class="muted">${u.account ? u.account.email + (u.account.providers?.length ? ' · ' + u.account.providers.map((x) => (x === 'google' ? 'Google' : 'Facebook')).join(' & ') + ' sign-in' : '') : u.supportsAuth ? 'Browsing as a guest — sign in to sync across devices.' : 'Your list and progress are saved on this device.'}</p></div>
+        <p class="muted">${u.account ? u.account.email + (u.account.providers?.length ? ' · ' + u.account.providers.map((x) => ({ google: 'Google', facebook: 'Facebook', apple: 'Apple' }[x] || x)).join(' & ') + ' sign-in' : '') : u.supportsAuth ? 'Browsing as a guest — sign in to sync across devices.' : 'Your list and progress are saved on this device.'}</p></div>
       <div class="who-actions">${u.supportsAuth ? (u.account ? html`<button class="btn btn-ghost" id="signout">${icon('logout', { size: 18 })} Sign out</button>` : html`<a class="btn btn-primary" href="#/signin">Sign in</a><a class="btn btn-ghost" href="#/signup">Create account</a>`) : ''}</div>
     </section>
 
-    <h2 class="sub-h">Profiles</h2>
+    ${''}<h2 class="sub-h">Profiles</h2>
     <div class="card-panel list">${link('#/profiles', 'user', 'Who’s watching?', `${u.profiles.length} profile${u.profiles.length > 1 ? 's' : ''} · switch profile`)}${link('#/profiles?manage=1', 'edit', 'Manage profiles')}</div>
 
     <h2 class="sub-h">Playback</h2>
@@ -48,6 +51,7 @@ export default async function account(ctx) {
     ${u.account ? html`<h2 class="sub-h">Danger zone</h2><div class="card-panel list"><button class="row-link danger" id="delAcc">${icon('trash', { size: 22 })}<span><b>Delete account</b><small>Permanently removes your account, profiles, list and history.</small></span></button></div>` : ''}
   </div>`.s;
 
+  extras.wire(ctx.root);
   $('#signout', ctx.root)?.addEventListener('click', async () => { await u.signOut(); toast('Signed out'); go('/', { replace: true }); });
   $('#autoNext', ctx.root).addEventListener('change', (e) => u.setPref('autoplayNext', e.target.checked));
   $('#clearHist', ctx.root).addEventListener('click', async () => {

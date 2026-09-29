@@ -47,7 +47,11 @@ export class LocalAdapter {
   async signOut() {}
   async deleteAccount() { Object.keys(localStorage).filter((k) => k.startsWith('ab.')).forEach((k) => localStorage.removeItem(k)); }
   async submitContact() { throw new ApiError(400, 'no-api'); }
+  // Features that need the server are simply absent in local mode (the UI checks `user.supportsAuth`).
+  async myRatings() { return {}; } async ratingCounts() { return { up: 0, down: 0 }; }
 }
+
+const pinHeader = (pin) => (pin ? { 'X-Parental-Pin': String(pin) } : {});
 
 export class RemoteAdapter {
   mode = 'remote';
@@ -57,7 +61,7 @@ export class RemoteAdapter {
     if (!this.api.token) return { account: null, profiles: [], subscription: { planId: 'free', status: 'active' } };
     try {
       const me = await this.api.get('/me');
-      return { account: { ...me.user, providers: me.providers || [], hasPassword: me.hasPassword !== false }, profiles: me.profiles, subscription: me.subscription };
+      return { account: { ...me.user, providers: me.providers || [], hasPassword: me.hasPassword !== false, hasPin: !!me.hasPin }, profiles: me.profiles, subscription: me.subscription };
     } catch (e) {
       if (e.status === 401) return { account: null, profiles: [], subscription: { planId: 'free', status: 'active' } };
       throw e;
@@ -67,6 +71,7 @@ export class RemoteAdapter {
   async signIn(p) { const r = await this.api.post('/auth/login', p); this.api.setToken(r.token); return r; }
   /** Google / Facebook: the API verifies the provider credential and returns our own session. */
   async signInSocial(provider, credential) {
+    if (provider === 'apple') return this.signInApple(credential.identityToken, credential.name);
     const r = await this.api.post(`/auth/${provider}`, provider === 'google' ? { idToken: credential } : { accessToken: credential });
     this.api.setToken(r.token); return r;
   }
@@ -76,9 +81,9 @@ export class RemoteAdapter {
   streamUrl(videoId) { return this.api.post(`/videos/${encodeURIComponent(videoId)}/stream`); }
   async signOut() { this.api.setToken(null); }
   async deleteAccount() { await this.api.del('/me'); this.api.setToken(null); }
-  async createProfile(p) { return (await this.api.post('/profiles', p)).profile; }
-  async updateProfile(id, patch) { return (await this.api.patch(`/profiles/${id}`, patch)).profile; }
-  async deleteProfile(id) { await this.api.del(`/profiles/${id}`); }
+  async createProfile(p, pin) { return (await this.api.post('/profiles', p, { headers: pinHeader(pin) })).profile; }
+  async updateProfile(id, patch, pin) { return (await this.api.patch(`/profiles/${id}`, patch, { headers: pinHeader(pin) })).profile; }
+  async deleteProfile(id, pin) { await this.api.del(`/profiles/${id}`, undefined, { headers: pinHeader(pin) }); }
   async loadLibrary(pid) { return { ...emptyLib(), ...(await this.api.get(`/profiles/${pid}/library`)) }; }
   async saveLibrary() {}
   addToList(pid, type, id) { return this.api.put(`/profiles/${pid}/list/${type}/${encodeURIComponent(id)}`); }
@@ -101,4 +106,42 @@ export class RemoteAdapter {
   }
   async cancelSubscription() { return (await this.api.del('/subscription'))?.subscription ?? { planId: 'free', status: 'active' }; }
   submitContact(payload) { return this.api.post('/contact', payload); }
+
+  /* ----- account security ----- */
+  async signInApple(identityToken, name) { const r = await this.api.post('/auth/apple', { identityToken, name }); this.api.setToken(r.token); return r; }
+  forgotPassword(email) { return this.api.post('/auth/forgot', { email }); }
+  async resetPassword(token, password) { const r = await this.api.post('/auth/reset', { token, password }); this.api.setToken(r.token); return r; }
+  verifyEmail(token) { return this.api.post('/auth/verify', { token }); }
+  resendVerification() { return this.api.post('/me/verify/resend'); }
+  async changePassword(currentPassword, newPassword) { const r = await this.api.post('/me/password', { currentPassword, newPassword }); this.api.setToken(r.token); return r; }
+  async signOutEverywhere() { const r = await this.api.post('/me/sessions/revoke'); this.api.setToken(r.token); return r; }
+
+  /* ----- parental PIN & devices ----- */
+  setPin(pin, currentPin) { return this.api.put('/me/pin', { pin, currentPin }); }
+  removePin(pin) { return this.api.del('/me/pin', { pin }); }
+  verifyPin(pin) { return this.api.post('/me/pin/verify', { pin }); }
+  devices() { return this.api.get('/me/devices'); }
+  forgetDevice(id) { return this.api.del(`/me/devices/${encodeURIComponent(id)}`); }
+  heartbeat(videoId) { return this.api.post('/playback/heartbeat', { videoId }); }
+  stopPlayback() { return this.api.post('/playback/stop'); }
+
+  /* ----- ratings & comments ----- */
+  async myRatings(pid) { return (await this.api.get(`/profiles/${pid}/ratings`)).ratings || {}; }
+  ratingCounts(type, id) { return this.api.get(`/ratings/${type}/${encodeURIComponent(id)}`); }
+  rate(pid, type, id, value) { return value ? this.api.put(`/profiles/${pid}/ratings/${type}/${encodeURIComponent(id)}`, { value }) : this.api.del(`/profiles/${pid}/ratings/${type}/${encodeURIComponent(id)}`); }
+  comments(videoId, { before } = {}) { return this.api.get(`/videos/${encodeURIComponent(videoId)}/comments${before ? `?before=${encodeURIComponent(before)}` : ''}`); }
+  addComment(videoId, body, profileId) { return this.api.post(`/videos/${encodeURIComponent(videoId)}/comments`, { body, profileId }); }
+  deleteComment(id) { return this.api.del(`/comments/${id}`); }
+  reportComment(id) { return this.api.post(`/comments/${id}/report`); }
+
+  /* ----- push, refunds, analytics ----- */
+  pushConfig() { return this.api.get('/push/config').catch(() => ({ enabled: false })); }
+  pushSubscribe(subscription, prefs) { return this.api.post('/push/subscribe', { subscription, prefs }); }
+  pushStatus(endpoint) { return this.api.post('/push/status', { endpoint }); }
+  pushPrefs(endpoint, prefs) { return this.api.patch('/push/prefs', { endpoint, ...prefs }); }
+  pushUnsubscribe(endpoint) { return this.api.post('/push/unsubscribe', { endpoint }); }
+  requestRefund(paymentId, reason) { return this.api.post(`/payments/${encodeURIComponent(paymentId)}/refund-request`, { reason }); }
+  refundRequests() { return this.api.get('/refund-requests'); }
+  playEvent(videoId, event, seconds) { this.api.beacon('/events/play', { videoId, event, seconds }); }
+  reportError(e) { this.api.beacon('/client-errors', e); }
 }

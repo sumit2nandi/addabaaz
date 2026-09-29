@@ -10,6 +10,9 @@ import { HISTORY } from './mode.js';
 import { renderShell, renderProfileMenu, markActive } from './ui/shell.js';
 import { syncButtons, scrollRail, toast } from './ui/components.js';
 import { initPlatform } from './platform.js';
+import { initConsent, trackPage } from './consent.js';
+import { initErrorReporting } from './errors.js';
+import { initPush } from './push.js';
 
 initPlatform();
 
@@ -22,16 +25,17 @@ async function boot() {
   const catalogUrl = useApi ? `${base}/api/v1/catalog` : 'data/catalog.json';
 
   const [catalog] = await Promise.all([loadCatalog(catalogUrl, undefined, { mediaBase: useApi ? base : '' })]);
-  app.catalog = catalog;
+  app.fullCatalog = catalog; app.catalog = catalog;
   app.user = new User(new LocalAdapter(), useApi ? new RemoteAdapter(app.api) : null);
   await app.user.init();
+  applyKids();
 
   renderShell();
   const router = app.router = new Router($('#view'), { onRoute: (r) => { markActive(r); syncButtons(document); window.dispatchEvent(new Event('ab:ready')); $('#boot')?.remove(); } });
   wireGlobalActions();
 
   app.user.on('library', () => syncButtons(document));
-  app.user.on('profile', renderProfileMenu);
+  app.user.on('profile', () => { applyKids(); renderProfileMenu(); });
   app.user.on('account', renderProfileMenu);
   window.addEventListener('ab:unauthorized', () => { app.user.signOut().then(() => toast('Your session expired. Please sign in again.')); });
 
@@ -40,8 +44,18 @@ async function boot() {
   }
   router.start();
   networkStatus();
+  initConsent(); initErrorReporting(); initPush();
+  window.addEventListener('ab:ready', trackPage);
   installPrompt();
   registerServiceWorker();
+}
+
+/** A Kids profile browses a filtered catalog (only titles rated U or 7+). */
+function applyKids() {
+  const kids = app.user.isKids;
+  if (kids && !app.catalog.kids) app.catalog = app.fullCatalog.kidsView();
+  else if (!kids && app.catalog.kids) app.catalog = app.fullCatalog;
+  document.body.classList.toggle('kids', kids);
 }
 
 function wireGlobalActions() {

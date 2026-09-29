@@ -35,6 +35,16 @@ function initFacebook({ appId, version = 'v21.0' }) {
 }
 const facebookWeb = (FB) => new Promise((res, rej) => FB.login((r) => (r.authResponse?.accessToken ? res(r.authResponse.accessToken) : rej(Object.assign(new Error('cancelled'), { cancelled: true }))), { scope: 'public_profile,email' }));
 
+/* ---------- web: Apple ---------- */
+async function appleWeb({ clientId }) {
+  await loadScript('apple', 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js');
+  window.AppleID.auth.init({ clientId, scope: 'name email', redirectURI: location.origin, usePopup: true });
+  try {
+    const r = await window.AppleID.auth.signIn();
+    const n = r.user?.name; return { identityToken: r.authorization?.id_token, name: n ? [n.firstName, n.lastName].filter(Boolean).join(' ') : '' };
+  } catch (e) { if (e?.error === 'popup_closed_by_user' || e?.error === 'user_cancelled_authorize') e.cancelled = true; throw e; }
+}
+
 /* ---------- native (Capacitor) ---------- */
 let nativeInit = false;
 function nativePlugin(providers) {
@@ -42,32 +52,35 @@ function nativePlugin(providers) {
   if (!SL) throw new Error('Social sign-in isn’t set up in this build of the app yet.');
   return { SL, ready: nativeInit ? Promise.resolve() : SL.initialize({
     ...(providers.google ? { google: { webClientId: providers.google.clientId, iOSClientId: providers.google.iosClientId, iOSServerClientId: providers.google.clientId, mode: 'online' } } : {}),
+    ...(providers.apple ? { apple: {} } : {}),
     ...(providers.facebook ? { facebook: { appId: providers.facebook.appId, clientToken: providers.facebook.clientToken } } : {}),
   }).then(() => { nativeInit = true; }) };
 }
 async function nativeCredential(provider, providers) {
   const { SL, ready } = nativePlugin(providers); await ready;
   try {
+    if (provider === 'apple') { const r = await SL.login({ provider: 'apple', options: { scopes: ['email', 'name'] } }); const n = r.result?.profile; return { identityToken: r.result?.idToken, name: n ? [n.givenName, n.familyName].filter(Boolean).join(' ') : '' }; }
     if (provider === 'google') { const r = await SL.login({ provider: 'google', options: { scopes: ['email', 'profile'] } }); return r.result?.idToken; }
     const r = await SL.login({ provider: 'facebook', options: { permissions: ['email', 'public_profile'] } }); return r.result?.accessToken?.token;
   } catch (e) { if (/cancel/i.test(`${e?.code} ${e?.message}`)) e.cancelled = true; throw e; }
 }
 
 const FB_LOGO = html`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M22 12a10 10 0 1 0-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.5 1.49-3.89 3.78-3.89 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.78l-.44 2.89h-2.34v6.99A10 10 0 0 0 22 12z"/></svg>`;
+const APPLE_LOGO = html`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M16.4 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9s-1.8-.8-3-.8c-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.700 2.4 2.900 2.300 1.200 0 1.600-.7 3-.7s1.800.7 3 .7 2-1.100 2.800-2.200c.9-1.300 1.200-2.500 1.300-2.600-.1 0-2.500-1-2.500-3.900zM14.100 5.800c.6-.8 1.100-1.900.9-3-.9 0-2.100.6-2.700 1.400-.6.700-1.100 1.800-1 2.900 1.100.1 2.200-.5 2.800-1.300z"/></svg>`;
 const G_LOGO = html`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285F4" d="M22.5 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h5.9a5.05 5.05 0 0 1-2.19 3.31v2.75h3.55c2.08-1.91 3.24-4.73 3.24-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.55-2.75c-.98.66-2.24 1.06-3.73 1.06-2.87 0-5.3-1.94-6.17-4.55H2.16v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.83 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.16a11 11 0 0 0 0 9.88l3.67-2.84z"/><path fill="#EA4335" d="M12 5.35c1.62 0 3.06.56 4.21 1.65l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.16 7.06L5.83 9.9C6.7 7.29 9.13 5.35 12 5.35z"/></svg>`;
 
 /**
  * Fills `box` with "Continue with Google / Facebook" buttons for the providers the server has enabled.
- * @param {(provider:'google'|'facebook', credential:string) => Promise<void>} onCredential
+ * @param {(provider:'google'|'facebook'|'apple', credential:string|{identityToken,name}) => Promise<void>} onCredential
  * @param {(msg:string) => void} onError
  * @returns {boolean} whether any button was rendered
  */
 export function mountSocialButtons(box, providers, { signup = false, onCredential, onError }) {
-  const wanted = ['google', 'facebook'].filter((p) => providers?.[p]);
+  const wanted = ['google', 'facebook', 'apple'].filter((p) => providers?.[p]);
   if (!wanted.length) return false;
   box.innerHTML = wanted.map((p) => (p === 'google' && !isNative
     ? '<div class="social-g" id="gBtn"></div>'
-    : html`<button type="button" class="btn-social btn-${p}" data-p="${p}">${p === 'google' ? G_LOGO : FB_LOGO}<span>Continue with ${p === 'google' ? 'Google' : 'Facebook'}</span></button>`.s)).join('');
+    : html`<button type="button" class="btn-social btn-${p}" data-p="${p}">${p === 'google' ? G_LOGO : p === 'apple' ? APPLE_LOGO : FB_LOGO}<span>Continue with ${p === 'google' ? 'Google' : p === 'apple' ? 'Apple' : 'Facebook'}</span></button>`.s)).join('');
   const run = async (provider, get) => {
     try { const cred = await get(); if (cred) await onCredential(provider, cred); }
     catch (e) { if (!e?.cancelled) onError(e?.message === 'blocked' ? 'Couldn’t load the sign-in service — check your connection or ad-blocker.' : e?.message || 'Sign-in failed. Please try again.'); }
@@ -84,6 +97,7 @@ export function mountSocialButtons(box, providers, { signup = false, onCredentia
     const b = e.target.closest('.btn-social[data-p]'); if (!b) return;
     const p = b.dataset.p;
     if (isNative) return run(p, () => nativeCredential(p, providers));
+    if (p === 'apple') return run(p, () => appleWeb(providers.apple));
     if (p === 'facebook') { if (!window.FB) return onError('Facebook is still loading — try again in a moment.'); run(p, () => facebookWeb(window.FB)); }
   });
   return true;

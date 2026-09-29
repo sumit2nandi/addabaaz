@@ -4,6 +4,7 @@ import { html, $, $$, el } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar } from './components.js';
 import { CONFIG } from '../config.js';
+import { mayLeaveKids } from './parental.js';
 
 const NAV = [
   ['/', 'Home', 'home'], ['/shows', 'Shows', 'shows'], ['/reels', 'Reels', 'reels'],
@@ -68,7 +69,7 @@ function wireMenus() {
       closeAll(); menu.hidden = !open; btn.setAttribute('aria-expanded', String(open)); return;
     }
     const sw = e.target.closest('[data-switch-profile]');
-    if (sw) { app.user.selectProfile(sw.dataset.switchProfile).then(() => location.reload()); return; }
+    if (sw) { const t = app.user.profiles.find((x) => x.id === sw.dataset.switchProfile); mayLeaveKids(app.user, t).then((ok) => ok && app.user.selectProfile(t.id)).then((r) => r !== false && location.reload()); return; }
     if (e.target.closest('[data-signout]')) { app.user.signOut().then(() => { go('/'); }); }
     if (!e.target.closest('.menu') || e.target.closest('a.menu-item, a')) closeAll();
   });

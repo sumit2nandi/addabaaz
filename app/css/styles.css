@@ -358,3 +358,23 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .bill-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; } .bill-head b { font-size: 17px; } .bill-amt { font-size: 20px; font-weight: 800; }
 .bill-docs { display: flex; flex-wrap: wrap; gap: 8px; } .bill-docs .btn { padding: 8px 12px; font-size: 13px; }
 .pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 700; background: #2a2200; color: var(--gold); } .pill.ok { background: #0f2415; color: #7be495; }
+
+/* ---------- accounts, legal, consent, engagement (v2.6) ---------- */
+.linklike { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; opacity: .85; } .linklike:hover { opacity: 1; }
+.forgot-link { justify-self: end; margin-top: -6px; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; } .forgot-link:hover { color: #fff; }
+.fine { font-size: 12.5px; color: var(--muted); text-align: center; line-height: 1.5; } .fine a { color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; }
+.stack-sm { display: grid; gap: 10px; } .btn.block { width: 100%; justify-content: center; }
+.pin-input { text-align: center; letter-spacing: .5em; font-size: 22px; }
+.legal section { margin-top: 26px; } .legal h2 { font-size: 19px; margin-bottom: 8px; } .legal p { color: var(--text-2); margin-top: 8px; line-height: 1.7; max-width: 72ch; } .legal .lead { font-size: 16px; margin-top: 4px; } .legal-links { margin-top: 36px !important; }
+.consent-bar { position: fixed; z-index: 90; left: 12px; right: 12px; bottom: calc(var(--tabbar-h) + var(--sab) + 12px); max-width: 760px; margin: 0 auto; display: flex; gap: 14px 20px; align-items: center; flex-wrap: wrap; justify-content: space-between; padding: 14px 18px; border-radius: 16px; background: rgba(24,24,28,.97); border: 1px solid var(--border-2); box-shadow: 0 12px 40px rgba(0,0,0,.6); font-size: 13.5px; color: var(--text-2); } .consent-bar p { flex: 1 1 320px; } .consent-bar a { text-decoration: underline; } .consent-bar .row { display: flex; gap: 8px; }
+@media (min-width: 900px) { .consent-bar { bottom: 20px; } }
+.dev-list { display: grid; gap: 4px; margin-top: 10px; } .dev-list li { display: flex; gap: 12px; align-items: center; padding: 10px 4px; border-top: 1px solid var(--border); } .dev-list li > div { flex: 1; display: grid; } .dev-list small { color: var(--muted); }
+.row-switch { cursor: pointer; }
+.rate-box { display: inline-flex; } .rate { display: inline-flex; gap: 6px; } .rate-btn { gap: 6px; } .rate-btn.on { border-color: var(--gold); color: var(--gold); } .rate-btn .i { flex: none; }
+.rate-box.glass .rate-btn { background: rgba(255,255,255,.14); border-color: transparent; padding: 0 16px; height: 48px; border-radius: 12px; color: #fff; } .rate-box.glass .rate-btn.on { color: var(--gold); }
+.comments { margin-top: 34px; } .comments .section-bar h2 { display: flex; gap: 8px; align-items: center; }
+.cm-form { display: grid; gap: 8px; margin: 12px 0 18px; } .cm-form textarea { width: 100%; resize: vertical; min-height: 64px; padding: 12px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border-2); color: #fff; font: inherit; } .cm-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.cm-list { display: grid; gap: 4px; } .cm { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border); } .cm-av { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--panel-3); font-weight: 700; }
+.cm-main { min-width: 0; flex: 1; } .cm-head { display: flex; gap: 10px; align-items: baseline; font-size: 13.5px; } .cm-head time { color: var(--muted); font-size: 12px; } .cm p { margin-top: 2px; white-space: pre-line; overflow-wrap: anywhere; color: var(--text-2); } .cm-actions { margin-top: 4px; font-size: 12.5px; color: var(--muted); } .cm-empty { padding: 14px 0; }
+.card-panel.notice { display: flex; background: #2a2200; border-color: #5c4a00; margin-bottom: 18px; } .card-panel.notice > div:nth-child(2) { flex: 1; } .card-panel.notice p { font-size: 13.5px; }
+@media (max-width: 600px) { .card-panel.notice { flex-wrap: wrap; } }

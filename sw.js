@@ -5,7 +5,7 @@
  * - YouTube thumbnails: stale-while-revalidate (opaque responses allowed)
  * - /api/*, /admin/*, YouTube player, analytics: never intercepted
  * Bump VERSION (or run `npm run build:www`, which stamps it) to force a refresh. */
-const VERSION = 'v2.5.0';
+const VERSION = 'v2.6.0';
 const SHELL = `ab-shell-${VERSION}`, DATA = `ab-data-${VERSION}`, MEDIA = `ab-media-${VERSION}`, THUMBS = `ab-thumbs-${VERSION}`;
 const PRECACHE = ['./', 'index.html', 'manifest.webmanifest', 'app/env.js', 'app/css/styles.css', 'app/js/main.js', 'app/js/app.js', 'app/js/config.js', 'app/js/util.js', 'app/js/icons.js',
   'app/js/router.js', 'app/js/mode.js', 'app/js/routes.js', 'app/js/seo/meta.js', 'app/js/seo/head.js', 'app/js/platform.js', 'app/js/social.js', 'app/js/payments.js', 'app/js/data/catalog.js', 'app/js/data/api.js', 'app/js/data/adapters.js', 'app/js/data/user.js',
@@ -50,4 +50,21 @@ self.addEventListener('fetch', (e) => {
   }
   if (/(^|\.)ytimg\.com$/.test(url.hostname) || url.hostname === 'img.youtube.com') return e.respondWith(swr(req, THUMBS));
   if (url.hostname === 'fonts.gstatic.com' || url.hostname === 'fonts.googleapis.com' || url.hostname === 'cdnjs.cloudflare.com') return e.respondWith(swr(req, SHELL));
+});
+
+/* ---------- Web Push ---------- */
+self.addEventListener('push', (e) => {
+  let d = {}; try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data && e.data.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'ADDABAAZ', {
+    body: d.body || '', icon: 'media/icons/icon-192.png', badge: 'media/icons/icon-96.png', image: d.image || undefined,
+    tag: d.tag || undefined, renotify: !!d.tag, data: { url: d.url || '/' },
+  }));
+});
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const target = new URL((e.notification.data && e.notification.data.url) || '/', self.registration.scope).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    for (const c of list) if (new URL(c.url).origin === new URL(target).origin && 'focus' in c) { c.navigate(target).catch(() => {}); return c.focus(); }
+    return self.clients.openWindow(target);
+  }));
 });

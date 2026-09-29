@@ -5,7 +5,7 @@ import { icon } from '../icons.js';
 import { img, sectionHeader } from '../ui/components.js';
 import { rebaseUploads } from '../data/catalog.js';
 
-async function studioData() {
+export async function studioData() {
   if (!app.studio) {
     // Editable from the admin console when an API is present; the bundled file is the offline / static-hosting fallback.
     if (app.api) { try { const r = await fetch(`${app.api.base}/api/v1/studio`, { cache: 'no-cache' }); if (r.ok) app.studio = rebaseUploads(await r.json(), app.api.base); } catch { /* fall back */ } }

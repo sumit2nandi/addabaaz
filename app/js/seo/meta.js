@@ -8,10 +8,11 @@
  */
 import { matchRoute } from '../routes.js';
 
+import { legalDoc, LEGAL_PAGES, LEGAL_UPDATED } from '../legal-text.js';
 export const SITE = 'ADDABAAZ';
 export const TYPE_LABEL = { series: 'Bengali web series', standup: 'Stand-up comedy', podcast: 'Fake podcast', film: 'Bengali short film' };
 const KIND_LABEL = { episode: 'episode', trailer: 'trailer', reel: 'reel', clip: 'clip' };
-const PRIVATE = { mylist: 'My List', account: 'Account', profiles: 'Choose a profile', billing: 'Billing & invoices' };
+const PRIVATE = { mylist: 'My List', account: 'Account', profiles: 'Choose a profile', billing: 'Billing & invoices', recover: 'Account recovery' };
 const ROBOTS_INDEX = 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1';
 
 /** Collapse whitespace and cut at a word boundary. */
@@ -155,6 +156,10 @@ export function pageMeta({ path, query = {}, cat, studio = null, origin, plans =
       '/contact': ['Contact ADDABAAZ — Production House in Kolkata', `Get in touch with ${SITE}: ${[st.email, (st.phones || [])[0]].filter(Boolean).join(' · ') || 'send us a message'}${(st.address || [])[1] ? ` — ${st.address[1]}` : ''}.`, 'ContactPage', 'Contact'] }[path];
     out.title = page[0]; out.description = clip(page[1], 158); out.canonical = path;
     out.jsonld = [{ '@type': page[2], name: page[3], url: `${origin}${path}` }, site, crumbs(origin, [home, [page[3], path]])];
+  } else if (view === 'legal') {
+    const d = legalDoc(LEGAL_PAGES[path], { studio: studio?.studio });
+    out.title = `${d.title} — ${SITE}`; out.description = clip(d.intro, 158); out.canonical = path;
+    out.jsonld = [{ '@type': 'WebPage', name: d.title, url: `${origin}${path}`, dateModified: LEGAL_UPDATED }, crumbs(origin, [home, [d.title, path]])];
   } else if (view === 'search') {
     out.title = `Search — ${SITE}`; out.description = `Search ${SITE} shows, episodes and reels.`; out.canonical = '/search'; out.robots = 'noindex,follow';
   } else if (view === 'auth') {
