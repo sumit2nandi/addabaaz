@@ -7,7 +7,8 @@ import { isDuplicate } from './db.js';
 import { verifyToken, sessionValid } from './auth.js';
 import { PLANS, paidPlan } from './plans.js';
 import { validate, TYPES } from './catalog-schema.js';
-import { saveImage, videoKey } from './uploads.js';
+import { saveImage, saveSubtitle, videoKey } from './uploads.js';
+import { adminExtraRoutes } from './admin-extra.js';
 
 const asInt = (v, what) => { if (v === undefined || v === null || v === '') return null; const n = Number(v); if (!Number.isInteger(n) || n < 0) throw bad(`${what} must be a whole number.`); return n; };
 const asDate = (v, what) => { if (v === undefined || v === null || v === '') return null; const t = Date.parse(v); if (Number.isNaN(t)) throw bad(`${what} must be an ISO date.`); return new Date(t); };
@@ -18,7 +19,7 @@ const page = (req, dflt = 25, max = 100) => ({ limit: Math.min(Math.max(Number(r
  * The admin API (mounted at /api/v1/admin). Access = a signed-in ADMIN ACCOUNT (users.is_admin, granted with `npm run admin -- grant <email>`)
  * whose session is younger than `sessionHours`, or — for scripts — the shared ADMIN_TOKEN. Every change is written to the audit log.
  */
-export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', env = process.env }) {
+export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, push = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', env = process.env }) {
   const tokenOn = adminToken.length >= 24;
   if (adminToken && !tokenOn) console.warn('[admin] ADMIN_TOKEN is shorter than 24 characters — the token is ignored (admin accounts still work).');
   const router = express.Router();
@@ -57,6 +58,8 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
       item('gst', 'GST invoicing', billing.config.gstEnabled, billing.config.gstEnabled ? `Invoices are issued under GSTIN ${billing.config.gstin}.` : 'GSTIN is not set — purchases get plain receipts without GST.'),
       item('mail', 'Email', mailer.provider === 'smtp', mailer.provider === 'smtp' ? 'SMTP is configured.' : 'SMTP_URL is not set — receipts, refund and reminder emails are not sent.'),
       item('r2', 'Premium video storage (R2)', !!r2.configured, r2.configured ? `Bucket “${r2.bucket}” is configured.` : 'R2 is not configured — premium videos cannot play.'),
+      item('push', 'Web push', !!push?.configured, push?.configured ? 'VAPID keys are set; notifications can be sent.' : 'VAPID keys are not set — push notifications are off (optional).', 'info'),
+      item('apple', 'Apple sign-in', !!social.verifiers?.apple, social.verifiers?.apple ? 'Enabled.' : 'Not configured (optional; required only for iOS apps that offer other social logins).', 'info'),
       item('google', 'Google sign-in', !!social.verifiers?.google, social.verifiers?.google ? 'Enabled.' : 'Not configured (optional).', 'info'),
       item('facebook', 'Facebook sign-in', !!social.verifiers?.facebook, social.verifiers?.facebook ? 'Enabled.' : 'Not configured (optional).', 'info'),
       item('uploads', 'Image uploads', uploads, uploads ? `Saved to ${uploadDir}${prod ? ' — make sure this folder is on a persistent volume.' : ''}` : `Cannot write to ${uploadDir}.`),
@@ -193,9 +196,9 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
   const kindOf = (req) => { if (!TYPES[req.params.type]) throw new HttpError(404, 'not_found', 'Unknown catalog section.'); return { key: req.params.type, type: TYPES[req.params.type] }; };
   const invalid = (errors) => new HttpError(400, 'invalid_item', errors.join(' '));
 
-  router.get('/catalog', wrap(async (_req, res) => { const s = await catalog.get(); res.json({ ...s.catalog, studio: s.studio }); }));
+  router.get('/catalog', wrap(async (_req, res) => { const s = await catalog.get({ all: true }); res.json({ ...s.catalog, studio: s.studio }); }));
   router.post('/catalog/:type', wrap(async (req, res) => {
-    const { key, type } = kindOf(req), snap = await catalog.get();
+    const { key, type } = kindOf(req), snap = await catalog.get({ all: true });
     const { doc, errors } = validate(type, req.body, ctxOf(snap)); if (errors.length) throw invalid(errors);
     try { await db.catalog.put(key, doc.id, doc, { create: true }); } catch (e) { if (isDuplicate(e)) throw new HttpError(409, 'exists', `A ${type} with the id “${doc.id}” already exists.`); throw e; }
     catalog.invalidate(); await log(req, `catalog.${type}.create`, doc.id, { title: doc.title || doc.caption || doc.id });
@@ -208,7 +211,7 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
     res.json({ ids: order });
   }));
   router.put('/catalog/:type/:id', wrap(async (req, res) => {
-    const { key, type } = kindOf(req), snap = await catalog.get();
+    const { key, type } = kindOf(req), snap = await catalog.get({ all: true });
     const body = { ...(req.body || {}) }; if (body.id === undefined) body.id = req.params.id;
     if (body.id !== req.params.id) throw bad('An id can’t be changed — create a new item instead.');
     const { doc, errors } = validate(type, body, ctxOf(snap)); if (errors.length) throw invalid(errors);
@@ -235,6 +238,12 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
     await log(req, 'upload.image', saved.path, { bytes: saved.bytes });
     res.status(201).json({ path: saved.path, bytes: saved.bytes, type: saved.type });
   }));
+  router.post('/uploads/subtitle', express.raw({ type: () => true, limit: '2mb' }), wrap(async (req, res) => {
+    if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the .vtt or .srt file as the request body.');
+    const saved = saveSubtitle(req.body, uploadDir); if (!saved) throw bad('That does not look like a WebVTT (.vtt) or SubRip (.srt) subtitle file.', 'unsupported_subtitle');
+    await log(req, 'upload.subtitle', saved.path, { cues: saved.cues });
+    res.status(201).json(saved);
+  }));
   /** Presigned PUT so the browser sends a big video straight to the private R2 bucket (never through this server). */
   router.post('/uploads/video', wrap(async (req, res) => {
     if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video storage (R2) is not configured on this server.');
@@ -244,5 +253,6 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
     res.status(201).json({ key: k.key, format: k.format, contentType: k.contentType, uploadUrl: r2.presignPut(k.key, { ttl: 6 * 3600 }), expiresInSeconds: 6 * 3600 });
   }));
 
+  adminExtraRoutes({ router, db, billing, catalog, push, mailer, log, siteUrl: billing.config.siteUrl });
   return router;
 }

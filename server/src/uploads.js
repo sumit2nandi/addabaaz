@@ -32,3 +32,22 @@ export function videoKey(filename, slug = '') {
   const base = clean(String(filename).replace(/\.[^.]+$/, '')) || 'video';
   return { key: `premium/${clean(slug) || 'uploads'}/${crypto.randomBytes(4).toString('hex')}-${base}.${ext}`, contentType: VIDEO_EXT[ext], format: 'mp4' };
 }
+
+/** Subtitles: WebVTT as-is, or SubRip (.srt) converted on the way in. Returns { vtt, cues } or null when it isn't a subtitle file. */
+export function toVtt(input) {
+  let t = Buffer.isBuffer(input) ? input.toString('utf8') : String(input || '');
+  t = t.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim();
+  if (!t || t.length > 2_000_000) return null;
+  if (/^WEBVTT(\s|$)/.test(t)) { const cues = (t.match(/\d{1,2}:\d{2}(?::\d{2})?[.,]\d{3}\s+-->\s+\d{1,2}:\d{2}(?::\d{2})?[.,]\d{3}/g) || []).length; return cues ? { vtt: `${t}\n`, cues } : null; }
+  const body = t.replace(/(\d{1,2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');   // SRT uses a comma before the milliseconds
+  const cues = (body.match(/\d{1,2}:\d{2}:\d{2}\.\d{3}\s+-->\s+\d{1,2}:\d{2}:\d{2}\.\d{3}/g) || []).length;
+  return cues ? { vtt: `WEBVTT\n\n${body}\n`, cues } : null;
+}
+export function saveSubtitle(buf, dir) {
+  const v = toVtt(buf); if (!v) return null;
+  const name = `${crypto.createHash('sha256').update(v.vtt).digest('hex').slice(0, 24)}.vtt`;
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, name);
+  if (!fs.existsSync(file)) { const tmp = `${file}.${process.pid}.tmp`; fs.writeFileSync(tmp, v.vtt); fs.renameSync(tmp, file); }
+  return { path: `uploads/${name}`, cues: v.cues, bytes: Buffer.byteLength(v.vtt) };
+}

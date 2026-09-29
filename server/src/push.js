@@ -35,8 +35,14 @@ export function createPush({ db, vapid = {}, sender = null, log = console }) {
       return { sent, failed, removed };
     },
     /** Run periodically: tell people about new episodes of shows they follow and about launched "Coming soon" titles. Idempotent. */
-    async runAutomatic(cat, { now = Date.now(), lookbackMs = 24 * 3600_000 } = {}) {
+    async runAutomatic(catalog, { now = Date.now(), lookbackMs = 24 * 3600_000 } = {}) {
       if (!configured) return { episodes: 0, launches: 0 };
+      const shows = new Map((catalog.shows || []).map((x) => [x.id, x]));   // `catalog` = the public snapshot's { shows, videos, upcoming }
+      const cat = {
+        videos: catalog.videos || [], upcoming: catalog.upcoming || [], show: (id) => shows.get(id),
+        episodes: (id) => (catalog.videos || []).filter((v) => v.kind === 'episode' && v.showId === id),
+        displayTitle: (v) => { const t = String(v.shortTitle || v.title || ''); return t.length > 100 ? `${t.slice(0, 97)}…` : t; },
+      };
       let episodes = 0, launches = 0;
       for (const v of cat.videos) {
         if (v.kind !== 'episode' || !v.showId || now - Date.parse(v.publishedAt) > lookbackMs || Date.parse(v.publishedAt) > now) continue;

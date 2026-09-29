@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createApp } from '../src/app.js';
 import { createDb } from '../src/db.js';
 import { migrate } from '../src/migrate.js';
@@ -12,14 +15,15 @@ import { socialFromEnv } from '../src/social.js';
 
 const cfg0 = dbConfigFromEnv({ DATABASE_URL: process.env.TEST_DATABASE_URL || 'mysql://root@127.0.0.1:3306/x' });
 const config = { ...cfg0, database: `addabaaz_eng_${process.pid}_${Date.now().toString(36)}` };
-let db, server, base, root, pushed, mails;
+const ADMIN = 'a'.repeat(32), tmpUploads = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-eng-'));
+let db, server, base, root, pushed, mails, theApp;
 const fakeSender = async (sub, payload) => { if (sub.endpoint.includes('gone')) throw Object.assign(new Error('gone'), { statusCode: 410 }); pushed.push({ endpoint: sub.endpoint, ...JSON.parse(payload) }); };
 test.before(async () => {
   db = await createDb({ config, ensureDatabase: true }); await migrate(db);
   pushed = []; mails = [];
   const mailer = createMailer({ transport: { sendMail: async (m) => { mails.push(m); } } });
   const push = createPush({ db, vapid: { publicKey: 'BPUBLIC' }, sender: fakeSender });
-  const app = createApp({ db, jwtSecret: 'test-secret', rate: false, mailer, push, features: { streamLimit: 1, reportsToHide: 2, refundWindowDays: 7 } });
+  const app = theApp = createApp({ db, jwtSecret: 'test-secret', rate: false, mailer, push, adminToken: ADMIN, uploadDir: tmpUploads, features: { streamLimit: 1, reportsToHide: 2, refundWindowDays: 7 } });
   server = app.listen(0); await new Promise((r) => server.once('listening', r));
   root = `http://127.0.0.1:${server.address().port}`; base = `${root}/api/v1`;
 });
@@ -197,7 +201,7 @@ test('push: subscribe, preferences, notify audiences, send-once automatic notifi
   await call('PATCH', '/push/prefs', { endpoint: 'https://push.example/dev1', episodes: true, news: true }, u.token);
   // automatic: a fresh episode → once per user, however many times the job runs
   const now = Date.now(), ep = cat.videos.find((v) => v.kind === 'episode' && v.showId === show.id);
-  const fakeCat = { videos: [{ ...ep, publishedAt: new Date(now - 3600_000).toISOString() }], upcoming: [], show: () => show, episodes: () => [], displayTitle: () => 'Title' };
+  const fakeCat = { shows: cat.shows, videos: [{ ...ep, publishedAt: new Date(now - 3600_000).toISOString() }], upcoming: [] };
   pushed.length = 0; assert.equal((await push.runAutomatic(fakeCat, { now })).episodes, 1); assert.equal((await push.runAutomatic(fakeCat, { now })).episodes, 0); assert.equal(pushed.length, 1); assert.equal(pushed[0].url, `/watch/${ep.id}`);
   assert.equal((await push.notify({ kind: 'news' }, { title: 'News', body: 'b' })).sent, 1);
   assert.equal((await call('POST', '/push/unsubscribe', { endpoint: 'https://push.example/dev1' }, u.token)).status, 204); assert.equal(await db.push.count(), 0);
@@ -230,4 +234,93 @@ test('refund requests: only real paid purchases inside the window, once; the cus
   await lastMailTo(u.email, /We received your refund request/);
   const other = await signup(); assert.equal((await call('POST', `/payments/${good}/refund-request`, {}, other.token)).status, 404, 'not your payment');
   assert.equal((await call('GET', '/refund-requests', null, u.token)).body.requests[0].status, 'pending');
+});
+
+const adm = (method, p, body, raw) => fetch(`${base}/admin${p}`, { method, headers: { Authorization: `Bearer ${ADMIN}`, ...(raw ? {} : { 'Content-Type': 'application/json' }) }, body: raw ?? (body ? JSON.stringify(body) : undefined) }).then(async (r) => { const t = await r.text(); let j = null; try { j = t ? JSON.parse(t) : null; } catch { /* text */ } return { status: r.status, body: j, text: t, headers: r.headers }; });
+
+test('admin: comment moderation queue — approve, hide, delete', async () => {
+  const u = await signup(); await db.accounts.markVerified(u.user.id); const w = await signup(); await db.accounts.markVerified(w.user.id); const x = await signup(); await db.accounts.markVerified(x.user.id);
+  const vid = (await call('GET', '/catalog')).body.videos.filter((v) => v.kind === 'episode')[1].id;
+  const c = (await call('POST', `/videos/${vid}/comments`, { body: 'borderline remark' }, u.token)).body.comment;
+  await call('POST', `/comments/${c.id}/report`, null, w.token); await call('POST', `/comments/${c.id}/report`, null, x.token);   // 2 reports hide it in this test setup
+  const q = (await adm('GET', '/comments')).body; assert.equal(q.comments.some((k) => k.id === c.id && k.status === 'hidden' && k.reports === 2), true);
+  assert.ok((await adm('GET', '/inbox')).body.comments >= 1);
+  assert.equal((await adm('POST', `/comments/${c.id}/approve`)).status, 204);
+  assert.equal((await call('GET', `/videos/${vid}/comments`)).body.comments.some((k) => k.id === c.id), true, 'visible again, reports cleared');
+  assert.equal((await adm('GET', '/comments')).body.comments.some((k) => k.id === c.id), false);
+  assert.equal((await adm('POST', `/comments/${c.id}/hide`)).status, 204); assert.equal((await call('GET', `/videos/${vid}/comments`)).body.comments.length, 0);
+  assert.equal((await adm('GET', '/comments?filter=all&q=borderline')).body.comments.length, 1);
+  assert.equal((await adm('DELETE', `/comments/${c.id}`)).status, 204); assert.equal((await adm('DELETE', `/comments/${c.id}`)).status, 404);
+  assert.equal((await call('GET', '/admin/comments', null, u.token)).status, 403);
+});
+
+test('admin: notifications go to the chosen audience and are audited; bad input refused', async () => {
+  const u = await signup(); const cat = (await call('GET', '/catalog')).body; const show = cat.shows[1], up = cat.upcoming[0];
+  const sub = { endpoint: 'https://push.example/admin1', keys: { p256dh: 'p'.repeat(20), auth: 'a'.repeat(10) } };
+  await call('POST', '/push/subscribe', { subscription: sub }, u.token);
+  const meta = (await adm('GET', '/notifications')).body; assert.equal(meta.configured, true); assert.ok(meta.audiences.some((a) => a.id === `show:${show.id}`)); assert.ok(meta.subscribers >= 1);
+  assert.equal((await adm('POST', '/notifications/send', { title: '', body: 'x' })).status, 400);
+  assert.equal((await adm('POST', '/notifications/send', { title: 'T', body: 'B', url: '//evil.com' })).status, 400);
+  assert.equal((await adm('POST', '/notifications/send', { title: 'T', body: 'B', audience: 'show:nope' })).status, 400);
+  pushed.length = 0; let r = await adm('POST', '/notifications/send', { title: 'Big news', body: 'Season 2 is here', url: '/plans', audience: 'news' }); assert.equal(r.status, 200); assert.equal(r.body.sent, 0, 'news is opt-in');
+  r = await adm('POST', '/notifications/send', { title: 'Hello all', body: 'Body', audience: 'all' }); assert.ok(r.body.sent >= 1); assert.equal(pushed.at(-1).title, 'Hello all');
+  pushed.length = 0; assert.equal((await adm('POST', '/notifications/send', { title: 'Show', body: 'B', audience: `show:${show.id}` })).body.sent, 0, 'nobody follows it');
+  await call('PUT', `/profiles/${u.profiles[0].id}/reminders/${up.id}`, null, u.token);
+  assert.equal((await adm('POST', '/notifications/send', { title: 'Live', body: 'B', audience: `launch:${up.id}` })).body.sent, 1);
+  assert.ok((await adm('GET', '/notifications')).body.history.length >= 3);
+  assert.equal((await fetch(`${base}/admin/notifications/send`, { method: 'POST' })).status, 401);
+});
+
+test('admin: analytics and error log views', async () => {
+  const v = (await call('GET', '/catalog')).body.videos.find((x) => x.kind === 'episode');
+  await call('POST', '/events/play', { videoId: v.id, event: 'start' }); await call('POST', '/events/play', { videoId: v.id, event: 'progress', seconds: 30 });
+  const a = (await adm('GET', '/analytics?days=7')).body; assert.equal(a.days, 7); assert.ok(a.totals.plays >= 1); assert.ok(a.videos[0].title); assert.ok(a.shows.length >= 1); assert.equal(Array.isArray(a.business.days), true);
+  assert.equal((await adm('GET', '/analytics?days=abc')).body.days, 30);
+  await call('POST', '/client-errors', { message: 'Boom in player', url: '/watch/x' });
+  const e = (await adm('GET', '/errors')).body; assert.ok(e.groups.some((g) => g.message === 'Boom in player')); assert.ok((await adm('GET', '/inbox')).body.errors >= 1);
+  assert.equal((await adm('DELETE', '/errors')).status, 204); assert.equal((await adm('GET', '/errors')).body.groups.length, 0);
+});
+
+test('subtitles: SRT is converted to WebVTT, stored, served, and validated on the video', async () => {
+  const srt = '1\r\n00:00:01,000 --> 00:00:03,500\r\nনমস্কার\r\n\r\n2\r\n00:00:04,000 --> 00:00:06,000\r\nHello\r\n';
+  const up = await adm('POST', '/uploads/subtitle', null, srt); assert.equal(up.status, 201); assert.equal(up.body.cues, 2); assert.match(up.body.path, /^uploads\/[0-9a-f]{24}\.vtt$/);
+  const file = await fetch(`${root}/${up.body.path}`); assert.equal(file.status, 200); assert.match(file.headers.get('content-type'), /text\/vtt/); const txt = await file.text(); assert.match(txt, /^WEBVTT\n\n1\n00:00:01\.000 --> 00:00:03\.500/); assert.ok(txt.includes('নমস্কার'));
+  assert.equal((await adm('POST', '/uploads/subtitle', null, 'just some text')).status, 400);
+  assert.equal((await adm('POST', '/uploads/subtitle', null, '<html>00:00:01,000 --> 00:00:02,000</html>')).status, 201, 'cue timing is what defines a subtitle (HTML is inert as .vtt text)');
+  const v = (await call('GET', '/catalog')).body.videos.find((x) => x.kind === 'episode'); const full = (await adm('GET', '/catalog')).body.videos.find((x) => x.id === v.id);
+  const put = (subtitles) => adm('PUT', `/catalog/videos/${v.id}`, { ...full, subtitles });
+  assert.equal((await put([{ lang: 'bn', label: 'বাংলা', url: up.body.path }, { lang: 'en', label: 'English', url: 'https://cdn.example.com/en.vtt' }])).status, 200);
+  assert.deepEqual((await call('GET', '/catalog')).body.videos.find((x) => x.id === v.id).subtitles.map((t) => t.lang), ['bn', 'en']);
+  for (const [why, subs] of [['not vtt', [{ lang: 'en', label: 'E', url: 'https://x.com/a.txt' }]], ['missing file', [{ lang: 'en', label: 'E', url: 'uploads/ffffffffffffffffffffffff.vtt' }]], ['dup lang', [{ lang: 'en', label: 'E', url: 'https://x.com/a.vtt' }, { lang: 'en', label: 'F', url: 'https://x.com/b.vtt' }]], ['bad lang', [{ lang: 'English!', label: 'E', url: 'https://x.com/a.vtt' }]], ['js url', [{ lang: 'en', label: 'E', url: 'javascript:alert(1).vtt' }]]])
+    assert.equal((await put(subs)).status, 400, why);
+  assert.equal((await put([])).status, 200); assert.equal((await call('GET', '/catalog')).body.videos.find((x) => x.id === v.id).subtitles, undefined);
+});
+
+test('maturity ratings validate; scheduled publishing hides an item until it is due, then it appears as new', async () => {
+  const shows = (await adm('GET', '/catalog')).body.shows; const s0 = shows[0];
+  assert.equal((await adm('PUT', `/catalog/shows/${s0.id}`, { ...s0, rating: '99+' })).status, 400);
+  assert.equal((await adm('PUT', `/catalog/shows/${s0.id}`, { ...s0, rating: '7+' })).status, 200); assert.equal((await call('GET', '/catalog')).body.shows.find((x) => x.id === s0.id).rating, '7+');
+  const future = new Date(Date.now() + 3600_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const doc = { id: 'sched-1', showId: s0.id, kind: 'episode', episode: 99, title: 'Scheduled episode', source: { type: 'youtube', id: 'abcdefghijk' }, duration: 600, publishedAt: '2026-01-01T00:00:00Z', publishAt: future, access: 'free' };
+  assert.equal((await adm('POST', '/catalog/videos', doc)).status, 201);
+  assert.equal((await call('GET', '/catalog')).body.videos.some((v) => v.id === 'sched-1'), false, 'hidden from visitors');
+  assert.equal((await adm('GET', '/catalog')).body.videos.find((v) => v.id === 'sched-1').publishAt, future, 'the admin still sees it');
+  assert.equal((await call('POST', '/videos/sched-1/stream', null, null)).status, 404, 'and cannot be played');
+  const sitemap = await (await fetch(`${root}/sitemap.xml`)).text(); assert.equal(sitemap.includes('sched-1'), false);
+  const past = new Date(Date.now() - 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  assert.equal((await adm('PUT', '/catalog/videos/sched-1', { ...doc, publishAt: past })).status, 200);
+  const live = (await call('GET', '/catalog')).body.videos.find((v) => v.id === 'sched-1'); assert.ok(live, 'due → visible'); assert.equal(live.publishedAt, past); assert.equal(live.publishAt, undefined);
+});
+
+test('the scheduled job announces newly published episodes exactly once', async () => {
+  const u = await signup(); const cat = (await call('GET', '/catalog')).body; const show = cat.shows[0];
+  await call('POST', '/push/subscribe', { subscription: { endpoint: 'https://push.example/job1', keys: { p256dh: 'p'.repeat(20), auth: 'a'.repeat(10) } } }, u.token);
+  await call('PUT', `/profiles/${u.profiles[0].id}/list/show/${show.id}`, null, u.token);
+  const { runScheduledJobs } = await import('../src/jobs.js');
+  const doc = { id: 'sched-2', showId: show.id, kind: 'episode', episode: 100, title: 'Fresh one', source: { type: 'youtube', id: 'abcdefghijk' }, duration: 600, publishedAt: '2026-01-01T00:00:00Z', publishAt: new Date(Date.now() - 1000).toISOString(), access: 'free' };
+  assert.equal((await adm('POST', '/catalog/videos', doc)).status, 201);
+  pushed.length = 0;
+  const r1 = await runScheduledJobs({ db, catalog: theApp.locals.catalog, push: theApp.locals.push, log: { info() {}, error: console.error } });
+  assert.ok(pushed.some((p) => p.url === '/watch/sched-2')); assert.ok(r1.episodes >= 1);
+  pushed.length = 0; const r2 = await runScheduledJobs({ db, catalog: theApp.locals.catalog, push: theApp.locals.push, log: { info() {} } }); assert.equal(pushed.length, 0); assert.equal(r2.episodes, 0);
 });

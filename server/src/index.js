@@ -1,6 +1,7 @@
 import { createApp } from './app.js';
 import { createDb } from './db.js';
 import { migrate } from './migrate.js';
+import { runScheduledJobs } from './jobs.js';
 
 const port = Number(process.env.PORT) || 3000;
 const db = await createDb({ ensureDatabase: process.env.DB_CREATE === 'true' });
@@ -17,6 +18,10 @@ const billing = app.locals.billing;
 const remind = () => billing.sendExpiryReminders().catch((e) => console.error('[billing] reminder run failed:', e.message));
 setTimeout(remind, 30_000).unref();
 setInterval(remind, 3600_000).unref();
+// Every minute: announce newly published episodes / launches (Web Push), and purge expired tokens, idle playback seats, old errors.
+const jobs = () => runScheduledJobs({ db, catalog: app.locals.catalog, push: app.locals.push, log: console });
+setTimeout(jobs, 10_000).unref();
+setInterval(jobs, 60_000).unref();
 if (process.env.NODE_ENV === 'production') {
   if (!process.env.SMTP_URL) console.warn('[mail] SMTP_URL is not set — receipts, refund and reminder emails will NOT be sent.');
   if (process.env.RAZORPAY_KEY_ID && !billing.config.gstEnabled) console.warn('[billing] GSTIN is not set — invoices are issued as plain receipts without GST.');

@@ -430,3 +430,30 @@ test('deleting an account keeps its invoices for the statutory period, detached 
   const row = await db.invoices.byId(inv.id); assert.equal(row.userId, null); assert.equal(row.doc.buyer.email, 'leaver@example.com'); assert.equal(row.number, inv.number);
   assert.equal((await call('GET', `/invoices/${inv.id}/pdf`, null, u.token)).status, 401);
 });
+
+test('refund requests: the customer asks, the admin approves (real refund + access ends) or declines (email, nothing changes)', async () => {
+  const u = await signup('askrefund@example.com'); const r = await buy(u); await billing.idle();
+  const [p] = await invoicesOf(u); refundMode = 'processed'; refundCalls.length = 0;
+  assert.equal((await call('POST', `/payments/${p.id}/refund-request`, { reason: 'Not what I expected' }, u.token)).status, 201);
+  await billing.idle();
+  assert.ok(emailsTo('help@addabaaz.in', /Refund request from askrefund@example.com/).length, 'support is told');
+  assert.equal((await adm('GET', '/inbox')).body.refunds >= 1, true);
+  const list = (await adm('GET', '/refund-requests')).body; const req = list.requests.find((x) => x.email === 'askrefund@example.com');
+  assert.equal(req.reason, 'Not what I expected'); assert.equal(req.payment.amountPaise, p.amountPaise);
+  // decline first request → mail, access stays; the customer may ask again afterwards
+  assert.equal((await adm('POST', `/refund-requests/${req.id}/decline`, { note: 'Outside our policy' })).status, 204);
+  assert.equal((await adm('POST', `/refund-requests/${req.id}/decline`, {})).status, 409, 'decided once');
+  assert.equal((await adm('POST', `/refund-requests/${req.id}/approve`, {})).status, 409);
+  await new Promise((r2) => setTimeout(r2, 50));
+  assert.ok(emailsTo('askrefund@example.com', /About your ADDABAAZ refund request/).length); assert.equal(refundCalls.length, 0); assert.equal((await stream(u.token)).status, 200);
+  assert.equal((await call('GET', '/refund-requests', null, u.token)).body.requests[0].status, 'declined');
+  assert.equal((await call('POST', `/payments/${p.id}/refund-request`, { reason: 'Please, again' }, u.token)).status, 201);
+  const req2 = (await adm('GET', '/refund-requests')).body.requests.find((x) => x.email === 'askrefund@example.com' && x.status === 'pending');
+  // a provider failure leaves the request open for another try
+  refundMode = 'error'; const failed = await adm('POST', `/refund-requests/${req2.id}/approve`, {}); assert.ok(failed.status >= 400);
+  assert.equal((await adm('GET', '/refund-requests?status=pending')).body.requests.some((x) => x.id === req2.id), true, 'back to pending');
+  refundMode = 'processed'; const ok = await adm('POST', `/refund-requests/${req2.id}/approve`, { note: 'ok' }); assert.equal(ok.status, 200); assert.equal(refundCalls.length >= 1, true);
+  await billing.idle(); assert.equal((await stream(u.token)).status, 402, 'access ended with the full refund');
+  assert.equal((await call('POST', `/payments/${p.id}/refund-request`, {}, u.token)).status, 409, 'nothing left to refund');
+  assert.equal((await call('POST', '/admin/refund-requests/x/decline', {}, u.token)).status, 403);
+});

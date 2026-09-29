@@ -8,6 +8,8 @@ export const TYPES = { shows: 'show', videos: 'video', upcoming: 'upcoming', gal
 const ID = /^[\w-]{1,64}$/;
 const IMG = /^(?:(?:media|uploads)\/[\w\-./]+|https:\/\/[^\s"'<>]+)$/;
 const ACCESS = ['free', 'premium'], SHOW_TYPES = ['series', 'standup', 'podcast', 'film'];
+const RATINGS = ['U', '7+', '13+', '16+', '18+'];   // U = suitable for everyone; the Kids profile shows only U and 7+ (unrated titles stay hidden from it)
+const SUB = /^(?:(?:media|uploads)\/[\w\-./]+\.vtt|https:\/\/[^\s"'<>?#]+\.vtt(?:\?[^\s"'<>]*)?)$/i;
 const KINDS = ['episode', 'trailer', 'reel', 'clip'], STATUSES = ['ongoing', 'completed', 'paused'];
 
 function reader(input, allowed, label, ctx) {
@@ -69,16 +71,16 @@ const ref = (r, ctx, k, sets) => {
 };
 
 function show(input, ctx) {
-  const r = reader(input, ['id', 'title', 'titleEn', 'type', 'genres', 'tagline', 'description', 'cast', 'language', 'year', 'status', 'featured', 'poster', 'posterLg', 'access'], 'A show', ctx);
+  const r = reader(input, ['id', 'title', 'titleEn', 'type', 'genres', 'tagline', 'description', 'cast', 'language', 'year', 'status', 'featured', 'poster', 'posterLg', 'access', 'rating'], 'A show', ctx);
   r.id(); r.str('title', { req: true }); r.str('titleEn'); r.oneOf('type', SHOW_TYPES, { dflt: 'series' }); r.list('genres', { max: 30, maxItems: 10 });
   r.str('tagline', { max: 300 }); r.str('description', { req: true, max: 3000 }); r.list('cast', { max: 60 }); r.str('language', { max: 40 });
   r.int('year', { min: 1900, max: 2100 }); r.oneOf('status', STATUSES, { dflt: 'ongoing' }); r.bool('featured'); r.img('poster', { req: true }); r.img('posterLg');
-  r.oneOf('access', ACCESS, { dflt: 'free' });
+  r.oneOf('access', ACCESS, { dflt: 'free' }); r.oneOf('rating', RATINGS);
   return r;
 }
 
 function video(input, ctx) {
-  const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'description', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access'], 'A video', ctx);
+  const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'description', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access', 'rating', 'subtitles', 'publishAt'], 'A video', ctx);
   r.id(); r.oneOf('kind', KINDS, { req: true }); r.str('showId', { max: 64, pattern: ID, nullable: true }); ref(r, ctx, 'showId', [ctx.showIds, ctx.upcomingIds].filter(Boolean));
   r.int('episode', { min: 1, max: 100000, nullable: true }); if (r.out.kind && r.out.kind !== 'episode') r.out.episode = null;
   r.str('title', { req: true, max: 300 }); r.str('shortTitle', { max: 120 }); r.str('description', { max: 500 });
@@ -99,7 +101,23 @@ function video(input, ctx) {
     } else r.errors.push('source.type must be youtube, r2, mp4 or hls.');
   }
   r.img('thumbnail'); r.int('duration', { req: true, max: 86400 }); r.date('publishedAt', { req: true }); r.int('views', { dflt: 0 });
-  r.oneOf('access', ACCESS, { req: true });
+  r.oneOf('access', ACCESS, { req: true }); r.oneOf('rating', RATINGS); r.date('publishAt');
+  if (r.src.subtitles !== undefined && r.src.subtitles !== null) {
+    const subs = r.src.subtitles;
+    if (!Array.isArray(subs) || subs.length > 12) r.errors.push('subtitles must be a list of at most 12 tracks.');
+    else {
+      const seen = new Set(), list = [];
+      subs.forEach((t, i) => {
+        const tr = reader(t, ['lang', 'label', 'url'], `subtitles[${i + 1}]`, ctx);
+        tr.str('lang', { req: true, max: 12, pattern: /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/, msg: 'lang must be a language code such as bn, en or hi.' }); tr.str('label', { req: true, max: 40 });
+        tr.str('url', { req: true, max: 500, pattern: SUB, msg: 'url must be an uploaded .vtt file (uploads/… or media/…) or an https:// .vtt URL.' });
+        if (tr.out.url && !/^https:/.test(tr.out.url) && (tr.out.url.includes('..') || (ctx.fileExists && !ctx.fileExists(tr.out.url)))) tr.errors.push(`file ${tr.out.url} does not exist.`);
+        if (tr.out.lang) { if (seen.has(tr.out.lang)) tr.errors.push(`two subtitle tracks use the language “${tr.out.lang}”.`); seen.add(tr.out.lang); }
+        r.errors.push(...tr.errors); list.push(tr.out);
+      });
+      if (subs.length) r.out.subtitles = list;
+    }
+  }
   if (r.out.source?.type === 'r2' && r.out.access === 'free') { /* allowed: free video hosted in R2 */ }
   return r;
 }

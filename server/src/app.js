@@ -109,7 +109,7 @@ export function createApp({
   const authLimit = rate ? rateLimit('auth', 20, 60_000) : (_q, _s, n) => n();
   const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, emailVerified: !!u.emailVerifiedAt, ...(u.isAdmin ? { isAdmin: true } : {}) });
   const notDisabled = (u) => { if (u.disabledAt) throw new HttpError(403, 'account_disabled', 'This account has been disabled. Please contact support.'); return u; };
-  const features = createFeatures({ db, secret, mailer, push, catalog, siteUrl: billing.config.siteUrl, rate, publicUser, notDisabled, userFromRequest: (req) => userFromRequest(req), plans: PLANS, options: featureOptions });
+  const features = createFeatures({ db, secret, mailer, push, catalog, siteUrl: billing.config.siteUrl, rate, publicUser, notDisabled, userFromRequest: (req) => userFromRequest(req), plans: PLANS, options: { supportEmail: billing.config.supportEmail, ...featureOptions } });
 
   api.post('/auth/signup', authLimit, wrap(async (req, res) => {
     const { name = '', email = '', password = '' } = req.body || {};
@@ -253,7 +253,7 @@ export function createApp({
   }));
 
   /* ---------- admin console API (admin accounts, or ADMIN_TOKEN for scripts) — see server/src/admin.js ---------- */
-  api.use('/admin', createAdminRouter({ db, billing, catalog, r2, payments, mailer, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate }));
+  api.use('/admin', createAdminRouter({ db, billing, catalog, r2, payments, mailer, push, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate }));
 
   /* ---------- authenticated ---------- */
   api.use(wrap(async (req, _res, next) => {

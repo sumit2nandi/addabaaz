@@ -98,6 +98,7 @@ export function extraDb({ q, tx, iso }) {
     },
     async get(userId, hash) { const r = (await q('SELECT episodes, launches, news FROM push_subscriptions WHERE user_id = ? AND endpoint_hash = ?', [userId, hash]))[0]; return r ? { episodes: !!r.episodes, launches: !!r.launches, news: !!r.news } : null; },
     async remove(userId, hash) { await q('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint_hash = ?', [userId, hash]); },
+    async pruneSent() { await q('DELETE FROM notify_sent WHERE created_at < UTC_TIMESTAMP(3) - INTERVAL 30 DAY'); },
     async removeId(id) { await q('DELETE FROM push_subscriptions WHERE id = ?', [id]); },
     async ok(id) { await q('UPDATE push_subscriptions SET last_ok_at = UTC_TIMESTAMP(3), fail_count = 0 WHERE id = ?', [id]); },
     async failed(id) { await q('UPDATE push_subscriptions SET fail_count = fail_count + 1 WHERE id = ?', [id]); await q('DELETE FROM push_subscriptions WHERE id = ? AND fail_count >= 5', [id]); },
@@ -177,6 +178,7 @@ export function extraDb({ q, tx, iso }) {
     },
     /** Only a pending request can be decided (returns false if someone else already did). */
     async decide(id, status, by, note) { return (await q("UPDATE refund_requests SET status = ?, decided_by = ?, admin_note = ?, decided_at = UTC_TIMESTAMP(3) WHERE id = ? AND status = 'pending'", [status, by, note || null, id])).affectedRows === 1; },
+    async reopen(id) { await q("UPDATE refund_requests SET status = 'pending', decided_by = NULL, decided_at = NULL WHERE id = ?", [id]); },
     async pendingCount() { return Number((await q("SELECT COUNT(*) AS n FROM refund_requests WHERE status = 'pending'"))[0].n); },
   };
 

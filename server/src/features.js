@@ -19,6 +19,7 @@ const noop = (_q, _s, n) => n();
  */
 export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rate = true, publicUser, notDisabled, userFromRequest, plans = [], options = {} }) {
   const cfg = {
+    supportEmail: options.supportEmail ?? process.env.SUPPORT_EMAIL ?? '',
     streamLimit: options.streamLimit ?? (Number(process.env.STREAM_LIMIT) || 2),
     heartbeatWindowSec: options.heartbeatWindowSec ?? 90,
     refundWindowDays: options.refundWindowDays ?? (process.env.REFUND_WINDOW_DAYS === undefined ? 7 : Number(process.env.REFUND_WINDOW_DAYS)),
@@ -37,7 +38,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
     const token = newToken();
     await db.authTokens.issue(user.id, 'verify', sha256(token), 3 * 24 * HOUR);
     const url = `${siteUrl}/verify?token=${token}`;
-    sendMail(user.email, mail.verifyEmailEmail({ name: user.name, url, supportEmail: process.env.SUPPORT_EMAIL || '' }), `verify link for ${user.email}: ${url}`);
+    sendMail(user.email, mail.verifyEmailEmail({ name: user.name, url, supportEmail: cfg.supportEmail }), `verify link for ${user.email}: ${url}`);
     return true;
   }
 
@@ -76,7 +77,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
             const token = newToken();
             await db.authTokens.issue(user.id, 'reset', sha256(token), HOUR);
             const url = `${siteUrl}/reset?token=${token}`;
-            sendMail(user.email, mail.resetPasswordEmail({ name: user.name, url, supportEmail: process.env.SUPPORT_EMAIL || '' }), `reset link for ${user.email}: ${url}`);
+            sendMail(user.email, mail.resetPasswordEmail({ name: user.name, url, supportEmail: cfg.supportEmail }), `reset link for ${user.email}: ${url}`);
           }
         }
         res.status(202).json({ ok: true });                            // same answer whether or not the account exists
@@ -89,7 +90,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         const user = await db.users.byId(uid); if (!user) throw new HttpError(400, 'invalid_token', 'This reset link is invalid or has expired.');
         notDisabled(user);
         const sv = await db.accounts.setPassword(uid, hashPassword(password), { verify: true });      // signs out every other device
-        sendMail(user.email, mail.passwordChangedEmail({ name: user.name, siteUrl, supportEmail: process.env.SUPPORT_EMAIL || '' }), `password changed for ${user.email}`);
+        sendMail(user.email, mail.passwordChangedEmail({ name: user.name, siteUrl, supportEmail: cfg.supportEmail }), `password changed for ${user.email}`);
         res.json({ ...sessionFor({ ...user, emailVerifiedAt: user.emailVerifiedAt || new Date().toISOString() }, sv), profiles: await db.profiles.list(uid) });
       }));
       api.post('/auth/verify', authLimit, wrap(async (req, res) => {
@@ -146,7 +147,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         if (!passwordOk(newPassword)) throw bad('Password must be 8–128 characters.', 'weak_password');
         if (req.user.passwordHash && !verifyPassword(String(currentPassword || ''), req.user.passwordHash)) throw new HttpError(403, 'invalid_credentials', 'Your current password is incorrect.');
         const sv = await db.accounts.setPassword(req.user.id, hashPassword(newPassword));
-        sendMail(req.user.email, mail.passwordChangedEmail({ name: req.user.name, siteUrl, supportEmail: process.env.SUPPORT_EMAIL || '' }), `password changed for ${req.user.email}`);
+        sendMail(req.user.email, mail.passwordChangedEmail({ name: req.user.name, siteUrl, supportEmail: cfg.supportEmail }), `password changed for ${req.user.email}`);
         res.json(sessionFor(req.user, sv));
       }));
       api.post('/me/sessions/revoke', authLimit, wrap(async (req, res) => { const sv = await db.accounts.bumpSessions(req.user.id); res.json(sessionFor(req.user, sv)); }));
@@ -238,7 +239,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         const id = crypto.randomUUID();
         await db.refundRequests.create({ id, paymentId: p.id, userId: req.user.id, reason });
         const planName = plans.find((x) => x.id === p.planId)?.name || p.planId;
-        const support = process.env.SUPPORT_EMAIL;
+        const support = cfg.supportEmail;
         if (support) sendMail(support, mail.refundRequestEmail({ email: req.user.email, amountPaise: p.amountPaise, planName, paidAt: p.paidAt, reason, siteUrl }), `refund request from ${req.user.email}`);
         sendMail(req.user.email, mail.refundRequestReceivedEmail({ name: req.user.name, planName, amountPaise: p.amountPaise, supportEmail: support || '' }), `refund request received for ${req.user.email}`);
         res.status(201).json({ request: { id, status: 'pending' } });
