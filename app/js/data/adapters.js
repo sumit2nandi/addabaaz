@@ -7,19 +7,24 @@ import { storage, store, uid } from '../util.js';
 import { ApiError } from './api.js';
 import { openCheckout } from '../payments.js';
 
+// An empty library: My List, watch progress per video, and reminders.
 const emptyLib = () => ({ list: [], progress: {}, reminders: [] });
 
+// Plans shown when there is no API (static mode). Keep in sync with server/src/plans.js; in API mode the server's list is used instead.
 export const PLANS_FALLBACK = [
   { id: 'free', name: 'Free', priceINR: 0, interval: 'forever', features: ['All free episodes & reels', 'Watch on any device', 'My List & Continue Watching'] },
   { id: 'plus-monthly', name: 'ADDABAAZ Plus', priceINR: 99, interval: 'month', features: ['Everything in Free', 'Premium originals & early access', 'Ad-free viewing', 'Up to 5 profiles'] },
   { id: 'plus-yearly', name: 'ADDABAAZ Plus (Yearly)', priceINR: 799, interval: 'year', features: ['Everything in Plus', '2 months free'] },
 ];
 
+// Billing capabilities in local mode: none.
 const NO_BILLING = { gst: false, coupons: false, states: [] };
 
+// LOCAL mode: guest data lives in this browser's localStorage. Anything needing an account or server throws a friendly ApiError.
 export class LocalAdapter {
   mode = 'local';
   supportsAuth = false;
+  // Returns the starting state: no account, at least one local profile, free plan.
   async init() {
     let profiles = storage('ab.profiles', null);
     if (!profiles?.length) { profiles = [{ id: uid(), name: 'Me', color: 0 }]; store('ab.profiles', profiles); }
@@ -34,6 +39,7 @@ export class LocalAdapter {
   async loadLibrary(pid) { return { ...emptyLib(), ...storage('ab.lib.' + pid, emptyLib()) }; }
   async saveLibrary(pid, lib) { store('ab.lib.' + pid, lib); }
   // Fine-grained ops are no-ops locally: the facade persists the whole library object via saveLibrary().
+  // The whole library object is saved with saveLibrary(), so the per-item operations do nothing here.
   async addToList() {} async removeFromList() {} async saveProgress() {} async clearProgress() {} async setReminder() {}
   async plans() { return { plans: PLANS_FALLBACK, payments: { provider: 'none' }, billing: NO_BILLING }; }
   async quote() { throw new ApiError(400, 'Coupons need the ADDABAAZ API.'); }
@@ -51,12 +57,15 @@ export class LocalAdapter {
   async myRatings() { return {}; } async ratingCounts() { return { up: 0, down: 0 }; }
 }
 
+// The parental PIN travels in a header for profile changes.
 const pinHeader = (pin) => (pin ? { 'X-Parental-Pin': String(pin) } : {});
 
+// REMOTE mode: every method is one call to the ADDABAAZ API (see docs/openapi.yaml). No state is kept here besides the cached providers list.
 export class RemoteAdapter {
   mode = 'remote';
   supportsAuth = true;
   constructor(api) { this.api = api; }
+  // Restore the session from the saved token: GET /me. A 401 (expired token) just means "signed out".
   async init() {
     if (!this.api.token) return { account: null, profiles: [], subscription: { planId: 'free', status: 'active' } };
     try {

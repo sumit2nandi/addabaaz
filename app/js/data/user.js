@@ -10,6 +10,8 @@ export const AVATAR_COUNT = PALETTE.length;
  * Reads are synchronous (in-memory); writes are optimistic and forwarded to the adapter.
  * Events: 'account' | 'profile' | 'library' | 'prefs' | 'subscription'
  */
+// The facade the whole UI talks to. It keeps the current account, profiles, library, subscription and preferences in memory (so reads are instant)
+// and forwards changes to the right adapter: `remote` when signed in, otherwise `local`.
 export class User extends Emitter {
   account = null;
   profiles = [];
@@ -19,16 +21,19 @@ export class User extends Emitter {
   prefs = { autoplayNext: true, ...storage('ab.prefs', {}) };
   ratings = {};                // this profile's thumbs: 'show:shahid' → 1 | -1 (signed-in only)
   pin = null;                  // the parental PIN, kept in memory once the viewer has entered it (never stored)
+  // Timers used to batch watch-progress saves.
   #progressTimers = new Map();
 
   /** `local` always exists (guest / offline). `remote` is optional and is used while signed in. */
   constructor(local, remote = null) { super(); this.local = local; this.remote = remote; }
+  // Which back-end is active right now.
   get adapter() { return this.remote && this.account ? this.remote : this.local; }
   get mode() { return this.remote ? 'remote' : 'local'; }
   get supportsAuth() { return !!this.remote; }
   get profile() { return this.profiles.find((p) => p.id === this.activeId) || null; }
   get isKids() { return !!this.profile?.kids; }
 
+  // Load state at start-up: the signed-in account if there is one, otherwise the guest profile; then re-select the last used profile.
   async init() {
     let s = this.remote ? await this.remote.init().catch(() => null) : null;
     if (!s || !s.account) s = await this.local.init();
@@ -45,6 +50,7 @@ export class User extends Emitter {
   }
 
   /* ---------- auth ---------- */
+  // Sign-up and sign-in. A guest's local My List / progress is copied into a brand-new account so nothing is lost.
   async signUp(p) {
     const local = this.#localSnapshot();
     const r = await this.remote.signUp(p);
@@ -76,6 +82,7 @@ export class User extends Emitter {
   }
   /** Signed playback URL for a video stored in R2 → { type: 'mp4'|'hls', url, expiresAt } */
   streamUrl(video) { if (!this.remote) throw new Error('Streaming needs the ADDABAAZ API.'); return this.remote.streamUrl(video.id); }
+  // After any sign-in: reload the account state from the server and reset the active profile.
   async #afterAuth(r) {
     const s = await this.remote.init();
     this.account = s.account || r.user;
@@ -85,6 +92,7 @@ export class User extends Emitter {
     if (this.profiles.length === 1) await this.selectProfile(this.profiles[0].id, { silent: true });
     this.emit('account'); this.emit('profile');
   }
+  // Sign out: detach push notifications, clear all in-memory state and fall back to the guest profile.
   async signOut() {
     try { if (this.account) await (await import('../push.js')).detachPush(); } catch { /* best effort */ }
     await this.remote?.signOut();
@@ -112,6 +120,7 @@ export class User extends Emitter {
   }
 
   /* ---------- profiles ---------- */
+  // Switch profile: load its library (and thumbs, when signed in).
   async selectProfile(id, { silent = false } = {}) {
     this.activeId = id; store('ab.activeProfile', id); sessionStorage.setItem('ab.profileChosen', '1');
     this.lib = { list: [], progress: {}, reminders: [] }; this.ratings = {};
@@ -168,6 +177,7 @@ export class User extends Emitter {
   }
 
   /* ---------- My List ---------- */
+  // Write the library back (only local mode actually stores it; remote mode saves per action).
   #persistLib() { if (this.activeId) this.adapter.saveLibrary(this.activeId, this.lib); }
   inList(type, id) { return this.lib.list.some((x) => x.type === type && x.id === id); }
   listItems() { return [...this.lib.list].sort((a, b) => (b.addedAt || '').localeCompare(a.addedAt || '')); }
