@@ -1,12 +1,20 @@
+// MySQL data-access layer: every SQL statement the app runs lives in the db*.js files.
+// This file holds the core tables (users, profiles, library, subscriptions, payments, contact messages);
+// db-extra.js, db-billing.js and db-admin.js add the rest and are merged into the same object at the bottom.
+// The rest of the server only ever calls these methods, e.g. `db.users.byEmail(...)`, never raw SQL.
 import mysql from 'mysql2/promise';
 import { dbConfigFromEnv } from './config.js';
 import { billingDb } from './db-billing.js';
 import { adminDb } from './db-admin.js';
 import { extraDb } from './db-extra.js';
 
+// Converts a Date (or date string) to an ISO-8601 string for JSON responses; null stays null.
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
+// True when MySQL rejected an insert because of a UNIQUE key (e.g. the email already exists).
 export const isDuplicate = (e) => e?.code === 'ER_DUP_ENTRY';
+// How many "continue watching" rows are kept per profile.
 const MAX_PROGRESS = 500;
+// Converts a `payments` table row (snake_case) into the camelCase object the rest of the code uses.
 const mapPayment = (r) => r && ({
   id: r.id, userId: r.user_id, planId: r.plan_id, provider: r.provider, orderId: r.provider_order_id, paymentId: r.provider_payment_id,
   amountPaise: r.amount_paise, listPricePaise: r.list_price_paise ?? r.amount_paise, discountPaise: r.discount_paise, couponCode: r.coupon_code,
@@ -19,17 +27,20 @@ const mapPayment = (r) => r && ({
  * Timestamps are UTC (pool option timezone 'Z') and returned to the API as ISO strings.
  */
 export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = false } = {}) {
+  // The database name is split off so the server can connect first and create the database if asked.
   const { database, ...conn } = config;
   if (ensureDatabase) {                                   // used by `npm run db:migrate` and tests
     const c = await mysql.createConnection({ ...conn, ssl: config.ssl });
     await c.query(`CREATE DATABASE IF NOT EXISTS \`${database.replace(/`/g, '')}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
     await c.end();
   }
+  // A connection pool shared by the whole app. Times are UTC everywhere.
   const pool = mysql.createPool({
     ...conn, database, timezone: 'Z', charset: 'utf8mb4', waitForConnections: true, queueLimit: 0,
     connectTimeout: 10_000, supportBigNumbers: true, dateStrings: false,
   });
   pool.pool.on('connection', (c) => c.query("SET time_zone = '+00:00'"));   // DEFAULT CURRENT_TIMESTAMP is then UTC too
+  // Shorthand: run a query and return only the rows (no column metadata).
   const q = async (sql, params) => (await pool.query(sql, params))[0];
 
   /** Runs fn(conn) in a transaction; commits on success, rolls back on error. */
@@ -43,16 +54,22 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
     } catch (e) { await c.rollback().catch(() => {}); throw e; } finally { c.release(); }
   }
 
+  // Row mappers: database column names -> API field names.
   const userRow = (r) => r && { id: r.id, email: r.email, name: r.name, passwordHash: r.password_hash, createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabledAt: iso(r.disabled_at), emailVerifiedAt: iso(r.email_verified_at), sessionVersion: r.session_version || 0, hasPin: !!r.parental_pin_hash };
   const profileRow = (r) => ({ id: r.id, name: r.name, color: r.color, ...(r.kids ? { kids: true } : {}) });
 
+  // The public object. `self` is also handed to the extension modules so they can call each other's methods.
   const self = {
     pool,
+    // Health check used by /health.
     async ping() { await q('SELECT 1'); return true; },
     async close() { await pool.end(); },
+    // Only used by tests to clean up.
     async dropDatabase() { await q(`DROP DATABASE IF EXISTS \`${database.replace(/`/g, '')}\``); },
 
+    // ---- Accounts ----
     users: {
+      // Lookups return null when nothing matches.
       async byEmail(email) { return userRow((await q('SELECT * FROM users WHERE email = ?', [email]))[0]); },
       async byId(id) { return userRow((await q('SELECT * FROM users WHERE id = ?', [id]))[0]); },
       /** Creates the user and their first profile atomically. Throws ER_DUP_ENTRY if the email exists. */
@@ -85,6 +102,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       },
     },
 
+    // ---- Profiles: up to a handful per account (Netflix-style), one may be a kids profile ----
     profiles: {
       async list(userId) { return (await q('SELECT id, name, color, kids FROM profiles WHERE user_id = ? ORDER BY created_at, id', [userId])).map(profileRow); },
       async get(id, userId) { const r = (await q('SELECT id, name, color, kids FROM profiles WHERE id = ? AND user_id = ?', [id, userId]))[0]; return r ? profileRow(r) : null; },
@@ -99,6 +117,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
           return { id, name, color, ...(kids ? { kids: true } : {}) };
         });
       },
+      // Builds the UPDATE from only the fields present in `patch` (partial update).
       async update(id, patch) {
         const sets = [], vals = [];
         for (const k of ['name', 'color', 'kids']) if (patch[k] !== undefined) { sets.push(`${k} = ?`); vals.push(k === 'kids' ? (patch[k] ? 1 : 0) : patch[k]); }
@@ -117,6 +136,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       },
     },
 
+    // ---- Per-profile library: My List, watch progress (continue watching) and release reminders ----
     library: {
       async get(profileId) {
         const [list, prog, rem] = await Promise.all([
@@ -132,6 +152,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       },
       async addListItem(profileId, type, id) { await q('INSERT IGNORE INTO list_items (profile_id, item_type, item_id) VALUES (?,?,?)', [profileId, type, id]); },
       async removeListItem(profileId, type, id) { await q('DELETE FROM list_items WHERE profile_id = ? AND item_type = ? AND item_id = ?', [profileId, type, id]); },
+      // Upsert: one row per (profile, video), updated as playback advances.
       async saveProgress(profileId, videoId, position, duration) {
         await q(`INSERT INTO watch_progress (profile_id, video_id, position_sec, duration_sec, updated_at) VALUES (?,?,?,?,UTC_TIMESTAMP(3))
                  ON DUPLICATE KEY UPDATE position_sec = VALUES(position_sec), duration_sec = VALUES(duration_sec), updated_at = VALUES(updated_at)`,
@@ -145,6 +166,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       async removeReminder(profileId, id) { await q('DELETE FROM reminders WHERE profile_id = ? AND upcoming_id = ?', [profileId, id]); },
     },
 
+    // ---- Premium access: one row per user with an expiry date ----
     subscriptions: {
       /** Effective subscription. An expired plan reads as free (status 'expired') so every access check is a simple planId test. */
       async get(userId) {
@@ -182,6 +204,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       async activateDemo(userId, planId, days) { await tx(async (t) => this.extend(userId, { planId, days, provider: 'mock', demo: true }, t)); },
     },
 
+    // ---- Payment orders (Razorpay or demo). Status goes created -> paid, or stays created/failed ----
     payments: {
       /** `coupon` (a coupons row) makes the insert happen under the coupon's row lock so its limits can't be beaten by parallel checkouts. */
       async create(p, { coupon = null } = {}) {
@@ -190,6 +213,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
           [p.id, p.userId, p.planId, p.provider, p.orderId, p.amountPaise, p.listPricePaise ?? p.amountPaise, p.discountPaise ?? 0, p.couponCode ?? null, p.billing ? JSON.stringify(p.billing) : null, p.currency || 'INR']);
         if (coupon) await self.coupons.reserve(coupon, p.userId, insert); else await insert({ query: q });
       },
+      // Lookups by our id, the provider's order id and the provider's payment id (used by the webhook).
       async byOrder(provider, orderId) { return mapPayment((await q('SELECT * FROM payments WHERE provider = ? AND provider_order_id = ?', [provider, orderId]))[0]); },
       async byProviderPayment(provider, providerPaymentId) { return mapPayment((await q('SELECT * FROM payments WHERE provider = ? AND provider_payment_id = ?', [provider, providerPaymentId]))[0]); },
       async byId(id) { return mapPayment((await q('SELECT * FROM payments WHERE id = ?', [id]))[0]); },
@@ -199,6 +223,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
                             AND created_at > UTC_TIMESTAMP(3) - INTERVAL ? MINUTE ORDER BY created_at DESC LIMIT 1`, [userId, planId, provider, amountPaise, couponCode ?? null, maxAgeMin]))[0];
         return mapPayment(r);
       },
+      // Stores the buyer's GST details (name, GSTIN, state) on a still-unpaid order.
       async setBilling(id, billing) { await q("UPDATE payments SET billing = ? WHERE id = ? AND status = 'created'", [JSON.stringify(billing), id]); },
       /** Atomically claims the right to send the "payment failed" email for an order (once). */
       async claimFailedNotice(id) { return (await q('UPDATE payments SET failed_notified_at = UTC_TIMESTAMP(3) WHERE id = ? AND failed_notified_at IS NULL AND status = \'created\'', [id])).affectedRows === 1; },
@@ -228,6 +253,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
         return rows;
       },
       /** Payments for the admin console: filter by buyer (email or user id) and status, newest first. */
+      // Optional filters are added to the WHERE clause only when supplied.
       async listRecent({ email = null, userId = null, status = null, limit = 50, offset = 0 } = {}) {
         const where = [], args = [];
         if (email) { where.push('u.email = ?'); args.push(email); }
@@ -248,11 +274,13 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       },
     },
 
+    // ---- Messages from the public contact form (read in the admin console) ----
     contacts: {
       async add(e) { await q('INSERT INTO contact_messages (id, name, email, phone, message) VALUES (?,?,?,?,?)', [e.id, e.name, e.email, e.phone, e.message]); },
       async count() { return (await q('SELECT COUNT(*) AS n FROM contact_messages'))[0].n; },
     },
   };
+  // Merge in the other data-access modules. They share the pool, transaction helper and `self`.
   Object.assign(self, extraDb({ q, tx, self, iso }));         // reset/verify tokens, ratings, comments, push, analytics…
   Object.assign(self, billingDb({ q, tx, self, iso }));      // coupons, invoices, refunds
   Object.assign(self, adminDb({ q, tx, self, iso }));        // catalog, audit log, admin user/message queries, dashboard numbers

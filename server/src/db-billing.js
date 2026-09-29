@@ -1,12 +1,18 @@
+// Data access for money-related documents: coupons, GST invoices / credit notes, and refunds.
+// The business rules (tax split, wording, emails) live in billing.js and gst.js; this file only stores and locks rows correctly.
 import crypto from 'node:crypto';
 import { creditNoteSplit, financialYear, invoiceNumber } from './gst.js';
 
+// Constants and tiny helpers.
 const PENDING_HOLD_MIN = 30;          // an unpaid order keeps its coupon slot for this long
+// Creates an Error with a machine-readable `code` (the API maps these codes to HTTP responses).
 const fail = (code, message) => Object.assign(new Error(message), { code });
+// JSON columns may come back as a string or an object depending on the driver; normalise.
 const json = (v) => (v == null ? null : typeof v === 'string' ? JSON.parse(v) : v);
 
 /** Coupons, invoices/credit notes and refunds. Mixed into createDb() (see db.js). */
 export function billingDb({ q, tx, self, iso }) {
+  // Row mappers (snake_case columns -> camelCase objects).
   const mapCoupon = (r) => r && ({
     code: r.code, description: r.description, kind: r.kind, value: r.value, planIds: r.plan_ids ? r.plan_ids.split(',') : null,
     maxRedemptions: r.max_redemptions, perUserLimit: r.per_user_limit, startsAt: iso(r.starts_at), expiresAt: iso(r.expires_at), active: !!r.active, createdAt: iso(r.created_at),
@@ -18,6 +24,7 @@ export function billingDb({ q, tx, self, iso }) {
   const mapRefund = (r) => r && ({ id: r.id, paymentId: r.payment_id, providerRefundId: r.provider_refund_id, amountPaise: r.amount_paise, status: r.status, reason: r.reason, source: r.source, revokedAccess: !!r.revoked_access, createdAt: iso(r.created_at) });
 
   /** Counts redemptions that are paid, plus unpaid orders still inside the hold window. */
+  // Used both for the overall coupon cap and each user's personal cap.
   async function usage(t, code, userId = null) {
     const rows = await t.query(
       `SELECT COUNT(*) AS n FROM payments WHERE coupon_code = ? AND (status = 'paid' OR (status = 'created' AND created_at > UTC_TIMESTAMP(3) - INTERVAL ${PENDING_HOLD_MIN} MINUTE))${userId ? ' AND user_id = ?' : ''}`,
@@ -27,6 +34,7 @@ export function billingDb({ q, tx, self, iso }) {
 
   /** Next gapless number for (series, financial year); the counter row stays locked until the surrounding transaction ends.
    *  The row is normally created beforehand by ensureCounter() (outside the transaction) so no gap locks are taken here. */
+  // The numbering is gapless because the counter is only incremented inside the issuing transaction.
   async function nextNo(t, series, fy) {
     let [row] = await t.query('SELECT last_no FROM invoice_counters WHERE series = ? AND fy = ? FOR UPDATE', [series, fy]);
     if (!row) { await t.query('INSERT IGNORE INTO invoice_counters (series, fy, last_no) VALUES (?,?,0)', [series, fy]); [row] = await t.query('SELECT last_no FROM invoice_counters WHERE series = ? AND fy = ? FOR UPDATE', [series, fy]); }
@@ -34,6 +42,7 @@ export function billingDb({ q, tx, self, iso }) {
     return row.last_no + 1;
   }
 
+  // ---- Tax invoices and credit notes ----
   const invoices = {
     /** Creates this financial year's counter row up front (call BEFORE opening the transaction that issues a document). */
     async ensureCounter(series, at = new Date()) { await q('INSERT IGNORE INTO invoice_counters (series, fy, last_no) VALUES (?,?,0)', [series, financialYear(at).code]); },
@@ -57,6 +66,7 @@ export function billingDb({ q, tx, self, iso }) {
     },
   };
 
+  // ---- Discount coupons ----
   const coupons = {
     async get(code) { return mapCoupon((await q('SELECT * FROM coupons WHERE code = ?', [code]))[0]); },
     async list() {
@@ -88,6 +98,7 @@ export function billingDb({ q, tx, self, iso }) {
     },
     usage: (code, userId) => usage({ query: q }, code, userId),
     /** Re-checks the limits under a row lock, then runs `insert` — two buyers can't both take the last redemption. */
+    // The lock is what makes the limits safe under concurrent purchases.
     async reserve(coupon, userId, insert) {
       return tx(async (t) => {
         await t.query('SELECT code FROM coupons WHERE code = ? FOR UPDATE', [coupon.code]);
@@ -98,6 +109,7 @@ export function billingDb({ q, tx, self, iso }) {
     },
   };
 
+  // ---- Refunds: one row per refund event reported by an admin, the API or a webhook ----
   const refunds = {
     async forPayment(paymentId) { return (await q('SELECT * FROM refunds WHERE payment_id = ? ORDER BY created_at', [paymentId])).map(mapRefund); },
     /**
@@ -126,6 +138,7 @@ export function billingDb({ q, tx, self, iso }) {
           if (!r.reason && reason) { await t.query('UPDATE refunds SET reason = ? WHERE id = ?', [reason, r.id]); r.reason = reason; }
         }
         // access
+        // Total of all refunds that have not failed, used to decide whether the whole payment is now refunded.
         const live = rows.filter((x) => x.status !== 'failed').reduce((n, x) => n + x.amount_paise, 0);
         let revoked = !!r.revoked_access;
         if (r.status !== 'failed' && !revoked && (revokeAccess || live >= p.amount_paise) && p.user_id && days > 0) {
@@ -137,6 +150,7 @@ export function billingDb({ q, tx, self, iso }) {
         }
         if (revoked !== !!r.revoked_access) { await t.query('UPDATE refunds SET revoked_access = ? WHERE id = ?', [revoked ? 1 : 0, r.id]); r.revoked_access = revoked ? 1 : 0; }
         // credit note + running total
+        // Only a refund that reached `processed` produces a credit note, and only once.
         let note = null, becameProcessed = false;
         if (r.status === 'processed') {
           const existing = (await t.query("SELECT * FROM invoices WHERE refund_id = ? AND kind = 'credit_note'", [r.id]))[0];
@@ -157,5 +171,6 @@ export function billingDb({ q, tx, self, iso }) {
       });
     },
   };
+  // Merged into the main `db` object by db.js.
   return { coupons, invoices, refunds };
 }

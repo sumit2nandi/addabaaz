@@ -3,29 +3,36 @@
  * subscriptions, playback sessions, play statistics, refund requests and the error log.
  * Same conventions as db.js: parameterised queries, UTC timestamps returned as ISO strings.
  */
+// Each `const x = {...}` below is one group of related queries, exposed as `db.x` (see the return statement at the end).
 export function extraDb({ q, tx, iso }) {
+  // ---- One-time tokens (password reset, e-mail verification). Only a hash is stored, never the token itself ----
   const authTokens = {
     /** Issues a token hash for `purpose`; earlier unused tokens of that purpose stop working. */
     async issue(userId, purpose, hash, ttlMs) {
       await q('UPDATE auth_tokens SET used_at = UTC_TIMESTAMP(3) WHERE user_id = ? AND purpose = ? AND used_at IS NULL', [userId, purpose]);
       await q('INSERT INTO auth_tokens (token_hash, user_id, purpose, expires_at) VALUES (?,?,?,?)', [hash, userId, purpose, new Date(Date.now() + ttlMs)]);
     },
+    // When the last token of this kind was issued (used for the 60-second re-send cooldown).
     async lastIssuedAt(userId, purpose) { const r = (await q('SELECT MAX(created_at) AS at FROM auth_tokens WHERE user_id = ? AND purpose = ?', [userId, purpose]))[0]; return r?.at ? new Date(r.at) : null; },
     /** Atomically spends a valid token; returns its user id or null. */
+    // Marks the token used and only succeeds if it is unused, unexpired and the right purpose, so a link works once.
     async consume(hash, purpose) {
       const res = await q('UPDATE auth_tokens SET used_at = UTC_TIMESTAMP(3) WHERE token_hash = ? AND purpose = ? AND used_at IS NULL AND expires_at > UTC_TIMESTAMP(3)', [hash, purpose]);
       if (res.affectedRows !== 1) return null;
       return (await q('SELECT user_id FROM auth_tokens WHERE token_hash = ?', [hash]))[0]?.user_id || null;
     },
+    // Housekeeping: remove long-expired tokens.
     async purge() { await q('DELETE FROM auth_tokens WHERE expires_at < UTC_TIMESTAMP(3) - INTERVAL 7 DAY'); },
   };
 
+  // ---- Account security: password changes, session invalidation, e-mail verification, parental PIN ----
   const accounts = {
     /** New password: every older session token stops working (session_version + 1); a reset link also proves the email is real. */
     async setPassword(userId, passwordHash, { verify = false } = {}) {
       await q(`UPDATE users SET password_hash = ?, session_version = session_version + 1${verify ? ', email_verified_at = COALESCE(email_verified_at, UTC_TIMESTAMP(3))' : ''} WHERE id = ?`, [passwordHash, userId]);
       return (await q('SELECT session_version AS v FROM users WHERE id = ?', [userId]))[0].v;
     },
+    // "Sign out everywhere": bump the version so every older token is rejected.
     async bumpSessions(userId) { await q('UPDATE users SET session_version = session_version + 1 WHERE id = ?', [userId]); return (await q('SELECT session_version AS v FROM users WHERE id = ?', [userId]))[0].v; },
     async markVerified(userId) { await q('UPDATE users SET email_verified_at = COALESCE(email_verified_at, UTC_TIMESTAMP(3)) WHERE id = ?', [userId]); },
     async setPin(userId, hash) { await q('UPDATE users SET parental_pin_hash = ?, pin_failed = 0, pin_locked_until = NULL WHERE id = ?', [hash, userId]); },
@@ -33,6 +40,7 @@ export function extraDb({ q, tx, iso }) {
       const r = (await q('SELECT parental_pin_hash, pin_failed, pin_locked_until FROM users WHERE id = ?', [userId]))[0];
       return r ? { hash: r.parental_pin_hash, failed: r.pin_failed, lockedUntil: r.pin_locked_until ? new Date(r.pin_locked_until) : null } : null;
     },
+    // Count a wrong PIN and lock further attempts for `lockMs` once `maxFails` is reached.
     async pinFailed(userId, maxFails, lockMs) {
       await q('UPDATE users SET pin_failed = pin_failed + 1 WHERE id = ?', [userId]);
       await q('UPDATE users SET pin_failed = 0, pin_locked_until = ? WHERE id = ? AND pin_failed >= ?', [new Date(Date.now() + lockMs), userId, maxFails]);
@@ -40,6 +48,7 @@ export function extraDb({ q, tx, iso }) {
     async pinOk(userId) { await q('UPDATE users SET pin_failed = 0, pin_locked_until = NULL WHERE id = ?', [userId]); },
   };
 
+  // ---- Thumbs up/down per profile (value 1 or -1) ----
   const ratings = {
     async set(profileId, type, id, value) { await q('INSERT INTO ratings (profile_id, item_type, item_id, value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value = VALUES(value), created_at = UTC_TIMESTAMP(3)', [profileId, type, id, value]); },
     async clear(profileId, type, id) { await q('DELETE FROM ratings WHERE profile_id = ? AND item_type = ? AND item_id = ?', [profileId, type, id]); },
@@ -49,6 +58,7 @@ export function extraDb({ q, tx, iso }) {
     async liked(profileId) { return (await q('SELECT item_type, item_id FROM ratings WHERE profile_id = ? AND value = 1', [profileId])).map((r) => ({ type: r.item_type, id: r.item_id })); },
   };
 
+  // ---- Comments on videos, with reporting and moderation ----
   const mapComment = (r) => ({ id: r.id, videoId: r.video_id, userId: r.user_id, author: r.author, body: r.body, status: r.status, reports: r.reports, hiddenReason: r.hidden_reason, createdAt: iso(r.created_at) });
   const comments = {
     async list(videoId, { limit = 30, before = null } = {}) {
@@ -57,6 +67,7 @@ export function extraDb({ q, tx, iso }) {
     },
     async count(videoId) { return Number((await q("SELECT COUNT(*) AS n FROM comments WHERE video_id = ? AND status = 'visible'", [videoId]))[0].n); },
     async add(c) { await q('INSERT INTO comments (id, video_id, user_id, author, body) VALUES (?,?,?,?,?)', [c.id, c.videoId, c.userId, c.author, c.body]); },
+    // How many comments this user posted in the last N seconds (spam limit).
     async recentBy(userId, seconds) { return Number((await q('SELECT COUNT(*) AS n FROM comments WHERE user_id = ? AND created_at > UTC_TIMESTAMP(3) - INTERVAL ? SECOND', [userId, seconds]))[0].n); },
     async byId(id) { const r = (await q('SELECT * FROM comments WHERE id = ?', [id]))[0]; return r ? mapComment(r) : null; },
     async remove(id) { return (await q('DELETE FROM comments WHERE id = ?', [id])).affectedRows === 1; },
@@ -68,6 +79,7 @@ export function extraDb({ q, tx, iso }) {
       const hid = await q("UPDATE comments SET status = 'hidden', hidden_reason = 'reports' WHERE id = ? AND status = 'visible' AND reports >= ?", [id, autoHideAt]);
       return { reported: true, hidden: hid.affectedRows === 1 };
     },
+    // Moderation: show/hide a comment; making it visible again clears its reports.
     async setStatus(id, status, reason = null) {
       const res = await q('UPDATE comments SET status = ?, hidden_reason = ?, reports = IF(? = \'visible\', 0, reports) WHERE id = ?', [status, status === 'hidden' ? reason || 'admin' : null, status, id]);
       if (status === 'visible') await q('DELETE FROM comment_reports WHERE comment_id = ?', [id]);
@@ -85,6 +97,7 @@ export function extraDb({ q, tx, iso }) {
     async reviewCount() { return Number((await q("SELECT COUNT(*) AS n FROM comments WHERE status = 'hidden' AND hidden_reason = 'reports'"))[0].n); },
   };
 
+  // ---- Web-push subscriptions (one row per browser) and send-once bookkeeping ----
   const push = {
     async upsert(userId, { endpoint, hash, p256dh, auth }, prefs = {}) {
       await q(`INSERT INTO push_subscriptions (id, user_id, endpoint_hash, endpoint, p256dh, auth, episodes, launches, news) VALUES (UUID(),?,?,?,?,?,?,?,?)
@@ -104,6 +117,7 @@ export function extraDb({ q, tx, iso }) {
     async failed(id) { await q('UPDATE push_subscriptions SET fail_count = fail_count + 1 WHERE id = ?', [id]); await q('DELETE FROM push_subscriptions WHERE id = ? AND fail_count >= 5', [id]); },
     async count() { return Number((await q('SELECT COUNT(*) AS n FROM push_subscriptions'))[0].n); },
     /** Subscriptions to notify. audience: { kind: 'episodes', showId, videoIds } | { kind: 'launches', upcomingId } | { kind: 'news' } | { kind: 'all' } | { kind: 'user', userId } */
+    // Works out who should get a notification: followers of a show, people waiting for a launch, everyone opted in to news, or one user.
     async audience(a) {
       const cols = 'ps.id, ps.user_id, ps.endpoint, ps.p256dh, ps.auth';
       let rows;
@@ -123,6 +137,7 @@ export function extraDb({ q, tx, iso }) {
     async claim(kind, ref, userId) { return (await q('INSERT IGNORE INTO notify_sent (kind, ref, user_id) VALUES (?,?,?)', [kind, ref, userId])).affectedRows === 1; },
   };
 
+  // ---- Which devices are streaming right now (enforces the simultaneous-stream limit) ----
   const playback = {
     /** Registers/refreshes this device. Refuses (ok:false) when `limit` OTHER devices were active within `windowSec`. */
     async touch(userId, deviceId, label, videoId, { limit, windowSec }) {
@@ -135,6 +150,7 @@ export function extraDb({ q, tx, iso }) {
         return { ok: true, active: others.map((o) => ({ deviceId: o.device_id, label: o.device_label })) };
       });
     },
+    // Playback stopped: keep the device row but clear the video.
     async stop(userId, deviceId) { await q('UPDATE playback_sessions SET video_id = NULL WHERE user_id = ? AND device_id = ?', [userId, deviceId]); },
     async devices(userId, windowSec) {
       return (await q('SELECT device_id, device_label, video_id, started_at, last_seen, (video_id IS NOT NULL AND last_seen > UTC_TIMESTAMP(3) - INTERVAL ? SECOND) AS watching FROM playback_sessions WHERE user_id = ? ORDER BY last_seen DESC LIMIT 20', [windowSec, userId]))
@@ -144,6 +160,7 @@ export function extraDb({ q, tx, iso }) {
     async purge() { await q('DELETE FROM playback_sessions WHERE last_seen < UTC_TIMESTAMP(3) - INTERVAL 90 DAY'); },
   };
 
+  // ---- Daily play counts and watch time for the admin analytics page ----
   const playStats = {
     async record(videoId, showId, { play = false, seconds = 0 }) {
       await q('INSERT INTO play_stats (day, video_id, show_id, plays, seconds) VALUES (UTC_DATE(),?,?,?,?) ON DUPLICATE KEY UPDATE plays = plays + VALUES(plays), seconds = seconds + VALUES(seconds)', [videoId, showId || null, play ? 1 : 0, Math.max(0, Math.floor(seconds))]);
@@ -165,6 +182,7 @@ export function extraDb({ q, tx, iso }) {
     },
   };
 
+  // ---- Viewer refund requests, decided by an admin ----
   const mapReq = (r) => ({ id: r.id, paymentId: r.payment_id, userId: r.user_id, email: r.email, reason: r.reason, status: r.status, adminNote: r.admin_note, decidedBy: r.decided_by, createdAt: iso(r.created_at), decidedAt: iso(r.decided_at) });
   const refundRequests = {
     async create({ id, paymentId, userId, reason }) { await q('INSERT INTO refund_requests (id, payment_id, user_id, reason) VALUES (?,?,?,?)', [id, paymentId, userId, reason]); },
@@ -182,6 +200,7 @@ export function extraDb({ q, tx, iso }) {
     async pendingCount() { return Number((await q("SELECT COUNT(*) AS n FROM refund_requests WHERE status = 'pending'"))[0].n); },
   };
 
+  // ---- Client/server error reports shown in the admin "Errors" page ----
   const errors = {
     async add(e) {
       await q('INSERT INTO error_log (source, message, stack, url, user_agent, user_id) VALUES (?,?,?,?,?,?)', [e.source, String(e.message || '').slice(0, 500), e.stack ? String(e.stack).slice(0, 4000) : null, String(e.url || '').slice(0, 300), String(e.userAgent || '').slice(0, 200), e.userId || null]);
@@ -198,5 +217,6 @@ export function extraDb({ q, tx, iso }) {
     async count24h() { return Number((await q('SELECT COUNT(*) AS n FROM error_log WHERE created_at > UTC_TIMESTAMP(3) - INTERVAL 1 DAY'))[0].n); },
   };
 
+  // Everything above becomes a property of the main `db` object.
   return { authTokens, accounts, ratings, comments, push, playback, playStats, refundRequests, errors };
 }

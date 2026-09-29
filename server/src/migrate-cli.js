@@ -1,3 +1,5 @@
+// Command line entry for `npm run db:migrate`: connects, applies pending migrations, prints the result.
+// Set DB_CREATE=true to create the database first if it does not exist.
 import { createDb } from './db.js';
 import { migrate } from './migrate.js';
 
