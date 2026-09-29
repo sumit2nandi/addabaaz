@@ -46,7 +46,13 @@ Google and Facebook block or break their web flows inside app WebViews, so the a
 
 Per the plugin docs you still need to do the native configuration once after `npx cap add android|ios`: Facebook `strings.xml` / `Info.plist` entries and the `AppDelegate` snippet, the Google Android SHA-1 / iOS URL scheme, then `npm run mobile:sync`. **This native path could not be exercised in the development environment (no Android/iOS toolchain) — test it on real devices before release.**
 
-**App Store rule 4.8:** an iOS app that offers Google/Facebook login must also offer an equivalent privacy-preserving option — in practice **Sign in with Apple**. It's not implemented yet; the plugin supports it and the API would get a third `/auth/apple` verifier of the same shape as the Google one.
+**App Store rule 4.8:** an iOS app that offers Google/Facebook login must also offer **Sign in with Apple**. It is implemented: `POST /auth/apple { identityToken, name? }` verifies Apple's RS256 token against Apple's published keys, issuer and audience.
+
+Setup (needs a paid Apple Developer account):
+1. *Certificates, Identifiers → Identifiers → App IDs*: enable **Sign In with Apple** on your app's bundle id → `APPLE_CLIENT_ID=<bundle id>` (used by the iOS app through the Capacitor plugin).
+2. For the website, create a **Services ID** (e.g. `com.addabaaz.web`), tick Sign In with Apple → *Configure*: primary app id, domain `addabaaz.in`, return URL `https://addabaaz.in` → `APPLE_SERVICE_ID=<services id>`. The site uses Apple's JS popup, so no client secret is needed on our side.
+3. Apple reports the user's name **only the first time**, and may give a private-relay email (`…@privaterelay.appleid.com`); both are handled (the name falls back to the email prefix). Emails from Apple arrive pre-verified.
+4. The button appears only when `APPLE_SERVICE_ID` (web) or the native app config is present. Not tested against real Apple servers in development — try it with a real device before submitting to the App Store.
 
 ## API summary
 

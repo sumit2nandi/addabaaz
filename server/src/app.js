@@ -426,7 +426,7 @@ export function createApp({
     if (err.type === 'entity.parse.failed') err = bad('Invalid JSON body.', 'invalid_json');
     if (err.type === 'entity.too.large') err = new HttpError(413, 'too_large', 'Request too large.');
     const status = err.status || 500;
-    if (status >= 500 && !(err instanceof HttpError)) { console.error(err); db.errors.add({ source: 'server', message: `${req.method} ${req.path}: ${err.message}`, stack: err.stack, url: req.originalUrl, userAgent: req.get('user-agent') }).catch(() => {}); }   // expected 5xx (provider down, storage off) are not logged as crashes
+    if (status >= 500 && !(err instanceof HttpError)) { console.error(err); try { app.locals.captureError?.(err, req); } catch { /* monitoring must never break error handling */ } db.errors.add({ source: 'server', message: `${req.method} ${req.path}: ${err.message}`, stack: err.stack, url: req.originalUrl, userAgent: req.get('user-agent') }).catch(() => {}); }   // expected 5xx (provider down, storage off) are not logged as crashes
     res.status(status).json({ error: { code: err.code || 'server_error', message: status === 500 ? 'Something went wrong.' : err.message } });
   });
   app.db = db;

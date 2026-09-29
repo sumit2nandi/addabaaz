@@ -15,6 +15,15 @@ if (process.env.DB_MIGRATE !== 'false') {                       // set DB_MIGRAT
 const noRate = /^(1|true)$/i.test(process.env.DISABLE_RATE_LIMIT || '') && process.env.NODE_ENV !== 'production';
 if (noRate) console.warn('⚠ Rate limiting is OFF (DISABLE_RATE_LIMIT) — never expose this instance publicly.');
 const app = createApp({ db, rate: !noRate });
+// Optional Sentry: `npm i @sentry/node` and set SENTRY_DSN. Not installed by default; the built-in Errors page in /admin works without it.
+if (process.env.SENTRY_DSN) {
+  try {
+    const Sentry = await import('@sentry/node');
+    Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV || 'development', tracesSampleRate: 0 });
+    app.locals.captureError = (err, req) => Sentry.captureException(err, { extra: { method: req?.method, path: req?.path } });
+    console.log('[sentry] error reporting enabled');
+  } catch (e) { console.warn('[sentry] SENTRY_DSN is set but @sentry/node could not be loaded (npm i @sentry/node):', e.message); }
+}
 const server = app.listen(port, '0.0.0.0', () => console.log(`ADDABAAZ running on http://localhost:${port}  (site + API at /api/v1, MySQL connected)`));
 // Renewal reminders: hourly, once per expiry date (the claim is atomic, so running several instances is fine).
 const billing = app.locals.billing;

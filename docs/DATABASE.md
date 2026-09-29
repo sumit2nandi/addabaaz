@@ -65,7 +65,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES ON addaba
 
 ## Operations
 
-- **Backups:** `mysqldump --single-transaction --routines addabaaz | gzip > addabaaz-$(date +%F).sql.gz` daily, or enable your provider's automated backups + PITR. Test a restore.
+- **Backups:** `npm run backup` (pure Node, encrypted option, R2 copy, verified restore — see `docs/ENGAGEMENT.md`), or `mysqldump --single-transaction --routines addabaaz | gzip > addabaaz-$(date +%F).sql.gz` daily, or enable your provider's automated backups + PITR. Test a restore.
 - **Health:** `GET /api/v1/health` (liveness, includes `db: up|down`) and `GET /api/v1/health/ready` (503 when MySQL is unreachable).
 - **Inspect:** `SELECT COUNT(*) FROM users;` · newest contact enquiries: `SELECT * FROM contact_messages ORDER BY created_at DESC LIMIT 20;`
 - **Privacy:** passwords are only stored as scrypt hashes; deleting an account deletes its rows (cascade). Keep backups' retention in line with your privacy policy.

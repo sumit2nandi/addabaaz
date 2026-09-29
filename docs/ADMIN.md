@@ -31,13 +31,19 @@ Security notes
 |---|---|
 | **Dashboard** | revenue and sign-ups for 30 days, active subscribers, plans expiring within 7 days, open messages, recent payments/users, and a *Finish setting up* list (GSTIN, SMTP, R2, Razorpay keys, weak secrets…) |
 | **Shows** | add / edit / delete / reorder; poster upload; "featured" on the home page. Deleting a show also deletes its videos (you are told how many first) |
+| **Videos & reels** (also) | each video has *Publish at* (scheduled release), *Maturity rating* (U / 7+ / 13+ / 16+ / 18+ — Kids profiles show only U and 7+) and *Subtitles* (upload .srt/.vtt). Shows have a rating too. |
 | **Videos & reels** | episodes, reels, trailers, clips. Filter by show/kind/access, 25 per page. Source = YouTube (paste the URL) or **premium video in R2** (upload from the browser or type the key). Access = free or premium |
 | **Coming soon** and **Gallery** | add / edit / delete / reorder; photo upload |
 | **Studio & team** | the About, Services and Contact pages: address, phones, WhatsApp, social links, mission text, services, team members with photos |
 | **Users** | search, filter (paid, expiring, expired, free, admins, disabled); rename, make/remove admin, disable/enable, delete; **give free access** (N days, no payment or invoice); end a plan |
 | **Payments & refunds** | every checkout with buyer, coupon, status, invoice/credit-note PDFs; **Refund…** (full or partial, via Razorpay; credit note issued when it is processed); GST **sales register CSV** by date range |
 | **Coupons** | create percent / flat codes with plan, date, per-user and total limits; turn off, edit limits, delete (used codes can only be turned off) |
+| **Refund requests** | customers' self-service requests: approve (runs the Razorpay refund + credit note) or decline with a note; sidebar badge for pending ones |
 | **Messages** | contact-form inbox: reply by email, mark handled, delete; unread count in the sidebar |
+| **Comments** | moderation queue: comments auto-hidden after 3 reports or reported once; restore, hide, delete, search |
+| **Analytics** | plays and watch time per day, top shows/videos (7/30/90 days), revenue |
+| **Notifications** | send a Web Push announcement to everyone / news subscribers / followers of a show / reminder-holders of a launch |
+| **Errors** | grouped browser and server errors of the last 7 days with stack traces |
 | **Audit log** | who did what, when, to what (`catalog.show.update`, `payment.refund`, `user.grant`, `coupon.create`, …). Append-only from the UI |
 
 Changes go live straight away: the public API serves the new catalog within a few seconds (several servers stay in sync through a version counter).
