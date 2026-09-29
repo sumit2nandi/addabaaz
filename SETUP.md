@@ -461,7 +461,19 @@ Business hosting is shared hosting, so three things work differently from a norm
 
 1. hPanel → **Websites → Add Website → Node.js web app**.
 2. Choose **Import Git repository → Connect with GitHub**, install the Hostinger GitHub App for this repository, and select it.
-   (No GitHub? Choose **Upload your files** and upload a ZIP made with `zip -r addabaaz.zip . --exclude "node_modules/*" --exclude ".git/*"`.)
+   **"Import Git repository" greyed out, or no GitHub?** Use **Upload your files** instead (the rest of the steps are identical):
+
+   1. Make sure the code you want is what's on disk. If you added shows in your local `/admin` and want them on the live site, run `npm run catalog:export` first — it writes them into `data/*.json`, which seeds the new Hostinger database on its first start.
+   2. Build a clean ZIP with `package.json` at its top level, **without** `node_modules`, `.git` or your local `.env`:
+      ```bash
+      git archive --format=zip -o addabaaz.zip HEAD          # committed files only (recommended)
+      # or, without git:
+      zip -r addabaaz.zip . -x "node_modules/*" ".git/*" ".env" "www/*" "backups/*" "uploads/*" "mobile/*"
+      ```
+   3. In hPanel choose **Upload your files**, upload `addabaaz.zip`, and continue with the settings below. Hostinger installs the packages itself.
+   4. Uploads don't auto-deploy: for each update make a new ZIP and upload it again (**Deployments → Redeploy with new files**). Environment variables are kept.
+
+   The usual reasons the Git option is unavailable: the GitHub App isn't installed for that repository (click *Connect with GitHub* and grant access), the domain already has a website on the plan (remove it first — download a backup — then *Add Website* again), or the plan isn't Business/Cloud.
 3. Set the deploy settings:
 
    | Field | Value |
