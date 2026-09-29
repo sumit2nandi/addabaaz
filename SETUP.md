@@ -15,8 +15,8 @@ Everything you need to install, configure, run, deploy and operate ADDABAAZ, in 
 8. [Turn on features, one at a time](#8-turn-on-features-one-at-a-time)
    Google · Facebook · Apple · premium video (R2) · payments (Razorpay) · GST invoices · email · push notifications · analytics · error alerts · legal pages
 9. [Adding content](#9-adding-content)
-10. [Deploying to production on Hostinger](#10-deploying-to-production-hostinger)
-    Web App (Business/Cloud hosting) · VPS with Docker · uploads · admin account · scheduled jobs · email
+10. [Deploying to production on Hostinger Business hosting](#10-deploying-to-production-hostinger-business-web-hosting)
+    database · Web App · uploads · admin account · scheduled jobs · email
 11. [After you deploy: Google search](#11-after-you-deploy-google-search)
 12. [Android and iOS apps](#12-android-and-ios-apps)
 13. [Running it: backups, updates, monitoring, load tests](#13-running-it)
@@ -48,7 +48,7 @@ Two ways to run it:
 |---|---|---|
 | **Node.js 20 or newer** (22 recommended) | everything | `node -v` |
 | **MySQL 5.7+ or 8.x** | full mode | On Hostinger: the database you create in hPanel (see section 10; on shared plans it may be MariaDB). Or Docker / a managed MySQL. Character set `utf8mb4`. |
-| **Hostinger plan** | production | **Business Web Hosting or Cloud Hosting** (Node.js Web App) or a **VPS**. See section 10. |
+| **Hostinger Business Web Hosting** | production | Provides the Node.js Web App, MySQL database, phpMyAdmin and SSL. See section 10. |
 | **Docker + Docker Compose** | quick start / production | Optional but the easiest way. |
 | A domain with **HTTPS** | production | Required for sign-in providers, payments, push notifications and PWA install. |
 | Accounts you may need later | | Google Cloud, Facebook developers, Apple Developer ($99/yr), Cloudflare (R2), Razorpay, an SMTP email provider, Google Search Console. Each is optional — see section 8. |
@@ -59,7 +59,7 @@ Two ways to run it:
 
 ## 3. Quick start — Docker (recommended)
 
-*Use this to try ADDABAAZ on your own computer, or on a Hostinger VPS. For a Hostinger Business/Cloud Web App go straight to [section 10](#10-deploying-to-production-hostinger).*
+*Use this to try ADDABAAZ on your own computer (Docker isn't available on Hostinger Business hosting — for going live, go straight to [section 10](#10-deploying-to-production-hostinger-business-web-hosting)).*
 
 This starts the app **and** a MySQL 8 database, with the database and uploaded images kept in Docker volumes.
 
@@ -292,7 +292,7 @@ All settings are environment variables (see `.env.example`, which has the same l
 
 ## 7. Create your first administrator
 
-Admins are ordinary accounts with an admin flag. (On a Hostinger **Web App** there is no command line — use the phpMyAdmin method in [10.2-D](#102-business--cloud-hosting-web-app) instead of step 2.)
+Admins are ordinary accounts with an admin flag. (On a Hostinger **Web App** there is no command line — use the phpMyAdmin method in [10.2-D](#102-step-by-step-web-app) instead of step 2.)
 
 1. Open the site and **create an account** (Sign up).
 2. On the server, promote it:
@@ -409,17 +409,17 @@ The first start seeds MySQL from `data/catalog.json` and `data/studio.json`. Tho
 
 ---
 
-## 10. Deploying to production (Hostinger)
+## 10. Deploying to production (Hostinger Business Web Hosting)
 
-This guide assumes your domain and hosting are at [Hostinger](https://www.hostinger.com). Which steps you follow depends on the plan you bought:
+This guide is for **Hostinger Business Web Hosting** (no VPS). Business plans can run a Node.js app as a **Web App** in hPanel, deployed from GitHub or a ZIP file, and include MySQL databases, phpMyAdmin, free SSL and cron/File Manager tools. (Hostinger's *Premium* and *Single* shared plans do not offer Node.js Web Apps — you would need to upgrade to Business.)
 
-| Hostinger product | Runs Node.js? | Use |
+Business hosting is shared hosting, so three things work differently from a normal server. Each is handled in the steps below:
+
+| Limit | What it means | What you do |
 |---|---|---|
-| **Business Web Hosting** (up to 5 Node.js apps) or any **Cloud Hosting** plan (Startup, Professional, Enterprise …) | Yes — as a **Web App** in hPanel, deployed from GitHub or a ZIP | **[10.2](#102-business--cloud-hosting-web-app)** — the simplest path, no server to look after |
-| **VPS** (KVM) | Yes — you manage the server | **[10.3](#103-hostinger-vps-docker)** — Docker Compose, all features and all command-line tools |
-| Premium / Single shared hosting (not on Hostinger's list of Node.js plans) | **No** | Only [static-only mode](#5-static-only-mode-no-backend), or upgrade |
-
-> **Which should I choose?** For a real OTT with payments and an admin, either works. The Web App route is cheaper and easier but has three limits you must plan for (all covered below): files inside the deployed app are **erased on every deploy** (so uploads go in a separate folder), the process is **stopped when idle** (so scheduled jobs need a ping), and there is **no command line** (so the admin account and backups are done through phpMyAdmin / hPanel). A VPS has none of these limits.
+| **Deploys erase the app folder** | Everything inside the deployed app (`hbuilds/…`, `public_html`) is replaced on every deploy. Images uploaded from `/admin` would be lost. | Store uploads in a separate folder (**10.2-C**). |
+| **The process sleeps when idle** | Hostinger stops your app when nobody visits and restarts it on the next request. Timer-based jobs (renewal reminders, new-episode pushes) only run while it is awake. | A free uptime monitor pings it every 5 minutes (**10.2-E**). |
+| **No command line** | You can't run `npm run admin` or `npm run backup`. | Make the first admin and take backups with phpMyAdmin and hPanel (**10.2-D**, section 13). |
 
 ### 10.1 Before you start (both routes)
 
@@ -447,7 +447,7 @@ This guide assumes your domain and hosting are at [Hostinger](https://www.hostin
 
    Use the separate `DB_*` variables rather than `DATABASE_URL` — a password containing `@`, `:` or `/` breaks a URL unless encoded.
 
-### 10.2 Business / Cloud hosting (Web App)
+### 10.2 Step by step (Web App)
 
 **A. Create the database (hPanel)**
 
@@ -455,7 +455,7 @@ This guide assumes your domain and hosting are at [Hostinger](https://www.hostin
 2. Nothing else to do — the app creates its own tables the first time it starts (`DB_MIGRATE` defaults to `true`). **Do not set `DB_CREATE=true`**: Hostinger database users may not create databases.
 3. Keep **Remote MySQL** switched off. The app runs on the same account, so it only needs the local connection (`127.0.0.1`).
 
-> Hostinger describes its databases as "MySQL"; on shared plans the engine can be MariaDB. ADDABAAZ is developed and tested against **MySQL 5.7/8** and only uses standard SQL plus JSON columns, which MariaDB stores as text — the code reads both forms. It has not been run on MariaDB by the project's tests, so **do the first-run check in step F** before you announce anything. If you see SQL errors there, use a VPS (10.3) or an external managed MySQL (`DB_SSL=true`).
+> Hostinger describes its databases as "MySQL"; on shared plans the engine can be MariaDB. ADDABAAZ is developed and tested against **MySQL 5.7/8** and only uses standard SQL plus JSON columns, which MariaDB stores as text — the code reads both forms. It has not been run on MariaDB by the project's tests, so **do the first-run check in step F** before you announce anything. If you see SQL errors there, copy the exact message from **Runtime logs** and get the (small) fix made in `server/migrations/` or `server/src/db*.js` — see the troubleshooting table. Ask Hostinger support which engine and version your database runs.
 
 **B. Create the Web App**
 
@@ -484,7 +484,7 @@ Hostinger **replaces everything inside the deployed app on every deployment** (`
 
 1. hPanel → **File Manager** → in your home folder (the one that contains `domains/`) create `addabaaz-data/uploads`.
 2. Add the environment variable `UPLOAD_DIR=/home/u123456789/addabaaz-data/uploads` (use your real account id; the File Manager shows the full path).
-3. Redeploy, then in `/admin` upload a test image, redeploy **again**, and confirm the image is still there. If it is missing, your plan does not let the app write outside its folder — use a VPS (10.3).
+3. Redeploy, then in `/admin` upload a test image, redeploy **again**, and confirm the image is still there. If it is missing, the app can't write outside its folder on your plan — ask Hostinger support, or skip the Upload button: the image boxes in `/admin` also accept a path like `media/shows/my-poster.webp` (put the file in the repository's `media/` folder and push — it deploys with the code) or any `https://…` image address.
 
 Premium **videos** are not affected: they go straight from the browser to Cloudflare R2, never to Hostinger's disk.
 
@@ -523,75 +523,17 @@ Push to the connected branch — Hostinger rebuilds and restarts automatically (
 If you created a mailbox in hPanel (*Emails*), you can send through it:
 `SMTP_URL=smtps://billing%40addabaaz.in:MAILBOX_PASSWORD@smtp.hostinger.com:465` and `MAIL_FROM="ADDABAAZ <billing@addabaaz.in>"` (write `@` inside the username as `%40`, and URL-encode any special characters in the password). Make sure the SPF/DKIM records for the domain are in place (hPanel shows them under *Emails*; copy them across if your DNS is hosted elsewhere) so receipts don't land in spam.
 
-### 10.3 Hostinger VPS (Docker)
+### 10.3 After the first deploy
 
-Use this if you bought a VPS, or if the Web App route hit one of its limits.
-
-1. hPanel → **VPS** → choose **Ubuntu 22.04/24.04** (or the *Ubuntu with Docker* template if offered). Log in over SSH (`ssh root@<vps-ip>`, or the browser terminal in hPanel).
-2. Install Docker if it is not there yet: `curl -fsSL https://get.docker.com | sh`.
-3. Point the domain at the VPS: hPanel → **Domains → DNS** → an **A record** for `@` (and `www`) with the VPS IP.
-4. Get the code and configure it:
-   ```bash
-   git clone https://github.com/<you>/addabaaz.git && cd addabaaz
-   cp .env.example .env && nano .env          # secrets! JWT_SECRET, MYSQL_PASSWORD, PUBLIC_SITE_URL, TRUST_PROXY=1 …
-   docker compose up --build -d
-   ```
-   Compose keeps three volumes: `db-data` (MySQL), `uploads` (admin images) and `backups`, and publishes port 3000. Compose builds the database address itself from `MYSQL_PASSWORD` (host `db`, the bundled MySQL container), so you don't set `DATABASE_URL`.
-5. Put HTTPS in front. Easiest is [Caddy](https://caddyserver.com) (automatic certificates):
-   ```bash
-   apt install -y caddy
-   printf 'addabaaz.in {\n  encode gzip\n  request_body { max_size 8MB }\n  reverse_proxy 127.0.0.1:3000\n}\nwww.addabaaz.in {\n  redir https://addabaaz.in{uri} permanent\n}\n' > /etc/caddy/Caddyfile
-   systemctl reload caddy
-   ```
-   (An nginx example is in 10.5.) Keep `TRUST_PROXY=1`.
-6. Firewall: allow only SSH, HTTP and HTTPS — `ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw enable` (you can also use hPanel's VPS firewall). **Port 3000 and MySQL's 3306 must not be open to the internet.** In `docker-compose.yml` change `"3000:3000"` to `"127.0.0.1:3000:3000"` so only Caddy can reach the app (Docker publishes ports past `ufw`, so this edit matters).
-7. Administrator: sign up on the site, then `docker compose exec app npm run admin -- grant you@example.com`.
-8. Backups: turn on Hostinger's **VPS snapshots/backups** in hPanel *and* schedule the app's own backup (section 13, `docker compose exec -T app npm run -s backup` from cron). Updates: `git pull && docker compose up --build -d` (after a backup).
-
-### 10.4 After the first deploy — both routes
-
-* Go through **section 8** for each feature you want (each one is just more environment variables + a restart/redeploy). Callback and webhook addresses always use your real domain, e.g. `https://addabaaz.in/api/v1/payments/webhook`.
+* Go through **section 8** for each feature you want (each one is just more environment variables, then a redeploy). Callback and webhook addresses always use your real domain, e.g. `https://addabaaz.in/api/v1/payments/webhook`.
 * Then **section 11** (Google search), and finally the **go-live checklist** (section 14).
 * Cloudflare's orange-cloud proxy in front of Hostinger is **not needed**. (Your premium videos use Cloudflare R2, which is separate and unaffected.)
+* Your plan includes up to five Web Apps, so you can create a second app from the same repository as a **staging** copy on a subdomain (own database, test Razorpay keys, a different `JWT_SECRET`, and `ALLOW_INDEXING=false` so Google ignores it). Keep `NODE_ENV=production` there too — without it the app falls back to an insecure development secret.
 
-### 10.5 Other hosts (reference)
+### 10.4 If something doesn't fit
 
-<details><summary>nginx, systemd/PM2 and static hosting examples</summary>
-
-**nginx reverse proxy**
-
-```nginx
-server {
-  listen 443 ssl http2;
-  server_name addabaaz.in;
-  # ssl_certificate … (Let's Encrypt / certbot)
-  client_max_body_size 8m;                      # admin image and subtitle uploads
-  location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-  }
-}
-server { listen 80; server_name addabaaz.in www.addabaaz.in; return 301 https://addabaaz.in$request_uri; }
-```
-
-Set `TRUST_PROXY=1`. Redirect `www` → apex (or the reverse) — one hostname only.
-
-**Without Docker (systemd / PM2)**
-
-```bash
-npm ci --omit=dev
-node --env-file=/etc/addabaaz.env server/src/index.js      # run this under systemd / PM2
-```
-
-Run migrations as part of deploys with `npm run db:migrate` (set `DB_MIGRATE=false` if you prefer the app not to migrate itself). One instance is fine; several instances also work (rate limits are per-instance, and a database version counter keeps catalogs in sync).
-
-**Static hosting for the website + API elsewhere**
-
-`API_BASE=https://api.addabaaz.in npm run build:www`, upload `www/`, and set the API's `CORS_ORIGINS` to the site's origin. (The API server also serves the site itself, so this split is optional.) On Hostinger's ordinary shared hosting you can do exactly this: upload the contents of `www/` to `public_html` with File Manager, and run the API on a Web App or VPS.
-
-</details>
+* **Static-only fallback:** `npm run build:www` produces a `www/` folder you can upload to `public_html` with File Manager on *any* Hostinger plan; you get browsing and free videos, but no accounts, premium video or admin (section 5).
+* Anything not covered here: read the **Runtime logs** and **Deployments** build log in hPanel first, then the troubleshooting table (section 15), then Hostinger support (they can confirm your database engine, connection limits and whether the app may write outside its folder).
 
 ---
 
@@ -645,7 +587,7 @@ Before publishing:
 2. **Uploaded images:** File Manager → `addabaaz-data/uploads` → compress and download it now and then (the catalog stores only the file names).
 3. **Settings:** keep a copy of every environment variable (especially `JWT_SECRET`) in a password manager.
 
-Test an import on a spare database once, before you need it. **VPS / own server:** use the app's backup command below.
+Test an import on a spare database once, before you need it. The `npm run backup` command below is for computers where you have a terminal (your own machine, or a copy of the site you run locally).
 
 ```bash
 BACKUP_PASSPHRASE='a long secret' npm run backup     # → ./backups/addabaaz-<UTC time>.ndjson.gz.enc
@@ -724,7 +666,7 @@ Prints requests per second and p50/p95/p99 latency per endpoint. The numbers dep
 | Hostinger: admin-uploaded images vanish after a deploy | `UPLOAD_DIR` is inside the app folder. Set it to a folder outside `domains/<domain>/hbuilds` (section 10.2-C). |
 | Hostinger: reminders / notifications arrive late | The process sleeps when idle. Add the 5-minute uptime monitor (section 10.2-E). |
 | Hostinger: `Too many connections` / `max_user_connections` | Lower `DB_POOL_SIZE` (try `3`–`5`). |
-| Hostinger: SQL syntax errors on the first start | The database is probably MariaDB. Try a VPS with MySQL (10.3) or a managed MySQL with `DB_SSL=true`. |
+| Hostinger: SQL syntax errors on the first start | The database is probably MariaDB and hit something the app doesn't support there. Copy the exact error from the **Runtime logs** and send it to whoever maintains the code — it is a small fix in `server/migrations/` or `server/src/db*.js`. Ask Hostinger support which engine/version your database runs. |
 | `ER_ACCESS_DENIED_ERROR` / `Unknown database` | Wrong credentials, or the database doesn't exist — create it, or start once with `DB_CREATE=true`. |
 | `npm test`: nearly every test fails with `MySQL is not reachable` | Start MySQL, or set `TEST_DATABASE_URL`. |
 | Server refuses to start: JWT secret | `NODE_ENV=production` requires `JWT_SECRET`. |
