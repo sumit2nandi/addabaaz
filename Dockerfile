@@ -10,10 +10,10 @@ COPY data ./data
 COPY media ./media
 COPY server/src ./server/src
 COPY server/migrations ./server/migrations
-COPY scripts/catalog-cli.mjs scripts/validate-catalog.mjs ./scripts/
+COPY scripts/catalog-cli.mjs scripts/validate-catalog.mjs scripts/backup.mjs scripts/restore.mjs ./scripts/
 # Admin-uploaded images live here — mount a persistent volume (see docker-compose.yml).
-RUN mkdir -p /app/uploads && chown node:node /app/uploads
-VOLUME ["/app/uploads"]
+RUN mkdir -p /app/uploads /app/backups && chown node:node /app/uploads /app/backups
+VOLUME ["/app/uploads", "/app/backups"]
 EXPOSE 3000
 USER node
 CMD ["node", "server/src/index.js"]

@@ -10,6 +10,8 @@ Bengali originals, stand-up comedy, web series and reels from ADDABAAZ (Kolkata)
 | **Works without a backend** | Falls back to on-device "local mode", so static hosting (GitHub Pages, Netlify…) still works |
 | **Android / iOS** | [Capacitor](https://capacitorjs.com) wrapper in [`mobile/`](mobile) around the same web bundle |
 
+> **New here? Start with [SETUP.md](SETUP.md)** — install, configure, deploy and operate everything, in one file.
+
 ## What's in the app
 
 Home hero carousel · Continue Watching · Top 10 · per-show rails · **show pages** with episode lists, resume and "next unwatched" · **watch page** with resume, progress tracking and autoplay-next · **Reels** (vertical swipe feed) · search (Bengali + English, recent/popular) · My List · Coming Soon with reminders · Behind-the-Scenes gallery with lightbox · multi-profile ("Who's watching?") · sign-up / sign-in (email, Google, Facebook) · account, settings, delete-account · **premium titles that require sign-in** (free titles never do) · optional ADDABAAZ Plus paywall (feature-flagged) · About / Services / Contact (existing studio pages, kept).
