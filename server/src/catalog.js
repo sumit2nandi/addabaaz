@@ -5,15 +5,20 @@ import fs from 'node:fs';
  * - First start: the database is seeded ONCE from data/catalog.json + data/studio.json (later edits live in MySQL).
  * - Several servers stay in sync through the `version` counter that every write bumps (checked at most every `ttl` ms).
  */
+// `ttl` is how long (ms) a loaded snapshot is trusted before the version counter is checked again.
 export function createCatalogStore({ db, catalogPath, studioPath = null, ttl = 3000 }) {
+  // `snap` = everything (admin view), `pub` = what visitors may see; `version` detects changes made by other servers.
   let snap = null, pub = null, version = -1, checked = 0, seeding = null;
 
+  // Seed files are optional; a missing or broken file is treated as empty.
   const readJson = (p) => { try { return p && fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : null; } catch (e) { console.error(`[catalog] cannot read ${p}: ${e.message}`); return null; } };
+  // Import data/catalog.json into MySQL once (only the first server to try wins; the rest skip).
   const ensureSeeded = () => seeding ||= (async () => {
     const data = readJson(catalogPath);
     if (data && await db.catalog.seed(data, readJson(studioPath))) console.log(`[catalog] imported ${data.shows?.length || 0} shows and ${data.videos?.length || 0} videos from ${catalogPath} into MySQL`);
   })().catch((e) => { seeding = null; throw e; });
 
+  // Adds fast lookup tables (ids, videos by id) to a catalog snapshot.
   const index = (catalog, studio, v) => ({
     catalog, studio, version: v,
     showIds: new Set(catalog.shows.map((s) => s.id)), upcomingIds: new Set(catalog.upcoming.map((u) => u.id)),
@@ -33,6 +38,7 @@ export function createCatalogStore({ db, catalogPath, studioPath = null, ttl = 3
     return { ...index({ ...full.catalog, videos }, full.studio, full.version), dueAt };
   };
 
+  // Public API of the store.
   const store = {
     /** Current snapshot: { catalog, studio, showIds, upcomingIds, videoById }. */
     async get({ all = false } = {}) {

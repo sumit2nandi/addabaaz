@@ -13,15 +13,19 @@ export function sniffImage(buf) {
 
 /** Stores an uploaded image under a content-hash name (so re-uploads dedupe and URLs can be cached forever). Returns the site-relative path. */
 export function saveImage(buf, dir) {
+  // Detect the real image type from its bytes; reject anything that is not WebP/PNG/JPEG/GIF.
   const kind = sniffImage(buf);
   if (!kind) return null;
+  // File name = hash of the content, so identical uploads share one file and URLs never change.
   const name = `${crypto.createHash('sha256').update(buf).digest('hex').slice(0, 24)}.${kind.ext}`;
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, name);
+  // Write to a temp file then rename, so a half-written file is never served.
   if (!fs.existsSync(file)) { const tmp = `${file}.${process.pid}.tmp`; fs.writeFileSync(tmp, buf); fs.renameSync(tmp, file); }
   return { path: `uploads/${name}`, bytes: buf.length, type: kind.type };
 }
 
+// Video types accepted for upload to R2.
 const VIDEO_EXT = { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm' };
 /** Object key for a browser upload to the private R2 bucket: premium/<slug>/<random>-<clean-name>.<ext>. */
 export function videoKey(filename, slug = '') {
@@ -43,6 +47,7 @@ export function toVtt(input) {
   const cues = (body.match(/\d{1,2}:\d{2}:\d{2}\.\d{3}\s+-->\s+\d{1,2}:\d{2}:\d{2}\.\d{3}/g) || []).length;
   return cues ? { vtt: `WEBVTT\n\n${body}\n`, cues } : null;
 }
+// Stores a subtitle file (converted to WebVTT) under a content-hash name.
 export function saveSubtitle(buf, dir) {
   const v = toVtt(buf); if (!v) return null;
   const name = `${crypto.createHash('sha256').update(v.vtt).digest('hex').slice(0, 24)}.vtt`;

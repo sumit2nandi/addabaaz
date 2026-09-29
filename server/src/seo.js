@@ -15,19 +15,23 @@ import { legalDoc, LEGAL_PAGES, LEGAL_UPDATED } from '../../app/js/legal-text.js
  * The metadata itself comes from app/js/seo/meta.js, which the browser also uses, so both always agree.
  */
 
+// Tiny HTML builders used to write the crawler-visible copy of each page (all text is escaped).
 const A = (href, text) => `<a href="${esc(href)}">${esc(text)}</a>`;
 const li = (href, text, extra = '') => `<li>${A(href, text)}${extra ? ` — ${esc(extra)}` : ''}</li>`;
 const enc = encodeURIComponent;
+// JSON for embedding in a <script> tag: `<` is escaped so the data can never close the tag early.
 const jsonForHtml = (o) => JSON.stringify(o).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 const showName = (s) => s.titleEn || s.title;
 
 /** Origin used in canonical URLs, the sitemap and structured data. PUBLIC_SITE_URL wins; otherwise what the request said. */
+// Falls back to the request's own host when PUBLIC_SITE_URL is not set.
 export function siteOrigin(req, configured) {
   if (configured) return configured.replace(/\/+$/, '');
   return `${req.protocol}://${req.get('host')}`;
 }
 
 /** The visible-to-crawlers copy of a page (kept visually hidden: the real page is drawn by the app). */
+// One `case` per page type; each writes a heading, description and links to related pages.
 export function bodyHtml(m, { view, params }, cat, studio, plans) {
   const h1 = (t) => `<h1>${esc(t)}</h1>`;
   const intro = (t, d = m.description) => `${h1(t)}<p>${esc(d)}</p>`;
@@ -35,6 +39,7 @@ export function bodyHtml(m, { view, params }, cat, studio, plans) {
   const showList = (list) => `<ul>${list.map((s) => li(`/show/${s.id}`, showFullName(s), s.tagline)).join('')}</ul>`;
   const epList = (list) => `<ul>${list.map((v) => li(`/watch/${v.id}`, `${v.kind === 'episode' && v.episode ? `EP ${v.episode}: ` : ''}${cat.displayTitle(v)}`, fmtDuration(v.duration))).join('')}</ul>`;
   let b = '';
+  // Choose the content by which page (view) was requested.
   switch (view) {
     case 'home': {
       const latest = [...cat.allEpisodes()].sort((a, c) => c.publishedAt.localeCompare(a.publishedAt)).slice(0, 12);
@@ -56,6 +61,7 @@ export function bodyHtml(m, { view, params }, cat, studio, plans) {
     case 'upcoming': b = `${intro('Coming soon')}<ul>${cat.upcoming.map((u) => li(`/soon/${u.id}`, showFullName(u), u.note)).join('')}</ul>`; break;
     case 'soon': { const u = cat.soon(params.id); b = `${intro(`${showFullName(u)} — coming soon`)}<p>${esc(u.note || '')}</p>${cat.show(u.showId) ? `<p>${A(`/show/${u.showId}`, 'Watch the show')}</p>` : ''}`; break; }
     case 'gallery': b = `${intro('Behind the scenes')}` + cat.gallery.map((g) => `<figure><img src="${esc(g.image)}" alt="${esc(g.caption || `Behind the scenes of ${g.group} — ADDABAAZ production`)}" loading="lazy" width="400" height="300"></figure>`).join(''); break;
+    // Legal pages (Privacy, Terms, ...) come from the shared legal-text module.
     case 'legal': {
       const d = legalDoc(LEGAL_PAGES[m.canonical], { studio: studio?.studio });
       b = `${h1(d.title)}<p>Last updated ${esc(LEGAL_UPDATED)}.</p><p>${esc(d.intro)}</p>` + d.sections.map(([h, ps]) => `<h2>${esc(h)}</h2>${ps.map((t) => `<p>${esc(t)}</p>`).join('')}`).join(''); break;
@@ -70,10 +76,13 @@ export function bodyHtml(m, { view, params }, cat, studio, plans) {
     }
     default: b = m.status === 404 ? `${h1('Page not found')}<p>${A('/', 'Go to the ADDABAAZ home page')}</p>` : h1(m.title.replace(/ — ADDABAAZ$/, ''));
   }
+  // Visually hidden but present in the HTML for crawlers; the browser app draws the real page on top.
   return `<div class="sr-only" id="seo-content">${nav}${b}</div>`;
 }
 
+// Factory. `catalog` supplies the data; `indexable` decides if search engines may index this deployment at all.
 export function createSeo({ catalog, root, plans, origin: configuredOrigin = '', indexable = false, verification = {}, staticDir = root }) {
+  // The app shell (index.html) is read once and re-read only when the file changes.
   const indexFile = path.join(root, 'index.html');
   let tpl = null, tplMtime = 0, preloads = null;
   const template = () => {
@@ -84,6 +93,7 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
   /** URLs of main.js and everything it imports statically — preloaded so the app starts without a request waterfall. */
   const modulePreloads = () => {
     if (preloads) return preloads;
+    // Follow `import` statements from main.js to list every module the page needs; each is preloaded so the app starts faster.
     const seen = new Set(), walk = (rel) => {
       if (seen.has(rel)) return; seen.add(rel);
       let src = ''; try { src = fs.readFileSync(path.join(root, rel), 'utf8'); } catch { return; }
@@ -95,6 +105,7 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
     return (preloads = [...seen].filter((f) => f.endsWith('.js')));
   };
 
+  // The catalog view (with lookup helpers) is rebuilt only when the catalog version changes.
   let catCache = { version: null, cat: null };
   const view = async () => {
     const snap = await catalog.get();
@@ -103,6 +114,7 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
   };
   const originOf = (req) => siteOrigin(req, configuredOrigin);
 
+  // Builds the <head> tags for one page: title, description, robots, canonical URL, Open Graph / Twitter cards, verification tags and JSON-LD structured data.
   const headHtml = (m, origin, path_) => {
     const url = m.canonical ? origin + m.canonical : null;
     const robots = indexable ? m.robots : 'noindex,nofollow';
@@ -134,6 +146,7 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
     return tags.filter(Boolean).join('\n');
   };
 
+  // Makes footer links real URLs (not #hash links) so crawlers can follow them.
   const footerLinks = (html) => html.replace(/(<footer[\s\S]*?<\/footer>)/, (f) => f.replace(/href="#\/([^"]*)"/g, 'href="/$1"'));
 
   /** Render the shell for a path. Returns { status, headers, body } or { redirect }. */
@@ -145,9 +158,12 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
     if (urlPath.length > 1 && urlPath.endsWith('/')) return { redirect: urlPath.replace(/\/+$/, '') + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '') };
     const { cat, studio } = await view();
     const query = req.query || {};
+    // The metadata comes from the same module the browser uses (app/js/seo/meta.js), so both always agree.
     const m = pageMeta({ path: urlPath, query, cat, studio, origin, plans });
     if (m.redirect) return { redirect: m.redirect, status: m.status };
+    // Pages that do not exist are rendered as the 404 view (with a real 404 status).
     const route = (m.status === 200 && matchRoute(urlPath)) || { view: '404', params: {} };
+    // Fill the placeholders in index.html with the generated head and body.
     let html = template();
     html = html.replace(/<!--seo:head-->[\s\S]*?<!--\/seo:head-->/, () => headHtml(m, origin, urlPath));
     html = html.replace(/<!--seo:body--><!--\/seo:body-->/, () => bodyHtml(m, route, cat, studio, plans));
@@ -156,10 +172,12 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
     return { status: m.status, body: html, headers: { 'Content-Type': 'text/html; charset=utf-8', ...robotsHeader, ...(m.status === 200 ? { 'Cache-Control': 'public, max-age=0, must-revalidate' } : { 'Cache-Control': 'no-cache' }) } };
   }
 
+  // robots.txt: staging/preview deployments block everything; production allows all but /admin and /api.
   const robotsTxt = (req) => indexable
     ? `User-agent: *\nDisallow: /admin\nDisallow: /api/\n\nSitemap: ${originOf(req)}/sitemap.xml\n`
     : 'User-agent: *\nDisallow: /\n';
 
+  // sitemap.xml lists every indexable page, with last-modified dates and video info for watch pages.
   async function sitemapXml(req) {
     const origin = originOf(req), { cat } = await view();
     const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
@@ -179,5 +197,6 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
     return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">\n${out.join('\n')}\n</urlset>\n`;
   }
 
+  // What app.js uses.
   return { render, robotsTxt, sitemapXml, indexable, origin: originOf, modulePreloads };
 }
