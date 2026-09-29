@@ -9,6 +9,7 @@ CREATE TABLE payments (
   provider            VARCHAR(30)  NOT NULL,
   provider_order_id   VARCHAR(64)  NOT NULL,
   provider_payment_id VARCHAR(64)  NULL,
+  -- Amount actually charged, in paise (1/100 rupee) - integers avoid rounding errors.
   amount_paise        INT UNSIGNED NOT NULL,
   currency            CHAR(3)      NOT NULL DEFAULT 'INR',
   status              ENUM('created','paid','failed') NOT NULL DEFAULT 'created',

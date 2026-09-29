@@ -1,3 +1,4 @@
+// Unit tests for the pure GST helpers (state codes, GSTIN checksum, tax split, financial year, amounts in words). No database needed.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { STATES, resolveState, stateName, isValidGstin, gstinCheckChar, computeTax, creditNoteSplit, financialYear, invoiceNumber, amountInWords, rupees } from '../src/gst.js';

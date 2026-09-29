@@ -1,3 +1,5 @@
+// Tests for account safety (verification, password reset, PIN), Sign in with Apple, ratings, comments, device limit,
+// web push, analytics, refund requests, subtitles and scheduled publishing.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -13,11 +15,14 @@ import { createPush } from '../src/push.js';
 import { createAppleVerifier } from '../src/apple.js';
 import { socialFromEnv } from '../src/social.js';
 
+// Database for the tests: TEST_DATABASE_URL or a local MySQL. Each file creates its own throw-away database (unique name) and drops it at the end, so tests never touch real data.
 const cfg0 = dbConfigFromEnv({ DATABASE_URL: process.env.TEST_DATABASE_URL || 'mysql://root@127.0.0.1:3306/x' });
 const config = { ...cfg0, database: `addabaaz_eng_${process.pid}_${Date.now().toString(36)}` };
 const ADMIN = 'a'.repeat(32), tmpUploads = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-eng-'));
+// Shared state for the tests in this file (database, HTTP server, base URL).
 let db, server, base, root, pushed, mails, theApp;
 const fakeSender = async (sub, payload) => { if (sub.endpoint.includes('gone')) throw Object.assign(new Error('gone'), { statusCode: 410 }); pushed.push({ endpoint: sub.endpoint, ...JSON.parse(payload) }); };
+// Runs once before the tests: create + migrate the database and start the app on a random free port.
 test.before(async () => {
   db = await createDb({ config, ensureDatabase: true }); await migrate(db);
   pushed = []; mails = [];
@@ -27,13 +32,16 @@ test.before(async () => {
   server = app.listen(0); await new Promise((r) => server.once('listening', r));
   root = `http://127.0.0.1:${server.address().port}`; base = `${root}/api/v1`;
 });
+// Clean up: stop the server and drop the temporary database.
 test.after(async () => { server?.close(); if (db) { await db.dropDatabase(); await db.close(); } });
 
+// Tiny HTTP client: calls the running app's API and returns `{ status, body }`; pass a token to act as a signed-in user.
 const call = async (method, p, body, token, headers = {}) => {
   const r = await fetch(base + p, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers }, body: body ? JSON.stringify(body) : undefined });
   const t = await r.text(); return { status: r.status, body: t ? JSON.parse(t) : null };
 };
 let n = 0;
+// Helper: register a new user and return their token (most tests start with this).
 const signup = async (email = `e${++n}@example.com`, password = 'password123') => { const r = await call('POST', '/auth/signup', { name: 'Eng Test', email, password }); return { ...r.body, email, password, token: r.body.token }; };
 const linkFrom = (mail, path) => new URL(String(mail.text).match(new RegExp(`https?://\\S+${path}\\?token=[\\w-]+`))[0]).searchParams.get('token');
 const lastMailTo = async (email, subjectRe) => { for (let i = 0; i < 40; i++) { const m = [...mails].reverse().find((x) => x.to === email && subjectRe.test(x.subject)); if (m) return m; await new Promise((r) => setTimeout(r, 25)); } throw new Error(`no mail to ${email} matching ${subjectRe}`); };

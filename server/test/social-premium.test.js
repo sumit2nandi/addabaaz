@@ -1,3 +1,5 @@
+// Tests for social sign-in (Google / Facebook, using fake providers) and premium video: R2 signed URLs,
+// access rules (login + paid plan) and the HLS gateway. No network or real credentials are used.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -69,6 +71,7 @@ test('Facebook token verification: debug_token must be valid and issued to OUR a
 
 /* ---------------- API tests against MySQL ---------------- */
 
+// Database for the tests: TEST_DATABASE_URL or a local MySQL. Each file creates its own throw-away database (unique name) and drops it at the end, so tests never touch real data.
 const cfg0 = dbConfigFromEnv({ DATABASE_URL: process.env.TEST_DATABASE_URL || 'mysql://root@127.0.0.1:3306/x' });
 const config = { ...cfg0, database: `addabaaz_test_sp_${process.pid}_${Date.now().toString(36)}` };
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-cat-'));
@@ -92,15 +95,19 @@ const social = {
   },
 };
 
+// Shared state for the tests in this file (database, HTTP server, base URL).
 let db, server, root;
 const mkServer = async (opts) => { const app = createApp({ db, jwtSecret: 'test-secret', rate: false, catalogPath: path.join(tmp, 'catalog.json'), r2: fakeR2, social, payments: { provider: 'mock' }, ...opts }); const s = app.listen(0); await new Promise((r) => s.once('listening', r)); return { s, url: `http://127.0.0.1:${s.address().port}/api/v1` }; };
+// Runs once before the tests: create + migrate the database and start the app on a random free port.
 test.before(async () => {
   try { db = await createDb({ config, ensureDatabase: true }); } catch (e) { throw new Error(`MySQL is not reachable (${e.code || e.message}). Set TEST_DATABASE_URL.`); }
   await migrate(db);
   const a = await mkServer(); server = a.s; root = a.url;
 });
+// Clean up: stop the server and drop the temporary database.
 test.after(async () => { server?.close(); if (db) { await db.dropDatabase(); await db.close(); } });
 
+// Tiny HTTP client: calls the running app's API and returns `{ status, body }`; pass a token to act as a signed-in user.
 const call = async (method, p, body, token, url = root, redirect = 'follow') => {
   const r = await fetch(url + p, { method, redirect, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
   const text = await r.text(); let json = null; try { json = text ? JSON.parse(text) : null; } catch { /* not json */ }
@@ -160,6 +167,7 @@ test('social: deleting the account removes linked identities', async () => {
   assert.equal((await call('POST', '/auth/google', { idToken: 'g-new' })).body.isNew, true);      // starts fresh
 });
 
+// Helper: register a new user and return their token (most tests start with this).
 const signup = async (email) => (await call('POST', '/auth/signup', { name: 'Vee', email, password: 'password123' })).body;
 const pay = (token) => call('POST', '/payments/checkout', { planId: 'plus-monthly' }, token);          // demo provider: instant
 const paidUser = async (email) => { const u = await signup(email); await pay(u.token); return u; };

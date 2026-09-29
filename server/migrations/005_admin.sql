@@ -1,10 +1,12 @@
 -- Admin console: admin accounts, database-backed catalog, message triage, audit log.
 
+-- Admin role flag and the ability to disable an account without deleting it.
 ALTER TABLE users
   ADD COLUMN is_admin    TINYINT(1)  NOT NULL DEFAULT 0,
   ADD COLUMN disabled_at DATETIME(3) NULL,
   ADD KEY ix_users_created (created_at);
 
+-- Lets admins mark inbox messages as handled (and by whom).
 ALTER TABLE contact_messages
   ADD COLUMN handled_at DATETIME(3)  NULL,
   ADD COLUMN handled_by VARCHAR(254) NULL;
@@ -32,6 +34,7 @@ CREATE TABLE catalog_meta (
 
 INSERT INTO catalog_meta (k, n) VALUES ('version', 0);
 
+-- Append-only history of admin actions: who, what, on which target, from which IP.
 CREATE TABLE admin_audit (
   id        BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

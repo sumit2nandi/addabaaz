@@ -1,6 +1,7 @@
 -- Account safety (password reset, email verification, PIN), Sign in with Apple, kids profiles, ratings & comments,
 -- web push, playback sessions (device limit), analytics, refund requests, error log.
 
+-- New account columns: session version (bumping it signs out every device), e-mail verification time and the parental PIN with its lock-out counters.
 ALTER TABLE users
   ADD COLUMN email_verified_at  DATETIME(3)  NULL,
   ADD COLUMN session_version    INT UNSIGNED NOT NULL DEFAULT 0,
@@ -13,6 +14,7 @@ UPDATE users SET email_verified_at = created_at WHERE password_hash IS NULL;
 
 ALTER TABLE auth_identities MODIFY provider ENUM('google','facebook','apple') NOT NULL;
 
+-- Kids profiles only show age-appropriate titles.
 ALTER TABLE profiles ADD COLUMN kids TINYINT(1) NOT NULL DEFAULT 0;
 
 -- One-time links: password reset and email verification. Only a SHA-256 of the token is stored.

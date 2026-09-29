@@ -1,3 +1,5 @@
+// Billing tests: GST invoices and credit notes, coupons, refunds, receipt e-mails and the accounting CSV.
+// Razorpay and SMTP are replaced by in-memory fakes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -38,6 +40,7 @@ const sent = [];
 const mailer = createMailer({ transport: { sendMail: async (m) => { sent.push(m); } }, from: 'ADDABAAZ <billing@addabaaz.in>' });
 const emailsTo = (to, re) => sent.filter((m) => m.to === to && (!re || re.test(m.subject)));
 
+// Database for the tests: TEST_DATABASE_URL or a local MySQL. Each file creates its own throw-away database (unique name) and drops it at the end, so tests never touch real data.
 const cfg0 = dbConfigFromEnv({ DATABASE_URL: process.env.TEST_DATABASE_URL || 'mysql://root@127.0.0.1:3306/x' });
 const config = { ...cfg0, database: `addabaaz_test_bill_${process.pid}_${Date.now().toString(36)}` };
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-bill-'));
@@ -47,6 +50,7 @@ catalog.videos.push({ ...base, id: 'prem', title: 'prem', kind: 'clip', episode:
 fs.writeFileSync(path.join(tmp, 'catalog.json'), JSON.stringify(catalog));
 const fakeR2 = { configured: true, presignGet: (key) => `https://r2.test/${key}`, getText: async () => null };
 
+// Shared state for the tests in this file (database, HTTP server, base URL).
 let db, server, root, app, billing;
 const billingEnv = { GSTIN: SELLER_GSTIN, GST_LEGAL_NAME: 'Adda Media Pvt Ltd', BUSINESS_ADDRESS: '12 MG Road\\nMumbai 400001', SUPPORT_EMAIL: 'help@addabaaz.in', PUBLIC_SITE_URL: 'https://addabaaz.in' };
 const mk = async ({ env = billingEnv, adminToken = ADMIN, provider = razorpay } = {}) => {
@@ -55,19 +59,23 @@ const mk = async ({ env = billingEnv, adminToken = ADMIN, provider = razorpay } 
   const s = a.listen(0); await new Promise((r) => s.once('listening', r));
   return { app: a, s, billing: b, url: `http://127.0.0.1:${s.address().port}/api/v1` };
 };
+// Runs once before the tests: create + migrate the database and start the app on a random free port.
 test.before(async () => {
   try { db = await createDb({ config, ensureDatabase: true }); } catch (e) { throw new Error(`MySQL is not reachable (${e.code || e.message}). Set TEST_DATABASE_URL.`); }
   await migrate(db);
   ({ app, s: server, url: root, billing } = await mk());
 });
+// Clean up: stop the server and drop the temporary database.
 test.after(async () => { server?.close(); if (db) { await db.dropDatabase(); await db.close(); } });
 
+// Tiny HTTP client: calls the running app's API and returns `{ status, body }`; pass a token to act as a signed-in user.
 const call = async (method, p, body, token, { url = root, raw, admin } = {}) => {
   const r = await fetch(url + p, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(admin ? { Authorization: `Bearer ${admin}` } : {}), ...(raw?.headers || {}) }, body: raw ? raw.body : body ? JSON.stringify(body) : undefined });
   const buf = Buffer.from(await r.arrayBuffer()); const text = buf.toString('utf8'); let json = null; try { json = text ? JSON.parse(text) : null; } catch { /* not json */ }
   return { status: r.status, body: json, text, buf, headers: r.headers };
 };
 let emailN = 0;
+// Helper: register a new user and return their token (most tests start with this).
 const signup = async (email = `u${++emailN}@example.com`) => { const b = (await call('POST', '/auth/signup', { name: 'Pay Er', email, password: 'password123' })).body; await db.accounts.markVerified(b.user.id); return { ...b, email }; };   // (buying needs a confirmed email when SMTP is on)
 const stream = (t) => call('POST', '/videos/prem/stream', null, t);
 const adm = (method, p, body) => call(method, '/admin' + p, body, null, { admin: ADMIN });

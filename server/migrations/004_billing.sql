@@ -1,5 +1,6 @@
 -- Billing: coupons, GST invoices / credit notes, refunds, expiry reminders.
 
+-- Pricing details on each payment: list price, discount and coupon used, the buyer's GST billing details (JSON), and how much has been refunded so far.
 ALTER TABLE payments
   ADD COLUMN list_price_paise  INT UNSIGNED NULL AFTER amount_paise,
   ADD COLUMN discount_paise    INT UNSIGNED NOT NULL DEFAULT 0 AFTER list_price_paise,
@@ -9,8 +10,10 @@ ALTER TABLE payments
   ADD COLUMN failed_notified_at DATETIME(3) NULL,
   ADD KEY ix_payments_coupon (coupon_code, status, created_at);
 
+-- Remembers which expiry date we already sent a reminder for, so each plan end triggers exactly one reminder.
 ALTER TABLE subscriptions ADD COLUMN expiry_reminder_for DATETIME(3) NULL;
 
+-- Discount codes: percent or flat, optional plan restriction, validity dates and redemption limits (overall and per user).
 CREATE TABLE coupons (
   code             VARCHAR(30)  NOT NULL,
   description      VARCHAR(120) NULL,

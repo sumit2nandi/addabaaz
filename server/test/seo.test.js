@@ -1,3 +1,4 @@
+// SEO tests: page metadata, JSON-LD structured data, server-rendered HTML for crawlers, status codes, robots.txt and sitemap.xml.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -10,17 +11,21 @@ import { Catalog } from '../../app/js/data/catalog.js';
 import { pageMeta, isoDuration, clip, videoIndexable } from '../../app/js/seo/meta.js';
 import { matchRoute } from '../../app/js/routes.js';
 
+// Database for the tests: TEST_DATABASE_URL or a local MySQL. Each file creates its own throw-away database (unique name) and drops it at the end, so tests never touch real data.
 const cfg0 = dbConfigFromEnv({ DATABASE_URL: process.env.TEST_DATABASE_URL || 'mysql://root@127.0.0.1:3306/x' });
 const config = { ...cfg0, database: `addabaaz_seo_${process.pid}_${Date.now().toString(36)}` };
 const SITE = 'https://addabaaz.example';
+// Shared state for the tests in this file (database, HTTP server, base URL).
 let db, live, staging, liveUrl, stagingUrl; const servers = [];
 const listen = async (app) => { const s = app.listen(0); await new Promise((r) => s.once('listening', r)); servers.push(s); return `http://127.0.0.1:${s.address().port}`; };
+// Runs once before the tests: create + migrate the database and start the app on a random free port.
 test.before(async () => {
   db = await createDb({ config, ensureDatabase: true }); await migrate(db);
   live = createApp({ db, jwtSecret: 't', rate: false, seo: { siteUrl: SITE, indexable: true } });
   staging = createApp({ db, jwtSecret: 't', rate: false, seo: { siteUrl: SITE, indexable: false } });
   liveUrl = await listen(live); stagingUrl = await listen(staging);
 });
+// Clean up: stop the server and drop the temporary database.
 test.after(async () => { servers.forEach((s) => s.close()); if (db) { await db.dropDatabase(); await db.close(); } });
 
 const get = (p, base = liveUrl, headers = {}) => fetch(base + p, { redirect: 'manual', headers });

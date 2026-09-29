@@ -1,3 +1,4 @@
+// Backup / restore round-trip tests, cross-device resume, and the HLS encoder helpers.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -10,10 +11,13 @@ import { migrate } from '../src/migrate.js';
 import { dbConfigFromEnv } from '../src/config.js';
 import { createBackup, restoreBackup, inspectBackup, pruneBackups, backupName, uploadBackup } from '../src/backup.js';
 
+// Database for the tests: TEST_DATABASE_URL or a local MySQL. Each file creates its own throw-away database (unique name) and drops it at the end, so tests never touch real data.
 const cfg0 = dbConfigFromEnv({ DATABASE_URL: process.env.TEST_DATABASE_URL || 'mysql://root@127.0.0.1:3306/x' });
 const config = { ...cfg0, database: `addabaaz_bak_${process.pid}_${Date.now().toString(36)}` };
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-bak-')), uploads = path.join(tmp, 'uploads'), uploads2 = path.join(tmp, 'uploads2');
+// Shared state for the tests in this file (database, HTTP server, base URL).
 let db, server, base;
+// Runs once before the tests: create + migrate the database and start the app on a random free port.
 test.before(async () => {
   db = await createDb({ config, ensureDatabase: true }); await migrate(db);
   fs.mkdirSync(path.join(uploads, 'sub'), { recursive: true });
@@ -21,7 +25,9 @@ test.before(async () => {
   const app = createApp({ db, jwtSecret: 'test-secret', rate: false, uploadDir: uploads });
   server = app.listen(0); await new Promise((r) => server.once('listening', r)); base = `http://127.0.0.1:${server.address().port}/api/v1`;
 });
+// Clean up: stop the server and drop the temporary database.
 test.after(async () => { server?.close(); if (db) { await db.dropDatabase(); await db.close(); } fs.rmSync(tmp, { recursive: true, force: true }); });
+// Tiny HTTP client: calls the running app's API and returns `{ status, body }`; pass a token to act as a signed-in user.
 const call = async (method, p, body, token) => {
   const r = await fetch(base + p, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
   const t = await r.text(); return { status: r.status, body: t ? JSON.parse(t) : null };

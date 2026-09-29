@@ -1,3 +1,5 @@
+// Admin console tests: who may enter, dashboard, user management, catalog CRUD and validation, uploads,
+// messages, coupons/payments views and the audit log.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -16,6 +18,7 @@ import { sniffImage, videoKey } from '../src/uploads.js';
 /* The admin console API, against MySQL: access control, users, catalog CRUD (+ its effect on the public API), uploads, messages, audit. */
 const SECRET = 'admin-test-secret', TOKEN = 't'.repeat(32);
 const ROOT = new URL('../../', import.meta.url);
+// Database for the tests: TEST_DATABASE_URL or a local MySQL. Each file creates its own throw-away database (unique name) and drops it at the end, so tests never touch real data.
 const cfg0 = dbConfigFromEnv({ DATABASE_URL: process.env.TEST_DATABASE_URL || 'mysql://root@127.0.0.1:3306/x' });
 const config = { ...cfg0, database: `addabaaz_test_admin_${process.pid}_${Date.now().toString(36)}` };
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-admin-'));
@@ -28,7 +31,9 @@ const fakeR2 = { configured: true, bucket: 'b', presignGet: (key) => `https://r2
 const sent = [];
 const mailer = createMailer({ transport: { sendMail: async (m) => { sent.push(m); } } });
 
+// Shared state for the tests in this file (database, HTTP server, base URL).
 let db, server, root, app, admin, viewer;
+// Runs once before the tests: create + migrate the database and start the app on a random free port.
 test.before(async () => {
   try { db = await createDb({ config, ensureDatabase: true }); } catch (e) { throw new Error(`MySQL is not reachable (${e.code || e.message}). Set TEST_DATABASE_URL.`); }
   await migrate(db);
@@ -38,13 +43,16 @@ test.before(async () => {
   admin = await signup('boss@example.com', 'Boss'); viewer = await signup('viewer@example.com', 'View Er');
   await db.adminUsers.setAdminByEmail('boss@example.com', true);
 });
+// Clean up: stop the server and drop the temporary database.
 test.after(async () => { server?.close(); if (db) { await db.dropDatabase(); await db.close(); } });
 
+// Tiny HTTP client: calls the running app's API and returns `{ status, body }`; pass a token to act as a signed-in user.
 const call = async (method, p, body, token, { raw, headers } = {}) => {
   const r = await fetch(root + '/api/v1' + p, { method, headers: { ...(raw ? {} : { 'Content-Type': 'application/json' }), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers }, body: raw ?? (body === undefined || body === null ? undefined : JSON.stringify(body)) });
   const buf = Buffer.from(await r.arrayBuffer()); const text = buf.toString('utf8'); let json = null; try { json = text ? JSON.parse(text) : null; } catch { /* not json */ }
   return { status: r.status, body: json, text, buf, headers: r.headers };
 };
+// Helper: register a new user and return their token (most tests start with this).
 async function signup(email, name = 'Test User') { const r = await call('POST', '/auth/signup', { name, email, password: 'password123' }); return { ...r.body, email, token: r.body.token, id: r.body.user.id }; }
 const A = (m, p, b, opts) => call(m, '/admin' + p, b, admin.token, opts);
 const audit = async (action) => (await A('GET', `/audit?action=${encodeURIComponent(action)}`)).body.entries;

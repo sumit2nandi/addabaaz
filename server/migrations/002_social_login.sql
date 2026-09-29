@@ -1,4 +1,5 @@
 -- Social login (Google, Facebook). Accounts created through a provider have no password.
+-- Password becomes optional: accounts created with Google/Facebook have none.
 ALTER TABLE users MODIFY password_hash VARCHAR(255) NULL;
 
 -- One row per linked provider account. (provider, subject) is the provider's stable user id — never the email.

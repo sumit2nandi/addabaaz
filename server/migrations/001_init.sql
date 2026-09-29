@@ -2,6 +2,8 @@
 -- All timestamps are stored in UTC (DATETIME(3)).
 -- Catalog content (shows, episodes, ...) lives in data/catalog.json, so tables reference catalog ids by value.
 
+-- Accounts. `id` is a UUID string. E-mails are unique (stored lower-case). Passwords are hashed with scrypt, never stored in clear text.
+-- (Later migrations add social login, admin role, session versions, e-mail verification and the parental PIN.)
 CREATE TABLE users (
   id            CHAR(36)     NOT NULL,
   email         VARCHAR(254) NOT NULL,
@@ -12,6 +14,8 @@ CREATE TABLE users (
   UNIQUE KEY uq_users_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Viewer profiles inside one account (like Netflix). Deleting the account deletes its profiles (ON DELETE CASCADE).
+-- `color` picks an avatar colour from a fixed palette.
 CREATE TABLE profiles (
   id         CHAR(36)    NOT NULL,
   user_id    CHAR(36)    NOT NULL,
@@ -56,6 +60,7 @@ CREATE TABLE reminders (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- No row = free plan.
+-- One row per user with their plan; the plan id refers to server/src/plans.js. (003_payments.sql adds the expiry date.)
 CREATE TABLE subscriptions (
   user_id     CHAR(36)    NOT NULL,
   plan_id     VARCHAR(40) NOT NULL,
@@ -68,6 +73,7 @@ CREATE TABLE subscriptions (
   CONSTRAINT fk_subs_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Messages sent through the public Contact form.
 CREATE TABLE contact_messages (
   id         CHAR(36)     NOT NULL,
   name       VARCHAR(100) NOT NULL,

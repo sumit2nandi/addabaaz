@@ -1,3 +1,6 @@
+// Core API tests: health/catalog/plans, sign-up and login, profiles and library isolation, demo subscription,
+// contact form, account deletion, migrations and data-integrity rules.
+// Run with `npm test` (needs MySQL, see SETUP.md).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../src/app.js';
@@ -9,9 +12,12 @@ import { dbConfigFromEnv } from '../src/config.js';
  * Integration tests against a real MySQL server. Point them at one with TEST_DATABASE_URL
  * (default mysql://root@127.0.0.1:3306). Each run creates and drops its own throw-away database.
  */
+// Database for the tests: TEST_DATABASE_URL or a local MySQL. Each file creates its own throw-away database (unique name) and drops it at the end, so tests never touch real data.
 const base_cfg = dbConfigFromEnv({ DATABASE_URL: process.env.TEST_DATABASE_URL || 'mysql://root@127.0.0.1:3306/x' });
 const config = { ...base_cfg, database: `addabaaz_test_${process.pid}_${Date.now().toString(36)}` };
+// Shared state for the tests in this file (database, HTTP server, base URL).
 let db, app, base, server;
+// Runs once before the tests: create + migrate the database and start the app on a random free port.
 test.before(async () => {
   try { db = await createDb({ config, ensureDatabase: true }); }
   catch (e) { throw new Error(`MySQL is not reachable (${e.code || e.message}). Start MySQL or set TEST_DATABASE_URL=mysql://user:pass@host:3306`); }
@@ -20,8 +26,10 @@ test.before(async () => {
   server = app.listen(0); await new Promise((r) => server.once('listening', r));
   base = `http://127.0.0.1:${server.address().port}/api/v1`;
 });
+// Clean up: stop the server and drop the temporary database.
 test.after(async () => { server?.close(); if (db) { await db.dropDatabase(); await db.close(); } });
 
+// Tiny HTTP client: calls the running app's API and returns `{ status, body }`; pass a token to act as a signed-in user.
 const call = async (method, p, body, token) => {
   const r = await fetch(base + p, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
   const text = await r.text();
