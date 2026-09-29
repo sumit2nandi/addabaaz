@@ -482,9 +482,9 @@ Business hosting is shared hosting, so three things work differently from a norm
    | Branch | `production` (or whichever branch you release from) |
    | Node.js version | **22** (20 or 24 also work) |
    | Root directory | `/` (leave empty) |
-   | Build script | leave **empty** — there is no build step |
+   | Build script | none needed. (For Express, Hostinger may pre-fill `npm run build:www` and not let you clear it — that's harmless: it only builds a static copy in `www/` and can print `fatal: not a git repository`, which you can ignore.) |
    | Output directory | leave empty (the whole project is deployed) |
-   | Entry file | **`server/src/index.js`** |
+   | Entry file | **`server.js`** (the default Hostinger suggests — a small file in the repo root that starts `server/src/index.js`; `server/src/index.js` also works) |
    | Package manager | npm (detected from `package-lock.json`) |
 
 4. Open **Set environment variables** and add every variable from the table in 10.1 (or use **Import .env** with a file made from `.env.example` — delete its `DATABASE_URL=…change-me…` line first, because `DATABASE_URL` takes priority over the `DB_*` variables). Values are stored encrypted and survive redeploys. Saving changes redeploys the app.
@@ -673,7 +673,7 @@ Prints requests per second and p50/p95/p99 latency per endpoint. The numbers dep
 |---|---|
 | `Cannot connect to MySQL (ECONNREFUSED …)` on start | MySQL isn't running or `DATABASE_URL` is wrong. With Docker use host `db`, not `127.0.0.1`. |
 | Hostinger: `Access denied for user '…'@'::1'` or `ECONNREFUSED ::1` | Use `DB_HOST=127.0.0.1`, not `localhost` (Node resolves `localhost` to IPv6). |
-| Hostinger: app is "Running" but the site shows an error / 503 | Open **Runtime logs**. Usual causes: a missing or mistyped environment variable, wrong `DB_*` values, or the entry file isn't `server/src/index.js`. Never hard-code a port — the app reads `PORT`. |
+| Hostinger: app is "Running" but the site shows an error / 503 | Open **Runtime logs**. Usual causes: a missing or mistyped environment variable, wrong `DB_*` values, or an entry file that doesn't exist (use `server.js`). Never hard-code a port — the app reads `PORT`. |
 | Hostinger: 403 after a redeploy | Hostinger regenerates `public_html/.htaccess` on each deploy; don't edit it by hand — just redeploy. |
 | Hostinger: admin-uploaded images vanish after a deploy | `UPLOAD_DIR` is inside the app folder. Set it to a folder outside `domains/<domain>/hbuilds` (section 10.2-C). |
 | Hostinger: reminders / notifications arrive late | The process sleeps when idle. Add the 5-minute uptime monitor (section 10.2-E). |
