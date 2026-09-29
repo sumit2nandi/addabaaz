@@ -1,3 +1,4 @@
+// Contact-form inbox: filter by status; mark handled or reopen; delete.
 import { api } from '../api.js';
 import { html, $, $$, icon, badge, empty, pager, pageHead, confirmBox, toast, errMsg, fmtDT, ago } from '../ui.js';
 

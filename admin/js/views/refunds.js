@@ -1,3 +1,4 @@
+// Refund requests from the customer Billing page: approve (issues the refund) or decline.
 import { api } from '../api.js';
 import { html, $$, badge, empty, pager, pageHead, formModal, confirmBox, toast, errMsg, ago, fmtDT, inr } from '../ui.js';
 

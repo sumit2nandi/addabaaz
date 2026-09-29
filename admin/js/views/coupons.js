@@ -1,6 +1,8 @@
+// Coupons: create, enable/disable, edit and delete discount codes.
 import { api } from '../api.js';
 import { html, $, $$, icon, badge, empty, pageHead, formModal, confirmBox, toast, errMsg, fmtD, inr } from '../ui.js';
 
+// Badge: off / expired / active.
 const status = (c) => !c.active ? badge('off') : c.expiresAt && new Date(c.expiresAt) < new Date() ? badge('expired', 'bad') : c.startsAt && new Date(c.startsAt) > new Date() ? badge('scheduled') : c.maxRedemptions != null && c.redeemed >= c.maxRedemptions ? badge('used up', 'warn') : badge('live', 'ok');
 
 export default async function coupons(root, _p, ctx) {

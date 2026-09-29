@@ -1,3 +1,4 @@
+// Audit log page: who changed what and when (every admin action is recorded).
 import { api } from '../api.js';
 import { html, $, $$, icon, badge, empty, pageHead, fmtDT, debounce } from '../ui.js';
 

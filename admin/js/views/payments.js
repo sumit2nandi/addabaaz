@@ -1,10 +1,13 @@
+// Payments list with GST invoices and refunds. The table and action wiring are exported so the user page can reuse them.
 import { api } from '../api.js';
 import { html, $, $$, icon, badge, empty, pager, pageHead, formModal, guard, toast, errMsg, fmtDT, inr, debounce } from '../ui.js';
 
 const PLAN = { 'plus-monthly': 'Plus · monthly', 'plus-yearly': 'Plus · yearly' };
 const LIMIT = 30;
+// Only paid Razorpay payments with something left to refund can be refunded from here.
 const canRefund = (p) => p.status === 'paid' && p.provider === 'razorpay' && p.amountPaise > 0 && p.refundedPaise < p.amountPaise;
 
+// Status chips: paid / refunded / partially refunded / invoice state.
 function statusBadges(p) {
   const b = [badge(p.status, p.status === 'paid' ? 'ok' : p.status === 'failed' ? 'bad' : '')];
   if (p.provider !== 'razorpay') b.push(badge(p.provider));
@@ -24,6 +27,7 @@ export function wirePaymentActions(root, rows, reload) {
   $$('[data-inv]', root).forEach((b) => b.onclick = () => guard(b, () => api.download(`/invoices/${b.dataset.inv}/pdf`, `${b.dataset.num.replaceAll('/', '-')}.pdf`)));
   $$('[data-refund]', root).forEach((b) => b.onclick = () => refundDialog(rows.find((p) => p.id === b.dataset.refund), reload));
 }
+// Asks for the amount and reason, then calls the refund API.
 function refundDialog(p, reload) {
   const left = p.amountPaise - p.refundedPaise;
   formModal({ title: `Refund ${p.userEmail || 'payment'}`, submit: 'Refund via Razorpay',

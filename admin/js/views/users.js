@@ -1,7 +1,9 @@
+// Users list with search and filters.
 import { api } from '../api.js';
 import { html, $, $$, icon, badge, empty, pager, pageHead, fmtD, ago, debounce } from '../ui.js';
 
 const LIMIT = 25;
+// Quick filters for the list.
 const FILTERS = [['all', 'All users'], ['paid', 'Paid plan'], ['expiring', 'Expiring in 7 days'], ['expired', 'Expired plan'], ['free', 'Free'], ['admin', 'Admins'], ['disabled', 'Disabled']];
 export const planBadge = (u) => u.planId === 'free' ? badge('free') : html`${badge(u.planId.includes('year') ? 'plus · yearly' : 'plus', 'gold')}${u.planSource === 'admin' ? html` ${badge('complimentary')}` : ''}`;
 

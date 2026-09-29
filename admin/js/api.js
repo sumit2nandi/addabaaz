@@ -1,13 +1,17 @@
 /* Admin API client. The session token is the same one the public site stores, so being signed in there is enough. */
+// Sign-in token key: the same localStorage entry the public site uses, so an admin account signed in on the site is signed in here too.
 const KEY = 'ab.token';
 export const getToken = () => { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } };
 export const setToken = (t) => { if (t) localStorage.setItem(KEY, JSON.stringify(t)); else localStorage.removeItem(KEY); };
 
+// Error carrying the HTTP status and the API's error code.
 export class ApiError extends Error {
   constructor(status, message, code) { super(message); this.status = status; this.code = code; }
 }
+// Tell main.js the session is invalid so it can show the sign-in form.
 const authLost = (err) => window.dispatchEvent(new CustomEvent('admin:auth', { detail: err }));
 
+// Every request goes through here: adds the token, sends JSON (or a raw body for uploads), parses the reply, and turns failures into ApiError.
 async function send(method, path, { body, raw, headers = {}, base = '/api/v1/admin' } = {}) {
   const token = getToken();
   let res;
@@ -29,6 +33,7 @@ async function send(method, path, { body, raw, headers = {}, base = '/api/v1/adm
   return data;
 }
 
+// Convenience wrappers: api.get / post / put / patch / del, all under /api/v1/admin.
 export const api = {
   get: (p) => send('GET', p),
   post: (p, body = {}) => send('POST', p, { body }),

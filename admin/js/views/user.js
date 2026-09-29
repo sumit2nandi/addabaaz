@@ -1,3 +1,4 @@
+// One user's detail page: profile, plan, payments and profiles; admin actions (edit, grant a plan, end the plan now, delete).
 import { api } from '../api.js';
 import { html, $, $$, icon, badge, empty, pageHead, formModal, confirmBox, guard, toast, errMsg, fmtD, fmtDT, inr } from '../ui.js';
 import { paymentTable, wirePaymentActions } from './payments.js';

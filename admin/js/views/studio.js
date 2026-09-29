@@ -1,6 +1,8 @@
+// Studio and team editor: the About / Services / Contact page content (changes go live immediately).
 import { api } from '../api.js';
 import { html, $, $$, icon, pageHead, formHtml, wireImages, toast, errMsg, guard, imgSrc } from '../ui.js';
 
+// Textarea -> list of non-empty lines.
 const lines = (s) => s.split('\n').map((x) => x.trim()).filter(Boolean);
 
 export default async function studio(root, _p, ctx) {

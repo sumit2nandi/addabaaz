@@ -1,3 +1,4 @@
+// Analytics page: plays and watch time per day, top shows and videos (from first-party play events).
 import { api } from '../api.js';
 import { empty, html, $$, icon, inr, fmtD, barChart, pageHead, badge } from '../ui.js';
 

@@ -1,6 +1,9 @@
+// Admin console entry point: sign-in, page frame (sidebar + content), and a tiny hash router (#/users, #/payments, …).
+// Pages live in ./views/*.js and are loaded on demand. Only accounts with the admin role get past `start()`.
 import { api, getToken, setToken } from './api.js';
 import { html, $, $$, icon, toast, errMsg, guard } from './ui.js';
 
+// Sidebar menu.
 const NAV = [
   ['Overview', [['dashboard', 'Dashboard', 'dashboard']]],
   ['Content', [['shows', 'Shows', 'film'], ['videos', 'Videos & reels', 'tv'], ['upcoming', 'Coming soon', 'clock'], ['gallery', 'Gallery', 'image'], ['studio', 'Studio & team', 'building']]],
@@ -8,6 +11,7 @@ const NAV = [
   ['Growth', [['analytics', 'Analytics', 'chart'], ['notifications', 'Notifications', 'bell']]],
   ['System', [['errors', 'Errors', 'bug'], ['audit', 'Audit log', 'log']]],
 ];
+// URL pattern -> page module. Each module's default export is `render(root, params, ctx)`.
 const ROUTES = [
   [/^dashboard$/, () => import('./views/dashboard.js')],
   [/^(shows|videos|upcoming|gallery)$/, () => import('./views/content.js')],
@@ -24,6 +28,7 @@ const ROUTES = [
   [/^notifications$/, () => import('./views/notifications.js')],
   [/^errors$/, () => import('./views/errors.js')],
 ];
+// `admin` = the signed-in admin; `navToken` lets a slow page load detect that the user already navigated elsewhere.
 const app = $('#app');
 let admin = null, navToken = 0;
 
@@ -82,6 +87,7 @@ export async function refreshCounts() {
 }
 
 /* ---------- routing ---------- */
+// Show the page for the current #hash: highlight the menu, lazy-load the module, run it, and show an error card if it throws.
 async function route() {
   if (!admin) return;
   const path = location.hash.replace(/^#\/?/, '').split('?')[0] || 'dashboard', my = ++navToken;
@@ -105,6 +111,7 @@ async function route() {
   main.innerHTML = html`<div class="card"><h2>Page not found</h2><p><a href="#/dashboard">Back to the dashboard</a></p></div>`.s;
 }
 
+// Boot: no token -> sign-in form; otherwise check /session. 403 means not an admin, 401 means expired.
 async function start() {
   if (!getToken()) return showLogin();
   try { admin = (await api.get('/session')).admin; }
@@ -117,6 +124,7 @@ async function start() {
   shell(); refreshCounts(); route();
 }
 
+// Wire up: navigation, session loss, and start.
 window.addEventListener('hashchange', route);
 window.addEventListener('admin:auth', (e) => { if (admin) { if (e.detail.status === 401) setToken(null); showLogin(e.detail.message); } });
 start();

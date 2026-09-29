@@ -1,3 +1,4 @@
+// Web-push notifications: compose and send a message to subscribed viewers, and see recent sends.
 import { api } from '../api.js';
 import { empty, html, $, icon, pageHead, toast, errMsg, guard, fmtDT, badge } from '../ui.js';
 

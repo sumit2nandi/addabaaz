@@ -1,12 +1,17 @@
+// Catalog management: shows, videos (free or premium), upcoming titles and the gallery. One page module handles all four sections; `section` comes from the URL.
 import { api, putFile } from '../api.js';
 import { html, raw, $, $$, icon, badge, empty, pager, pageHead, formModal, confirmBox, guard, toast, errMsg, imgSrc, fmtDur, parseDur, fmtDT, fmtD, slug, ytId, plural, esc } from '../ui.js';
 
+// Option lists for the forms.
 const SHOW_TYPES = [['series', 'Series'], ['standup', 'Stand-up'], ['podcast', 'Podcast'], ['film', 'Film']].map(([v, l]) => ({ v, l }));
 const ACCESS = [{ v: 'free', l: 'Free' }, { v: 'premium', l: 'Premium (login + paid plan)' }];
 const KINDS = [['episode', 'Episode'], ['reel', 'Reel'], ['clip', 'Clip'], ['trailer', 'Trailer']].map(([v, l]) => ({ v, l }));
+// Thumbnail URL for a video row (custom image, else YouTube's).
 const thumb = (v) => v.thumbnail ? imgSrc(v.thumbnail) : v.source?.type === 'youtube' ? `https://i.ytimg.com/vi/${v.source.id}/default.jpg` : '';
+// Rows per page in lists.
 const PAGE = 25;
 
+// Draws the chosen section's list plus its add/edit dialogs. Saving calls the admin API and reloads the list.
 export default async function content(root, [section], ctx) {
   let data = await api.get('/catalog');
   if (ctx.stale()) return;
@@ -50,6 +55,7 @@ export default async function content(root, [section], ctx) {
   const orderBtns = (id, i, n) => html`<button class="icon-btn" data-move="${id}:-1" title="Move up" ${i === 0 ? 'disabled' : ''}>${icon('up', 16)}</button><button class="icon-btn" data-move="${id}:1" title="Move down" ${i === n - 1 ? 'disabled' : ''}>${icon('down', 16)}</button>`;
   const wireMoves = (list) => $$('[data-move]', root).forEach((b) => b.onclick = () => { const [id, d] = b.dataset.move.split(':'); move(list, id, Number(d)); });
 
+  // Shows list and editor.
   function drawShows() {
     root.innerHTML = html`${pageHead('Shows', note, html`<button class="btn primary" id="new">${icon('plus', 16)} New show</button>`)}
       <div class="card flush">${data.shows.length ? html`<table class="tbl"><thead><tr><th></th><th>Show</th><th>Type</th><th>Videos</th><th>Access</th><th class="end">Order</th><th></th></tr></thead><tbody>

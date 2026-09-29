@@ -1,3 +1,4 @@
+// Crashes reported by visitors' browsers, grouped by error with counts; "Clear all" empties the list.
 import { api } from '../api.js';
 import { empty, html, $, badge, pageHead, confirmBox, toast, errMsg, ago, fmtDT } from '../ui.js';
 

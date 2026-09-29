@@ -1,3 +1,4 @@
+// Dashboard: headline stats, recent payments and users, catalog counts and system status (from /stats, /catalog, /health).
 import { api } from '../api.js';
 import { html, icon, inr, ago, fmtD, badge, barChart, pageHead, plural } from '../ui.js';
 

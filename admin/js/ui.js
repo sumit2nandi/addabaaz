@@ -5,6 +5,7 @@ export { html, raw, esc, $, $$, debounce, ApiError };
 
 /* ---------- formatting ---------- */
 export const inr = (paise) => { const n = (Number(paise) || 0) / 100; return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 }); };
+// Dates are always displayed in Indian Standard Time.
 const IST = { timeZone: 'Asia/Kolkata' };
 export const fmtDT = (iso) => (iso ? new Date(iso).toLocaleString('en-IN', { ...IST, day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—');
 export const fmtD = (iso) => (iso ? new Date(iso).toLocaleDateString('en-IN', { ...IST, day: 'numeric', month: 'short', year: 'numeric' }) : '—');
@@ -14,6 +15,7 @@ export const ago = (iso) => {
   return 'just now';
 };
 export const fmtDur = (sec) => { sec = Math.max(0, Math.round(Number(sec) || 0)); const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`; };
+// Duration text <-> seconds ("1:05:30" or plain seconds); slug and YouTube-id helpers for the content forms.
 export const parseDur = (t) => { t = String(t ?? '').trim(); if (/^\d+$/.test(t)) return Number(t); const p = t.split(':').map(Number); return p.length > 1 && p.length <= 3 && p.every((x) => Number.isInteger(x) && x >= 0) ? p.reduce((a, x) => a * 60 + x, 0) : NaN; };
 export const slug = (s) => String(s || '').normalize('NFKD').replace(/[^\w\s-]/g, '').trim().toLowerCase().replace(/[\s_]+/g, '-').replace(/-+/g, '-').slice(0, 50);
 export const plural = (n, w) => `${n.toLocaleString('en-IN')} ${w}${n === 1 ? '' : 's'}`;
@@ -21,6 +23,7 @@ export const imgSrc = (p) => (!p ? '' : /^https?:/.test(p) ? p : '/' + p);
 export const ytId = (t) => { const m = String(t || '').trim().match(/(?:youtu\.be\/|v=|shorts\/|embed\/|live\/)([\w-]{11})|^([\w-]{11})$/); return m ? m[1] || m[2] : ''; };
 
 /* ---------- icons ---------- */
+// Icon set (SVG paths).
 const I = {
   dashboard: '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
   film: '<rect x="2" y="2" width="20" height="20" rx="2.2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/>',
@@ -50,6 +53,7 @@ const I = {
 export const icon = (n, size = 18) => raw(`<svg class="i" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n] || ''}</svg>`);
 
 /* ---------- toasts ---------- */
+// Small pop-up message; type 'ok' or 'err'.
 export function toast(message, type = 'ok') {
   const t = document.createElement('div'); t.className = `toast ${type}`; t.textContent = message;
   $('#toasts').append(t); setTimeout(() => t.classList.add('out'), type === 'err' ? 6000 : 3200); setTimeout(() => t.remove(), type === 'err' ? 6400 : 3600);
@@ -57,6 +61,7 @@ export function toast(message, type = 'ok') {
 export const errMsg = (e) => (e instanceof Error ? e.message : String(e));
 
 /* ---------- modal ---------- */
+// Modal dialog helper; returns { el, close }.
 export function openModal(content, { title = '', wide = false, dismissable = true, onClose } = {}) {
   const d = document.createElement('dialog'); d.className = 'modal' + (wide ? ' wide' : '');
   d.innerHTML = html`<header><h2>${title}</h2><button type="button" class="icon-btn" data-close aria-label="Close">${icon('x', 20)}</button></header><div class="modal-body">${content}</div>`.s;

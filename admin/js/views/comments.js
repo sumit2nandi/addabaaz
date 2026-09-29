@@ -1,3 +1,4 @@
+// Comment moderation: search and filter comments; approve, hide (3 viewer reports hide automatically) or delete.
 import { api } from '../api.js';
 import { html, $, $$, icon, badge, empty, pager, pageHead, confirmBox, toast, errMsg, ago, fmtDT, debounce } from '../ui.js';
 
