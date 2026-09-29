@@ -10,21 +10,30 @@ import { validate, TYPES } from './catalog-schema.js';
 import { saveImage, saveSubtitle, videoKey } from './uploads.js';
 import { adminExtraRoutes } from './admin-extra.js';
 
+// Input helpers: `asInt` / `asDate` turn optional request values into numbers/dates (or null) and throw a 400 with a helpful message when invalid.
 const asInt = (v, what) => { if (v === undefined || v === null || v === '') return null; const n = Number(v); if (!Number.isInteger(n) || n < 0) throw bad(`${what} must be a whole number.`); return n; };
 const asDate = (v, what) => { if (v === undefined || v === null || v === '') return null; const t = Date.parse(v); if (Number.isNaN(t)) throw bad(`${what} must be an ISO date.`); return new Date(t); };
+// Hash used to compare secrets in constant time (both sides get the same length).
 const digest = (v) => crypto.createHash('sha256').update(String(v)).digest();
+// Reads `limit` / `offset` query parameters with sane defaults and a maximum page size.
 const page = (req, dflt = 25, max = 100) => ({ limit: Math.min(Math.max(Number(req.query.limit) || dflt, 1), max), offset: Math.max(Number(req.query.offset) || 0, 0) });
 
 /**
  * The admin API (mounted at /api/v1/admin). Access = a signed-in ADMIN ACCOUNT (users.is_admin, granted with `npm run admin -- grant <email>`)
  * whose session is younger than `sessionHours`, or — for scripts — the shared ADMIN_TOKEN. Every change is written to the audit log.
  */
+// Every route below runs after the authentication middleware, so `req.admin` is always set.
+// Write actions call `log(...)` so the audit log records who did what.
 export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, push = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', env = process.env }) {
+  // The shared ADMIN_TOKEN (for scripts) only counts when it is long enough to be unguessable.
   const tokenOn = adminToken.length >= 24;
   if (adminToken && !tokenOn) console.warn('[admin] ADMIN_TOKEN is shorter than 24 characters — the token is ignored (admin accounts still work).');
   const router = express.Router();
 
+  // Generous rate limit for the console (600 requests/min per IP).
   router.use(rate ? rateLimit('admin', 600, 60_000) : (_q, _s, n) => n());
+  // AUTHENTICATION: accept either the shared ADMIN_TOKEN, or a normal session token that belongs to an enabled account with the admin role
+  // and is recent enough (admin sessions expire sooner than viewer ones).
   router.use(wrap(async (req, _res, next) => {
     const got = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
     if (!got) throw new HttpError(401, 'unauthorized', 'Please sign in.');
@@ -39,17 +48,22 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
     req.admin = { id: user.id, email: user.email, name: user.name, via: 'session' };
     next();
   }));
+  // Writes an entry to the audit log (who, what, which target, extra details, from which IP).
   const log = (req, action, target = null, meta = null) => db.audit.add({ actorId: req.admin.id, actor: req.admin.email, action, target, meta, ip: req.ip }).catch((e) => console.error('[audit]', e.message));
 
+  // Who am I? Used by the console after sign-in.
   router.get('/session', (req, res) => res.json({ admin: req.admin, sessionHours, tokenEnabled: tokenOn }));
 
   /* ---------- dashboard & setup checklist ---------- */
+  // Dashboard numbers (users, subscribers, revenue, signups).
   router.get('/stats', wrap(async (_req, res) => res.json(await db.stats.overview())));
+  // Setup checklist: reports which optional services (payments, mail, R2, social logins ...) are configured. Never reveals secret values.
   router.get('/health', wrap(async (_req, res) => {
     const dbUp = await db.ping().then(() => true, () => false);
     let uploads = false; try { fs.mkdirSync(uploadDir, { recursive: true }); fs.accessSync(uploadDir, fs.constants.W_OK); uploads = true; } catch { /* not writable */ }
     const prod = env.NODE_ENV === 'production';
     const indexing = env.ALLOW_INDEXING ? /^(1|true|yes)$/i.test(env.ALLOW_INDEXING) : prod;
+    // Builds one checklist row: ok -> level "ok", otherwise the given level (warn / error).
     const item = (id, label, ok, detail, level = 'warn') => ({ id, label, ok, detail, level: ok ? 'ok' : level });
     res.json({ checks: [
       item('db', 'Database', dbUp, dbUp ? 'MySQL is reachable.' : 'MySQL is not reachable.', 'error'),
@@ -70,13 +84,16 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
   }));
 
   /* ---------- users ---------- */
+  // List users with search, filter tabs and paging.
   router.get('/users', wrap(async (req, res) => res.json(await db.adminUsers.list({ q: typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '', filter: String(req.query.filter || 'all'), ...page(req) }))));
+  // Loads a user or answers 404.
   const userOr404 = async (id) => { const u = await db.adminUsers.get(String(id)); if (!u) throw new HttpError(404, 'not_found', 'Unknown user.'); return u; };
   router.get('/users/:id', wrap(async (req, res) => {
     const u = await userOr404(req.params.id);
     const [profiles, subscription, providers, pays] = await Promise.all([db.profiles.list(u.id), db.subscriptions.get(u.id), db.identities.providersOf(u.id), db.payments.listRecent({ userId: u.id, limit: 50 })]);
     res.json({ user: { ...u, providers }, profiles, subscription, payments: pays, spentPaise: pays.filter((p) => p.status === 'paid').reduce((n, p) => n + p.amountPaise - p.refundedPaise, 0) });
   }));
+  // Rename, promote/demote admin, enable/disable. Safety rules: you cannot lock yourself out, and the last administrator cannot be removed.
   router.patch('/users/:id', wrap(async (req, res) => {
     const u = await userOr404(req.params.id), b = req.body || {}, patch = {};
     if (b.name !== undefined) { if (typeof b.name !== 'string' || !b.name.trim() || b.name.length > 60) throw bad('Name must be 1–60 characters.'); patch.name = b.name.trim(); }
@@ -92,17 +109,20 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
   /** Complimentary access (no payment, no invoice) — e.g. cast, press, support fixes. */
   router.post('/users/:id/grant', wrap(async (req, res) => {
     const u = await userOr404(req.params.id), b = req.body || {};
+    // Free access grant: 1 to 3650 days of a paid plan, no payment and no invoice; recorded as provider "admin".
     const days = Number(b.days); if (!Number.isInteger(days) || days < 1 || days > 3650) throw bad('days must be a whole number from 1 to 3650.');
     const plan = paidPlan(b.planId || 'plus-monthly'); if (!plan) throw bad('Choose a paid plan.', 'unknown_plan');
     await db.subscriptions.extend(u.id, { planId: plan.id, days, provider: 'admin' });
     await log(req, 'user.grant', u.email, { days, planId: plan.id, note: typeof b.note === 'string' ? b.note.slice(0, 200) : undefined });
     res.json({ subscription: await db.subscriptions.get(u.id) });
   }));
+  // Remove a user's plan immediately.
   router.post('/users/:id/revoke-plan', wrap(async (req, res) => {
     const u = await userOr404(req.params.id);
     await db.subscriptions.clear(u.id); await log(req, 'user.revoke_plan', u.email);
     res.json({ subscription: await db.subscriptions.get(u.id) });
   }));
+  // Permanently delete an account (cascades to profiles, library, subscription).
   router.delete('/users/:id', wrap(async (req, res) => {
     const u = await userOr404(req.params.id);
     if (req.admin.id === u.id) throw new HttpError(409, 'cannot_lock_yourself_out', 'You can’t delete your own account here — use the site’s Account page.');
@@ -112,20 +132,24 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
   }));
 
   /* ---------- payments, refunds, invoices ---------- */
+  // Payment list, filterable by buyer and status.
   router.get('/payments', wrap(async (req, res) => {
     const f = { email: typeof req.query.email === 'string' && req.query.email.trim() ? req.query.email.trim().toLowerCase() : null, status: ['created', 'paid', 'failed'].includes(req.query.status) ? req.query.status : null };
     const { limit, offset } = page(req, 50, 200);
     res.json({ total: await db.payments.countAll(f), payments: await db.payments.listRecent({ ...f, limit, offset }) });
   }));
+  // Refund a payment (full or partial). Talks to Razorpay, issues a credit note and revokes access on a full refund - see billing.js.
   router.post('/payments/:id/refund', wrap(async (req, res) => {
     const b = req.body || {};
     const rec = await billing.refund({ paymentId: req.params.id, amountPaise: b.amountPaise === undefined ? undefined : Number(b.amountPaise), reason: typeof b.reason === 'string' ? b.reason.trim() : '', revokeAccess: b.revokeAccess === true });
     await log(req, 'payment.refund', req.params.id, { amountPaise: rec.refund?.amountPaise, status: rec.refund?.status, revokeAccess: b.revokeAccess === true, reason: b.reason });
     res.status(201).json({ refund: rec.refund, creditNote: rec.creditNote && { id: rec.creditNote.id, number: rec.creditNote.number }, accessRevoked: rec.revoked });
   }));
+  // Download any invoice / credit note as PDF.
   router.get('/invoices/:id/pdf', wrap(async (req, res) => { const f = await billing.adminInvoicePdf(req.params.id); res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${f.filename}"`, 'Cache-Control': 'private, no-store' }); res.send(f.content); }));
   /** Sales register as CSV. from/to are IST calendar dates (inclusive); default = the current calendar month. */
   router.get('/invoices.csv', wrap(async (req, res) => {
+    // Date range is in IST calendar days, inclusive of the last day.
     const ist = (d) => new Date(Date.parse(`${d}T00:00:00+05:30`));
     const ok = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(ist(d).getTime());
     const now = new Date(Date.now() + 5.5 * 3600_000), monthStart = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
@@ -136,7 +160,9 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
   }));
 
   /* ---------- coupons ---------- */
+  // Coupon list (with how many times each was used).
   router.get('/coupons', wrap(async (_req, res) => res.json({ coupons: await db.coupons.list(), plans: PLANS.filter((p) => p.priceINR > 0).map((p) => ({ id: p.id, name: p.name, priceINR: p.priceINR })) })));
+  // Create a coupon: percent (1-100) or flat amount in paise, optional plan restriction, redemption caps and dates.
   router.post('/coupons', wrap(async (req, res) => {
     const b = req.body || {}, code = String(b.code || '').trim().toUpperCase();
     if (!/^[A-Z0-9_-]{3,30}$/.test(code)) throw bad('Code must be 3–30 characters: letters, digits, "-" or "_".');
@@ -152,6 +178,7 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
       res.status(201).json({ coupon });
     } catch (e) { if (isDuplicate(e)) throw new HttpError(409, 'exists', 'A coupon with that code already exists.'); throw e; }
   }));
+  // Only limits, dates, status and description can change; the discount itself is fixed so past invoices stay correct.
   router.patch('/coupons/:code', wrap(async (req, res) => {
     const code = String(req.params.code).toUpperCase(), b = req.body || {};
     if (!(await db.coupons.get(code))) throw new HttpError(404, 'not_found', 'Unknown coupon.');
@@ -165,6 +192,7 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
     const coupon = await db.coupons.update(code, patch); await log(req, 'coupon.update', code, patch);
     res.json({ coupon });
   }));
+  // Only unused coupons can be deleted; used ones should be deactivated instead.
   router.delete('/coupons/:code', wrap(async (req, res) => {
     const code = String(req.params.code).toUpperCase();
     if (!(await db.coupons.get(code))) throw new HttpError(404, 'not_found', 'Unknown coupon.');
@@ -173,6 +201,7 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
   }));
 
   /* ---------- contact messages ---------- */
+  // Contact-form inbox: list, mark handled/re-open, delete.
   router.get('/messages', wrap(async (req, res) => res.json(await db.messages.list({ status: ['open', 'handled', 'all'].includes(req.query.status) ? req.query.status : 'open', ...page(req, 30) }))));
   router.patch('/messages/:id', wrap(async (req, res) => {
     if (typeof req.body?.handled !== 'boolean') throw bad('handled must be true or false.');
@@ -184,19 +213,25 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
     await log(req, 'message.delete', req.params.id); res.sendStatus(204);
   }));
 
+  // The audit log (newest first, filterable by action).
   router.get('/audit', wrap(async (req, res) => res.json({ entries: await db.audit.list({ limit: Math.min(Number(req.query.limit) || 100, 300), before: Number(req.query.before) || null, action: typeof req.query.action === 'string' ? req.query.action.slice(0, 40) : null }) })));
 
   /* ---------- catalog (shows, videos, coming soon, gallery, studio) ---------- */
+  // Catalog documents may reference uploaded images / media files; this lets the validator check that a referenced path really exists (and stays inside the allowed folders).
   const fileExists = (rel) => {
     const [top, ...rest] = rel.split('/'); const base = top === 'uploads' ? uploadDir : top === 'media' ? mediaDir : null;
     if (!base) return false;
     const file = path.resolve(base, ...rest); return file.startsWith(path.resolve(base) + path.sep) && fs.existsSync(file);
   };
+  // Extra context the catalog validator needs (existing show ids etc.).
   const ctxOf = (snap) => ({ fileExists, showIds: snap.showIds, upcomingIds: snap.upcomingIds });
+  // Maps the `:type` URL segment (show, video, upcoming, gallery) to the collection; unknown types -> 404.
   const kindOf = (req) => { if (!TYPES[req.params.type]) throw new HttpError(404, 'not_found', 'Unknown catalog section.'); return { key: req.params.type, type: TYPES[req.params.type] }; };
   const invalid = (errors) => new HttpError(400, 'invalid_item', errors.join(' '));
 
+  // Full catalog including drafts and scheduled items (the public API hides those).
   router.get('/catalog', wrap(async (_req, res) => { const s = await catalog.get({ all: true }); res.json({ ...s.catalog, studio: s.studio }); }));
+  // Create an item: validated by catalog-schema.js, stored in MySQL, then the cache is cleared so the site updates.
   router.post('/catalog/:type', wrap(async (req, res) => {
     const { key, type } = kindOf(req), snap = await catalog.get({ all: true });
     const { doc, errors } = validate(type, req.body, ctxOf(snap)); if (errors.length) throw invalid(errors);
@@ -204,12 +239,14 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
     catalog.invalidate(); await log(req, `catalog.${type}.create`, doc.id, { title: doc.title || doc.caption || doc.id });
     res.status(201).json({ item: doc });
   }));
+  // Drag-and-drop ordering. This route is declared before `/:id` so "order" is not mistaken for an id.
   router.put('/catalog/:type/order', wrap(async (req, res) => {
     const { key, type } = kindOf(req); if (key === 'videos') throw bad('Videos are ordered by date and episode number.');
     const ids = req.body?.ids; if (!Array.isArray(ids) || ids.some((i) => typeof i !== 'string')) throw bad('ids must be a list of ids.');
     const order = await db.catalog.reorder(key, ids); catalog.invalidate(); await log(req, `catalog.${type}.reorder`, null, { count: order.length });
     res.json({ ids: order });
   }));
+  // Update (replace) an item. The id in the URL and in the body must match.
   router.put('/catalog/:type/:id', wrap(async (req, res) => {
     const { key, type } = kindOf(req), snap = await catalog.get({ all: true });
     const body = { ...(req.body || {}) }; if (body.id === undefined) body.id = req.params.id;
@@ -219,6 +256,7 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
     catalog.invalidate(); await log(req, `catalog.${type}.update`, doc.id, { title: doc.title || doc.caption || doc.id });
     res.json({ item: doc });
   }));
+  // Delete an item. Deleting a show that still has episodes needs `?cascade=1` so nothing disappears by accident.
   router.delete('/catalog/:type/:id', wrap(async (req, res) => {
     const { key, type } = kindOf(req), id = req.params.id, cascade = req.query.cascade === '1' || req.query.cascade === 'true';
     if (key === 'shows' && !cascade) { const n = await db.catalog.countVideosOf(id); if (n) throw new HttpError(409, 'has_videos', `This show has ${n} video(s). Delete them first, or delete the show together with its videos.`); }
@@ -226,18 +264,21 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
     catalog.invalidate(); await log(req, `catalog.${type}.delete`, id, out.videos ? { videos: out.videos } : null);
     res.json({ ok: true, deletedVideos: out.videos });
   }));
+  // The About/studio page content.
   router.put('/studio', wrap(async (req, res) => {
     const { doc, errors } = validate('studio', req.body, { fileExists }); if (errors.length) throw invalid(errors);
     await db.catalog.putStudio(doc); catalog.invalidate(); await log(req, 'catalog.studio.update'); res.json({ studio: doc });
   }));
 
   /* ---------- uploads ---------- */
+  // Image upload: the raw file is the request body; the type is detected from its bytes (not the file name).
   router.post('/uploads/image', express.raw({ type: () => true, limit: '4mb' }), wrap(async (req, res) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the image file as the request body.');
     const saved = saveImage(req.body, uploadDir); if (!saved) throw bad('Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
     await log(req, 'upload.image', saved.path, { bytes: saved.bytes });
     res.status(201).json({ path: saved.path, bytes: saved.bytes, type: saved.type });
   }));
+  // Subtitle upload (.vtt or .srt; converted to WebVTT).
   router.post('/uploads/subtitle', express.raw({ type: () => true, limit: '2mb' }), wrap(async (req, res) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the .vtt or .srt file as the request body.');
     const saved = saveSubtitle(req.body, uploadDir); if (!saved) throw bad('That does not look like a WebVTT (.vtt) or SubRip (.srt) subtitle file.', 'unsupported_subtitle');
@@ -245,6 +286,7 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
     res.status(201).json(saved);
   }));
   /** Presigned PUT so the browser sends a big video straight to the private R2 bucket (never through this server). */
+  // Returns a presigned URL so the browser uploads the big video file straight to R2 (it never passes through this server).
   router.post('/uploads/video', wrap(async (req, res) => {
     if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video storage (R2) is not configured on this server.');
     const k = videoKey(req.body?.filename, req.body?.slug); if (!k) throw bad('Upload an .mp4, .m4v or .webm file.', 'unsupported_video');
@@ -253,6 +295,7 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
     res.status(201).json({ key: k.key, format: k.format, contentType: k.contentType, uploadUrl: r2.presignPut(k.key, { ttl: 6 * 3600 }), expiresInSeconds: 6 * 3600 });
   }));
 
+  // More admin endpoints (analytics, comments moderation, refund requests, notifications, errors ...) live in admin-extra.js.
   adminExtraRoutes({ router, db, billing, catalog, push, mailer, log, siteUrl: billing.config.siteUrl });
   return router;
 }
