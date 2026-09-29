@@ -11,7 +11,10 @@ if (process.env.DB_MIGRATE !== 'false') {                       // set DB_MIGRAT
   const applied = await migrate(db, { log: (m) => console.log('[migrate]', m) });
   if (applied.length) console.log(`[migrate] applied ${applied.length} migration(s)`);
 }
-const app = createApp({ db });
+// DISABLE_RATE_LIMIT=true is for load tests on a staging copy only — it is ignored in production.
+const noRate = /^(1|true)$/i.test(process.env.DISABLE_RATE_LIMIT || '') && process.env.NODE_ENV !== 'production';
+if (noRate) console.warn('⚠ Rate limiting is OFF (DISABLE_RATE_LIMIT) — never expose this instance publicly.');
+const app = createApp({ db, rate: !noRate });
 const server = app.listen(port, '0.0.0.0', () => console.log(`ADDABAAZ running on http://localhost:${port}  (site + API at /api/v1, MySQL connected)`));
 // Renewal reminders: hourly, once per expiry date (the claim is atomic, so running several instances is fine).
 const billing = app.locals.billing;
