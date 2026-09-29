@@ -5,6 +5,7 @@
  *   ctx.showIds / ctx.upcomingIds  optional Sets: check `showId` references
  */
 export const TYPES = { shows: 'show', videos: 'video', upcoming: 'upcoming', gallery: 'gallery' };
+// Reusable patterns and allowed values. IDs are short slugs; image paths must be local uploads/media files or https URLs; subtitle files must be .vtt.
 const ID = /^[\w-]{1,64}$/;
 const IMG = /^(?:(?:media|uploads)\/[\w\-./]+|https:\/\/[^\s"'<>]+)$/;
 const ACCESS = ['free', 'premium'], SHOW_TYPES = ['series', 'standup', 'podcast', 'film'];
@@ -12,6 +13,10 @@ const RATINGS = ['U', '7+', '13+', '16+', '18+'];   // U = suitable for everyone
 const SUB = /^(?:(?:media|uploads)\/[\w\-./]+\.vtt|https:\/\/[^\s"'<>?#]+\.vtt(?:\?[^\s"'<>]*)?)$/i;
 const KINDS = ['episode', 'trailer', 'reel', 'clip'], STATUSES = ['ongoing', 'completed', 'paused'];
 
+// A small validation toolkit for one JSON object.
+// Create a reader with the list of allowed fields, then call r.str / r.int / r.bool / r.oneOf / r.list / r.img / r.date for each field.
+// Valid values are copied (trimmed / normalised) into `r.out`; problems are collected in `r.errors` as sentences an admin can read.
+// Unknown fields are rejected so typos do not silently disappear.
 function reader(input, allowed, label, ctx) {
   const errors = [], out = {};
   const ok = input && typeof input === 'object' && !Array.isArray(input);
@@ -66,10 +71,13 @@ function reader(input, allowed, label, ctx) {
   return r;
 }
 
+// Checks that a reference (e.g. a video's showId) points at an item that exists.
 const ref = (r, ctx, k, sets) => {
   if (r.out[k] && sets.length && !sets.some((s) => s?.has(r.out[k]))) r.errors.push(`${k} "${r.out[k]}" does not exist.`);
 };
 
+// ---- One validator per document type. Each returns a reader whose `.out` is the cleaned document. ----
+// Show / series.
 function show(input, ctx) {
   const r = reader(input, ['id', 'title', 'titleEn', 'type', 'genres', 'tagline', 'description', 'cast', 'language', 'year', 'status', 'featured', 'poster', 'posterLg', 'access', 'rating'], 'A show', ctx);
   r.id(); r.str('title', { req: true }); r.str('titleEn'); r.oneOf('type', SHOW_TYPES, { dflt: 'series' }); r.list('genres', { max: 30, maxItems: 10 });
@@ -79,6 +87,7 @@ function show(input, ctx) {
   return r;
 }
 
+// Video or episode. The `source` decides where it plays from: YouTube id, Cloudflare R2 object (premium/private), or a direct mp4/hls URL.
 function video(input, ctx) {
   const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'description', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access', 'rating', 'subtitles', 'publishAt'], 'A video', ctx);
   r.id(); r.oneOf('kind', KINDS, { req: true }); r.str('showId', { max: 64, pattern: ID, nullable: true }); ref(r, ctx, 'showId', [ctx.showIds, ctx.upcomingIds].filter(Boolean));
@@ -88,6 +97,7 @@ function video(input, ctx) {
   if (!s || typeof s !== 'object' || Array.isArray(s)) r.errors.push('source is required.');
   else {
     const t = s.type, extra = (allowed) => Object.keys(s).filter((k) => !allowed.includes(k)).forEach((k) => r.errors.push(`Unknown source field "${k}".`));
+    // Each source type has its own required fields; anything else is rejected.
     if (t === 'youtube') { extra(['type', 'id']); if (!/^[\w-]{11}$/.test(String(s.id || ''))) r.errors.push('source.id must be an 11-character YouTube video id.'); else r.out.source = { type: 'youtube', id: s.id }; }
     else if (t === 'r2') {
       extra(['type', 'key', 'format']); const key = String(s.key || '').trim();
@@ -102,6 +112,7 @@ function video(input, ctx) {
   }
   r.img('thumbnail'); r.int('duration', { req: true, max: 86400 }); r.date('publishedAt', { req: true }); r.int('views', { dflt: 0 });
   r.oneOf('access', ACCESS, { req: true }); r.oneOf('rating', RATINGS); r.date('publishAt');
+  // Optional subtitle tracks: max 12, each with a language code, label and a .vtt file; one track per language.
   if (r.src.subtitles !== undefined && r.src.subtitles !== null) {
     const subs = r.src.subtitles;
     if (!Array.isArray(subs) || subs.length > 12) r.errors.push('subtitles must be a list of at most 12 tracks.');
@@ -122,6 +133,7 @@ function video(input, ctx) {
   return r;
 }
 
+// "Coming soon" entry.
 function upcoming(input, ctx) {
   const r = reader(input, ['id', 'title', 'titleEn', 'type', 'genres', 'note', 'showId', 'poster', 'posterLg', 'backdrop'], 'A coming-soon title', ctx);
   r.id(); r.str('title', { req: true }); r.str('titleEn'); r.oneOf('type', SHOW_TYPES, { dflt: 'series' }); r.list('genres', { max: 30, maxItems: 10 });
@@ -129,12 +141,14 @@ function upcoming(input, ctx) {
   return r;
 }
 
+// Behind-the-scenes photo.
 function gallery(input, ctx) {
   const r = reader(input, ['id', 'group', 'image', 'imageLg', 'caption'], 'A gallery photo', ctx);
   r.id(); r.str('group', { req: true, max: 60 }); r.img('image', { req: true }); r.img('imageLg'); r.str('caption', { max: 200 }); if (r.out.caption === undefined) r.out.caption = '';
   return r;
 }
 
+// The studio (About / Contact) page: a nested document with contact details, social links, mission text, services and team lists.
 const URL_OK = /^https?:\/\/[^\s"'<>]+$/;
 function studio(input, ctx) {
   const errors = [];
@@ -151,6 +165,7 @@ function studio(input, ctx) {
   for (const k of ['missionEn', 'missionBn']) {
     const l = reader({ [k]: o[k] }, [k], k, ctx); l.list(k, { max: 400, maxItems: 12 }); errors.push(...l.errors); out[k] = l.out[k];
   }
+  // Validates a list of small objects (services, team) with a maximum length.
   const rows = (k, fields, max) => {
     const arr = o[k] === undefined ? [] : o[k];
     if (!Array.isArray(arr) || arr.length > max) { errors.push(`${k} must be a list of at most ${max} entries.`); return []; }
@@ -165,6 +180,7 @@ function studio(input, ctx) {
   return { errors, out };
 }
 
+// Entry point: pick the validator by type and return `{ doc, errors }` (doc is null when there are errors).
 const VALIDATORS = { show, video, upcoming, gallery, studio };
 export function validate(type, input, ctx = {}) {
   const v = VALIDATORS[type];

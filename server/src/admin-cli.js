@@ -7,11 +7,13 @@
 import { createDb } from './db.js';
 import { migrate } from './migrate.js';
 
+// Read the command (grant | revoke | list) and e-mail from the command line.
 const [cmd, email] = process.argv.slice(2);
 if (!['grant', 'revoke', 'list'].includes(cmd) || (cmd !== 'list' && !email)) {
   console.error('Usage: admin-cli.js grant|revoke <email>   |   admin-cli.js list');
   process.exit(2);
 }
+// Connect using the normal DB_* / DATABASE_URL settings, then run the requested command.
 const db = await createDb();
 try {
   await migrate(db);                                   // makes sure the is_admin column exists

@@ -1,9 +1,14 @@
+// Process entry point (`npm start`): connects to MySQL, applies pending migrations, creates the app and starts listening.
+// Also schedules the background jobs and shuts down cleanly on SIGINT / SIGTERM.
+// All settings come from environment variables - see .env.example and SETUP.md.
 import { createApp } from './app.js';
 import { createDb } from './db.js';
 import { migrate } from './migrate.js';
 import { runScheduledJobs } from './jobs.js';
 
+// Listen port (PORT, default 3000).
 const port = Number(process.env.PORT) || 3000;
+// Connect to MySQL (creating the database first when DB_CREATE=true) and stop early with a clear message if it is unreachable.
 const db = await createDb({ ensureDatabase: process.env.DB_CREATE === 'true' });
 try { await db.ping(); }
 catch (e) { console.error(`Cannot connect to MySQL (${e.code || e.message}). Check DATABASE_URL / DB_* settings — see .env.example.`); process.exit(1); }
@@ -14,6 +19,7 @@ if (process.env.DB_MIGRATE !== 'false') {                       // set DB_MIGRAT
 // DISABLE_RATE_LIMIT=true is for load tests on a staging copy only — it is ignored in production.
 const noRate = /^(1|true)$/i.test(process.env.DISABLE_RATE_LIMIT || '') && process.env.NODE_ENV !== 'production';
 if (noRate) console.warn('⚠ Rate limiting is OFF (DISABLE_RATE_LIMIT) — never expose this instance publicly.');
+// Build the HTTP app.
 const app = createApp({ db, rate: !noRate });
 // Optional Sentry: `npm i @sentry/node` and set SENTRY_DSN. Not installed by default; the built-in Errors page in /admin works without it.
 if (process.env.SENTRY_DSN) {
@@ -24,6 +30,7 @@ if (process.env.SENTRY_DSN) {
     console.log('[sentry] error reporting enabled');
   } catch (e) { console.warn('[sentry] SENTRY_DSN is set but @sentry/node could not be loaded (npm i @sentry/node):', e.message); }
 }
+// Start serving on all interfaces (required inside Docker / behind a reverse proxy).
 const server = app.listen(port, '0.0.0.0', () => console.log(`ADDABAAZ running on http://localhost:${port}  (site + API at /api/v1, MySQL connected)`));
 // Renewal reminders: hourly, once per expiry date (the claim is atomic, so running several instances is fine).
 const billing = app.locals.billing;
@@ -38,6 +45,7 @@ if (process.env.NODE_ENV === 'production') {
   if (!process.env.SMTP_URL) console.warn('[mail] SMTP_URL is not set — receipts, refund and reminder emails will NOT be sent.');
   if (process.env.RAZORPAY_KEY_ID && !billing.config.gstEnabled) console.warn('[billing] GSTIN is not set — invoices are issued as plain receipts without GST.');
 }
+// Graceful shutdown: stop accepting connections, wait for in-flight e-mails, close the database, then exit (force-exit after 5 s).
 let stopping = false;
 const stop = () => {
   if (stopping) return; stopping = true;
