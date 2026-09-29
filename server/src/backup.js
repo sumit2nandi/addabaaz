@@ -55,7 +55,7 @@ export async function createBackup({ file, config, uploadDir, passphrase = '', n
     await conn.query('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ'); await conn.query('START TRANSACTION WITH CONSISTENT SNAPSHOT');   // one consistent point in time
     const [trows] = await conn.query('SHOW FULL TABLES WHERE Table_type = "BASE TABLE"');
     const tables = trows.map((r) => Object.values(r)[0]).filter((t) => !SKIP.has(t)).sort();
-    const migrations = (await conn.query('SELECT name FROM schema_migrations ORDER BY name').then(([r]) => r.map((x) => x.name)).catch(() => []));
+    const migrations = (await conn.query('SELECT version FROM schema_migrations ORDER BY version').then(([r]) => r.map((x) => x.version)).catch(() => []));
     const counts = {}; for (const t of tables) counts[t] = Number((await conn.query(`SELECT COUNT(*) AS n FROM ${q(t)}`))[0][0].n);
 
     const gz = zlib.createGzip({ level: 6 });
@@ -130,7 +130,7 @@ export async function restoreBackup({ file, config, uploadDir, passphrase = '', 
   const info = await inspectBackup(file, passphrase);                       // validate before deleting anything
   const conn = await connect(config);
   try {
-    const applied = new Set((await conn.query('SELECT name FROM schema_migrations').then(([r]) => r.map((x) => x.name)).catch(() => [])));
+    const applied = new Set((await conn.query('SELECT version FROM schema_migrations').then(([r]) => r.map((x) => x.version)).catch(() => [])));
     const missing = info.migrations.filter((m) => !applied.has(m));
     if (missing.length) throw new Error(`The database schema is older than the backup (missing ${missing.join(', ')}). Run: npm run db:migrate`);
     const [trows] = await conn.query('SHOW FULL TABLES WHERE Table_type = "BASE TABLE"');
