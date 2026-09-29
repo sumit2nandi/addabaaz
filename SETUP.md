@@ -475,7 +475,7 @@ This guide assumes your domain and hosting are at [Hostinger](https://www.hostin
    | Entry file | **`server/src/index.js`** |
    | Package manager | npm (detected from `package-lock.json`) |
 
-4. Open **Set environment variables** and add every variable from the table in 10.1 (or use **Import .env** with a file made from `.env.example`). Values are stored encrypted and survive redeploys. Saving changes redeploys the app.
+4. Open **Set environment variables** and add every variable from the table in 10.1 (or use **Import .env** with a file made from `.env.example` — delete its `DATABASE_URL=…change-me…` line first, because `DATABASE_URL` takes priority over the `DB_*` variables). Values are stored encrypted and survive redeploys. Saving changes redeploys the app.
 5. Click **Deploy**. Hostinger installs the packages, starts the app and shows a **Running** badge. On the very first start the app creates all tables and imports the starting catalog from `data/catalog.json`. Watch **Deployments → build log** and **Runtime logs** — you should see `[migrate] applied 6 migration(s)` and `ADDABAAZ running on …`.
 
 **C. Keep uploads safe (important)**
