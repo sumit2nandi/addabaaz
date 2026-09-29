@@ -181,6 +181,44 @@ npm run validate:catalog                        # checks data/catalog.json and e
 | `npm run r2:check` | Check that R2 credentials and a video key work. |
 | `npm run mobile:android` / `mobile:ios` | Build the web bundle and open the native project (section 12). |
 
+### 4.6 Windows (PowerShell) — the same steps
+
+Commands elsewhere in this guide use Linux/macOS syntax. On a Windows laptop use **PowerShell** (Start → "PowerShell") and these equivalents. Install first: [Node.js 22 LTS](https://nodejs.org), [Git for Windows](https://git-scm.com/download/win) and either [MySQL Installer](https://dev.mysql.com/downloads/installer/) or [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
+| Linux/macOS | Windows PowerShell |
+|---|---|
+| `DB_CREATE=true DATABASE_URL=… npm start` | `$env:DB_CREATE="true"; $env:DATABASE_URL="mysql://root:YOURPASSWORD@127.0.0.1:3306/addabaaz"; npm start` |
+| `cp .env.example .env` | `Copy-Item .env.example .env` |
+| `node --env-file=.env server/src/index.js` | same command (works as is) |
+| `openssl rand -hex 32` | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `curl http://localhost:3000/api/v1/health` | `Invoke-RestMethod http://localhost:3000/api/v1/health` |
+| `python3 -m http.server 8080` | `npx serve -l 8080 .` |
+| `API_BASE=off npm run build:www` | `$env:API_BASE="off"; npm run build:www` |
+| `docker run … \` (multi-line) | put it on **one line** (PowerShell continues lines with a backtick `` ` ``, not `\`) |
+
+Notes:
+
+* **Setting variables in PowerShell** lasts only for that window (`$env:NAME="value"`). To clear one: `Remove-Item Env:NAME`. In the older `cmd.exe` it is `set NAME=value` (no quotes) and `&&` between commands.
+* If MySQL Installer asked you for a root password, put it in the URL (`mysql://root:password@127.0.0.1:3306/addabaaz`). Special characters in a password must be URL-encoded (`@` → `%40`, `:` → `%3A`, `/` → `%2F`). Easier: use the separate variables, `$env:DB_HOST="127.0.0.1"; $env:DB_USER="root"; $env:DB_PASSWORD="…"; $env:DB_NAME="addabaaz"`.
+* Docker Desktop: the MySQL command becomes `docker run -d --name ab-mysql -p 3306:3306 -e MYSQL_ALLOW_EMPTY_PASSWORD=yes mysql:8.0 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci`.
+* `npm test` on Windows: `$env:TEST_DATABASE_URL="mysql://root:PASSWORD@127.0.0.1:3306/x"; npm test`.
+* Scripts that are shell files (`npm run images`, which needs ImageMagick) are for Linux/macOS/WSL; you don't need them to run or deploy the site.
+* Running PowerShell scripts is not required. If you ever see "running scripts is disabled", run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
+**Making the ZIP for Hostinger on Windows** (section 10.2-B):
+
+```powershell
+cd C:\path\to\addabaaz
+git fetch origin
+git checkout arena/01a0ec36-addabaaz        # the branch that has the latest code (or your merged production branch)
+git pull
+git archive --format=zip -o addabaaz.zip HEAD
+```
+
+`git archive` only includes committed files, so `node_modules`, `.env` and local uploads are left out automatically, and the paths inside the ZIP are the ones Linux expects. Avoid *right-click → Send to → Compressed folder* on the project folder: it would include `node_modules` and your `.env`, and it wraps everything in an extra top-level folder, which breaks Hostinger's detection (`package.json` must be at the top of the ZIP). If you have to zip without git: `tar -a -c -f addabaaz.zip --exclude node_modules --exclude .git --exclude .env --exclude www --exclude mobile --exclude backups --exclude uploads *` (`tar` is built into Windows 10/11 and writes correct paths; `Compress-Archive` in Windows PowerShell 5.1 does not).
+
+Check the result: `tar -tf addabaaz.zip | Select-String -Pattern "^(package.json|server.js)$"` should print both names.
+
 ---
 
 ## 5. Static-only mode (no backend)
@@ -191,7 +229,7 @@ Use this for a quick free host (GitHub Pages, Netlify, Cloudflare Pages) when yo
 API_BASE=off npm run build:www       # writes ./www  — upload the contents of that folder
 ```
 
-or, to just try it locally: `python3 -m http.server 8080` in the repo root and open <http://localhost:8080>.
+or, to just try it locally: `python3 -m http.server 8080` in the repo root (Windows: `npx serve -l 8080 .`) and open <http://localhost:8080>.
 
 In this mode the website falls back to "local mode": My List, progress and profiles live in the browser, and pages such as sign-in say accounts aren't enabled. To connect a static site to a separately hosted API instead, build with `API_BASE=https://api.example.com npm run build:www` (and add the site's address to the API's `CORS_ORIGINS`). Leaving `API_BASE` unset means "use the same origin, auto-detect".
 
@@ -467,6 +505,7 @@ Business hosting is shared hosting, so three things work differently from a norm
    2. Build a clean ZIP with `package.json` at its top level, **without** `node_modules`, `.git` or your local `.env`:
       ```bash
       git archive --format=zip -o addabaaz.zip HEAD          # committed files only (recommended)
+      # Windows PowerShell: the same git archive command works — see section 4.6
       # or, without git:
       zip -r addabaaz.zip . -x "node_modules/*" ".git/*" ".env" "www/*" "backups/*" "uploads/*" "mobile/*"
       ```
