@@ -1,0 +1,60 @@
+# Database (MySQL)
+
+User data is stored in **MySQL 5.7+ or 8.x** (InnoDB, `utf8mb4`, UTC timestamps). Content (shows, episodes, upcoming, gallery) is *not* in the database — it stays in `data/catalog.json`, and tables reference catalog ids by value (validated by the API on write).
+
+## Schema
+
+```
+users ──< profiles ──< list_items        (My List:   PK profile_id, item_type, item_id)
+   │           ├─────< watch_progress    (Continue watching: PK profile_id, video_id)
+   │           └─────< reminders         (Coming-soon reminders: PK profile_id, upcoming_id)
+   ├── subscriptions                     (1:1, no row = free plan)
+
+contact_messages                         (standalone inbox for the Contact form)
+schema_migrations                        (applied migration files)
+```
+
+| Table | Columns |
+|---|---|
+| `users` | `id` CHAR(36) PK · `email` VARCHAR(254) **UNIQUE** · `name` · `password_hash` (scrypt) · `created_at` |
+| `profiles` | `id` PK · `user_id` FK→users · `name` VARCHAR(24) · `color` · `created_at` |
+| `list_items` | `profile_id` FK · `item_type` ENUM(show, video, upcoming) · `item_id` (case-sensitive) · `added_at` |
+| `watch_progress` | `profile_id` FK · `video_id` (case-sensitive) · `position_sec` · `duration_sec` · `updated_at` — capped at the 500 most recent rows per profile |
+| `reminders` | `profile_id` FK · `upcoming_id` · `created_at` |
+| `subscriptions` | `user_id` PK/FK · `plan_id` · `status` · `provider` · `is_demo` · `started_at` · `updated_at` |
+| `contact_messages` | `id` PK · `name` · `email` · `phone` · `message` TEXT · `created_at` |
+
+All foreign keys are `ON DELETE CASCADE`, so `DELETE /me` (account deletion, required by the app stores) removes everything belonging to the user in one statement. Ids are UUID v4 strings. Video/list ids use `utf8mb4_bin` because YouTube ids are case-sensitive. Full DDL: [`server/migrations/001_init.sql`](../server/migrations/001_init.sql).
+
+Concurrency: the unique email index makes simultaneous sign-ups safe; the 5-profile limit and "can't delete your last profile" rules run in transactions that lock the user row; progress uses `INSERT … ON DUPLICATE KEY UPDATE`.
+
+## Configuration
+
+Set either `DATABASE_URL=mysql://user:pass@host:3306/addabaaz` or `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME`. Extras: `DB_SSL=true` (managed MySQL), `DB_POOL_SIZE`, `DB_CREATE=true` (create the database on start), `DB_MIGRATE=false` (skip auto-migrate). See [`.env.example`](../.env.example).
+
+Create a dedicated least-privilege user:
+
+```sql
+CREATE DATABASE addabaaz CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'addabaaz'@'%' IDENTIFIED BY 'a-strong-password';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES ON addabaaz.* TO 'addabaaz'@'%';
+-- CREATE/ALTER/INDEX/REFERENCES are only needed by migrations; if you run `npm run db:migrate`
+-- with a separate admin account (DB_MIGRATE=false for the app), the app user needs just the first four.
+```
+
+## Migrations
+
+- Files live in `server/migrations/NNN_description.sql` and are applied **in order, once each**, recorded in `schema_migrations`.
+- They run automatically on server start (guarded by a MySQL advisory lock, so several instances can boot together) or explicitly with `npm run db:migrate`.
+- Never edit an applied migration — add a new file (`002_add_devices.sql`, …). MySQL DDL isn't transactional, so keep migrations small.
+
+## Operations
+
+- **Backups:** `mysqldump --single-transaction --routines addabaaz | gzip > addabaaz-$(date +%F).sql.gz` daily, or enable your provider's automated backups + PITR. Test a restore.
+- **Health:** `GET /api/v1/health` (liveness, includes `db: up|down`) and `GET /api/v1/health/ready` (503 when MySQL is unreachable).
+- **Inspect:** `SELECT COUNT(*) FROM users;` · newest contact enquiries: `SELECT * FROM contact_messages ORDER BY created_at DESC LIMIT 20;`
+- **Privacy:** passwords are only stored as scrypt hashes; deleting an account deletes its rows (cascade). Keep backups' retention in line with your privacy policy.
+
+## Tests
+
+`npm test` runs the API integration tests against a real MySQL server: set `TEST_DATABASE_URL=mysql://user:pass@host:3306` (default `mysql://root@127.0.0.1:3306`). Each run creates a throw-away `addabaaz_test_*` database, runs the migrations, and drops it afterwards — the account needs `CREATE`/`DROP` on `addabaaz\_test%`. CI uses a `mysql:8.0` service container.

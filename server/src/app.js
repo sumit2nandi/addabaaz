@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { Db } from './db.js';
+import { isDuplicate } from './db.js';
 import { hashPassword, verifyPassword, signToken, verifyToken } from './auth.js';
 import { PLANS } from './plans.js';
 
@@ -29,8 +29,12 @@ function rateLimit(bucket, max, windowMs) {
   };
 }
 
+/**
+ * @param {object} opts
+ * @param {object} opts.db  MySQL data layer from createDb() (required; run migrate() first)
+ */
 export function createApp({
-  dbFile = process.env.DB_FILE || path.join(ROOT, 'server/data/db.json'),
+  db,
   jwtSecret = process.env.JWT_SECRET,
   corsOrigins = process.env.CORS_ORIGINS || '*',
   serveStatic = true,
@@ -38,9 +42,11 @@ export function createApp({
   contactWebhook = process.env.CONTACT_WEBHOOK_URL || '',
   rate = true,
 } = {}) {
-  const db = new Db(dbFile);
-  const secret = jwtSecret || db.data.meta.secret;
-  if (process.env.NODE_ENV === 'production' && !jwtSecret) throw new Error('JWT_SECRET must be set in production');
+  if (!db) throw new Error('createApp: a database (createDb()) is required');
+  const production = process.env.NODE_ENV === 'production';
+  if (production && !jwtSecret) throw new Error('JWT_SECRET must be set in production');
+  if (!jwtSecret) console.warn('[auth] JWT_SECRET not set — using an insecure development secret. Set JWT_SECRET before deploying.');
+  const secret = jwtSecret || 'insecure-development-secret';
   const catalogPath = path.join(ROOT, 'data/catalog.json');
   const loadCatalog = () => JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
   let catalog = loadCatalog(); let catalogMtime = fs.statSync(catalogPath).mtimeMs;
@@ -67,31 +73,34 @@ export function createApp({
   api.use(express.json({ limit: '50kb' }));
 
   /* ---------- public ---------- */
-  api.get('/health', (_req, res) => res.json({ ok: true, service: 'addabaaz', version: VERSION, time: new Date().toISOString() }));
+  api.get('/health', wrap(async (_req, res) => {                 // liveness + discovery: always 200; `db` reports the database state
+    const dbUp = await db.ping().then(() => true, () => false);
+    res.json({ ok: true, service: 'addabaaz', version: VERSION, db: dbUp ? 'up' : 'down', time: new Date().toISOString() });
+  }));
+  api.get('/health/ready', wrap(async (_req, res) => {           // readiness for load balancers / orchestrators: 503 when MySQL is unreachable
+    const dbUp = await db.ping().then(() => true, () => false);
+    res.status(dbUp ? 200 : 503).json({ ok: dbUp, db: dbUp ? 'up' : 'down' });
+  }));
   api.get('/catalog', (req, res) => { res.set('Cache-Control', 'public, max-age=60'); res.json(cat()); });
   api.get('/plans', (_req, res) => res.json({ plans: PLANS }));
 
   const authLimit = rate ? rateLimit('auth', 20, 60_000) : (_q, _s, n) => n();
   const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name });
-  const profilesOf = (userId) => db.data.profiles.filter((p) => p.userId === userId).map(({ id, name, color }) => ({ id, name, color }));
-  const subOf = (userId) => db.data.subscriptions[userId] || { planId: 'free', status: 'active' };
 
-  api.post('/auth/signup', authLimit, wrap((req, res) => {
+  api.post('/auth/signup', authLimit, wrap(async (req, res) => {
     const { name = '', email = '', password = '' } = req.body || {};
     if (typeof email !== 'string' || !EMAIL.test(email.trim()) || email.length > 254) throw bad('Please enter a valid email address.', 'invalid_email');
     if (typeof password !== 'string' || password.length < 8 || password.length > 128) throw bad('Password must be 8–128 characters.', 'weak_password');
     if (typeof name !== 'string' || !name.trim() || name.length > 60) throw bad('Please enter your name.', 'invalid_name');
-    const mail = email.trim().toLowerCase();
-    if (db.data.users.some((u) => u.email === mail)) throw new HttpError(409, 'email_taken', 'An account with this email already exists.');
-    const user = { id: crypto.randomUUID(), email: mail, name: name.trim(), passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
-    db.data.users.push(user);
-    db.data.profiles.push({ id: crypto.randomUUID(), userId: user.id, name: user.name.split(/\s+/)[0].slice(0, 24), color: 0 });
-    db.save();
-    res.status(201).json({ token: signToken(user.id, secret), user: publicUser(user), profiles: profilesOf(user.id) });
+    const user = { id: crypto.randomUUID(), email: email.trim().toLowerCase(), name: name.trim(), passwordHash: hashPassword(password) };
+    const profile = { id: crypto.randomUUID(), name: user.name.split(/\s+/)[0].slice(0, 24), color: 0 };
+    try { await db.users.createWithProfile(user, profile); }
+    catch (e) { if (isDuplicate(e)) throw new HttpError(409, 'email_taken', 'An account with this email already exists.'); throw e; }
+    res.status(201).json({ token: signToken(user.id, secret), user: publicUser(user), profiles: [profile] });
   }));
-  api.post('/auth/login', authLimit, wrap((req, res) => {
+  api.post('/auth/login', authLimit, wrap(async (req, res) => {
     const { email = '', password = '' } = req.body || {};
-    const user = db.data.users.find((u) => u.email === String(email).trim().toLowerCase());
+    const user = await db.users.byEmail(String(email).trim().toLowerCase());
     // Always run a hash to keep timing similar whether or not the user exists.
     const ok = user ? verifyPassword(String(password), user.passwordHash) : (verifyPassword(String(password), 'scrypt$00$00'), false);
     if (!ok) throw new HttpError(401, 'invalid_credentials', 'Incorrect email or password.');
@@ -102,40 +111,36 @@ export function createApp({
     const { name = '', email = '', phone = '', message = '', website = '' } = req.body || {};
     if (website) return res.status(202).json({ ok: true });          // honeypot
     if (!String(name).trim() || !EMAIL.test(String(email).trim()) || !String(message).trim()) throw bad('Name, a valid email and a message are required.');
-    if (String(message).length > 5000 || String(name).length > 100 || String(phone).length > 40) throw bad('One of the fields is too long.');
+    if (String(message).length > 5000 || String(name).length > 100 || String(phone).length > 40 || String(email).length > 254) throw bad('One of the fields is too long.');
     const entry = { id: crypto.randomUUID(), name: String(name).trim(), email: String(email).trim(), phone: String(phone).trim(), message: String(message).trim(), at: new Date().toISOString() };
-    db.data.contacts.push(entry); db.save();
+    await db.contacts.add(entry);
     if (contactWebhook) fetch(contactWebhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch((e) => console.warn('[contact] webhook failed', e.message));
     res.status(202).json({ ok: true });
   }));
 
   /* ---------- authenticated ---------- */
-  const requireAuth = (req, _res, next) => {
+  api.use(wrap(async (req, _res, next) => {
     const h = req.headers.authorization || '';
     const payload = h.startsWith('Bearer ') ? verifyToken(h.slice(7), secret) : null;
-    const user = payload && db.data.users.find((u) => u.id === payload.sub);
-    if (!user) return next(new HttpError(401, 'unauthorized', 'Please sign in.'));
+    const user = payload && await db.users.byId(String(payload.sub));
+    if (!user) throw new HttpError(401, 'unauthorized', 'Please sign in.');
     req.user = user; next();
-  };
-  const ownProfile = (req) => {
-    const p = db.data.profiles.find((x) => x.id === req.params.pid && x.userId === req.user.id);
+  }));
+  const ownProfile = async (req) => {
+    const p = await db.profiles.get(req.params.pid, req.user.id);
     if (!p) throw new HttpError(404, 'not_found', 'Profile not found.');
     return p;
   };
-  api.use(requireAuth);
 
-  api.get('/me', (req, res) => res.json({ user: publicUser(req.user), profiles: profilesOf(req.user.id), subscription: subOf(req.user.id) }));
-  api.patch('/me', (req, res) => {
+  api.get('/me', wrap(async (req, res) => res.json({ user: publicUser(req.user), profiles: await db.profiles.list(req.user.id), subscription: await db.subscriptions.get(req.user.id) })));
+  api.patch('/me', wrap(async (req, res) => {
     const n = req.body?.name; if (typeof n !== 'string' || !n.trim() || n.length > 60) throw bad('Please enter your name.');
-    req.user.name = n.trim(); db.save(); res.json({ user: publicUser(req.user) });
-  });
-  api.delete('/me', (req, res) => {           // required by Apple App Store guideline 5.1.1(v) & Google Play policy
-    const ids = db.data.profiles.filter((p) => p.userId === req.user.id).map((p) => p.id);
-    ids.forEach((id) => delete db.data.library[id]);
-    db.data.profiles = db.data.profiles.filter((p) => p.userId !== req.user.id);
-    db.data.users = db.data.users.filter((u) => u.id !== req.user.id);
-    delete db.data.subscriptions[req.user.id]; db.save(); res.sendStatus(204);
-  });
+    await db.users.rename(req.user.id, n.trim()); res.json({ user: publicUser({ ...req.user, name: n.trim() }) });
+  }));
+  api.delete('/me', wrap(async (req, res) => {           // required by Apple App Store guideline 5.1.1(v) & Google Play policy
+    await db.users.remove(req.user.id);                   // FK cascades remove profiles, library and subscription
+    res.sendStatus(204);
+  }));
 
   /* profiles */
   const cleanProfile = (b, partial = false) => {
@@ -144,62 +149,57 @@ export function createApp({
     if (b.color !== undefined) { if (!Number.isInteger(b.color) || b.color < 0 || b.color >= PALETTE) throw bad('Invalid colour.'); out.color = b.color; }
     return out;
   };
-  api.get('/profiles', (req, res) => res.json({ profiles: profilesOf(req.user.id) }));
-  api.post('/profiles', (req, res) => {
-    if (profilesOf(req.user.id).length >= MAX_PROFILES) throw new HttpError(409, 'profile_limit', `You can have up to ${MAX_PROFILES} profiles.`);
-    const p = { id: crypto.randomUUID(), userId: req.user.id, color: profilesOf(req.user.id).length % PALETTE, ...cleanProfile(req.body || {}) };
-    db.data.profiles.push(p); db.save(); res.status(201).json({ profile: { id: p.id, name: p.name, color: p.color } });
-  });
-  api.patch('/profiles/:pid', (req, res) => {
-    const p = ownProfile(req); Object.assign(p, cleanProfile(req.body || {}, true)); db.save(); res.json({ profile: { id: p.id, name: p.name, color: p.color } });
-  });
-  api.delete('/profiles/:pid', (req, res) => {
-    const p = ownProfile(req);
-    if (profilesOf(req.user.id).length <= 1) throw new HttpError(409, 'last_profile', 'At least one profile is required.');
-    db.data.profiles = db.data.profiles.filter((x) => x.id !== p.id); delete db.data.library[p.id]; db.save(); res.sendStatus(204);
-  });
+  api.get('/profiles', wrap(async (req, res) => res.json({ profiles: await db.profiles.list(req.user.id) })));
+  api.post('/profiles', wrap(async (req, res) => {
+    const { name } = cleanProfile(req.body || {});
+    const profile = await db.profiles.create(req.user.id, { id: crypto.randomUUID(), name }, MAX_PROFILES, PALETTE);
+    if (!profile) throw new HttpError(409, 'profile_limit', `You can have up to ${MAX_PROFILES} profiles.`);
+    res.status(201).json({ profile });
+  }));
+  api.patch('/profiles/:pid', wrap(async (req, res) => {
+    const p = await ownProfile(req); res.json({ profile: await db.profiles.update(p.id, cleanProfile(req.body || {}, true)) });
+  }));
+  api.delete('/profiles/:pid', wrap(async (req, res) => {
+    const p = await ownProfile(req);
+    if (!(await db.profiles.remove(p.id, req.user.id))) throw new HttpError(409, 'last_profile', 'At least one profile is required.');
+    res.sendStatus(204);
+  }));
 
   /* library: My List, progress, reminders */
-  api.get('/profiles/:pid/library', (req, res) => { const p = ownProfile(req); res.json(db.lib(p.id)); });
-  api.put('/profiles/:pid/list/:type/:id', (req, res) => {
-    const p = ownProfile(req); const { type, id } = req.params;
+  api.get('/profiles/:pid/library', wrap(async (req, res) => { const p = await ownProfile(req); res.json(await db.library.get(p.id)); }));
+  api.put('/profiles/:pid/list/:type/:id', wrap(async (req, res) => {
+    const p = await ownProfile(req); const { type, id } = req.params;
     if (!exists(type, id)) throw new HttpError(404, 'not_found', 'Unknown title.');
-    const lib = db.lib(p.id);
-    if (!lib.list.some((x) => x.type === type && x.id === id)) lib.list.push({ type, id, addedAt: new Date().toISOString() });
-    db.save(); res.sendStatus(204);
-  });
-  api.delete('/profiles/:pid/list/:type/:id', (req, res) => {
-    const p = ownProfile(req); const lib = db.lib(p.id);
-    lib.list = lib.list.filter((x) => !(x.type === req.params.type && x.id === req.params.id)); db.save(); res.sendStatus(204);
-  });
-  api.put('/profiles/:pid/progress/:videoId', (req, res) => {
-    const p = ownProfile(req); const { position, duration } = req.body || {};
+    await db.library.addListItem(p.id, type, id); res.sendStatus(204);
+  }));
+  api.delete('/profiles/:pid/list/:type/:id', wrap(async (req, res) => {
+    const p = await ownProfile(req); await db.library.removeListItem(p.id, req.params.type, req.params.id); res.sendStatus(204);
+  }));
+  api.put('/profiles/:pid/progress/:videoId', wrap(async (req, res) => {
+    const p = await ownProfile(req); const { position, duration } = req.body || {};
     if (!exists('video', req.params.videoId)) throw new HttpError(404, 'not_found', 'Unknown video.');
     if (!Number.isFinite(position) || position < 0 || !Number.isFinite(duration ?? 0) || (duration ?? 0) < 0) throw bad('position and duration must be non-negative numbers.');
-    const lib = db.lib(p.id);
-    lib.progress[req.params.videoId] = { position: Math.floor(position), duration: Math.floor(duration || 0), updatedAt: new Date().toISOString() };
-    const keys = Object.keys(lib.progress);                        // cap history per profile
-    if (keys.length > 500) keys.sort((a, b) => lib.progress[a].updatedAt.localeCompare(lib.progress[b].updatedAt)).slice(0, keys.length - 500).forEach((k) => delete lib.progress[k]);
-    db.save(); res.sendStatus(204);
-  });
-  api.delete('/profiles/:pid/progress/:videoId', (req, res) => { const p = ownProfile(req); delete db.lib(p.id).progress[req.params.videoId]; db.save(); res.sendStatus(204); });
-  api.put('/profiles/:pid/reminders/:id', (req, res) => {
-    const p = ownProfile(req); if (!exists('upcoming', req.params.id)) throw new HttpError(404, 'not_found', 'Unknown title.');
-    const lib = db.lib(p.id); if (!lib.reminders.includes(req.params.id)) lib.reminders.push(req.params.id); db.save(); res.sendStatus(204);
-  });
-  api.delete('/profiles/:pid/reminders/:id', (req, res) => { const p = ownProfile(req); const lib = db.lib(p.id); lib.reminders = lib.reminders.filter((x) => x !== req.params.id); db.save(); res.sendStatus(204); });
+    await db.library.saveProgress(p.id, req.params.videoId, Math.min(Math.floor(position), 4_294_967_295), Math.min(Math.floor(duration || 0), 4_294_967_295));
+    res.sendStatus(204);
+  }));
+  api.delete('/profiles/:pid/progress/:videoId', wrap(async (req, res) => { const p = await ownProfile(req); await db.library.removeProgress(p.id, req.params.videoId); res.sendStatus(204); }));
+  api.put('/profiles/:pid/reminders/:id', wrap(async (req, res) => {
+    const p = await ownProfile(req); if (!exists('upcoming', req.params.id)) throw new HttpError(404, 'not_found', 'Unknown title.');
+    await db.library.addReminder(p.id, req.params.id); res.sendStatus(204);
+  }));
+  api.delete('/profiles/:pid/reminders/:id', wrap(async (req, res) => { const p = await ownProfile(req); await db.library.removeReminder(p.id, req.params.id); res.sendStatus(204); }));
 
   /* subscription — `mock` provider activates instantly (demo). Wire Razorpay/Stripe/Play Billing/StoreKit here. */
-  api.get('/subscription', (req, res) => res.json({ subscription: subOf(req.user.id) }));
-  api.post('/subscription', (req, res) => {
+  api.get('/subscription', wrap(async (req, res) => res.json({ subscription: await db.subscriptions.get(req.user.id) })));
+  api.post('/subscription', wrap(async (req, res) => {
     const plan = PLANS.find((p) => p.id === req.body?.planId);
     if (!plan) throw bad('Unknown plan.', 'unknown_plan');
-    if (plan.id === 'free') { db.data.subscriptions[req.user.id] = { planId: 'free', status: 'active' }; db.save(); return res.json({ subscription: subOf(req.user.id) }); }
+    if (plan.id === 'free') { await db.subscriptions.set(req.user.id, { planId: 'free' }); return res.json({ subscription: await db.subscriptions.get(req.user.id) }); }
     if (paymentProvider !== 'mock') throw new HttpError(501, 'payments_not_configured', `Payment provider "${paymentProvider}" is not implemented yet.`);
-    db.data.subscriptions[req.user.id] = { planId: plan.id, status: 'active', provider: 'mock', demo: true, startedAt: new Date().toISOString() };
-    db.save(); res.status(201).json({ subscription: subOf(req.user.id) });
-  });
-  api.delete('/subscription', (req, res) => { db.data.subscriptions[req.user.id] = { planId: 'free', status: 'active' }; db.save(); res.json({ subscription: subOf(req.user.id) }); });
+    await db.subscriptions.set(req.user.id, { planId: plan.id, provider: 'mock', demo: true });
+    res.status(201).json({ subscription: await db.subscriptions.get(req.user.id) });
+  }));
+  api.delete('/subscription', wrap(async (req, res) => { await db.subscriptions.set(req.user.id, { planId: 'free' }); res.json({ subscription: await db.subscriptions.get(req.user.id) }); }));
 
   api.use((_req, _res, next) => next(new HttpError(404, 'not_found', 'Unknown endpoint.')));
   app.use('/api/v1', api);

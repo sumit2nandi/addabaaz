@@ -17,7 +17,7 @@
         └──────────── optional ────────────┐
                                            ▼
                           server/ (Express)  /api/v1/*  + serves the site
-                          JSON-file DB → swap for Postgres/Firestore/Supabase
+                          MySQL 5.7+/8.x (mysql2 pool, SQL migrations)
 ```
 
 ## Key decisions
@@ -28,6 +28,7 @@
 - **Player abstraction.** `players/index.js` exposes `createPlayer(container, video, opts)`; the engine is chosen from `video.source.type` (`youtube | mp4 | hls`). Moving titles to your own CDN is a data change, not a code change.
 - **Hash routing** (`#/show/shahid`). Works on any static host and inside WebViews with zero server config, and deep links map 1:1 to app routes. Trade-off: weaker SEO for inner pages — see roadmap.
 - **No framework/build step.** Small (~200 KB of unminified JS, views loaded on demand), trivially deployable, easy for the studio team to edit. `html` tagged templates escape all interpolations by default.
+- **MySQL for user data, JSON for content.** Accounts, profiles, My List, progress, reminders, subscriptions and contact messages live in MySQL (`server/migrations/*.sql`, accessed only through `server/src/db.js`). The catalog stays in `data/catalog.json` so editors need no database access and static hosting keeps working; tables reference catalog ids by value.
 - **Content as data.** `data/catalog.json` is the single source of truth, served both as a static file and by the API; a validator guards it.
 
 ## Security notes
@@ -43,7 +44,7 @@
 | Target | How |
 |---|---|
 | Static site only | Publish the repo root (or `npm run build:www` → `www/`). Contact form uses the existing Google Form. |
-| Site + API | `docker build -t addabaaz . && docker run -p 3000:3000 -e JWT_SECRET=… -e NODE_ENV=production -v ab-data:/app/server/data addabaaz` (see `Dockerfile`, `.env.example`). Put behind HTTPS (Caddy/nginx/Cloud Run). |
+| Site + API + MySQL | `cp .env.example .env` (set secrets) → `docker compose up --build` (app + MySQL 8, migrations run on start). Or run the `Dockerfile` image against any managed MySQL with `DATABASE_URL` (see `.env.example`, `docs/DATABASE.md`). Put behind HTTPS (Caddy/nginx/Cloud Run). |
 | Split | Static bundle on a CDN with `API_BASE=https://api…`, API elsewhere with `CORS_ORIGINS=https://addabaaz.in`. |
 
 ## Roadmap — what a v3 would add
@@ -56,4 +57,4 @@
 6. **SEO:** prerender `/show/:id` & `/watch/:id` pages (static generation from the catalog) with `VideoObject`/`TVSeries` JSON-LD and clean URLs.
 7. **Analytics & recommendations** (watch-time events → "Because you watched…"), A/B tests on the hero.
 8. **i18n:** Bengali/English UI toggle (strings are already isolated in views).
-9. **Postgres** replacement for `server/src/db.js` (collections map 1:1 to tables) once traffic warrants.
+9. **Scale-out:** move rate limiting to Redis/edge, add read replicas / a managed MySQL with automated backups, and a `devices` table for push tokens.

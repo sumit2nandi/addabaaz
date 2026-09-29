@@ -5,7 +5,7 @@ Bengali originals, stand-up comedy, web series and reels from ADDABAAZ (Kolkata)
 | | |
 |---|---|
 | **Web app** | Installable PWA, offline app-shell, no build step (vanilla ES modules) |
-| **Accounts & sync** | Optional REST API (Node/Express) — profiles, My List, Continue Watching, reminders, subscriptions |
+| **Accounts & sync** | Optional REST API (Node/Express + **MySQL**) — profiles, My List, Continue Watching, reminders, subscriptions |
 | **Works without a backend** | Falls back to on-device "local mode", so static hosting (GitHub Pages, Netlify…) still works |
 | **Android / iOS** | [Capacitor](https://capacitorjs.com) wrapper in [`mobile/`](mobile) around the same web bundle |
 
@@ -17,13 +17,20 @@ Home hero carousel · Continue Watching · Top 10 · per-show rails · **show pa
 
 ```bash
 npm install
-npm start                # http://localhost:3000 — site + API together (accounts enabled)
+# Site + API with accounts (needs a MySQL 5.7+/8.x server):
+cp .env.example .env     # set DATABASE_URL (and JWT_SECRET for production)
+DB_CREATE=true npm start # creates the database if needed, applies migrations, serves http://localhost:3000
+# or everything in containers (app + MySQL):
+docker compose up --build
 # or, no backend at all:
 python3 -m http.server 8080   # local mode: list/progress stored on the device
 ```
 
+The server does not read `.env` by itself — export the variables or use `node --env-file=.env server/src/index.js` (Node 20.6+) / `docker compose`.
+
 ```bash
-npm test                 # API tests
+npm test                 # API tests (real MySQL: set TEST_DATABASE_URL, default mysql://root@127.0.0.1:3306)
+npm run db:migrate       # apply pending SQL migrations (also runs automatically on start)
 npm run validate:catalog # checks data/catalog.json + every referenced image
 npm run build:www        # static bundle in ./www  (what the mobile apps package)
 ```
@@ -36,16 +43,17 @@ app/                 web app (css/, js/{views,ui,data,players}, env.js = deploy-
 data/catalog.json    ALL content: shows, videos, upcoming, gallery   ← edit this to publish
 data/studio.json     About / team / services / contact details
 media/               optimised WebP artwork + app icons (generated)
-server/              REST API + static file server (Express, JSON-file DB, tests)
+server/              REST API + static file server (Express), MySQL layer, SQL migrations, tests
 mobile/              Capacitor config for Android & iOS
 scripts/             optimize-images.sh, validate-catalog.mjs, build-www.mjs
-docs/                ARCHITECTURE.md · MOBILE.md · CONTENT.md · openapi.yaml
+docs/                ARCHITECTURE.md · DATABASE.md · MOBILE.md · CONTENT.md · openapi.yaml
 BTS/, UpcomingReleases/, images/, resources/   original artwork (untouched) & native icon/splash masters
 ```
 
 ## Documentation
 
 - [Architecture & roadmap](docs/ARCHITECTURE.md) — how the pieces fit, how to go to production, what to add next
+- [Database (MySQL)](docs/DATABASE.md) — schema, migrations, configuration, backups
 - [Android & iOS](docs/MOBILE.md) — build, sign and publish the apps
 - [Managing content](docs/CONTENT.md) — add episodes, shows, posters, your own hosted video
 - [API reference](docs/openapi.yaml) — OpenAPI 3 spec for the REST API

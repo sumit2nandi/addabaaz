@@ -33,7 +33,8 @@ components:
     Unauthorized: { description: Missing or invalid token, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 security: [ { bearer: [] } ]
 paths:
-  /health: { get: { security: [], summary: Liveness + service discovery (used by the app to detect API mode), responses: { '200': { description: OK } } } }
+  /health: { get: { security: [], summary: 'Liveness + service discovery (used by the app to detect API mode). Body includes db: up|down.', responses: { '200': { description: OK } } } }
+  /health/ready: { get: { security: [], summary: 'Readiness probe — 503 when MySQL is unreachable.', responses: { '200': { description: Ready }, '503': { description: Database down } } } }
   /catalog: { get: { security: [], summary: Full catalog (shows, videos, upcoming, gallery), responses: { '200': { description: catalog.json } } } }
   /plans: { get: { security: [], summary: Subscription plans, responses: { '200': { description: '{ plans: [...] }' } } } }
   /auth/signup:
