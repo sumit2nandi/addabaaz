@@ -14,6 +14,7 @@ export const STATES = [
   ['37', 'Andhra Pradesh'], ['38', 'Ladakh'], ['97', 'Other Territory'],
 ].map(([code, name]) => ({ code, name }));
 
+// Lookup tables built from STATES: by code, and by normalised name (so "west bengal", "West-Bengal" etc. all match).
 const BY_CODE = new Map(STATES.map((s) => [s.code, s]));
 const norm = (s) => String(s).toLowerCase().replace(/&/g, 'and').replace(/[^a-z]/g, '');
 const BY_NAME = new Map(STATES.map((s) => [norm(s.name), s]));
@@ -28,8 +29,10 @@ export function resolveState(input) {
 }
 
 /* ---------- GSTIN ---------- */
+// GSTIN = 15 characters: 2-digit state code, 10-character PAN, entity number, 'Z', and a checksum character.
 const CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const GSTIN_RE = /^(\d{2})[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+// Computes the checksum character (mod-36 weighted sum) that must end a valid GSTIN.
 export function gstinCheckChar(first14) {
   let sum = 0;
   for (let i = 0; i < 14; i++) { const v = CHARS.indexOf(first14[i]) * (i % 2 === 0 ? 1 : 2); sum += Math.floor(v / 36) + (v % 36); }
@@ -41,6 +44,7 @@ export function isValidGstin(g) {
   const m = GSTIN_RE.exec(g);
   return !!m && BY_CODE.has(m[1]) && gstinCheckChar(g.slice(0, 14)) === g[14];
 }
+// The first two digits of a GSTIN are the state code.
 export const gstinState = (g) => g.slice(0, 2);
 
 /* ---------- tax ---------- */
@@ -48,6 +52,8 @@ export const gstinState = (g) => g.slice(0, 2);
  * Splits a GST-inclusive amount. Intra-state → CGST + SGST (equal halves), inter-state → IGST.
  * taxable + cgst + sgst + igst always equals `totalPaise` exactly.
  */
+// Intra-state sales (buyer in the seller's state) split tax equally into CGST + SGST; inter-state sales charge IGST.
+// Rounding differences are pushed into the taxable value so the parts always add up to the exact total.
 export function computeTax({ totalPaise, rate, intraState }) {
   if (!(rate > 0)) return { taxable: totalPaise, cgst: 0, sgst: 0, igst: 0, total: totalPaise };
   const tax = (totalPaise * rate) / (100 + rate);
@@ -58,6 +64,7 @@ export function computeTax({ totalPaise, rate, intraState }) {
 
 /** Tax split of a credit note for `amountPaise` against an invoice; the final credit note takes the exact remainder so the sums match. */
 export function creditNoteSplit(invoice, prior, amountPaise) {
+  // Amounts already credited by earlier credit notes; the final credit note takes the remainder so nothing is over- or under-credited.
   const sum = (k) => prior.reduce((n, c) => n + c[k], 0);
   const left = (k) => Math.max(0, invoice[k] - sum(k));
   if (amountPaise >= left('total')) return { taxable: left('taxable'), cgst: left('cgst'), sgst: left('sgst'), igst: left('igst'), total: left('total') };
@@ -68,6 +75,7 @@ export function creditNoteSplit(invoice, prior, amountPaise) {
 
 /* ---------- financial year & numbering ---------- */
 /** Indian financial year (1 Apr – 31 Mar, judged in IST) → { code: '2627', label: '2026-27' }. */
+// India's financial year runs 1 April to 31 March; the code (e.g. "2627") is part of every invoice number.
 export function financialYear(date = new Date()) {
   const ist = new Date(date.getTime() + 5.5 * 3600_000);
   const y = ist.getUTCFullYear(), start = ist.getUTCMonth() >= 3 ? y : y - 1;
@@ -78,8 +86,10 @@ export function financialYear(date = new Date()) {
 export const invoiceNumber = (prefix, fyCode, n) => `${prefix}/${fyCode}/${String(n).padStart(6, '0')}`;
 
 /* ---------- money formatting ---------- */
+// Formats paise as rupees with Indian digit grouping, e.g. 1234567 -> "12,345.67".
 export const rupees = (paise) => (paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Number-to-words (Indian system: thousand, lakh, crore) for the "amount in words" line that invoices need.
 const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
 const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
 const below100 = (n) => (n < 20 ? ONES[n] : TENS[Math.floor(n / 10)] + (n % 10 ? ' ' + ONES[n % 10] : ''));

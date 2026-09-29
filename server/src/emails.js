@@ -1,7 +1,12 @@
+// Transactional e-mail templates (receipts, refunds, password reset ...). Each function takes the data it needs
+// and returns `{ subject, text, html }`; mailer.js sends them. To change wording, edit the text here.
 import { rupees } from './gst.js';
 
+// HTML-escapes user-provided text so names or reasons can never inject markup.
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Formats a date the way Indian customers expect, in IST (e.g. 30 Sep 2026).
 const day = (iso) => new Date(iso).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long', year: 'numeric' });
+// Money for e-mail text. Plain "Rs." is used instead of the rupee symbol for maximum client compatibility.
 const inr = (paise) => `Rs. ${rupees(paise)}`;
 
 /** Every email is { subject, text, html }. Plain-text first; the HTML is the same content in a simple, client-safe layout. */
@@ -20,9 +25,13 @@ ${footer ? `<p style="margin:18px 0 0;color:#666;font-size:12.5px">${esc(footer)
   return { subject, text, html };
 }
 
+// Greeting with the first name only.
 const hello = (name) => `Hi ${String(name || '').split(' ')[0] || 'there'},`;
+// Footer line pointing to support (only if a support address is configured).
 const help = (o) => (o.supportEmail ? `Questions? Reply to this email or write to ${o.supportEmail}.` : '');
 
+// ---- Payment e-mails ----
+// Sent after a successful payment; the invoice PDF is attached by billing.js.
 export function receiptEmail(o) {
   const tax = o.invoice.doc.title === 'TAX INVOICE';
   return layout({
@@ -38,6 +47,7 @@ export function receiptEmail(o) {
   });
 }
 
+// Sent when a 100%-off coupon unlocks access without payment.
 export function accessGrantedEmail(o) {
   return layout({
     subject: 'Your ADDABAAZ Plus access is active',
@@ -46,6 +56,7 @@ export function accessGrantedEmail(o) {
   });
 }
 
+// Sent when a refund has been processed (with the credit note attached).
 export function refundEmail(o) {
   const full = o.fullRefund;
   return layout({
@@ -61,6 +72,7 @@ export function refundEmail(o) {
   });
 }
 
+// Sent when the payment gateway reports a failed attempt.
 export function paymentFailedEmail(o) {
   return layout({
     subject: 'Your ADDABAAZ payment didn’t go through',
@@ -69,6 +81,7 @@ export function paymentFailedEmail(o) {
   });
 }
 
+// Reminder a few days before a prepaid plan ends.
 export function expiringEmail(o) {
   return layout({
     subject: `Your ADDABAAZ Plus ends on ${day(o.expiresAt)}`,
@@ -85,6 +98,7 @@ export function resetPasswordEmail(o) {
     button: { label: 'Choose a new password', url: o.url }, footer: help(o),
   });
 }
+// Account confirmation link.
 export function verifyEmailEmail(o) {
   return layout({
     subject: 'Confirm your email for ADDABAAZ',
@@ -92,6 +106,7 @@ export function verifyEmailEmail(o) {
     button: { label: 'Confirm my email', url: o.url }, footer: help(o),
   });
 }
+// Security notice after a password change.
 export function passwordChangedEmail(o) {
   return layout({
     subject: 'Your ADDABAAZ password was changed',
@@ -99,6 +114,8 @@ export function passwordChangedEmail(o) {
     button: { label: 'Reset password', url: `${o.siteUrl}/forgot` }, footer: help(o),
   });
 }
+// ---- Refund requests ----
+// To the support inbox: a customer asked for a refund.
 export function refundRequestEmail(o) {
   return layout({
     subject: `Refund request from ${o.email}`,
@@ -106,12 +123,14 @@ export function refundRequestEmail(o) {
     button: { label: 'Open admin console', url: `${o.siteUrl}/admin/#/refunds` },
   });
 }
+// To the customer: the request was declined.
 export function refundDeclinedEmail(o) {
   return layout({
     subject: 'About your ADDABAAZ refund request',
     paragraphs: [hello(o.name), `We reviewed your refund request for ${o.planName} and can’t refund this payment.`, o.note ? `Note from our team: ${o.note}` : null, 'Your plan and access are unchanged.'].filter(Boolean), footer: help(o),
   });
 }
+// To the customer: we got your request.
 export function refundRequestReceivedEmail(o) {
   return layout({
     subject: 'We received your refund request',

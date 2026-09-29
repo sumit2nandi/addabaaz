@@ -12,15 +12,20 @@ import crypto from 'node:crypto';
  * Without Razorpay keys a clearly-labelled demo provider is used in development only (never in production
  * unless ALLOW_MOCK_PAYMENTS=true).
  */
+// HMAC helpers for signature checks. `safeEqualHex` compares in constant time so timing cannot leak the signature.
 const hmacHex = (secret, data) => crypto.createHmac('sha256', secret).update(data).digest('hex');
 const safeEqualHex = (a, b) => { const x = Buffer.from(String(a || ''), 'utf8'), y = Buffer.from(String(b || ''), 'utf8'); return x.length === y.length && crypto.timingSafeEqual(x, y); };
 
+// Error for provider problems (503 unreachable, 502 provider rejected the request).
 export class PaymentError extends Error { constructor(status, code, message) { super(message); this.status = status; this.code = code; } }
 
+// Razorpay client (plain HTTPS calls, no SDK). `fetchImpl` is injectable so tests can simulate Razorpay without network access.
 export function createRazorpay({ keyId, keySecret, webhookSecret = '', fetchImpl = fetch }) {
+  // Razorpay uses HTTP Basic auth with key id + secret.
   const auth = 'Basic ' + Buffer.from(`${keyId}:${keySecret}`).toString('base64');
   return {
     provider: 'razorpay', keyId,
+    // Creates a payment order for the amount; the browser then opens Razorpay Checkout with the returned order id.
     async createOrder({ amountPaise, receipt, notes }) {
       let r;
       try { r = await fetchImpl('https://api.razorpay.com/v1/orders', { method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: amountPaise, currency: 'INR', receipt, notes }) }); }
@@ -50,8 +55,11 @@ export function createRazorpay({ keyId, keySecret, webhookSecret = '', fetchImpl
   };
 }
 
+// Development-only stand-in: checkout succeeds instantly without money.
 export const createMock = () => ({ provider: 'mock' });
 
+// Chooses the provider: real Razorpay when keys are set; the mock in development (or if ALLOW_MOCK_PAYMENTS=true);
+// otherwise "none" (checkout returns 501 in production without keys).
 export function paymentsFromEnv(env = process.env) {
   if (env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) return createRazorpay({ keyId: env.RAZORPAY_KEY_ID.trim(), keySecret: env.RAZORPAY_KEY_SECRET.trim(), webhookSecret: (env.RAZORPAY_WEBHOOK_SECRET || '').trim() });
   if (env.NODE_ENV !== 'production' || /^(1|true)$/i.test(env.ALLOW_MOCK_PAYMENTS || '')) return createMock();

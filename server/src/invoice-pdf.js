@@ -1,6 +1,9 @@
+// Draws invoices, receipts and credit notes as A4 PDFs using PDFKit. It only lays out the stored document (`inv.doc`);
+// all numbers were computed earlier in billing.js / gst.js, so a re-downloaded PDF always matches the original.
 import PDFDocument from 'pdfkit';
 import { amountInWords, rupees } from './gst.js';
 
+// Small formatting helpers.
 const money = (paise) => rupees(paise);
 const dateIst = (iso) => new Date(iso).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -12,7 +15,9 @@ export function renderInvoicePdf(inv, { compress = true } = {}) {
   const d = inv.doc;
   return new Promise((resolve, reject) => {
     const pdf = new PDFDocument({ size: 'A4', margin: 44, compress, info: { Title: `${d.title} ${inv.number}`, Author: d.seller.name, Subject: d.title } });
+    // PDFKit streams data; collect the chunks and resolve with one Buffer at the end.
     const chunks = []; pdf.on('data', (c) => chunks.push(c)); pdf.on('end', () => resolve(Buffer.concat(chunks))); pdf.on('error', reject);
+    // Page geometry: left/right margins, usable width, colours, and a helper that draws a horizontal rule.
     const L = 44, R = pdf.page.width - 44, W = R - L;
     const gray = '#555555', line = '#cccccc';
     const hr = (y) => pdf.moveTo(L, y).lineTo(R, y).strokeColor(line).lineWidth(0.7).stroke();
@@ -26,6 +31,7 @@ export function renderInvoicePdf(inv, { compress = true } = {}) {
 
     // seller | buyer
     const col = W / 2 - 10;
+    // Draws a titled block of lines (seller or buyer) and returns the y position below it.
     const block = (x, head, rows) => {
       pdf.font('Helvetica-Bold').fontSize(8).fillColor(gray).text(head, x, y, { width: col });
       let yy = y + 12;
@@ -46,6 +52,7 @@ export function renderInvoicePdf(inv, { compress = true } = {}) {
     if (refs.length) { pdf.font('Helvetica').fontSize(9).fillColor(gray).text(refs.join('   •   '), L, y, { width: W }); y = pdf.y + 10; }
 
     // table
+    // Column layout depends on the kind of document: no tax (receipt), IGST only, or CGST + SGST.
     const taxed = inv.cgst + inv.sgst + inv.igst > 0 || inv.gstRate > 0;
     const cols = taxed
       ? (inv.igst > 0 ? [['Description', 0.34, 'left'], ['SAC', 0.1, 'left'], ['Taxable value', 0.18, 'right'], [`IGST ${inv.gstRate}%`, 0.18, 'right'], ['Total', 0.2, 'right']]
@@ -67,6 +74,7 @@ export function renderInvoicePdf(inv, { compress = true } = {}) {
     y += rowH + 8; hr(y); y += 10;
 
     // totals
+    // Right-aligned label/value pair in the totals section.
     const totalRow = (label, value, bold = false) => {
       pdf.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(bold ? 11 : 9.5).fillColor('#000');
       pdf.text(label, L + W * 0.5, y, { width: W * 0.28 }); pdf.text(`${sign}Rs. ${money(value)}`, L + W * 0.78, y, { width: W * 0.22, align: 'right' }); y += bold ? 18 : 14;
