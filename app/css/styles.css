@@ -1,4 +1,5 @@
 /* ADDABAAZ — design system & app styles (mobile-first, dark, no build step) */
+/* Design tokens: colours, radii, fonts and sizes used everywhere below. Change these to re-theme the site. */
 :root {
   --bg: #050505; --bg-2: #0b0b0d; --panel: #111114; --panel-2: #18181c; --panel-3: #222228;
   --text: #fff; --text-2: #d1d1d6; --muted: #9a9aa6;
@@ -12,6 +13,7 @@
   --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
   --ease: cubic-bezier(.2,.7,.2,1);
 }
+/* ---------- reset & base elements ---------- */
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
@@ -24,12 +26,14 @@ h1, h2, h3, h4 { margin: 0; line-height: 1.2; }
 p { margin: 0; }
 ul { margin: 0; padding: 0; list-style: none; }
 :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 6px; }
+/* ---------- small utilities: Bengali font, muted text, screen-reader-only, skip link ---------- */
 .bn { font-family: var(--font-bn); }
 .muted { color: var(--muted); } .small { font-size: 13px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .skip-link { position: fixed; left: 12px; top: -60px; z-index: 300; background: var(--gold); color: #000; padding: 10px 16px; border-radius: 8px; font-weight: 700; }
 .skip-link:focus { top: calc(12px + var(--sat)); }
 .i { flex: none; }
+/* ---------- page container and page-change fade (disabled for reduced-motion users below) ---------- */
 #view { min-height: 70vh; outline: none; }
 .view { animation: fadeIn .35s var(--ease); }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

@@ -1,8 +1,12 @@
+<!-- ADDABAAZ public site: one HTML page; the JavaScript router (app/js) draws every screen into <main id="view">.
+     The server fills the two "seo" placeholders below per URL (title, description, structured data, and a plain-HTML copy
+     of the page) so search engines and link previews see real content. Static hosts just serve this file as it is. -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Default search/social tags; the server replaces everything between the seo:head markers for each page. -->
 <!--seo:head-->
 <title>ADDABAAZ — Bengali Originals, Comedy &amp; Web Series</title>
 <meta name="description" content="Stream ADDABAAZ originals: Shahid, Laugh Bite, Faltu Kotha and more. Bengali web series, stand-up comedy, fake podcasts and reels from Kolkata's ADDABAAZ film & ad production house.">
@@ -14,6 +18,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"ADDABAAZ","url":"https://addabaaz.in/","logo":"https://addabaaz.in/media/icons/icon-512.png","email":"office@addabaaz.in","address":{"@type":"PostalAddress","streetAddress":"162/B, 283 Lake Gardens","addressLocality":"Kolkata","addressRegion":"West Bengal","postalCode":"700045","addressCountry":"IN"},"sameAs":["https://www.youtube.com/@ADDABAAZ01","https://www.instagram.com/addabaazdeep","https://www.facebook.com/ADDABAAZDEEP"]}</script>
 <!--/seo:head-->
+<!-- App-like behaviour: colours, install manifest and icons (home-screen "Add to Home screen" support). -->
 <meta name="theme-color" content="#050505">
 <meta name="color-scheme" content="dark">
 <link rel="manifest" href="manifest.webmanifest">
@@ -23,6 +28,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="ADDABAAZ">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- Web fonts (Latin + Bengali). -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Tiro+Bangla:ital@0;1&display=swap" rel="stylesheet">
@@ -30,13 +36,17 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="app/css/styles.css">
 
+<!-- Deployment settings (API address etc.) — a separate file so it can be changed without touching the app. -->
 <script src="app/env.js"></script>
 </head>
 <body>
+<!-- Accessibility: keyboard users can jump past the menu. -->
 <a class="skip-link" href="#view">Skip to content</a>
 <div id="offlineBar" class="offline-bar" hidden role="status">You’re offline — showing saved content.</div>
+<!-- Empty containers below are filled by app/js/ui/shell.js: top bar, footer and mobile tab bar. -->
 <header class="topbar" id="topbar"></header>
 <main id="view" tabindex="-1">
+  <!-- Splash shown until the app has loaded; replaced by the first page. -->
   <div id="boot" class="boot"><img src="media/icons/icon-192.png" width="96" height="96" alt="ADDABAAZ"><div class="spinner"></div></div>
 <!--seo:body--><!--/seo:body-->
 </main>
@@ -47,9 +57,11 @@
   </div>
 </footer>
 <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
+<!-- Live regions: toasts (pop-up messages) and a hidden announcer so screen readers hear page changes. -->
 <div id="toasts" class="toasts" aria-live="polite"></div>
 <div id="announcer" class="sr-only" aria-live="polite"></div>
 <noscript><p style="padding:2rem;color:#fff">ADDABAAZ needs JavaScript to play videos. Please enable it.</p></noscript>
+<!-- App entry point. -->
 <script type="module" src="app/js/main.js"></script>
 </body>
 </html>

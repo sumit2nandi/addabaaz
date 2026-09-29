@@ -6,36 +6,44 @@
  * - /api/*, /admin/*, YouTube player, analytics: never intercepted
  * Bump VERSION (or run `npm run build:www`, which stamps it) to force a refresh. */
 const VERSION = 'v2.6.0';
+// One cache per kind of content, all tagged with the version so old caches are deleted when the version changes.
 const SHELL = `ab-shell-${VERSION}`, DATA = `ab-data-${VERSION}`, MEDIA = `ab-media-${VERSION}`, THUMBS = `ab-thumbs-${VERSION}`;
+// Files downloaded at install so the app shell opens offline. A missing file is skipped rather than failing the install.
 const PRECACHE = ['./', 'index.html', 'manifest.webmanifest', 'app/env.js', 'app/css/styles.css', 'app/js/main.js', 'app/js/app.js', 'app/js/config.js', 'app/js/util.js', 'app/js/icons.js',
   'app/js/router.js', 'app/js/mode.js', 'app/js/routes.js', 'app/js/seo/meta.js', 'app/js/seo/head.js', 'app/js/platform.js', 'app/js/social.js', 'app/js/payments.js', 'app/js/consent.js', 'app/js/errors.js', 'app/js/push.js', 'app/js/legal-text.js', 'app/js/data/catalog.js', 'app/js/data/api.js', 'app/js/data/adapters.js', 'app/js/data/user.js',
   'app/js/ui/shell.js', 'app/js/ui/components.js', 'app/js/ui/dialog.js', 'app/js/ui/lightbox.js', 'app/js/ui/parental.js', 'app/js/views/engage.js', 'app/js/views/home.js', 'app/js/views/show.js', 'app/js/views/watch.js',
   'app/js/players/index.js', 'app/js/players/youtube.js', 'app/js/players/html5.js', 'data/catalog.json', 'data/studio.json', 'media/icons/icon-192.png', 'media/icons/logo-96.webp'];
 
+// Install: pre-cache the shell.
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => Promise.all(PRECACHE.map((u) => c.add(u).catch(() => {})))).then(() => self.skipWaiting()));
 });
+// Activate: delete caches from older versions.
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k.startsWith('ab-') && !k.endsWith(VERSION)).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
+// Caching strategies. stale-while-revalidate: answer from cache immediately, refresh the cache from the network in the background.
 const swr = async (req, cacheName) => {
   const cache = await caches.open(cacheName);
   const hit = (await cache.match(req)) || (await caches.match(req));
   const net = fetch(req).then((res) => { if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone()); return res; }).catch(() => hit);
   return hit || net;
 };
+// network-first: try the network, use the cached copy only when offline (catalog data should be fresh).
 const networkFirst = async (req, cacheName) => {
   const cache = await caches.open(cacheName);
   try { const res = await fetch(req); if (res.ok) cache.put(req, res.clone()); return res; }
   catch { const hit = (await cache.match(req)) || (await caches.match(req)); if (hit) return hit; throw new Error('offline'); }
 };
+// cache-first: use the cache, go to the network only on a miss (artwork never changes).
 const cacheFirst = async (req, cacheName) => {
   const cache = await caches.open(cacheName);
   const hit = (await cache.match(req)) || (await caches.match(req)); if (hit) return hit;
   const res = await fetch(req); if (res.ok) cache.put(req, res.clone()); return res;
 };
 
+// Routing: decide, per request, which strategy applies (or leave the request alone).
 self.addEventListener('fetch', (e) => {
   const req = e.request; if (req.method !== 'GET') return;
   const url = new URL(req.url);
@@ -53,6 +61,7 @@ self.addEventListener('fetch', (e) => {
 });
 
 /* ---------- Web Push ---------- */
+// Push: show a notification when the server sends one.
 self.addEventListener('push', (e) => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data && e.data.text() }; }
   e.waitUntil(self.registration.showNotification(d.title || 'ADDABAAZ', {
@@ -60,6 +69,7 @@ self.addEventListener('push', (e) => {
     tag: d.tag || undefined, renotify: !!d.tag, data: { url: d.url || '/' },
   }));
 });
+// Click: focus an open tab of the site and go to the notification's link, or open a new tab.
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const target = new URL((e.notification.data && e.notification.data.url) || '/', self.registration.scope).href;
