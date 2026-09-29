@@ -1,9 +1,11 @@
 /* Native-shell hooks. Everything here is a no-op in a normal browser, so the same
  * bundle runs on the web, in a PWA and inside Capacitor (Android / iOS). */
 import { HISTORY } from './mode.js';
+// Detect the Capacitor native shell and which platform (android / ios / web).
 export const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform?.());
 export const platform = isNative ? window.Capacitor.getPlatform() : 'web';
 
+// One-time native set-up: back button, status bar, splash screen and deep links.
 export function initPlatform() {
   document.documentElement.dataset.platform = platform;
   if (!isNative) return;
@@ -30,6 +32,7 @@ export function initPlatform() {
 }
 
 /** Where a shareable public URL for a route lives (native apps share the website URL). */
+// Native apps have no shareable address of their own, so shared links point to the website.
 export const PUBLIC_URL = 'https://addabaaz.in/';
 /** Website (server) → real URL; static hosting → hash URL; native apps share the public website's URL. */
 export const shareUrl = (path) => (isNative ? PUBLIC_URL.replace(/\/$/, '') + path : HISTORY ? location.origin + path : location.origin + location.pathname + '#' + path);

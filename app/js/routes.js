@@ -1,5 +1,7 @@
 /* The page table, shared by the browser router and the server (which needs it to answer with the right status code and
  * page metadata). Pure data + a matcher — no DOM. */
+// [url pattern, view name]. `:id` matches one path segment. The view name is the file in app/js/views/ that draws the page.
+// Each entry is compiled into a regular expression below.
 export const ROUTES = [
   ['/', 'home'], ['/shows', 'browse'], ['/show/:id', 'show'], ['/watch/:id', 'watch'],
   ['/reels', 'reels'], ['/reels/:id', 'reels'], ['/upcoming', 'upcoming'], ['/soon/:id', 'soon'],
@@ -14,6 +16,7 @@ export const ROUTES = [
 }));
 
 /** '/show/shahid' → { view: 'show', params: { id: 'shahid' }, pattern } or null. */
+// Finds the route for a path (or returns null). Malformed %-escapes in the URL also give null (page not found).
 export function matchRoute(path) {
   for (const r of ROUTES) {
     const m = path.match(r.re); if (!m) continue;
