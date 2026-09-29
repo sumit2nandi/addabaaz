@@ -109,6 +109,16 @@ test('server: page HTML carries per-page metadata for crawlers that do not run J
   assert.equal(status304, 304);
 });
 
+test('server: every public page renders for a direct visit, including the Reels feed (/reels) and a single reel', async () => {
+  // Regression: /reels (no :id) used to crash the renderer -> 503 -> a reload or shared link of Reels showed the home page instead.
+  for (const path of ['/', '/shows', '/reels', '/upcoming', '/gallery', '/plans', '/about', '/search', '/account']) {
+    const r = await get(path); assert.equal(r.status, 200, path);
+    assert.match(await r.text(), /<meta name="ab:routing" content="history">/, path + ' must be served with real-URL routing');
+  }
+  const reel = cat.reels()[0]; assert.equal((await get('/reels/' + reel.id)).status, 200);
+  assert.equal((await get('/reels/zzzzzzzzzzz')).status, 404);
+});
+
 test('server: watch page has VideoObject and a crawlable episode list on the show page', async () => {
   const ep = cat.episodes('shahid')[0];
   const html = await (await get(`/watch/${ep.id}`)).text();

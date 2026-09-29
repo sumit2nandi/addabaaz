@@ -25,10 +25,10 @@ async function attachSubtitles(v, tracks = []) {
 }
 
 // Plays MP4 or HLS (premium videos from R2) in a <video> element and returns the same controller interface as the YouTube player (play, pause, seek, destroy…).
-export async function createHtml5Player(container, video, { start = 0, autoplay = true, muted = false, onProgress, onEnded, onState } = {}) {
+export async function createHtml5Player(container, video, { start = 0, autoplay = true, muted = false, controls = true, onProgress, onEnded, onState } = {}) {
   container.innerHTML = '';
   const v = document.createElement('video');
-  v.controls = true; v.muted = muted; v.playsInline = true; v.preload = 'metadata';
+  v.controls = controls; v.muted = muted; v.playsInline = true; v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', ''); v.autoplay = autoplay; v.preload = 'metadata';
   v.setAttribute('controlsList', 'nodownload');
   if (video.poster) v.poster = video.poster;
   container.appendChild(v);

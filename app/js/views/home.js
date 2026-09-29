@@ -3,7 +3,7 @@ import { app } from '../app.js';
 import { html, $, $$, fmtDate } from '../util.js';
 import { icon } from '../icons.js';
 import { CONFIG } from '../config.js';
-import { rail, enhanceRails, showCard, videoCard, reelCard, soonCard, galleryCard, listBtn, img, showMeta } from '../ui/components.js';
+import { rail, enhanceRails, showCard, videoCard, reelCard, soonCard, galleryCard, listBtn, img, heroBg, showMeta } from '../ui/components.js';
 import { openLightbox } from '../ui/lightbox.js';
 
 // Picks the featured shows for the carousel.
@@ -22,7 +22,7 @@ function heroHtml(slides) {
       const t = u.resumeTarget(cat, show.id);
       const label = !t ? 'Play' : t.resume ? `Resume ${cat.label(t.video)}` : t.continued ? `Continue ${cat.label(t.video)}` : `Play ${cat.label(t.video)}`;
       return html`<article class="hero-slide ${i === 0 ? 'active' : ''}" data-i="${i}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
-        <div class="hero-bg">${img(cat.thumb(latest, 'maxresdefault'), '', { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault') })}</div>
+        <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault') })}</div>
         <div class="hero-shade"></div>
         <div class="hero-inner">
           <div class="hero-copy">

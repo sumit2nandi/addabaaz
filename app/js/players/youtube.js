@@ -21,12 +21,12 @@ export function loadYouTube() {
 const httpOrigin = () => (/^https?:$/.test(location.protocol) ? location.origin : undefined);
 
 // Creates the player and a timer that reports playback position (used for Continue Watching and analytics).
-export async function createYouTubePlayer(container, videoId, { start = 0, autoplay = true, muted = false, onProgress, onEnded, onState } = {}) {
+export async function createYouTubePlayer(container, videoId, { start = 0, autoplay = true, muted = false, controls = true, onProgress, onEnded, onState } = {}) {
   container.innerHTML = '';
   const mount = document.createElement('div');
   container.appendChild(mount);
   let YT;
-  try { YT = await loadYouTube(); } catch (e) { return plainIframe(container, videoId, start, autoplay); }
+  try { YT = await loadYouTube(); } catch (e) { return plainIframe(container, videoId, start, autoplay, muted, controls); }
 
   let player, timer, destroyed = false, ready = false;
   const tick = () => {
@@ -37,7 +37,7 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
     player = new YT.Player(mount, {
       videoId,
       width: '100%', height: '100%',
-      playerVars: { autoplay: autoplay ? 1 : 0, playsinline: 1, rel: 0, modestbranding: 1, start: Math.floor(start), origin: httpOrigin(), iv_load_policy: 3, mute: muted ? 1 : 0 },
+      playerVars: { autoplay: autoplay ? 1 : 0, playsinline: 1, controls: controls ? 1 : 0, rel: 0, modestbranding: 1, start: Math.floor(start), origin: httpOrigin(), iv_load_policy: 3, mute: muted ? 1 : 0 },
       events: {
         onReady: () => { ready = true; resolve(); },
         onError: (e) => { onState?.('error', e.data); resolve(); },
@@ -64,8 +64,8 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
 }
 
 // Last-resort embed with no API (no progress tracking).
-function plainIframe(container, videoId, start, autoplay) {
+function plainIframe(container, videoId, start, autoplay, muted, controls) {
   const o = httpOrigin();
-  container.innerHTML = `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=${autoplay ? 1 : 0}&playsinline=1&rel=0&modestbranding=1&start=${Math.floor(start)}${o ? '&origin=' + encodeURIComponent(o) : ''}" title="Video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+  container.innerHTML = `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=${autoplay ? 1 : 0}&mute=${muted ? 1 : 0}&controls=${controls ? 1 : 0}&playsinline=1&rel=0&modestbranding=1&start=${Math.floor(start)}${o ? '&origin=' + encodeURIComponent(o) : ''}" title="Video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
   return { engine: 'iframe', mute() {}, unmute() {}, isMuted: () => false, time: () => 0, duration: () => 0, seek() {}, play() {}, pause() {}, destroy() { container.innerHTML = ''; } };
 }

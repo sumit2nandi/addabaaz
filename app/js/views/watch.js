@@ -148,8 +148,17 @@ export default async function watch(ctx) {
         const s = await u.streamUrl(v);
         media = { ...v, source: { type: s.type, url: s.url }, poster: cat.thumb(v) };
       }
+      $('#unmutePill', ctx.root)?.remove();
       ctl = await createPlayer(slot, media, {
         start, autoplay: true,
+        // The browser refused autoplay with sound (usual on phones), so the video runs muted: offer one tap to turn the sound on.
+        onAutoplayMuted: () => {
+          if (dead || $('#unmutePill', ctx.root)) return;
+          const b = document.createElement('button'); b.type = 'button'; b.id = 'unmutePill'; b.className = 'unmute-pill';
+          b.innerHTML = icon('mute', { size: 18 }).s + '<span>Tap to unmute</span>';
+          b.onclick = () => { ctl?.unmute(); b.remove(); };
+          $('#playerBox', ctx.root).appendChild(b);
+        },
         onProgress: (t, d) => persist(t, d),
         onEnded: () => { u.saveProgress(v.id, lastD || v.duration, lastD || v.duration, { flush: true }); if (next && u.pref('autoplayNext')) showNextUp(); },
         onState: (s, code) => { if (s === 'playing') onPlaying(); else if (s === 'paused') onIdle(false); else if (s === 'ended') onIdle(true); else if (s === 'error') { onIdle(true); failed(code); } },

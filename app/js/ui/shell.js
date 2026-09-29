@@ -14,6 +14,9 @@ const NAV = [
 ];
 const STUDIO = [['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact']];
 const TABS = [['/', 'Home', 'home'], ['/shows', 'Shows', 'tv'], ['/reels', 'Reels', 'reels'], ['/search', 'Search', 'search'], ['/account', 'Me', 'user']];
+// A visitor who is not signed in has no personal "Me" area (and no profile to show): only offered once signed in, or when this build has no sign-in at all.
+const isGuest = () => !!app.user?.supportsAuth && !app.user?.account;
+let lastPath = '/';
 
 // Which top-level menu item a URL belongs to (so "/watch/…" highlights the right tab).
 const section = (path) => {
@@ -37,7 +40,6 @@ export function renderShell() {
       <button type="button" class="btn btn-sm btn-primary" id="installBtn" hidden>${icon('download', { size: 16 })} Install app</button>
       <div class="menu-wrap" id="profileWrap"></div>
     </div>`.s;
-  $('#tabbar').innerHTML = TABS.map(([p, l, ic]) => html`<a href="#${p}" data-tab="${p}">${icon(ic, { size: 24 })}<span>${l}</span></a>`).map(String).join('');
   renderProfileMenu();
   wireMenus();
   window.addEventListener('scroll', () => $('#topbar').classList.toggle('scrolled', window.scrollY > 24), { passive: true });
@@ -46,10 +48,33 @@ export function renderShell() {
   });
 }
 
+// Bottom tab bar (phones). Re-drawn when the user signs in or out, because the "Me" tab only exists for signed-in users.
+export function renderTabbar() {
+  const bar = $('#tabbar'); if (!bar) return;
+  const tabs = TABS.filter(([p]) => p !== '/account' || !isGuest());
+  bar.style.setProperty('--tabs', tabs.length);
+  bar.innerHTML = tabs.map(([p, l, ic]) => html`<a href="#${p}" data-tab="${p}">${icon(ic, { size: 24 })}<span>${l}</span></a>`).map(String).join('');
+  markTabs(lastPath);
+}
+
 // The avatar dropdown: switch profile, account, sign in/out. Re-drawn when the user or profile changes.
 export function renderProfileMenu() {
   const u = app.user; const wrap = $('#profileWrap'); if (!wrap) return;
   const p = u.profile;
+  renderTabbar();
+  if (isGuest()) {       // signed out: no profile avatar or profile list, just a neutral icon with sign-in links
+    wrap.innerHTML = html`
+      <button type="button" class="avatar-btn" id="profileBtn" aria-haspopup="true" aria-expanded="false" aria-label="Sign in and settings"><span class="avatar" style="--av:#444;width:34px;height:34px">${icon('user', { size: 18 })}</span></button>
+      <div class="menu menu-right" id="profileMenu" hidden>
+        <a class="menu-item" href="#/signin">${icon('user', { size: 18 })}<span>Sign in</span></a>
+        <a class="menu-item" href="#/signup">${icon('plus', { size: 18 })}<span>Create account</span></a>
+        <hr>
+        <a class="menu-item" href="#/list">${icon('list', { size: 18 })}<span>My List</span></a>
+        <a class="menu-item" href="#/plans">${icon('crown', { size: 18 })}<span>Plans</span></a>
+        <a class="menu-item" href="#/account">${icon('edit', { size: 18 })}<span>Settings &amp; privacy</span></a>
+      </div>`.s;
+    return;
+  }
   wrap.innerHTML = html`
     <button type="button" class="avatar-btn" id="profileBtn" aria-haspopup="true" aria-expanded="false" aria-label="Profile menu">${p ? avatar(p, { size: 34 }) : html`<span class="avatar" style="--av:#444;width:34px;height:34px">${icon('user', { size: 18 })}</span>`}</button>
     <div class="menu menu-right" id="profileMenu" hidden>
@@ -83,9 +108,11 @@ function wireMenus() {
 }
 
 // Highlight the current section in the nav after each navigation.
+function markTabs(path) { const sec = section(path); $$('#tabbar a').forEach((a) => a.classList.toggle('active', section(a.dataset.tab) === sec)); }
 export function markActive({ path }) {
+  lastPath = path;
   const sec = section(path);
   $$('#topbar [data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === sec));
-  $$('#tabbar a').forEach((a) => a.classList.toggle('active', section(a.dataset.tab) === sec));
+  markTabs(path);
   document.body.dataset.route = path.split('/')[1] || 'home';
 }

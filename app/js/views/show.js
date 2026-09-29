@@ -3,7 +3,7 @@ import { app } from '../app.js';
 import { go } from '../router.js';
 import { html, $, fmtDuration, fmtViews, fmtDate, timeAgo, fmtRuntime } from '../util.js';
 import { icon } from '../icons.js';
-import { rail, enhanceRails, showCard, videoCard, reelCard, listBtn, img, showMeta, toast } from '../ui/components.js';
+import { rail, enhanceRails, showCard, videoCard, reelCard, listBtn, img, heroBg, showMeta, toast } from '../ui/components.js';
 import { shareOrCopy } from '../util.js';
 import { mountRating } from './engage.js';
 import { shareUrl } from '../platform.js';
@@ -33,7 +33,7 @@ export default async function showView(ctx) {
 
   ctx.root.innerHTML = html`
     <section class="detail-hero">
-      <div class="hero-bg">${latest ? img(cat.thumb(latest, 'maxresdefault'), '', { lazy: false, fallback: cat.thumb(latest, 'hqdefault') }) : ''}</div>
+      <div class="hero-bg">${latest ? heroBg(cat.thumb(latest, 'maxresdefault'), s.posterLg || s.poster, { fallback: cat.thumb(latest, 'hqdefault') }) : heroBg(s.posterLg || s.poster, '')}</div>
       <div class="hero-shade"></div>
       <div class="hero-inner">
         <div class="detail-poster">${img(s.posterLg || s.poster, s.title, { lazy: false })}</div>

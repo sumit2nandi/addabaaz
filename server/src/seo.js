@@ -53,7 +53,11 @@ export function bodyHtml(m, { view, params }, cat, studio, plans) {
         `<p>${esc(TYPE_LABEL[s.type] || 'Show')}${(s.genres || []).length ? ` · ${esc(s.genres.join(', '))}` : ''}${s.year ? ` · ${esc(s.year)}` : ''}${(s.cast || []).length ? ` · Starring ${esc(s.cast.join(', '))}` : ''}</p>` +
         (eps.length ? `<h2>Episodes</h2>${epList(eps)}` : '') + (extras.length ? `<h2>Trailers and clips</h2>${epList(extras)}` : ''); break;
     }
-    case 'watch': case 'reels': {
+    case 'reels': if (!params.id) {          // /reels (the feed itself, no particular reel): a plain collection page
+      b = `${intro('Reels')}<ul>${cat.reels().slice(0, 30).map((r) => li(`/reels/${r.id}`, cat.displayTitle(r), '')).join('')}</ul>`; break;
+    }
+    // falls through: /reels/:id is described like a watch page
+    case 'watch': {
       const v = cat.video(params.id), s = cat.show(v.showId), eps = s ? cat.episodes(s.id) : [], i = eps.findIndex((e) => e.id === v.id);
       b = `${h1(cat.displayTitle(v))}<p>${esc(videoDescription(v, s, cat))}</p>` + (s ? `<p>From ${A(`/show/${s.id}`, showFullName(s))}</p>` : '') +
         (i > 0 ? `<p>Previous: ${A(`/watch/${eps[i - 1].id}`, cat.displayTitle(eps[i - 1]))}</p>` : '') + (i >= 0 && i < eps.length - 1 ? `<p>Next: ${A(`/watch/${eps[i + 1].id}`, cat.displayTitle(eps[i + 1]))}</p>` : ''); break;

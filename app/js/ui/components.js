@@ -12,6 +12,13 @@ export function img(src, alt = '', { cls = '', lazy = true, fallback } = {}) {
   const fb = fallback ? `this.onerror=null;this.src='${esc(fallback)}'` : IMG_FALLBACK;
   return html`<img class="${cls}" src="${src}" alt="${alt}" ${lazy ? raw('loading="lazy" decoding="async"') : ''} onerror="${raw(esc(fb))}">`;
 }
+/** Hero background. Wide screens get the landscape episode thumbnail; phones (portrait, < 760px) get the portrait show poster instead,
+ *  because a 16:9 picture cropped into a tall phone screen shows only a thin slice of the middle (faces cut in half). */
+export function heroBg(thumb, poster, { lazy = false, fallback } = {}) {
+  const fb = fallback ? `this.onerror=null;this.src='${esc(fallback)}'` : IMG_FALLBACK;
+  const img = html`<img src="${thumb || poster}" alt="" ${lazy ? raw('loading="lazy" decoding="async"') : ''} onerror="${raw(esc(fb))}">`;
+  return poster ? html`<picture><source media="(max-width: 759px)" srcset="${poster}">${img}</picture>` : img;
+}
 /** Card thumbnail. hqdefault (480x360, letterboxed) + object-fit:cover gives a clean 16:9 *and* 9:16 crop. */
 export function ytImg(v, alt = '', { cls = '' } = {}) {
   return img(app.catalog.thumb(v, 'hqdefault'), alt, { cls });

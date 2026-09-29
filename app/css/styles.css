@@ -82,7 +82,7 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .nav-drop .menu a::after { display: none; }
 
 /* ---------- bottom tab bar (mobile) ---------- */
-.tabbar { position: fixed; z-index: 100; bottom: 0; left: 0; right: 0; height: calc(var(--tabbar-h) + var(--sab)); padding: 0 var(--sar) var(--sab) var(--sal); display: grid; grid-template-columns: repeat(5, 1fr); background: rgba(8,8,10,.94); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-top: 1px solid var(--border); }
+.tabbar { position: fixed; z-index: 100; bottom: 0; left: 0; right: 0; height: calc(var(--tabbar-h) + var(--sab)); padding: 0 var(--sar) var(--sab) var(--sal); display: grid; grid-template-columns: repeat(var(--tabs, 5), 1fr); background: rgba(8,8,10,.94); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-top: 1px solid var(--border); }
 .tabbar a { display: grid; place-items: center; align-content: center; gap: 3px; color: var(--muted); font-size: 11px; font-weight: 600; }
 .tabbar a.active { color: #fff; }
 .tabbar a.active svg { color: var(--accent-2); }
@@ -121,6 +121,7 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .hero-bg { position: absolute; inset: 0; z-index: -2; }
 .hero-bg img { width: 100%; height: 100%; object-fit: cover; object-position: center 25%; animation: kenburns 24s ease-out both; filter: saturate(1.05); }
 .hero-slide:not(.active) .hero-bg img { animation: none; }
+.hero-bg picture { display: block; width: 100%; height: 100%; }
 @keyframes kenburns { from { transform: scale(1.02); } to { transform: scale(1.12); } }
 .hero-shade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(5,5,5,.94) 0%, rgba(5,5,5,.7) 38%, rgba(5,5,5,.15) 75%), linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.5) 22%, rgba(5,5,5,0) 50%), linear-gradient(180deg, rgba(5,5,5,.8), rgba(5,5,5,0) 22%); }
 .hero-inner { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; padding: calc(var(--topbar-h) + var(--sat) + 40px) var(--pad) 72px; }
@@ -257,7 +258,7 @@ img.img-failed { opacity: 0; }
 body.reels-mode { overflow: hidden; } body.reels-mode .footer { display: none; }
 .reels-feed { height: calc(100dvh - var(--topbar-h) - var(--sat) - var(--tabbar-h) - var(--sab)); overflow-y: auto; scroll-snap-type: y mandatory; scrollbar-width: none; outline: none; overscroll-behavior: contain; }
 .reels-feed::-webkit-scrollbar { display: none; }
-.reel { height: 100%; scroll-snap-align: start; scroll-snap-stop: always; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 10px 12px; }
+.reel { position: relative; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 10px 12px; }
 .reel-frame { position: relative; height: 100%; max-height: 900px; aspect-ratio: 9/16; max-width: 100%; border-radius: var(--radius-lg); overflow: hidden; background: #000; box-shadow: 0 0 0 1px var(--border-2), 0 30px 80px rgba(0,0,0,.6); }
 .reel-slot { position: absolute; inset: 0; } .reel-slot > img { width: 100%; height: 100%; object-fit: cover; }
 .reel-player, .reel-player iframe, .reel-player > div { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
@@ -332,8 +333,13 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 }
 @media (max-width: 899px) {
   .topbar { gap: 12px; } .brand-text { font-size: 17px; } #installBtn { display: none !important; }
-  .hero { min-height: 74vh; } .hero-inner { padding-bottom: 60px; } .hero-desc { -webkit-line-clamp: 3; font-size: 14.5px; }
+  .hero { min-height: 74vh; min-height: 74svh; } .hero-inner { padding-bottom: 60px; } .hero-desc { -webkit-line-clamp: 3; font-size: 14.5px; }
   .hero-actions .btn-lg { padding: 11px 18px; font-size: 15px; } .hero-actions .btn-glass:last-child { display: none; }
+}
+@media (max-width: 759px) {
+  .hero-bg img { object-position: center 15%; }
+  .hero-shade { background: linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.88) 30%, rgba(5,5,5,.35) 58%, rgba(5,5,5,0) 78%), linear-gradient(180deg, rgba(5,5,5,.75), rgba(5,5,5,0) 20%); }
+  .detail-hero { min-height: 70vh; min-height: 70svh; }
 }
 @media (max-width: 480px) { .ep-row { grid-template-columns: 26px 112px 1fr; gap: 10px; padding: 8px 4px; } .watch-actions .btn { padding: 9px 13px; } }
 [data-platform="ios"] .rail-arrow, [data-platform="android"] .rail-arrow { display: none !important; }
@@ -384,3 +390,12 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 @media (max-width: 600px) { .card-panel.notice { flex-wrap: wrap; } }
 body.bare .consent-bar { bottom: 12px; }
 body:has(#consentBar) .auth-page { padding-bottom: 190px; } body:has(#consentBar) .footer { padding-bottom: 170px; }
+
+/* ---------- autoplay helpers (watch + reels) ---------- */
+.unmute-pill { position: absolute; z-index: 4; left: 12px; top: 12px; display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border: 0; border-radius: 999px; background: rgba(0,0,0,.72); color: #fff; font-weight: 700; font-size: 13.5px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 0 0 1px var(--border-2); animation: fadeIn .3s var(--ease); }
+
+/* Reels: a transparent layer over the video takes taps and lets swipes scroll the feed (an iframe would swallow the touch), plus a play glyph while paused. */
+.reel-tap { position: absolute; inset: 0; z-index: 1; border: 0; padding: 0; background: transparent; display: grid; place-items: center; touch-action: pan-y; -webkit-tap-highlight-color: transparent; cursor: pointer; }
+.reel-pp { display: none; place-items: center; width: 76px; height: 76px; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); pointer-events: none; }
+.reel.paused .reel-pp { display: grid; }
+.reel-player video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
