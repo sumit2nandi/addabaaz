@@ -49,6 +49,37 @@ paths:
       summary: Sign in
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [email, password], properties: { email: { type: string }, password: { type: string } } } } } }
       responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Auth' } } } }, '401': { description: invalid_credentials } }
+  /auth/providers: { get: { security: [], summary: 'Which sign-in methods are enabled, with public client ids for the web/native SDKs.', responses: { '200': { description: '{ password, google?, facebook? }' } } } }
+  /auth/google:
+    post:
+      security: []
+      summary: Sign in / sign up with a Google ID token (verified server-side). Links to an existing account with the same verified email.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [idToken], properties: { idToken: { type: string } } } } } }
+      responses: { '200': { description: 'Auth + isNew flag' }, '400': { description: email_required / email_unverified }, '401': { description: invalid_credential }, '501': { description: provider_not_configured }, '503': { description: provider_unavailable } }
+  /auth/facebook:
+    post:
+      security: []
+      summary: Sign in / sign up with a Facebook user access token (verified via debug_token, must belong to this app).
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [accessToken], properties: { accessToken: { type: string } } } } } }
+      responses: { '200': { description: 'Auth + isNew flag' }, '400': { description: email_required / email_unverified }, '401': { description: invalid_credential }, '501': { description: provider_not_configured }, '503': { description: provider_unavailable } }
+  /videos/{id}/stream:
+    post:
+      security: [ {}, { bearer: [] } ]
+      summary: 'Playable URL for a video stored in Cloudflare R2. Premium videos need a signed-in user (Bearer); free ones are public.'
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200': { description: '{ type: mp4|hls, url, expiresAt }', content: { application/json: { schema: { type: object, properties: { type: { type: string, enum: [mp4, hls] }, url: { type: string }, expiresAt: { type: string, format: date-time } } } } } }
+        '400': { description: not_hosted (video isn't an R2 source) }
+        '401': { description: login_required }
+        '402': { description: subscription_required (only if PREMIUM_REQUIRES_SUBSCRIPTION) }
+        '404': { description: unknown video }
+        '503': { description: storage_not_configured }
+  /media/{token}/{path}:
+    get:
+      security: []
+      summary: 'HLS gateway. `token` comes from /videos/{id}/stream. Playlists (.m3u8) are proxied; everything else is a 302 to a 15-minute presigned R2 URL.'
+      parameters: [ { name: token, in: path, required: true, schema: { type: string } }, { name: path, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: playlist }, '302': { description: redirect to R2 }, '401': { description: expired/invalid token }, '404': { description: not found } }
   /contact:
     post:
       security: []

@@ -58,6 +58,24 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       async remove(id) { await q('DELETE FROM users WHERE id = ?', [id]); },
     },
 
+    /** Linked social accounts (Google / Facebook). */
+    identities: {
+      async userFor(provider, subject) {
+        return userRow((await q('SELECT u.* FROM auth_identities i JOIN users u ON u.id = i.user_id WHERE i.provider = ? AND i.subject = ?', [provider, subject]))[0]);
+      },
+      async touch(provider, subject) { await q('UPDATE auth_identities SET last_login_at = UTC_TIMESTAMP(3) WHERE provider = ? AND subject = ?', [provider, subject]); },
+      async link(userId, { provider, subject, email }) { await q('INSERT IGNORE INTO auth_identities (provider, subject, user_id, email, last_login_at) VALUES (?,?,?,?,UTC_TIMESTAMP(3))', [provider, subject, userId, email]); },
+      async providersOf(userId) { return (await q('SELECT provider FROM auth_identities WHERE user_id = ? ORDER BY created_at', [userId])).map((r) => r.provider); },
+      /** New passwordless account + first profile + identity, atomically. Throws ER_DUP_ENTRY on an email/identity race. */
+      async createUser(user, profile, { provider, subject, email }) {
+        await tx(async (t) => {
+          await t.query('INSERT INTO users (id, email, name, password_hash) VALUES (?,?,?,NULL)', [user.id, user.email, user.name]);
+          await t.query('INSERT INTO profiles (id, user_id, name, color) VALUES (?,?,?,?)', [profile.id, user.id, profile.name, profile.color]);
+          await t.query('INSERT INTO auth_identities (provider, subject, user_id, email, last_login_at) VALUES (?,?,?,?,UTC_TIMESTAMP(3))', [provider, subject, user.id, email]);
+        });
+      },
+    },
+
     profiles: {
       async list(userId) { return (await q('SELECT id, name, color FROM profiles WHERE user_id = ? ORDER BY created_at, id', [userId])).map(profileRow); },
       async get(id, userId) { const r = (await q('SELECT id, name, color FROM profiles WHERE id = ? AND user_id = ?', [id, userId]))[0]; return r ? profileRow(r) : null; },

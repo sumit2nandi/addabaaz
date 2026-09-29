@@ -3,6 +3,7 @@ import { html, $ } from '../util.js';
 import { icon } from '../icons.js';
 import { go } from '../router.js';
 import { toast } from '../ui/components.js';
+import { mountSocialButtons } from '../social.js';
 
 export default async function auth(ctx) {
   const u = app.user; const signup = ctx.path === '/signup';
@@ -17,6 +18,8 @@ export default async function auth(ctx) {
     <form class="auth-card form" id="af" novalidate>
       <h1>${signup ? 'Create your account' : 'Welcome back'}</h1>
       <p class="muted">${signup ? 'Sync My List and Continue Watching across all your devices.' : 'Sign in to pick up where you left off.'}</p>
+      <div class="social" id="social" hidden></div>
+      <div class="or" id="or" hidden><span>or use your email</span></div>
       ${signup ? html`<label>Your name<input name="name" autocomplete="name" required maxlength="60" placeholder="Full name"></label>` : ''}
       <label>Email<input name="email" type="email" autocomplete="email" required placeholder="name@example.com" inputmode="email"></label>
       <label>Password<span class="pw"><input name="password" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" required minlength="8" placeholder="${signup ? 'At least 8 characters' : 'Your password'}"><button type="button" class="icon-btn" id="pwt" aria-label="Show password">${icon('eye', { size: 18 })}</button></span></label>
@@ -25,6 +28,22 @@ export default async function auth(ctx) {
       <p class="switch-auth">${signup ? html`Already have an account? <a href="#/signin?next=${encodeURIComponent(next)}">Sign in</a>` : html`New to ADDABAAZ? <a href="#/signup?next=${encodeURIComponent(next)}">Create an account</a>`}</p>
       <a class="skip" href="#/">Continue without an account</a>
     </form></div>`.s;
+
+  const st0 = () => $('#as', ctx.root);
+  const finish = (msg) => { toast(msg); if (u.needsProfileChoice()) go('/profiles?next=' + encodeURIComponent(next), { replace: true }); else go(next, { replace: true }); };
+  u.providers().then((prov) => {                                    // Google / Facebook buttons appear only if the server has them configured
+    if (!$('#social', ctx.root)) return;                             // navigated away meanwhile
+    const shown = mountSocialButtons($('#social', ctx.root), prov, {
+      signup,
+      onError: (m) => { st0().textContent = m; },
+      onCredential: async (provider, cred) => {
+        st0().textContent = '';
+        try { const r = await u.signInSocial(provider, cred); finish(r.isNew ? 'Welcome to ADDABAAZ!' : 'Signed in'); }
+        catch (err) { st0().textContent = err.message; }
+      },
+    });
+    if (shown) { $('#social', ctx.root).hidden = false; $('#or', ctx.root).hidden = false; }
+  });
 
   $('#pwt', ctx.root).addEventListener('click', () => { const i = $('[name=password]', ctx.root); i.type = i.type === 'password' ? 'text' : 'password'; });
   $('#af', ctx.root).addEventListener('submit', async (e) => {
@@ -38,8 +57,7 @@ export default async function auth(ctx) {
     btn.disabled = true; st.textContent = '';
     try {
       await (signup ? u.signUp(body) : u.signIn(body));
-      toast(signup ? 'Welcome to ADDABAAZ!' : 'Signed in');
-      if (u.needsProfileChoice()) go('/profiles?next=' + encodeURIComponent(next), { replace: true }); else go(next, { replace: true });
+      finish(signup ? 'Welcome to ADDABAAZ!' : 'Signed in');
     } catch (err) { st.textContent = err.message; btn.disabled = false; }
   });
 }

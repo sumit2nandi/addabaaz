@@ -1,0 +1,90 @@
+/* Google & Facebook sign-in on the client.
+ *
+ * The client only obtains a credential from the provider; the ADDABAAZ API verifies it
+ * (POST /auth/google {idToken}, POST /auth/facebook {accessToken}) and returns our own session token.
+ *   - Web:            Google Identity Services button + Facebook JS SDK popup
+ *   - Android / iOS:  native SDKs through the Capacitor plugin @capgo/capacitor-social-login
+ *                     (Google's/Facebook's web flows are blocked or unreliable inside app WebViews)
+ * Provider ids come from GET /auth/providers, so they're configured once, on the server.
+ */
+import { html, $ } from './util.js';
+import { icon } from './icons.js';
+import { isNative } from './platform.js';
+
+const loaded = {};
+const loadScript = (key, src) => loaded[key] || (loaded[key] = new Promise((res, rej) => {
+  const s = document.createElement('script'); s.src = src; s.async = true;
+  s.onload = res; s.onerror = () => { delete loaded[key]; rej(new Error('blocked')); };
+  document.head.appendChild(s);
+}));
+
+/* ---------- web: Google ---------- */
+async function initGoogle(clientId, onCredential) {
+  await loadScript('gis', 'https://accounts.google.com/gsi/client');
+  window.google.accounts.id.initialize({ client_id: clientId, callback: (r) => r.credential && onCredential(r.credential), auto_select: false, cancel_on_tap_outside: true, use_fedcm_for_prompt: true });
+  return window.google.accounts.id;
+}
+
+/* ---------- web: Facebook ---------- */
+let fbReady = null;
+function initFacebook({ appId, version = 'v21.0' }) {
+  return fbReady || (fbReady = new Promise((res, rej) => {
+    window.fbAsyncInit = () => { window.FB.init({ appId, cookie: false, xfbml: false, version }); res(window.FB); };
+    loadScript('fb', 'https://connect.facebook.net/en_US/sdk.js').catch((e) => { fbReady = null; rej(e); });
+  }));
+}
+const facebookWeb = (FB) => new Promise((res, rej) => FB.login((r) => (r.authResponse?.accessToken ? res(r.authResponse.accessToken) : rej(Object.assign(new Error('cancelled'), { cancelled: true }))), { scope: 'public_profile,email' }));
+
+/* ---------- native (Capacitor) ---------- */
+let nativeInit = false;
+function nativePlugin(providers) {
+  const SL = window.Capacitor?.Plugins?.SocialLogin;
+  if (!SL) throw new Error('Social sign-in isn’t set up in this build of the app yet.');
+  return { SL, ready: nativeInit ? Promise.resolve() : SL.initialize({
+    ...(providers.google ? { google: { webClientId: providers.google.clientId, iOSClientId: providers.google.iosClientId, iOSServerClientId: providers.google.clientId, mode: 'online' } } : {}),
+    ...(providers.facebook ? { facebook: { appId: providers.facebook.appId, clientToken: providers.facebook.clientToken } } : {}),
+  }).then(() => { nativeInit = true; }) };
+}
+async function nativeCredential(provider, providers) {
+  const { SL, ready } = nativePlugin(providers); await ready;
+  try {
+    if (provider === 'google') { const r = await SL.login({ provider: 'google', options: { scopes: ['email', 'profile'] } }); return r.result?.idToken; }
+    const r = await SL.login({ provider: 'facebook', options: { permissions: ['email', 'public_profile'] } }); return r.result?.accessToken?.token;
+  } catch (e) { if (/cancel/i.test(`${e?.code} ${e?.message}`)) e.cancelled = true; throw e; }
+}
+
+const FB_LOGO = html`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M22 12a10 10 0 1 0-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.5 1.49-3.89 3.78-3.89 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.78l-.44 2.89h-2.34v6.99A10 10 0 0 0 22 12z"/></svg>`;
+const G_LOGO = html`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285F4" d="M22.5 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h5.9a5.05 5.05 0 0 1-2.19 3.31v2.75h3.55c2.08-1.91 3.24-4.73 3.24-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.55-2.75c-.98.66-2.24 1.06-3.73 1.06-2.87 0-5.3-1.94-6.17-4.55H2.16v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.83 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.16a11 11 0 0 0 0 9.88l3.67-2.84z"/><path fill="#EA4335" d="M12 5.35c1.62 0 3.06.56 4.21 1.65l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.16 7.06L5.83 9.9C6.7 7.29 9.13 5.35 12 5.35z"/></svg>`;
+
+/**
+ * Fills `box` with "Continue with Google / Facebook" buttons for the providers the server has enabled.
+ * @param {(provider:'google'|'facebook', credential:string) => Promise<void>} onCredential
+ * @param {(msg:string) => void} onError
+ * @returns {boolean} whether any button was rendered
+ */
+export function mountSocialButtons(box, providers, { signup = false, onCredential, onError }) {
+  const wanted = ['google', 'facebook'].filter((p) => providers?.[p]);
+  if (!wanted.length) return false;
+  box.innerHTML = wanted.map((p) => (p === 'google' && !isNative
+    ? '<div class="social-g" id="gBtn"></div>'
+    : html`<button type="button" class="btn-social btn-${p}" data-p="${p}">${p === 'google' ? G_LOGO : FB_LOGO}<span>Continue with ${p === 'google' ? 'Google' : 'Facebook'}</span></button>`.s)).join('');
+  const run = async (provider, get) => {
+    try { const cred = await get(); if (cred) await onCredential(provider, cred); }
+    catch (e) { if (!e?.cancelled) onError(e?.message === 'blocked' ? 'Couldn’t load the sign-in service — check your connection or ad-blocker.' : e?.message || 'Sign-in failed. Please try again.'); }
+  };
+  if (wanted.includes('google') && !isNative) {
+    initGoogle(providers.google.clientId, (cred) => run('google', async () => cred)).then((gid) => {
+      const el = $('#gBtn', box); if (!el) return;
+      gid.renderButton(el, { type: 'standard', theme: 'filled_black', size: 'large', shape: 'pill', text: signup ? 'signup_with' : 'continue_with', logo_alignment: 'left', width: Math.min(400, Math.max(200, box.clientWidth || 340)) });
+    }).catch(() => { const el = $('#gBtn', box); if (el) el.outerHTML = html`<button type="button" class="btn-social btn-google" disabled>${G_LOGO}<span>Google unavailable</span></button>`.s; });
+  }
+  // Facebook's SDK must already be loaded when the user taps (popup blockers), so preload it now.
+  if (wanted.includes('facebook') && !isNative) initFacebook(providers.facebook).catch(() => {});
+  box.addEventListener('click', (e) => {
+    const b = e.target.closest('.btn-social[data-p]'); if (!b) return;
+    const p = b.dataset.p;
+    if (isNative) return run(p, () => nativeCredential(p, providers));
+    if (p === 'facebook') { if (!window.FB) return onError('Facebook is still loading — try again in a moment.'); run(p, () => facebookWeb(window.FB)); }
+  });
+  return true;
+}

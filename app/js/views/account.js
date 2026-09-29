@@ -19,7 +19,7 @@ export default async function account(ctx) {
     <section class="card-panel who">
       ${p ? avatar(p, { size: 64 }) : ''}
       <div><h2>${u.account ? u.account.name : p ? p.name : 'Guest'}</h2>
-        <p class="muted">${u.account ? u.account.email : u.supportsAuth ? 'Browsing as a guest — sign in to sync across devices.' : 'Your list and progress are saved on this device.'}</p></div>
+        <p class="muted">${u.account ? u.account.email + (u.account.providers?.length ? ' · ' + u.account.providers.map((x) => (x === 'google' ? 'Google' : 'Facebook')).join(' & ') + ' sign-in' : '') : u.supportsAuth ? 'Browsing as a guest — sign in to sync across devices.' : 'Your list and progress are saved on this device.'}</p></div>
       <div class="who-actions">${u.supportsAuth ? (u.account ? html`<button class="btn btn-ghost" id="signout">${icon('logout', { size: 18 })} Sign out</button>` : html`<a class="btn btn-primary" href="#/signin">Sign in</a><a class="btn btn-ghost" href="#/signup">Create account</a>`) : ''}</div>
     </section>
 

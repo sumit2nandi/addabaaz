@@ -15,12 +15,14 @@ export function verifyPassword(password, stored) {
   const good = Buffer.from(hash, 'hex');
   return test.length === good.length && crypto.timingSafeEqual(test, good);
 }
-/** Minimal HS256 JWT (sub, iat, exp). Swap for `jsonwebtoken`/OIDC when you add social login. */
-export function signToken(userId, secret, ttl = TTL_SECONDS) {
+/** Minimal HS256 JWT. `claims` may carry `aud` to scope a token (session tokens have none; media tokens use "media"). */
+export function signJwt(claims, secret, ttl = TTL_SECONDS) {
   const now = Math.floor(Date.now() / 1000);
-  const body = `${b64(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${b64(JSON.stringify({ sub: userId, iat: now, exp: now + ttl }))}`;
+  const body = `${b64(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))}.${b64(JSON.stringify({ ...claims, iat: now, exp: now + ttl }))}`;
   return `${body}.${crypto.createHmac('sha256', secret).update(body).digest('base64url')}`;
 }
+export const signToken = (userId, secret, ttl = TTL_SECONDS) => signJwt({ sub: userId }, secret, ttl);
+/** Returns the claims of a valid, unexpired token, else null. */
 export function verifyToken(token, secret) {
   const parts = String(token || '').split('.');
   if (parts.length !== 3) return null;

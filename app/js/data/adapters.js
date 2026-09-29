@@ -50,7 +50,7 @@ export class RemoteAdapter {
     if (!this.api.token) return { account: null, profiles: [], subscription: { planId: 'free', status: 'active' } };
     try {
       const me = await this.api.get('/me');
-      return { account: me.user, profiles: me.profiles, subscription: me.subscription };
+      return { account: { ...me.user, providers: me.providers || [], hasPassword: me.hasPassword !== false }, profiles: me.profiles, subscription: me.subscription };
     } catch (e) {
       if (e.status === 401) return { account: null, profiles: [], subscription: { planId: 'free', status: 'active' } };
       throw e;
@@ -58,6 +58,15 @@ export class RemoteAdapter {
   }
   async signUp(p) { const r = await this.api.post('/auth/signup', p); this.api.setToken(r.token); return r; }
   async signIn(p) { const r = await this.api.post('/auth/login', p); this.api.setToken(r.token); return r; }
+  /** Google / Facebook: the API verifies the provider credential and returns our own session. */
+  async signInSocial(provider, credential) {
+    const r = await this.api.post(`/auth/${provider}`, provider === 'google' ? { idToken: credential } : { accessToken: credential });
+    this.api.setToken(r.token); return r;
+  }
+  async providers() { try { return this.#providers ||= await this.api.get('/auth/providers'); } catch { return { password: true }; } }
+  #providers = null;
+  /** Signed URL for a video stored in Cloudflare R2 (the API decides whether this viewer may watch it). */
+  streamUrl(videoId) { return this.api.post(`/videos/${encodeURIComponent(videoId)}/stream`); }
   async signOut() { this.api.setToken(null); }
   async deleteAccount() { await this.api.del('/me'); this.api.setToken(null); }
   async createProfile(p) { return (await this.api.post('/profiles', p)).profile; }

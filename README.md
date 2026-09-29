@@ -5,13 +5,14 @@ Bengali originals, stand-up comedy, web series and reels from ADDABAAZ (Kolkata)
 | | |
 |---|---|
 | **Web app** | Installable PWA, offline app-shell, no build step (vanilla ES modules) |
-| **Accounts & sync** | Optional REST API (Node/Express + **MySQL**) — profiles, My List, Continue Watching, reminders, subscriptions |
+| **Accounts & sync** | Optional REST API (Node/Express + **MySQL**) — email, **Google** and **Facebook** sign-in, profiles, My List, Continue Watching, reminders |
+| **Premium video** | Files in a private **Cloudflare R2** bucket, served by signed URLs to signed-in viewers only; everything else stays open |
 | **Works without a backend** | Falls back to on-device "local mode", so static hosting (GitHub Pages, Netlify…) still works |
 | **Android / iOS** | [Capacitor](https://capacitorjs.com) wrapper in [`mobile/`](mobile) around the same web bundle |
 
 ## What's in the app
 
-Home hero carousel · Continue Watching · Top 10 · per-show rails · **show pages** with episode lists, resume and "next unwatched" · **watch page** with resume, progress tracking and autoplay-next · **Reels** (vertical swipe feed) · search (Bengali + English, recent/popular) · My List · Coming Soon with reminders · Behind-the-Scenes gallery with lightbox · multi-profile ("Who's watching?") · sign-up / sign-in · account, settings, delete-account · optional ADDABAAZ Plus paywall (feature-flagged) · About / Services / Contact (existing studio pages, kept).
+Home hero carousel · Continue Watching · Top 10 · per-show rails · **show pages** with episode lists, resume and "next unwatched" · **watch page** with resume, progress tracking and autoplay-next · **Reels** (vertical swipe feed) · search (Bengali + English, recent/popular) · My List · Coming Soon with reminders · Behind-the-Scenes gallery with lightbox · multi-profile ("Who's watching?") · sign-up / sign-in (email, Google, Facebook) · account, settings, delete-account · **premium titles that require sign-in** (free titles never do) · optional ADDABAAZ Plus paywall (feature-flagged) · About / Services / Contact (existing studio pages, kept).
 
 ## Run it
 
@@ -46,13 +47,15 @@ media/               optimised WebP artwork + app icons (generated)
 server/              REST API + static file server (Express), MySQL layer, SQL migrations, tests
 mobile/              Capacitor config for Android & iOS
 scripts/             optimize-images.sh, validate-catalog.mjs, build-www.mjs
-docs/                ARCHITECTURE.md · DATABASE.md · MOBILE.md · CONTENT.md · openapi.yaml
+docs/                ARCHITECTURE.md · AUTH.md · PREMIUM.md · DATABASE.md · MOBILE.md · CONTENT.md · openapi.yaml
 BTS/, UpcomingReleases/, images/, resources/   original artwork (untouched) & native icon/splash masters
 ```
 
 ## Documentation
 
 - [Architecture & roadmap](docs/ARCHITECTURE.md) — how the pieces fit, how to go to production, what to add next
+- [Sign-in: email, Google, Facebook](docs/AUTH.md) — who must log in, provider setup, native apps
+- [Premium video on Cloudflare R2](docs/PREMIUM.md) — bucket, upload, catalog entry, access rules, security
 - [Database (MySQL)](docs/DATABASE.md) — schema, migrations, configuration, backups
 - [Android & iOS](docs/MOBILE.md) — build, sign and publish the apps
 - [Managing content](docs/CONTENT.md) — add episodes, shows, posters, your own hosted video

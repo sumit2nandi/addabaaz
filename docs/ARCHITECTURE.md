@@ -31,6 +31,10 @@
 - **MySQL for user data, JSON for content.** Accounts, profiles, My List, progress, reminders, subscriptions and contact messages live in MySQL (`server/migrations/*.sql`, accessed only through `server/src/db.js`). The catalog stays in `data/catalog.json` so editors need no database access and static hosting keeps working; tables reference catalog ids by value.
 - **Content as data.** `data/catalog.json` is the single source of truth, served both as a static file and by the API; a validator guards it.
 
+## Sign-in and premium content
+
+Free content never needs an account. Titles marked `access: "premium"` require one: the UI shows a sign-in wall, and — the real gate — `POST /api/v1/videos/:id/stream` refuses without a session. Sign-in is email/password, Google or Facebook (credentials verified server-side, see [AUTH.md](AUTH.md)). Premium video files live in a private **Cloudflare R2** bucket and are delivered through signed, expiring URLs (MP4) or a token gateway (HLS) — see [PREMIUM.md](PREMIUM.md).
+
 ## Security notes
 
 - Passwords: `scrypt` with per-user salt; login runs a hash even for unknown emails (timing); JWT (HS256, 30 days) verified with constant-time compare. **Set `JWT_SECRET`** in production (the server refuses to start without it when `NODE_ENV=production`).

@@ -30,8 +30,9 @@ Each later release: `npm run mobile:sync` from the repo root, then build/run fro
 
 1. **`mobile/capacitor.config.json`** — `appId` (`in.addabaaz.app`, change if you own a different reverse-DNS id) and `server.hostname`. The app is served from `https://<hostname>` inside the WebView; pick a hostname you control that isn't used by a live site. YouTube's embedded player rejects `capacitor://` / `file://` origins (error 153), which is why `androidScheme`/`iosScheme` are `https`.
 2. **API URL** — `API_BASE` in `build:www`. The API's `CORS_ORIGINS` must allow `https://<hostname>` (default `*` is fine because auth uses bearer tokens, not cookies).
-3. **Deep links** (optional) — custom scheme `addabaaz://show/shahid` is handled in `platform.js`. For universal/app links, host `apple-app-site-association` and `assetlinks.json` on your domain and add the associated domain in Xcode / intent-filter in `AndroidManifest.xml`.
-4. **Push notifications** (for "Remind me") — add `@capacitor/push-notifications`, register the device token to a new `POST /api/v1/devices` endpoint, and have the server send a push when a title moves from `upcoming` to `shows` for every profile with a reminder (`library.reminders`). The reminder data is already collected.
+3. **Google / Facebook sign-in** — uses the native `@capgo/capacitor-social-login` plugin (already in `mobile/package.json`). Finish the native configuration described in [AUTH.md](AUTH.md#native-apps-android--ios) (Facebook Info.plist/strings.xml + AppDelegate, Google SHA-1 / URL scheme). Apple requires **Sign in with Apple** alongside third-party logins on iOS (guideline 4.8) — not implemented yet.
+4. **Deep links** (optional) — custom scheme `addabaaz://show/shahid` is handled in `platform.js`. For universal/app links, host `apple-app-site-association` and `assetlinks.json` on your domain and add the associated domain in Xcode / intent-filter in `AndroidManifest.xml`.
+5. **Push notifications** (for "Remind me") — add `@capacitor/push-notifications`, register the device token to a new `POST /api/v1/devices` endpoint, and have the server send a push when a title moves from `upcoming` to `shows` for every profile with a reminder (`library.reminders`). The reminder data is already collected.
 
 ## Store-readiness
 

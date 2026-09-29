@@ -50,9 +50,27 @@ export class User extends Emitter {
     return r;
   }
   async signIn(p) { const r = await this.remote.signIn(p); await this.#afterAuth(r); return r; }
+  /** Google / Facebook sign-in. A brand-new account inherits the device's guest list & progress, like sign-up. */
+  async signInSocial(provider, credential) {
+    const local = this.#localSnapshot();
+    const r = await this.remote.signInSocial(provider, credential);
+    await this.#afterAuth(r);
+    if (r.isNew && local && this.profile) await this.#migrate(local);
+    return r;
+  }
+  providers() { return this.remote ? this.remote.providers() : Promise.resolve({ password: false }); }
+  /** Can this viewer play `video` right now?  'ok' | 'login' (sign in first) | 'plan' (needs a Plus plan) | 'unavailable' (no accounts in local mode) */
+  gateFor(video) {
+    if (video?.access !== 'premium') return 'ok';
+    if (!this.supportsAuth) return 'unavailable';
+    if (!this.account) return 'login';
+    return CONFIG.premiumEnabled && !this.isPremium ? 'plan' : 'ok';
+  }
+  /** Signed playback URL for a video stored in R2 → { type: 'mp4'|'hls', url, expiresAt } */
+  streamUrl(video) { if (!this.remote) throw new Error('Streaming needs the ADDABAAZ API.'); return this.remote.streamUrl(video.id); }
   async #afterAuth(r) {
-    this.account = r.user;
     const s = await this.remote.init();
+    this.account = s.account || r.user;
     this.profiles = s.profiles; this.subscription = s.subscription;
     this.activeId = null; this.lib = { list: [], progress: {}, reminders: [] };
     sessionStorage.removeItem('ab.profileChosen');

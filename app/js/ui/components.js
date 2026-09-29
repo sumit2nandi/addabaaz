@@ -54,6 +54,7 @@ export function videoCard(v, { progress = true, rank = 0, showName = true, cls =
     <div class="thumb">
       ${ytImg(v, cat.displayTitle(v))}
       <span class="chip chip-label">${cat.label(v)}</span>
+      ${v.access === 'premium' ? html`<span class="chip chip-premium">${icon('lock', { size: 11 })} Premium</span>` : ''}
       <span class="chip chip-dur">${fmtDuration(v.duration)}</span>
       <span class="play-overlay">${icon('play', { size: 22 })}</span>
       ${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}

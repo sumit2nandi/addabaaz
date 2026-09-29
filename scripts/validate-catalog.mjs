@@ -27,8 +27,14 @@ for (const v of cat.videos) {
   if (!v.title) err(`${c}: missing title`);
   if (!['episode', 'trailer', 'reel', 'clip'].includes(v.kind)) err(`${c}: bad kind "${v.kind}"`);
   if (v.showId && !showIds.has(v.showId) && !soonIds.has(v.showId)) err(`${c}: unknown showId "${v.showId}"`);
-  if (!v.source || !['youtube', 'mp4', 'hls'].includes(v.source.type)) err(`${c}: bad source`);
+  if (!v.source || !['youtube', 'mp4', 'hls', 'r2'].includes(v.source.type)) err(`${c}: bad source`);
   else if (v.source.type === 'youtube' && !/^[\w-]{11}$/.test(v.source.id || '')) err(`${c}: bad YouTube id`);
+  else if (v.source.type === 'r2') {   // private Cloudflare R2 object; the API signs access
+    if (!/^[\w\-./]+$/.test(v.source.key || '') || v.source.key.includes('..') || v.source.key.startsWith('/')) err(`${c}: r2 source needs a safe "key" (e.g. premium/shahid-ep6/master.m3u8)`);
+    if (v.source.format && !['mp4', 'hls'].includes(v.source.format)) err(`${c}: r2 format must be mp4 or hls`);
+    if (/\.m3u8$/i.test(v.source.key || '') && v.source.format === 'mp4') err(`${c}: .m3u8 key can't be format mp4`);
+    if (!v.thumbnail) err(`${c}: r2 videos need a public "thumbnail" image (e.g. media/premium/ep6.webp)`);
+  }
   else if (v.source.type !== 'youtube' && !/^https?:\/\//.test(v.source.url || '')) err(`${c}: ${v.source.type} needs an absolute url`);
   if (!(v.duration >= 0)) err(`${c}: duration must be seconds`);
   if (isNaN(Date.parse(v.publishedAt))) err(`${c}: bad publishedAt`);

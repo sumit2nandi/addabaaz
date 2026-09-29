@@ -333,3 +333,15 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 @media (max-width: 480px) { .ep-row { grid-template-columns: 26px 112px 1fr; gap: 10px; padding: 8px 4px; } .watch-actions .btn { padding: 9px 13px; } }
 [data-platform="ios"] .rail-arrow, [data-platform="android"] .rail-arrow { display: none !important; }
 @media print { .topbar, .tabbar, .footer { display: none; } }
+
+/* ---- social sign-in + premium ---- */
+.social { display: grid; gap: 10px; justify-items: center; margin: 4px 0 2px; }
+.social-g { min-height: 44px; display: flex; justify-content: center; width: 100%; color-scheme: light; }
+.btn-social { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; max-width: 400px; min-height: 44px; border-radius: 999px; font-weight: 600; font-size: 14px; cursor: pointer; border: 1px solid var(--border-2); background: #131314; color: #fff; padding: 0 20px; }
+.btn-social:hover:not(:disabled) { filter: brightness(1.15); } .btn-social:disabled { opacity: .55; cursor: default; }
+.btn-social.btn-facebook { background: #1877f2; border-color: #1877f2; }
+.or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; letter-spacing: .6px; text-transform: uppercase; }
+.or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--border-2); }
+.chip-premium { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 4px; background: var(--gold); color: #000; font-weight: 800; font-size: 10.5px; letter-spacing: .4px; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; }
+.ep-thumb .chip-premium { top: 4px; right: 4px; padding: 3px 5px; }
+.player-overlay .row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 6px; }

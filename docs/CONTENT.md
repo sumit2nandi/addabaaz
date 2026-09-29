@@ -27,6 +27,10 @@ Append to `videos`:
 
 `reel` items appear in the **Reels** feed (best for vertical Shorts), `trailer`/`clip` on the show page.
 
+## Premium / private videos (Cloudflare R2)
+
+Set `"access": "premium"` and `"source": { "type": "r2", "key": "premium/…/ep6.mp4" }` plus a public `"thumbnail"`. Premium titles require login; the file itself stays in a private R2 bucket. Full walkthrough: [PREMIUM.md](PREMIUM.md).
+
 ## Host video yourself (no YouTube)
 
 Change only `source`:

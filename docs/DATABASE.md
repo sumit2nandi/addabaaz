@@ -8,6 +8,7 @@ User data is stored in **MySQL 5.7+ or 8.x** (InnoDB, `utf8mb4`, UTC timestamps)
 users ──< profiles ──< list_items        (My List:   PK profile_id, item_type, item_id)
    │           ├─────< watch_progress    (Continue watching: PK profile_id, video_id)
    │           └─────< reminders         (Coming-soon reminders: PK profile_id, upcoming_id)
+   ├── auth_identities                   (linked Google / Facebook accounts: PK provider, subject)
    ├── subscriptions                     (1:1, no row = free plan)
 
 contact_messages                         (standalone inbox for the Contact form)
@@ -16,7 +17,8 @@ schema_migrations                        (applied migration files)
 
 | Table | Columns |
 |---|---|
-| `users` | `id` CHAR(36) PK · `email` VARCHAR(254) **UNIQUE** · `name` · `password_hash` (scrypt) · `created_at` |
+| `users` | `id` CHAR(36) PK · `email` VARCHAR(254) **UNIQUE** · `name` · `password_hash` (scrypt; **NULL** for accounts created with Google/Facebook) · `created_at` |
+| `auth_identities` | `provider` ENUM(google, facebook) · `subject` (provider's user id, case-sensitive) · `user_id` FK→users · `email` · `created_at` · `last_login_at` — PK (provider, subject) |
 | `profiles` | `id` PK · `user_id` FK→users · `name` VARCHAR(24) · `color` · `created_at` |
 | `list_items` | `profile_id` FK · `item_type` ENUM(show, video, upcoming) · `item_id` (case-sensitive) · `added_at` |
 | `watch_progress` | `profile_id` FK · `video_id` (case-sensitive) · `position_sec` · `duration_sec` · `updated_at` — capped at the 500 most recent rows per profile |
@@ -24,7 +26,7 @@ schema_migrations                        (applied migration files)
 | `subscriptions` | `user_id` PK/FK · `plan_id` · `status` · `provider` · `is_demo` · `started_at` · `updated_at` |
 | `contact_messages` | `id` PK · `name` · `email` · `phone` · `message` TEXT · `created_at` |
 
-All foreign keys are `ON DELETE CASCADE`, so `DELETE /me` (account deletion, required by the app stores) removes everything belonging to the user in one statement. Ids are UUID v4 strings. Video/list ids use `utf8mb4_bin` because YouTube ids are case-sensitive. Full DDL: [`server/migrations/001_init.sql`](../server/migrations/001_init.sql).
+All foreign keys are `ON DELETE CASCADE`, so `DELETE /me` (account deletion, required by the app stores) removes everything belonging to the user in one statement. Ids are UUID v4 strings. Video/list ids use `utf8mb4_bin` because YouTube ids are case-sensitive. Full DDL: [`001_init.sql`](../server/migrations/001_init.sql), social login in [`002_social_login.sql`](../server/migrations/002_social_login.sql).
 
 Concurrency: the unique email index makes simultaneous sign-ups safe; the 5-profile limit and "can't delete your last profile" rules run in transactions that lock the user row; progress uses `INSERT … ON DUPLICATE KEY UPDATE`.
 

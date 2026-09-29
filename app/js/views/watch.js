@@ -1,5 +1,6 @@
 import { app } from '../app.js';
 import { CONFIG } from '../config.js';
+import { ApiError } from '../data/api.js';
 import { html, $, fmtDate, fmtViews, fmtDuration, timeAgo, shareOrCopy } from '../util.js';
 import { icon } from '../icons.js';
 import { createPlayer } from '../players/index.js';
@@ -15,7 +16,8 @@ export default async function watch(ctx) {
   const show = cat.show(v.showId), soon = !show && cat.soon(v.showId);
   const next = cat.nextEpisode(v);
   const title = cat.displayTitle(v);
-  const locked = CONFIG.premiumEnabled && v.access === 'premium' && !u.isPremium;
+  const gate = u.gateFor(v);                       // 'ok' | 'login' | 'plan' | 'unavailable'
+  const here = encodeURIComponent('/watch/' + v.id);
   ctx.setTitle(title);
 
   const sideList = v.kind === 'episode' && show
@@ -58,11 +60,15 @@ export default async function watch(ctx) {
   });
 
   const msg = $('#playerMsg', ctx.root), slot = $('#playerSlot', ctx.root);
-  if (locked) {
-    msg.hidden = false;
-    msg.innerHTML = html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><p>Subscribe to watch this title and get early access to every new original.</p><a class="btn btn-primary btn-lg" href="#/plans">${icon('crown', { size: 20 })} See plans</a>`.s;
-    return;
-  }
+  const wall = (kind) => {
+    msg.hidden = false; slot.innerHTML = '';
+    msg.innerHTML = kind === 'login'
+      ? html`${icon('lock', { size: 40 })}<h2>Sign in to watch</h2><p>This is ADDABAAZ Premium. Sign in or create a free account to watch it — everything else on ADDABAAZ stays open to everyone.</p><div class="row"><a class="btn btn-primary btn-lg" href="#/signin?next=${here}">Sign in</a><a class="btn btn-ghost btn-lg" href="#/signup?next=${here}">Create account</a></div>`.s
+      : kind === 'plan'
+        ? html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><p>Subscribe to watch this title and get early access to every new original.</p><a class="btn btn-primary btn-lg" href="#/plans">${icon('crown', { size: 20 })} See plans</a>`.s
+        : html`${icon('lock', { size: 40 })}<h2>Premium video needs an account</h2><p>This copy of ADDABAAZ runs without the ADDABAAZ API, so premium titles can’t be unlocked here.</p><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s;
+  };
+  if (gate !== 'ok') { wall(gate); return; }
 
   /* ---------- playback + progress ---------- */
   const prog = u.progressOf(v.id);
@@ -76,8 +82,8 @@ export default async function watch(ctx) {
   };
   const failed = (code) => {
     msg.hidden = false;
-    const yt = v.source.type === 'youtube' ? `https://www.youtube.com/watch?v=${encodeURIComponent(v.source.id)}` : v.source.url;
-    msg.innerHTML = html`${icon('wifioff', { size: 40 })}<h2>Can’t play this video here</h2><p>${code === 101 || code === 150 || code === 153 ? 'The owner restricted embedded playback.' : 'Check your connection and try again.'}</p><div class="row"><button class="btn btn-primary" id="retry">Try again</button><a class="btn btn-ghost" href="${yt}" target="_blank" rel="noopener">Open on YouTube</a></div>`.s;
+    const yt = v.source.type === 'youtube' ? `https://www.youtube.com/watch?v=${encodeURIComponent(v.source.id)}` : '';
+    msg.innerHTML = html`${icon('wifioff', { size: 40 })}<h2>Can’t play this video here</h2><p>${code === 101 || code === 150 || code === 153 ? 'The owner restricted embedded playback.' : 'Check your connection and try again.'}</p><div class="row"><button class="btn btn-primary" id="retry">Try again</button>${yt ? html`<a class="btn btn-ghost" href="${yt}" target="_blank" rel="noopener">Open on YouTube</a>` : ''}</div>`.s;
     $('#retry', msg).onclick = () => { msg.hidden = true; startPlayer(); };
   };
   const showNextUp = () => {
@@ -91,14 +97,24 @@ export default async function watch(ctx) {
   };
   async function startPlayer() {
     try {
-      ctl = await createPlayer(slot, v, {
+      let media = v;
+      if (v.source.type === 'r2') {                     // premium/own-hosted video in Cloudflare R2: the API checks access and signs a short-lived URL
+        const s = await u.streamUrl(v);
+        media = { ...v, source: { type: s.type, url: s.url }, poster: cat.thumb(v) };
+      }
+      ctl = await createPlayer(slot, media, {
         start, autoplay: true,
         onProgress: (t, d) => persist(t, d),
         onEnded: () => { u.saveProgress(v.id, lastD || v.duration, lastD || v.duration, { flush: true }); if (next && u.pref('autoplayNext')) showNextUp(); },
         onState: (s, code) => { if (s === 'error') failed(code); },
       });
       if (dead) ctl.destroy();
-    } catch (e) { console.warn(e); failed(); }
+    } catch (e) {
+      console.warn(e);
+      if (e instanceof ApiError && e.status === 401) return wall('login');       // session expired or never signed in
+      if (e instanceof ApiError && e.status === 402) return wall('plan');
+      failed();
+    }
   }
   startPlayer();
 
