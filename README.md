@@ -10,7 +10,7 @@ Bengali originals, stand-up comedy, web series and reels from ADDABAAZ (Kolkata)
 | **Works without a backend** | Falls back to on-device "local mode", so static hosting (GitHub Pages, Netlify…) still works |
 | **Android / iOS** | [Capacitor](https://capacitorjs.com) wrapper in [`mobile/`](mobile) around the same web bundle |
 
-> **New here? Start with [SETUP.md](SETUP.md)** — install, configure, deploy and operate everything, in one file.
+> **New here? Start with [SETUP.md](SETUP.md)** — install, configure, deploy and operate everything, in one file, including step-by-step **deployment on Hostinger** (Business/Cloud Web App or VPS).
 
 ## What's in the app
 
