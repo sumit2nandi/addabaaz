@@ -203,7 +203,7 @@ Notes:
 * Docker Desktop: the MySQL command becomes `docker run -d --name ab-mysql -p 3306:3306 -e MYSQL_ALLOW_EMPTY_PASSWORD=yes mysql:8.0 --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci`.
 * `npm test` on Windows: `$env:TEST_DATABASE_URL="mysql://root:PASSWORD@127.0.0.1:3306/x"; npm test`.
 * Scripts that are shell files (`npm run images`, which needs ImageMagick) are for Linux/macOS/WSL; you don't need them to run or deploy the site.
-* Running PowerShell scripts is not required. If you ever see "running scripts is disabled", run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+* If `npm` fails with "running scripts is disabled on this system" (`npm.ps1 cannot be loaded`), run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` and answer `Y`, then open a new PowerShell window. Or type `npm.cmd` instead of `npm` (for example `npm.cmd install`).
 
 **Making the ZIP for Hostinger on Windows** (section 10.2-B):
 
