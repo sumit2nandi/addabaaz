@@ -1,3 +1,4 @@
+// Home page (#/): hero carousel, Continue Watching, recommendations, and rails for trending, latest, reels and upcoming titles.
 import { app } from '../app.js';
 import { html, $, $$, fmtDate } from '../util.js';
 import { icon } from '../icons.js';
@@ -5,6 +6,7 @@ import { CONFIG } from '../config.js';
 import { rail, enhanceRails, showCard, videoCard, reelCard, soonCard, galleryCard, listBtn, img, showMeta } from '../ui/components.js';
 import { openLightbox } from '../ui/lightbox.js';
 
+// Picks the featured shows for the carousel.
 function heroSlides() {
   const cat = app.catalog;
   return cat.shows.filter((s) => s.featured && cat.episodes(s.id).length)
@@ -12,6 +14,7 @@ function heroSlides() {
     .sort((a, b) => b.latest.publishedAt.localeCompare(a.latest.publishedAt));
 }
 
+// Markup for the hero carousel.
 function heroHtml(slides) {
   const cat = app.catalog, u = app.user;
   return html`<section class="hero" aria-roledescription="carousel" aria-label="Featured shows">
@@ -42,6 +45,7 @@ function heroHtml(slides) {
   </section>`;
 }
 
+// Carousel behaviour: auto-advance, dots, swipe; pauses on hover/focus or when the tab is hidden.
 function mountHero(root, ctx) {
   const hero = $('.hero', root); if (!hero) return;
   const slides = $$('.hero-slide', hero), dots = $$('[data-dot]', hero);
@@ -62,6 +66,7 @@ function mountHero(root, ctx) {
   schedule(); ctx.onCleanup(() => clearInterval(timer));
 }
 
+// Builds the page from the catalog and this profile's library (Kids profiles see only kid-safe titles).
 export default async function home(ctx) {
   const cat = app.catalog, u = app.user;
   const cw = u.continueWatching(cat);

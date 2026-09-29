@@ -1,3 +1,5 @@
+// Sign-in / sign-up page (#/signin and #/signup): email + password plus Google, Facebook and Apple buttons.
+// After success the user is sent back to the page they came from (`?next=`).
 import { app } from '../app.js';
 import { html, $ } from '../util.js';
 import { icon } from '../icons.js';

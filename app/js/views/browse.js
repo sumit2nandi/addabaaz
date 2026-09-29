@@ -1,9 +1,11 @@
+// All-shows page (#/shows): filter by type/genre, sort, and load more.
 import { app } from '../app.js';
 import { replaceUrl } from '../router.js';
 import { html, $, $$ } from '../util.js';
 import { icon } from '../icons.js';
 import { showCard, videoCard, sectionHeader, showMeta, emptyState } from '../ui/components.js';
 
+// How many cards to show per "Load more".
 const PAGE = 24;
 export default async function browse(ctx) {
   const cat = app.catalog;

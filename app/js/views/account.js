@@ -1,3 +1,4 @@
+// Account page (#/account): profile details, subscription, preferences, security, devices and the danger zone (delete account).
 import { app } from '../app.js';
 import { CONFIG } from '../config.js';
 import { html, $, fmtDate } from '../util.js';
@@ -8,6 +9,7 @@ import { go } from '../router.js';
 import { platform } from '../platform.js';
 import { accountExtras } from './account-extra.js';
 
+// Draws the page; sections from account-extra.js are added and wired here.
 export default async function account(ctx) {
   const u = app.user;
   ctx.setTitle('Account');

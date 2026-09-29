@@ -1,3 +1,6 @@
+// Video page (#/watch/:id): the player, episode list, likes, comments and "next episode" countdown.
+// Premium videos are checked first (gateFor): signed out -> sign-in wall, no plan -> subscribe wall. Every view is a function of `ctx`
+// (the router context: params, root element, setTitle, onCleanup).
 import { app } from '../app.js';
 import { CONFIG } from '../config.js';
 import { ApiError } from '../data/api.js';
@@ -10,6 +13,7 @@ import { epRow } from './show.js';
 import { shareUrl, isNative } from '../platform.js';
 import { mountRating, mountComments } from './engage.js';
 
+// Renders the page, then starts the player and wires progress saving. Cleanup (timers, listeners) is registered with ctx.onCleanup.
 export default async function watch(ctx) {
   const cat = app.catalog, u = app.user;
   const v = cat.video(ctx.params.id);
@@ -17,14 +21,17 @@ export default async function watch(ctx) {
   const show = cat.show(v.showId), soon = !show && cat.soon(v.showId);
   const next = cat.nextEpisode(v);
   const title = cat.displayTitle(v);
+  // Can this viewer play it? 'ok' | 'login' | 'plan' | 'unavailable' (premium in static mode).
   const gate = u.gateFor(v);                       // 'ok' | 'login' | 'plan' | 'unavailable'
   const here = encodeURIComponent('/watch/' + v.id);
   ctx.setTitle(title);
 
+  // Right-hand list: all episodes for a series episode, otherwise related videos.
   const sideList = v.kind === 'episode' && show
     ? html`<div class="section-bar"><h2>Episodes</h2><span class="count">${cat.episodes(show.id).length}</span></div><div class="ep-list compact" id="sideEps">${cat.episodes(show.id).map((e) => epRow(e, { current: e.id === v.id }))}</div>`
     : html`<div class="section-bar"><h2>Up next</h2></div><div class="stack">${cat.relatedVideos(v, 12).map((x) => videoCard(x, { showName: false }))}</div>`;
 
+  // Page markup (everything interpolated is auto-escaped by html``).
   ctx.root.innerHTML = html`
     <div class="watch">
       <div class="watch-main">
@@ -54,6 +61,7 @@ export default async function watch(ctx) {
       </div>
       <aside class="watch-side" aria-label="${v.kind === 'episode' ? 'Episodes' : 'Up next'}">${sideList}</aside>
     </div>`.s;
+  // Wire up interactive bits: rails, auto-play switch, share button, likes and comments.
   enhanceRails(ctx.root);
   $('#sideEps .current', ctx.root)?.scrollIntoView({ block: 'nearest' });
 
@@ -65,6 +73,7 @@ export default async function watch(ctx) {
 
   mountRating($('#rateBox', ctx.root), { type: 'video', id: v.id, label: 'this video' });
   mountComments($('#commentsBox', ctx.root), { video: v });
+  // The player area shows a message instead of the player when the viewer is locked out.
   const msg = $('#playerMsg', ctx.root), slot = $('#playerSlot', ctx.root);
   const wall = (kind) => {
     msg.hidden = false; slot.innerHTML = '';
@@ -76,24 +85,29 @@ export default async function watch(ctx) {
           : html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><p>You’re signed in — subscribe to watch this title and get early access to every new original.</p><a class="btn btn-primary btn-lg" href="#/plans?next=${here}">${icon('crown', { size: 20 })} See plans</a>`.s
         : html`${icon('lock', { size: 40 })}<h2>Premium video needs an account</h2><p>This copy of ADDABAAZ runs without the ADDABAAZ API, so premium titles can’t be unlocked here.</p><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s;
   };
+  // Locked: show the wall and stop; no player is created.
   if (gate !== 'ok') { wall(gate); return; }
 
   /* ---------- playback + progress ---------- */
+  // Resume where the viewer left off (unless they had almost finished).
   const prog = u.progressOf(v.id);
   const start = prog && prog.position >= CONFIG.resumeMinSeconds && !u.isFinished(v.id, v.duration) ? prog.position : 0;
   let ctl = null, lastSaved = 0, dead = false, countdown = null, lastT = start, lastD = v.duration;
 
+  // Save watch position at most every 5 s (or immediately when `flush` is set, e.g. on pause or leaving the page).
   const persist = (t, d, flush = false) => {
     if (!(t > 0)) return; lastT = t; lastD = d || v.duration;
     const now = Date.now();
     if (flush || now - lastSaved > 5000) { lastSaved = now; u.saveProgress(v.id, t, lastD, { flush }); }
   };
+  // Player error message with a Retry button (and a YouTube link when relevant).
   const failed = (code) => {
     msg.hidden = false;
     const yt = v.source.type === 'youtube' ? `https://www.youtube.com/watch?v=${encodeURIComponent(v.source.id)}` : '';
     msg.innerHTML = html`${icon('wifioff', { size: 40 })}<h2>Can’t play this video here</h2><p>${code === 101 || code === 150 || code === 153 ? 'The owner restricted embedded playback.' : 'Check your connection and try again.'}</p><div class="row"><button class="btn btn-primary" id="retry">Try again</button>${yt ? html`<a class="btn btn-ghost" href="${yt}" target="_blank" rel="noopener">Open on YouTube</a>` : ''}</div>`.s;
     $('#retry', msg).onclick = () => { msg.hidden = true; startPlayer(); };
   };
+  // Shown when the plan's simultaneous-screens limit is reached.
   const limitWall = (text) => {
     if (ctl) { try { ctl.pause(); } catch { /* ignore */ } }
     msg.hidden = false;
@@ -115,6 +129,7 @@ export default async function watch(ctx) {
     }
   };
   const onIdle = (stop) => { flushWatch(); playedAt = 0; clearInterval(tick); tick = null; clearInterval(beat); beat = null; if (stop && premium && u.account && api) api.stopPlayback().catch(() => {}); };
+  // Autoplay: a countdown card for the next episode; tapping cancels or plays now.
   const showNextUp = () => {
     const box = $('#nextUp', ctx.root);
     let n = CONFIG.autoplayCountdown;
@@ -124,6 +139,8 @@ export default async function watch(ctx) {
     countdown = setInterval(() => { n -= 1; if (n <= 0) { stop(); go('/watch/' + next.id, { replace: true }); } else draw(); }, 1000);
     box.onclick = (e) => { if (e.target.closest('#nuPlay')) { stop(); go('/watch/' + next.id, { replace: true }); } else if (e.target.closest('#nuCancel')) stop(); };
   };
+  // Create the player. R2 videos first ask the API for a short-lived signed URL (this is where login and payment are enforced server-side);
+  // errors map to the matching wall (401 sign in, 402 needs plan, stream_limit) or a generic failure.
   async function startPlayer() {
     try {
       let media = v;
@@ -147,6 +164,7 @@ export default async function watch(ctx) {
       failed();
     }
   }
+  // Save progress when the tab is hidden or closed, and tidy up on leaving the page.
   startPlayer();
 
   const onHide = () => { if (document.hidden && ctl) persist(ctl.time(), ctl.duration(), true); };

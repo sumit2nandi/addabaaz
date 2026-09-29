@@ -1,3 +1,4 @@
+// Search page (#/search?q=): instant results, recent searches (kept on this device) and suggestions.
 import { app } from '../app.js';
 import { replaceUrl } from '../router.js';
 import { html, $, debounce, storage, store } from '../util.js';
@@ -5,6 +6,7 @@ import { icon } from '../icons.js';
 import { showCard, videoCard, reelCard, soonCard, emptyState } from '../ui/components.js';
 
 const RECENT = 'ab.recent';
+// Suggested searches shown when the box is empty.
 const SUGGEST = ['শহীদ', 'Laugh Bite', 'ফালতু কথা', 'Subhadip Ghosh', 'comedy', 'Khudiram', 'Fake podcast', 'Holmes'];
 
 export default async function search(ctx) {

@@ -1,3 +1,4 @@
+// About, Services and Contact pages for the production house. Text comes from data/studio.json (or the API).
 import { app } from '../app.js';
 import { CONFIG } from '../config.js';
 import { html, $, esc } from '../util.js';
@@ -5,6 +6,7 @@ import { icon } from '../icons.js';
 import { img, sectionHeader } from '../ui/components.js';
 import { rebaseUploads } from '../data/catalog.js';
 
+// Load the studio profile (API first, bundled JSON as fallback).
 export async function studioData() {
   if (!app.studio) {
     // Editable from the admin console when an API is present; the bundled file is the offline / static-hosting fallback.
@@ -14,11 +16,13 @@ export async function studioData() {
   return app.studio;
 }
 
+// Chooses which of the three pages to draw from the URL.
 export default async function studio(ctx) {
   const d = await studioData();
   ({ '/about': about, '/services': services, '/contact': contact }[ctx.path])(ctx, d);
 }
 
+// About page.
 function about(ctx, d) {
   ctx.setTitle('About');
   ctx.root.innerHTML = html`<div class="page">
@@ -32,6 +36,7 @@ function about(ctx, d) {
   </div>`.s;
 }
 
+// Services page.
 function services(ctx, d) {
   ctx.setTitle('Services');
   ctx.root.innerHTML = html`<div class="page">
@@ -41,6 +46,7 @@ function services(ctx, d) {
   </div>`.s;
 }
 
+// Contact form: validates, checks the CAPTCHA, then posts to the API (or to a Google Form in static mode, if configured).
 function contact(ctx, d) {
   const s = d.studio;
   ctx.setTitle('Contact');

@@ -1,3 +1,4 @@
+// Billing page (#/billing): payments, GST invoices, credit notes and refund requests.
 import { app } from '../app.js';
 import { html, fmtDate } from '../util.js';
 import { icon } from '../icons.js';
@@ -6,6 +7,7 @@ import { go } from '../router.js';
 import { openDialog } from '../ui/dialog.js';
 import { $ } from '../util.js';
 
+// Formats paise (integer hundredths of a rupee) as ₹ with Indian digit grouping.
 const inr = (paise) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: paise % 100 ? 2 : 0 })}`;
 
 /** Billing & invoices: every paid plan with its GST invoice, credit notes for refunds, and the refund status. */

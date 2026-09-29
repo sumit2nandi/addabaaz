@@ -1,3 +1,4 @@
+// My List page (#/mylist): saved shows and videos, plus Continue Watching for this profile.
 import { app } from '../app.js';
 import { html } from '../util.js';
 import { icon } from '../icons.js';

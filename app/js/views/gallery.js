@@ -1,3 +1,4 @@
+// Behind-the-scenes photo gallery (#/gallery); clicking a photo opens the lightbox.
 import { app } from '../app.js';
 import { html, $, $$ } from '../util.js';
 import { galleryCard, sectionHeader } from '../ui/components.js';

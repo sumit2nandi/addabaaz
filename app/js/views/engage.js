@@ -6,6 +6,7 @@ import { toast } from '../ui/components.js';
 import { confirmDialog } from '../ui/dialog.js';
 import { go } from '../router.js';
 
+// 1234 -> "1.2K".
 const compact = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, '')}K` : String(n));
 
 /** 👍 12  👎 1 — anyone can see the counts; signing in (with a profile) lets you vote. */

@@ -1,3 +1,4 @@
+// "Who's watching?" page (#/profiles): pick, add, edit or delete profiles (max 5; Kids profile option; PIN needed for changes if set).
 import { app } from '../app.js';
 import { CONFIG } from '../config.js';
 import { html, $, $$ } from '../util.js';

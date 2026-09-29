@@ -1,9 +1,11 @@
+// Pages reached from emails: forgot password, reset password, and email verification.
 import { app } from '../app.js';
 import { html, $ } from '../util.js';
 import { icon } from '../icons.js';
 import { go } from '../router.js';
 import { toast } from '../ui/components.js';
 
+// Shared page frame and card for the three screens.
 const shell = (ctx, inner) => { ctx.root.innerHTML = html`<div class="auth-page"><a href="#/" class="auth-brand"><img src="media/icons/icon-96.png" width="56" height="56" alt=""><span class="brand-text"><b>ADDA</b><i>BAAZ</i></span></a>${inner}</div>`.s; };
 const card = (title, body) => html`<div class="auth-card form"><h1>${title}</h1>${body}</div>`;
 

@@ -7,6 +7,7 @@ import { openDialog, confirmDialog, pinPrompt } from '../ui/dialog.js';
 import { pushState, enablePush, disablePush, setPushPrefs } from '../push.js';
 import { openConsentDialog } from '../consent.js';
 
+// Settings row markup (icon, label, sub-label) that opens a dialog when clicked.
 const row = (id, ic, label, sub) => html`<button class="row-link" id="${id}">${icon(ic, { size: 22 })}<span><b>${label}</b>${sub ? html`<small>${sub}</small>` : ''}</span>${icon('right', { size: 18, cls: 'chev' })}</button>`;
 
 /** Returns { banner, sections, wire(root) } — both go into the page, wire() attaches the handlers once it is in the DOM. */

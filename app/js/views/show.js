@@ -1,3 +1,4 @@
+// Show page (#/show/:id): banner, action buttons, episode list, extras (trailers/clips), cast and related shows.
 import { app } from '../app.js';
 import { go } from '../router.js';
 import { html, $, fmtDuration, fmtViews, fmtDate, timeAgo, fmtRuntime } from '../util.js';
@@ -7,6 +8,7 @@ import { shareOrCopy } from '../util.js';
 import { mountRating } from './engage.js';
 import { shareUrl } from '../platform.js';
 
+// One episode row (shared with the watch page's side list).
 export function epRow(v, { current = false } = {}) {
   const cat = app.catalog; const frac = app.user.fraction(v.id, v.duration);
   return html`<a class="ep-row ${current ? 'current' : ''}" href="#/watch/${v.id}" ${current ? html`aria-current="true"` : ''}>

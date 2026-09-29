@@ -1,3 +1,4 @@
+// Plans and checkout page (#/plans).
 import { app } from '../app.js';
 import { html, fmtDate } from '../util.js';
 import { icon } from '../icons.js';
@@ -8,7 +9,9 @@ import { isNative } from '../platform.js';
 import { openDialog } from '../ui/dialog.js';
 import { storage, store, $ } from '../util.js';
 
+// Formats paise as ₹.
 const inr = (paise) => `₹${(paise / 100).toFixed(paise % 100 ? 2 : 0)}`;
+// Server error codes that are shown inside the checkout form instead of as a toast.
 const FORM_ERRORS = new Set(['invalid_coupon', 'billing_state_required', 'invalid_gstin', 'business_name_required', 'gstin_not_supported']);
 
 /** Checkout details: coupon + (when GST invoicing is on) the buyer's state and optional GSTIN. Resolves null if dismissed. */

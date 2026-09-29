@@ -1,3 +1,4 @@
+// Reels page (#/reels): a vertical, snap-scrolling feed where only the reel on screen plays (sound is muted until the viewer unmutes once).
 import { app } from '../app.js';
 import { html, $, $$, shareOrCopy } from '../util.js';
 import { icon } from '../icons.js';

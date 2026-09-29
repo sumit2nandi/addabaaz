@@ -1,3 +1,4 @@
+// Privacy policy, Terms and Refund policy pages. The text itself lives in legal-text.js so the server can use it for SEO too.
 import { html } from '../util.js';
 import { legalDoc, LEGAL_PAGES, LEGAL_UPDATED } from '../legal-text.js';
 import { fmtDate } from '../util.js';

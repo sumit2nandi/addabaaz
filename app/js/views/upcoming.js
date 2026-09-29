@@ -1,3 +1,4 @@
+// Coming-soon list (#/upcoming).
 import { app } from '../app.js';
 import { html } from '../util.js';
 import { remindBtn, img, sectionHeader } from '../ui/components.js';

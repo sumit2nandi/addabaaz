@@ -1,3 +1,4 @@
+// Details for an upcoming title (#/soon/:id) with a "Remind me" button.
 import { app } from '../app.js';
 import { html } from '../util.js';
 import { icon } from '../icons.js';
