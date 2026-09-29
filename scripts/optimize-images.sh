@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Generates web/app-friendly WebP renditions of the original artwork into media/.
+# Originals (BTS/, UpcomingReleases/, images/) are never modified.
+# Requires ImageMagick (`convert`). Re-run after adding new artwork, then update data/catalog.json.
+#
+#   media/<group>/<slug>-sm.webp   grid / rail cards   (400px wide)
+#   media/<group>/<slug>-lg.webp   detail / lightbox   (1200px wide)
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+slug() { # "UTTRAN BTS (16).png" -> "uttran-bts-16"
+  local b; b="$(basename "$1")"; b="${b%.*}"
+  echo "$b" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g'
+}
+
+render() { # src group slug small large [quality]
+  local src="$1" group="$2" name="$3" sm="$4" lg="$5" q="${6:-78}"
+  mkdir -p "media/$group"
+  [ -n "$sm" ] && convert "$src" -auto-orient -strip -resize "${sm}x>" -quality "$q" "media/$group/$name-sm.webp"
+  [ -n "$lg" ] && convert "$src" -auto-orient -strip -resize "${lg}x>" -quality "$q" "media/$group/$name-lg.webp"
+  return 0
+}
+
+# Show posters
+render images/Shahid.webp        shows shahid       400 1000
+render images/laughBite.webp     shows laugh-bite   400 1000
+render images/FaltuKatha.webp    shows faltu-kotha  400 1000
+render "images/কিছু কথা কিছু ইতিহাস.webp" shows kichu-kotha-kichu-itihas 400 1000
+
+# Upcoming posters, BTS
+for f in UpcomingReleases/*.png; do render "$f" upcoming "$(slug "$f")" 400 1200; done
+for f in BTS/*.png BTS/*.jpeg;   do render "$f" bts      "$(slug "$f")" 400 1400; done
+
+# Team portraits
+for f in images/Team/*.png; do render "$f" team "$(slug "$f")" 360 ""; done
+
+# Brand / PWA / native-app icons
+mkdir -p media/icons
+for s in 48 72 96 128 144 152 180 192 256 384 512; do
+  convert images/addabaaz-logo.png -resize "${s}x${s}" -strip "media/icons/icon-$s.png"
+done
+# Maskable icon: logo at ~70% on the brand background (safe-zone friendly)
+convert -size 512x512 xc:'#050505' \( images/addabaaz-logo.png -resize 360x360 \) -gravity center -composite -strip media/icons/maskable-512.png
+convert -size 192x192 xc:'#050505' \( images/addabaaz-logo.png -resize 134x134 \) -gravity center -composite -strip media/icons/maskable-192.png
+convert images/addabaaz-logo.png -resize 96x96 -strip -quality 80 media/icons/logo-96.webp
+# Master art for native icon/splash generation (@capacitor/assets, run via `npm --prefix mobile run assets`)
+mkdir -p resources
+convert images/addabaaz-logo1.png -resize 1024x1024 -strip -define png:compression-level=9 resources/icon-only.png
+convert -size 1024x1024 xc:'#050505' resources/icon-background.png
+convert -size 2732x2732 xc:'#050505' \( images/addabaaz-logo.png -resize 900x900 \) -gravity center -composite -strip -define png:compression-level=9 resources/splash.png
+echo "done"; du -sh media resources

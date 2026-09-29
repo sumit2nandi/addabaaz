@@ -1,0 +1,9 @@
+node_modules/
+server/data/
+www/
+mobile/android/
+mobile/ios/
+mobile/node_modules/
+.env
+.DS_Store
+*.log

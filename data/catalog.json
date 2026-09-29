@@ -1,0 +1,3198 @@
+{
+ "schema": 1,
+ "updatedAt": "2026-09-29",
+ "shows": [
+  {
+   "id": "shahid",
+   "title": "শহীদ",
+   "titleEn": "Shahid",
+   "type": "series",
+   "genres": [
+    "Drama",
+    "History"
+   ],
+   "tagline": "The men and women who gave everything for freedom.",
+   "description": "A Bengali historical drama series that brings the lives and final days of Bengal’s revolutionaries to the screen — Khudiram Bose, Jatindra Nath Das, Pritilata Waddedar, Prafulla Chaki and Bina Das — with one story in every episode.",
+   "cast": [
+    "Gourav",
+    "Sudip",
+    "Deep",
+    "Sourav",
+    "Mainak",
+    "Sritama",
+    "Kaustav"
+   ],
+   "language": "Bengali",
+   "year": 2026,
+   "status": "ongoing",
+   "featured": true,
+   "poster": "media/shows/shahid-sm.webp",
+   "posterLg": "media/shows/shahid-lg.webp",
+   "access": "free"
+  },
+  {
+   "id": "laugh-bite",
+   "title": "Laugh Bite",
+   "titleEn": "Laugh Bite",
+   "type": "standup",
+   "genres": [
+    "Comedy",
+    "Stand-up"
+   ],
+   "tagline": "A stand-up comedy show. 100% faltu guaranteed.",
+   "description": "Bengali stand-up comedy from ADDABAAZ, featuring Subhadip Ghosh, Vaskar Manna, Pramit Mitra and Anmitra Sarkar — local jokes, local trains, local chaos.",
+   "cast": [
+    "Subhadip Ghosh",
+    "Vaskar Manna",
+    "Pramit Mitra",
+    "Anmitra Sarkar"
+   ],
+   "language": "Bengali",
+   "year": 2026,
+   "status": "ongoing",
+   "featured": true,
+   "poster": "media/shows/laugh-bite-sm.webp",
+   "posterLg": "media/shows/laugh-bite-lg.webp",
+   "access": "free"
+  },
+  {
+   "id": "faltu-kotha",
+   "title": "ফালতু কথা",
+   "titleEn": "Faltu Kotha",
+   "type": "podcast",
+   "genres": [
+    "Comedy",
+    "Fake Podcast"
+   ],
+   "tagline": "গল্প নাই, যুক্তি নাই, শুধু ফালতু কথা!",
+   "description": "Unfiltered Bengali comedy and satirical fake-podcast episodes — relationships, Gen Z, IT cells, gym gurus and everything in between.",
+   "cast": [],
+   "language": "Bengali",
+   "year": 2026,
+   "status": "ongoing",
+   "featured": true,
+   "poster": "media/shows/faltu-kotha-sm.webp",
+   "posterLg": "media/shows/faltu-kotha-lg.webp",
+   "access": "free"
+  }
+ ],
+ "videos": [
+  {
+   "id": "yxpctHMPcCk",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 18| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "yxpctHMPcCk"
+   },
+   "duration": 30,
+   "publishedAt": "2026-09-14T13:30:04Z",
+   "views": 18,
+   "access": "free"
+  },
+  {
+   "id": "C26VrT3kTtM",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 17| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "C26VrT3kTtM"
+   },
+   "duration": 58,
+   "publishedAt": "2026-09-14T10:56:39Z",
+   "views": 14,
+   "access": "free"
+  },
+  {
+   "id": "SBFaqlpsu6c",
+   "showId": "shahid",
+   "kind": "episode",
+   "episode": 5,
+   "title": "সমাবর্তনে ৫টি গুলি! বীণা দাশের সেই দুঃসাহসিক কাণ্ড | শহীদ |EP 05 | ADDABAAZ",
+   "source": {
+    "type": "youtube",
+    "id": "SBFaqlpsu6c"
+   },
+   "duration": 886,
+   "publishedAt": "2026-09-12T13:30:16Z",
+   "views": 55,
+   "access": "free"
+  },
+  {
+   "id": "PTEPziaTDzQ",
+   "showId": "shahid",
+   "kind": "clip",
+   "episode": null,
+   "title": "প্রফুল্ল চাকী মৃত্যুর মুখেও হার মানেননি ! বাংলার অমর বিপ্লবীর গল্প। শহীদ | Reel-05| EP-04| Addabaaz",
+   "source": {
+    "type": "youtube",
+    "id": "PTEPziaTDzQ"
+   },
+   "duration": 105,
+   "publishedAt": "2026-09-11T13:30:07Z",
+   "views": 49,
+   "access": "free"
+  },
+  {
+   "id": "5uX2-b6DeA8",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "প্রফুল্ল শেষ মুহূর্তের সেই সিদ্ধান্ত! ইতিহাসের শিহরণ জাগানো কাহিনি । শহীদ | Reel-04| EP-04| Addabaaz",
+   "source": {
+    "type": "youtube",
+    "id": "5uX2-b6DeA8"
+   },
+   "duration": 53,
+   "publishedAt": "2026-09-10T13:30:19Z",
+   "views": 246,
+   "access": "free"
+  },
+  {
+   "id": "5o0eQomkmgs",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "প্রফুল্ল চাকীর জীবনের সেই গোপন অধ্যায় | কী লুকিয়ে ছিল সেই কাগজে?। শহীদ | Reel-03| EP-04| Addabaaz",
+   "source": {
+    "type": "youtube",
+    "id": "5o0eQomkmgs"
+   },
+   "duration": 74,
+   "publishedAt": "2026-09-07T13:30:14Z",
+   "views": 52,
+   "access": "free"
+  },
+  {
+   "id": "IYREigy7dqA",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "প্রফুল্ল চাকী - দেশের জন্য শেষ আত্মত্যাগ। শহীদ | Reel-02| EP-04| Addabazz",
+   "source": {
+    "type": "youtube",
+    "id": "IYREigy7dqA"
+   },
+   "duration": 87,
+   "publishedAt": "2026-09-06T13:30:23Z",
+   "views": 58,
+   "access": "free"
+  },
+  {
+   "id": "4YW1wjhpIxM",
+   "showId": "shahid",
+   "kind": "clip",
+   "episode": null,
+   "title": "প্রফুল্ল চাকীর শেষ লড়াই ! ইতিহাসের এক অজানা অধ্যায়। শহীদ | Reel-01| EP-04 | Addabaaz",
+   "source": {
+    "type": "youtube",
+    "id": "4YW1wjhpIxM"
+   },
+   "duration": 97,
+   "publishedAt": "2026-09-06T13:30:12Z",
+   "views": 48,
+   "access": "free"
+  },
+  {
+   "id": "Cp8uG-44ICk",
+   "showId": "shahid",
+   "kind": "episode",
+   "episode": 4,
+   "title": "প্রফুল্ল চাকী, মোকামা ঘাটের শেষ লড়াই | শহীদ | EP-04 | Kaustav | Gourav | Sudip | Deep | Sourav",
+   "source": {
+    "type": "youtube",
+    "id": "Cp8uG-44ICk"
+   },
+   "duration": 950,
+   "publishedAt": "2026-09-05T13:30:03Z",
+   "views": 80,
+   "access": "free"
+  },
+  {
+   "id": "eD2ijKbTpqk",
+   "showId": "shahid",
+   "kind": "trailer",
+   "episode": null,
+   "title": "প্রফুল্ল চাকী, শেষ ট্রেনযাত্রা!।শহীদ | Trailer | EP-03| Addabazz",
+   "source": {
+    "type": "youtube",
+    "id": "eD2ijKbTpqk"
+   },
+   "duration": 57,
+   "publishedAt": "2026-09-05T07:13:37Z",
+   "views": 61,
+   "access": "free"
+  },
+  {
+   "id": "C3_eHtqrYo8",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 16| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "C3_eHtqrYo8"
+   },
+   "duration": 29,
+   "publishedAt": "2026-09-04T13:30:06Z",
+   "views": 253,
+   "access": "free"
+  },
+  {
+   "id": "h4-gUXaGpz4",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ |REEL-01| EP-02 | Addabazz | Kaustav | Ritam Jana | Gourav | Sudip | Deep | Sourav |",
+   "source": {
+    "type": "youtube",
+    "id": "h4-gUXaGpz4"
+   },
+   "duration": 86,
+   "publishedAt": "2026-09-03T13:30:13Z",
+   "views": 35,
+   "access": "free"
+  },
+  {
+   "id": "djjo0qJ5gY8",
+   "showId": "shahid",
+   "kind": "episode",
+   "episode": 3,
+   "title": "প্রীতিলতা ওয়াদ্দেদার | শহীদ | EP-03 | Sritama| Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "djjo0qJ5gY8"
+   },
+   "duration": 885,
+   "publishedAt": "2026-08-29T13:30:16Z",
+   "views": 106,
+   "access": "free"
+  },
+  {
+   "id": "jreSzqkfShg",
+   "showId": "shahid",
+   "kind": "trailer",
+   "episode": null,
+   "title": "প্রীতিলতা ওয়াদ্দেদার—শুধু একজন শহিদ নন, তিনি একটা প্রশ্ন।শহীদ | Trailer | EP-03| Addabazz",
+   "source": {
+    "type": "youtube",
+    "id": "jreSzqkfShg"
+   },
+   "duration": 80,
+   "publishedAt": "2026-08-29T08:00:37Z",
+   "views": 62,
+   "access": "free"
+  },
+  {
+   "id": "Eep1QMCVIm4",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 15| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "Eep1QMCVIm4"
+   },
+   "duration": 46,
+   "publishedAt": "2026-08-28T13:30:16Z",
+   "views": 46,
+   "access": "free"
+  },
+  {
+   "id": "1kLuk4nlkgU",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 14| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "1kLuk4nlkgU"
+   },
+   "duration": 40,
+   "publishedAt": "2026-08-28T07:00:30Z",
+   "views": 66,
+   "access": "free"
+  },
+  {
+   "id": "W2vfbLu3Wlg",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 13| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "W2vfbLu3Wlg"
+   },
+   "duration": 34,
+   "publishedAt": "2026-08-27T13:30:31Z",
+   "views": 330,
+   "access": "free"
+  },
+  {
+   "id": "g5LWdij7w6s",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 12| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "g5LWdij7w6s"
+   },
+   "duration": 49,
+   "publishedAt": "2026-08-26T13:30:31Z",
+   "views": 78,
+   "access": "free"
+  },
+  {
+   "id": "XvpOuz9Mf08",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 11| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "XvpOuz9Mf08"
+   },
+   "duration": 59,
+   "publishedAt": "2026-08-26T07:00:32Z",
+   "views": 125,
+   "access": "free"
+  },
+  {
+   "id": "3NVo7WtiTXg",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 10| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "3NVo7WtiTXg"
+   },
+   "duration": 51,
+   "publishedAt": "2026-08-24T13:30:13Z",
+   "views": 273,
+   "access": "free"
+  },
+  {
+   "id": "GS9fcoJVvE4",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 9| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "GS9fcoJVvE4"
+   },
+   "duration": 50,
+   "publishedAt": "2026-08-24T09:30:16Z",
+   "views": 306,
+   "access": "free"
+  },
+  {
+   "id": "C7k5FSKn4Gw",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 8| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "C7k5FSKn4Gw"
+   },
+   "duration": 45,
+   "publishedAt": "2026-08-23T13:30:01Z",
+   "views": 499,
+   "access": "free"
+  },
+  {
+   "id": "1YH-ij2eBkI",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 7| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "1YH-ij2eBkI"
+   },
+   "duration": 42,
+   "publishedAt": "2026-08-23T07:00:29Z",
+   "views": 88,
+   "access": "free"
+  },
+  {
+   "id": "-SGbw97-1wM",
+   "showId": "shahid",
+   "kind": "trailer",
+   "episode": null,
+   "title": "শহীদ |Trailer | EP-02 | Addabazz | Kaustav | Ritam Jana | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "-SGbw97-1wM"
+   },
+   "duration": 95,
+   "publishedAt": "2026-08-22T16:30:27Z",
+   "views": 15395,
+   "access": "free"
+  },
+  {
+   "id": "1GsBEE9jkqw",
+   "showId": "shahid",
+   "kind": "episode",
+   "episode": 2,
+   "title": "৬৩ দিনের অগ্নিপরীক্ষা | শহীদ | EP-02 | Jatindra Nath Das | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "1GsBEE9jkqw"
+   },
+   "duration": 943,
+   "publishedAt": "2026-08-22T13:31:24Z",
+   "views": 569,
+   "access": "free"
+  },
+  {
+   "id": "s5x5L-syLvo",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 6| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "s5x5L-syLvo"
+   },
+   "duration": 52,
+   "publishedAt": "2026-08-21T13:30:20Z",
+   "views": 161,
+   "access": "free"
+  },
+  {
+   "id": "qMjeC5f1QEo",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 5| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "qMjeC5f1QEo"
+   },
+   "duration": 44,
+   "publishedAt": "2026-08-21T09:30:15Z",
+   "views": 140,
+   "access": "free"
+  },
+  {
+   "id": "Ki7S3mYZBV0",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 4| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "Ki7S3mYZBV0"
+   },
+   "duration": 39,
+   "publishedAt": "2026-08-20T13:30:03Z",
+   "views": 169,
+   "access": "free"
+  },
+  {
+   "id": "wAr76XbeL6E",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 3| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "wAr76XbeL6E"
+   },
+   "duration": 46,
+   "publishedAt": "2026-08-20T04:30:19Z",
+   "views": 157,
+   "access": "free"
+  },
+  {
+   "id": "5M9pAD0Iako",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 2| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "5M9pAD0Iako"
+   },
+   "duration": 46,
+   "publishedAt": "2026-08-19T13:30:33Z",
+   "views": 71,
+   "access": "free"
+  },
+  {
+   "id": "e6WNHAEYdaI",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "শহীদ | Part - 1| Khudiram Bose | Addabazz | Kaustav | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "e6WNHAEYdaI"
+   },
+   "duration": 49,
+   "publishedAt": "2026-08-19T04:30:17Z",
+   "views": 181,
+   "access": "free"
+  },
+  {
+   "id": "o31DjxoaHM8",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "o31DjxoaHM8"
+   },
+   "duration": 33,
+   "publishedAt": "2026-08-17T04:30:04Z",
+   "views": 760,
+   "access": "free"
+  },
+  {
+   "id": "5WcpoVrf-nk",
+   "showId": "shahid",
+   "kind": "clip",
+   "episode": null,
+   "title": "Sahid (শহীদ) | Promo | Addabazz | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "5WcpoVrf-nk"
+   },
+   "duration": 107,
+   "publishedAt": "2026-08-16T13:22:27Z",
+   "views": 37,
+   "access": "free"
+  },
+  {
+   "id": "0eHrzHXG2Ys",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "0eHrzHXG2Ys"
+   },
+   "duration": 34,
+   "publishedAt": "2026-08-16T04:30:17Z",
+   "views": 368,
+   "access": "free"
+  },
+  {
+   "id": "7jz3BSqSXsM",
+   "showId": "shahid",
+   "kind": "episode",
+   "episode": 1,
+   "title": "হাসতে হাসতে ফাঁসির মঞ্চে | শহীদ | EP-01| Khudiram Bose | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "7jz3BSqSXsM"
+   },
+   "duration": 948,
+   "publishedAt": "2026-08-15T06:30:05Z",
+   "views": 5191,
+   "access": "free"
+  },
+  {
+   "id": "Z_YguFelLy4",
+   "showId": "shahid",
+   "kind": "reel",
+   "episode": null,
+   "title": "Sahid (শহীদ) | Promo | Addabazz | Gourav | Sudip | Deep | Sourav | Mainak",
+   "source": {
+    "type": "youtube",
+    "id": "Z_YguFelLy4"
+   },
+   "duration": 68,
+   "publishedAt": "2026-08-14T15:45:54Z",
+   "views": 21290,
+   "access": "free"
+  },
+  {
+   "id": "sveSHsfEYx4",
+   "showId": "shahid",
+   "kind": "clip",
+   "episode": null,
+   "title": "ক্ষুদিরাম বসু !! দেশের স্বাধীনতার জন্য কীভাবে নিজের জীবন উৎসর্গ করেছিলেন তিনি?",
+   "source": {
+    "type": "youtube",
+    "id": "sveSHsfEYx4"
+   },
+   "duration": 103,
+   "publishedAt": "2026-08-14T07:00:23Z",
+   "views": 231,
+   "access": "free"
+  },
+  {
+   "id": "6uF9z6XiPuw",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "6uF9z6XiPuw"
+   },
+   "duration": 21,
+   "publishedAt": "2026-08-14T04:30:15Z",
+   "views": 177,
+   "access": "free"
+  },
+  {
+   "id": "xVPdbkDjgfc",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "xVPdbkDjgfc"
+   },
+   "duration": 31,
+   "publishedAt": "2026-08-13T04:30:23Z",
+   "views": 55,
+   "access": "free"
+  },
+  {
+   "id": "4pdafr46SgY",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "4pdafr46SgY"
+   },
+   "duration": 23,
+   "publishedAt": "2026-08-12T04:30:03Z",
+   "views": 72,
+   "access": "free"
+  },
+  {
+   "id": "vbiQfTlPKBk",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "vbiQfTlPKBk"
+   },
+   "duration": 30,
+   "publishedAt": "2026-08-11T04:30:20Z",
+   "views": 1012,
+   "access": "free"
+  },
+  {
+   "id": "NX-2nyrONgU",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "NX-2nyrONgU"
+   },
+   "duration": 33,
+   "publishedAt": "2026-08-10T04:30:12Z",
+   "views": 139,
+   "access": "free"
+  },
+  {
+   "id": "Zm2RLO-doj4",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "XX ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "Zm2RLO-doj4"
+   },
+   "duration": 27,
+   "publishedAt": "2026-08-05T04:30:36Z",
+   "views": 219,
+   "access": "free"
+  },
+  {
+   "id": "peXmjIvR5W8",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "XX ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "peXmjIvR5W8"
+   },
+   "duration": 24,
+   "publishedAt": "2026-08-04T04:30:18Z",
+   "views": 82,
+   "access": "free"
+  },
+  {
+   "id": "S_Td3a6neyk",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "XX ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "S_Td3a6neyk"
+   },
+   "duration": 31,
+   "publishedAt": "2026-08-03T04:30:26Z",
+   "views": 56,
+   "access": "free"
+  },
+  {
+   "id": "SZlJgaRQm0Q",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "XX ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "SZlJgaRQm0Q"
+   },
+   "duration": 43,
+   "publishedAt": "2026-08-02T04:30:07Z",
+   "views": 48,
+   "access": "free"
+  },
+  {
+   "id": "gf7xdl3ibt8",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "XX ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "gf7xdl3ibt8"
+   },
+   "duration": 42,
+   "publishedAt": "2026-08-01T04:30:14Z",
+   "views": 589,
+   "access": "free"
+  },
+  {
+   "id": "X9lyomnnlL8",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "XX ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "X9lyomnnlL8"
+   },
+   "duration": 30,
+   "publishedAt": "2026-07-31T04:30:17Z",
+   "views": 1184,
+   "access": "free"
+  },
+  {
+   "id": "IQzlhRUSbTM",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "XX ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "IQzlhRUSbTM"
+   },
+   "duration": 51,
+   "publishedAt": "2026-07-30T04:30:26Z",
+   "views": 79,
+   "access": "free"
+  },
+  {
+   "id": "0ngZptKE0ls",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "XX ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "0ngZptKE0ls"
+   },
+   "duration": 28,
+   "publishedAt": "2026-07-29T04:30:00Z",
+   "views": 161,
+   "access": "free"
+  },
+  {
+   "id": "lJ5SOYQc-1g",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 18,
+   "title": "“বিয়ে না Silicone Doll? 🤯 আধুনিক সম্পর্কের ভয়ংকর সত্য!” || EP-18 || আড্ডাবাজ (ADDABAAZ)",
+   "source": {
+    "type": "youtube",
+    "id": "lJ5SOYQc-1g"
+   },
+   "duration": 269,
+   "publishedAt": "2026-07-28T12:30:09Z",
+   "views": 2956,
+   "access": "free"
+  },
+  {
+   "id": "RUKUEZ6NbxM",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "XX ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "RUKUEZ6NbxM"
+   },
+   "duration": 58,
+   "publishedAt": "2026-07-27T04:30:18Z",
+   "views": 55,
+   "access": "free"
+  },
+  {
+   "id": "zIef-ntK6wc",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "zIef-ntK6wc"
+   },
+   "duration": 45,
+   "publishedAt": "2026-07-25T15:34:42Z",
+   "views": 47,
+   "access": "free"
+  },
+  {
+   "id": "NxJhyNA2GOQ",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "NxJhyNA2GOQ"
+   },
+   "duration": 17,
+   "publishedAt": "2026-07-23T12:30:09Z",
+   "views": 28,
+   "access": "free"
+  },
+  {
+   "id": "QI-y8SLY4MI",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "QI-y8SLY4MI"
+   },
+   "duration": 15,
+   "publishedAt": "2026-07-22T12:30:39Z",
+   "views": 27,
+   "access": "free"
+  },
+  {
+   "id": "qhdj8tpfY0k",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 17,
+   "title": "Laugh Bite|| Addabaaz ||Vaskar Manna || EP-17 || Stand up comedy | আড্ডাবাজ (ADDABAAZ)",
+   "source": {
+    "type": "youtube",
+    "id": "qhdj8tpfY0k"
+   },
+   "duration": 291,
+   "publishedAt": "2026-07-21T12:30:27Z",
+   "views": 35,
+   "access": "free"
+  },
+  {
+   "id": "RVa3w4jFCxw",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "RVa3w4jFCxw"
+   },
+   "duration": 17,
+   "publishedAt": "2026-07-20T12:30:31Z",
+   "views": 31,
+   "access": "free"
+  },
+  {
+   "id": "jlJyDXTBkdY",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "jlJyDXTBkdY"
+   },
+   "duration": 17,
+   "publishedAt": "2026-07-19T12:30:19Z",
+   "views": 25,
+   "access": "free"
+  },
+  {
+   "id": "Q-gNUoAU2UA",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "Q-gNUoAU2UA"
+   },
+   "duration": 14,
+   "publishedAt": "2026-07-17T12:30:35Z",
+   "views": 32,
+   "access": "free"
+  },
+  {
+   "id": "_vVX_zTACxM",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "_vVX_zTACxM"
+   },
+   "duration": 13,
+   "publishedAt": "2026-07-16T12:30:39Z",
+   "views": 22,
+   "access": "free"
+  },
+  {
+   "id": "pOuqQ-MjQ6M",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "pOuqQ-MjQ6M"
+   },
+   "duration": 29,
+   "publishedAt": "2026-07-15T12:30:37Z",
+   "views": 19,
+   "access": "free"
+  },
+  {
+   "id": "MKm_nMLC60Y",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 16,
+   "title": "Laugh Bite|| Addabaaz||Anmitra Sarkar || EP-16 || Stand up comedy | আড্ডাবাজ (ADDABAAZ)",
+   "source": {
+    "type": "youtube",
+    "id": "MKm_nMLC60Y"
+   },
+   "duration": 280,
+   "publishedAt": "2026-07-14T12:30:11Z",
+   "views": 43,
+   "access": "free"
+  },
+  {
+   "id": "tYnF71HdaYk",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "tYnF71HdaYk"
+   },
+   "duration": 23,
+   "publishedAt": "2026-07-13T12:30:08Z",
+   "views": 42,
+   "access": "free"
+  },
+  {
+   "id": "o1aMOGfeieA",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "o1aMOGfeieA"
+   },
+   "duration": 18,
+   "publishedAt": "2026-07-12T12:30:26Z",
+   "views": 42,
+   "access": "free"
+  },
+  {
+   "id": "HRohhXBp6Qs",
+   "showId": "faltu-kotha",
+   "kind": "episode",
+   "episode": 14,
+   "title": "ফুটপাতে হাঁটা নিষেধ! কমরেডের আজব বিপ্লব |পর্ব -১৪।ফালতু কথা | Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "HRohhXBp6Qs"
+   },
+   "duration": 484,
+   "publishedAt": "2026-07-11T12:30:35Z",
+   "views": 678,
+   "access": "free"
+  },
+  {
+   "id": "typzGcuWM5g",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "typzGcuWM5g"
+   },
+   "duration": 28,
+   "publishedAt": "2026-07-10T12:30:07Z",
+   "views": 29,
+   "access": "free"
+  },
+  {
+   "id": "exGz4Qk4Exs",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "exGz4Qk4Exs"
+   },
+   "duration": 18,
+   "publishedAt": "2026-07-09T12:30:25Z",
+   "views": 30,
+   "access": "free"
+  },
+  {
+   "id": "1nKFHlpqrXo",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "1nKFHlpqrXo"
+   },
+   "duration": 16,
+   "publishedAt": "2026-07-08T12:30:25Z",
+   "views": 56,
+   "access": "free"
+  },
+  {
+   "id": "BlqUjY2QYts",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 15,
+   "title": "New Year Night & Madness ||Subhadip Ghosh || EP-15 || Stand up comedy | আড্ডাবাজ (ADDABAAZ)",
+   "source": {
+    "type": "youtube",
+    "id": "BlqUjY2QYts"
+   },
+   "duration": 407,
+   "publishedAt": "2026-07-07T12:30:29Z",
+   "views": 32,
+   "access": "free"
+  },
+  {
+   "id": "CPbIErpQ-ko",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "CPbIErpQ-ko"
+   },
+   "duration": 16,
+   "publishedAt": "2026-07-06T12:30:15Z",
+   "views": 32,
+   "access": "free"
+  },
+  {
+   "id": "68O016VMnao",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "68O016VMnao"
+   },
+   "duration": 17,
+   "publishedAt": "2026-07-05T12:30:38Z",
+   "views": 36,
+   "access": "free"
+  },
+  {
+   "id": "n2i_46N6Mh8",
+   "showId": "faltu-kotha",
+   "kind": "episode",
+   "episode": 13,
+   "title": "iPhone-এ পুঁজিবাদবিরোধী বিপ্লব | আন্দোলন-লেনিনের প্রেম!|পর্ব -১৩ ।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "n2i_46N6Mh8"
+   },
+   "duration": 665,
+   "publishedAt": "2026-07-04T12:30:37Z",
+   "views": 264,
+   "access": "free"
+  },
+  {
+   "id": "Lm2ImosnUMs",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "Lm2ImosnUMs"
+   },
+   "duration": 27,
+   "publishedAt": "2026-07-03T12:30:32Z",
+   "views": 32,
+   "access": "free"
+  },
+  {
+   "id": "T4S_IaN9r4k",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "T4S_IaN9r4k"
+   },
+   "duration": 34,
+   "publishedAt": "2026-07-02T12:30:20Z",
+   "views": 31,
+   "access": "free"
+  },
+  {
+   "id": "Yio34_DCx4o",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "Yio34_DCx4o"
+   },
+   "duration": 31,
+   "publishedAt": "2026-07-01T12:30:35Z",
+   "views": 34,
+   "access": "free"
+  },
+  {
+   "id": "zzyMGH6BAAE",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 14,
+   "title": "Reels নাকি Cinema? 😳 ১২ সেকেন্ডেই Emotion Damage!| Pramit Mitra | EP-14 | addabaaz | Lught Bite",
+   "source": {
+    "type": "youtube",
+    "id": "zzyMGH6BAAE"
+   },
+   "duration": 363,
+   "publishedAt": "2026-06-30T12:30:02Z",
+   "views": 134359,
+   "access": "free"
+  },
+  {
+   "id": "ajMuAPEA2fA",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "ajMuAPEA2fA"
+   },
+   "duration": 25,
+   "publishedAt": "2026-06-29T12:30:32Z",
+   "views": 995,
+   "access": "free"
+  },
+  {
+   "id": "zd-rXXqGkss",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "zd-rXXqGkss"
+   },
+   "duration": 31,
+   "publishedAt": "2026-06-28T12:30:14Z",
+   "views": 273,
+   "access": "free"
+  },
+  {
+   "id": "v9TPpETeZEM",
+   "showId": "faltu-kotha",
+   "kind": "episode",
+   "episode": 12,
+   "title": "Trainer না Businessman? Gym Guru-র Supplement Scam ফাঁস! | পর্ব ১২ ।Fake Podcast | আড্ডাবাজ",
+   "source": {
+    "type": "youtube",
+    "id": "v9TPpETeZEM"
+   },
+   "duration": 538,
+   "publishedAt": "2026-06-27T12:30:32Z",
+   "views": 1274,
+   "access": "free"
+  },
+  {
+   "id": "_YBv9vHhSCM",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "_YBv9vHhSCM"
+   },
+   "duration": 27,
+   "publishedAt": "2026-06-26T12:30:14Z",
+   "views": 470,
+   "access": "free"
+  },
+  {
+   "id": "gmgRCtiaUTM",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "gmgRCtiaUTM"
+   },
+   "duration": 25,
+   "publishedAt": "2026-06-25T12:30:12Z",
+   "views": 165,
+   "access": "free"
+  },
+  {
+   "id": "DIK4coqQBzU",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "DIK4coqQBzU"
+   },
+   "duration": 21,
+   "publishedAt": "2026-06-24T12:30:36Z",
+   "views": 243,
+   "access": "free"
+  },
+  {
+   "id": "KHhJyHjShyI",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 13,
+   "title": "Laugh Bite|| Addabaaz||Anmitra Sarkar || EP-13 || Standupcomedy",
+   "source": {
+    "type": "youtube",
+    "id": "KHhJyHjShyI"
+   },
+   "duration": 266,
+   "publishedAt": "2026-06-23T12:30:23Z",
+   "views": 21,
+   "access": "free"
+  },
+  {
+   "id": "f9s1Wz7thHE",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ফালতু কথা || REELS || FALTU KOTHA ||FAKE PODCAST || ADDABAAZ #comedy #entertainment",
+   "source": {
+    "type": "youtube",
+    "id": "f9s1Wz7thHE"
+   },
+   "duration": 31,
+   "publishedAt": "2026-06-22T12:30:25Z",
+   "views": 250,
+   "access": "free"
+  },
+  {
+   "id": "dz2Ew3Yd2eY",
+   "showId": null,
+   "kind": "reel",
+   "episode": null,
+   "title": "আড্ডাবাজ || Addabaaz reels || Addabaaz content || Addabaaz Promo || Reel-07",
+   "source": {
+    "type": "youtube",
+    "id": "dz2Ew3Yd2eY"
+   },
+   "duration": 28,
+   "publishedAt": "2026-06-21T12:30:05Z",
+   "views": 899,
+   "access": "free"
+  },
+  {
+   "id": "lTCtA864fN8",
+   "showId": "faltu-kotha",
+   "kind": "episode",
+   "episode": 11,
+   "title": "Relationship না Customer Support Job? 🤯| পর্ব ১১ ।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "lTCtA864fN8"
+   },
+   "duration": 628,
+   "publishedAt": "2026-06-20T12:30:05Z",
+   "views": 156,
+   "access": "free"
+  },
+  {
+   "id": "rhqpUVg_Wn4",
+   "showId": null,
+   "kind": "reel",
+   "episode": null,
+   "title": "আড্ডাবাজ || Addabaaz reels || Addabaaz content || Addabaaz Promo || Reel-06",
+   "source": {
+    "type": "youtube",
+    "id": "rhqpUVg_Wn4"
+   },
+   "duration": 48,
+   "publishedAt": "2026-06-19T12:30:08Z",
+   "views": 902,
+   "access": "free"
+  },
+  {
+   "id": "Q3k1I55fof0",
+   "showId": null,
+   "kind": "reel",
+   "episode": null,
+   "title": "আড্ডাবাজ || Addabaaz reels || Addabaaz content || Addabaaz Promo || Reel-05",
+   "source": {
+    "type": "youtube",
+    "id": "Q3k1I55fof0"
+   },
+   "duration": 39,
+   "publishedAt": "2026-06-18T12:30:16Z",
+   "views": 169,
+   "access": "free"
+  },
+  {
+   "id": "xd6hQLLJ3LE",
+   "showId": null,
+   "kind": "reel",
+   "episode": null,
+   "title": "আড্ডাবাজ || Addabaaz reels || Addabaaz content || Addabaaz Promo || Reel-04",
+   "source": {
+    "type": "youtube",
+    "id": "xd6hQLLJ3LE"
+   },
+   "duration": 27,
+   "publishedAt": "2026-06-17T12:30:30Z",
+   "views": 84,
+   "access": "free"
+  },
+  {
+   "id": "ZQBf4oi3Jzw",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 12,
+   "title": "Corporate চাকরি না জেলখানা? 😵‍💫|| Lught Bite || Subhadip Ghosh || EP-12 | Addabaaz",
+   "source": {
+    "type": "youtube",
+    "id": "ZQBf4oi3Jzw"
+   },
+   "duration": 465,
+   "publishedAt": "2026-06-16T12:30:29Z",
+   "views": 52,
+   "access": "free"
+  },
+  {
+   "id": "JT4WZVQk6bM",
+   "showId": null,
+   "kind": "reel",
+   "episode": null,
+   "title": "আড্ডাবাজ || Addabaaz reels || Addabaaz content || Addabaaz Promo || Reel-03",
+   "source": {
+    "type": "youtube",
+    "id": "JT4WZVQk6bM"
+   },
+   "duration": 38,
+   "publishedAt": "2026-06-15T12:30:14Z",
+   "views": 98,
+   "access": "free"
+  },
+  {
+   "id": "3Y0JKfIaRhs",
+   "showId": null,
+   "kind": "reel",
+   "episode": null,
+   "title": "আড্ডাবাজ || Addabaaz reels || Addabaaz content || Addabaaz Promo || Reel-02",
+   "source": {
+    "type": "youtube",
+    "id": "3Y0JKfIaRhs"
+   },
+   "duration": 31,
+   "publishedAt": "2026-06-14T12:30:27Z",
+   "views": 148,
+   "access": "free"
+  },
+  {
+   "id": "001IXO-JZog",
+   "showId": "faltu-kotha",
+   "kind": "episode",
+   "episode": 10,
+   "title": "AI Girlfriend বানিয়ে প্রেম! 😱 মাসে ₹999 দিয়ে | পর্ব ১০।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "001IXO-JZog"
+   },
+   "duration": 334,
+   "publishedAt": "2026-06-13T12:30:35Z",
+   "views": 213,
+   "access": "free"
+  },
+  {
+   "id": "qwiGU-YIkSA",
+   "showId": null,
+   "kind": "reel",
+   "episode": null,
+   "title": "আড্ডাবাজ || Addabaaz reels || Addabaaz content || Addabaaz Promo || Reel-01",
+   "source": {
+    "type": "youtube",
+    "id": "qwiGU-YIkSA"
+   },
+   "duration": 46,
+   "publishedAt": "2026-06-12T12:30:39Z",
+   "views": 254,
+   "access": "free"
+  },
+  {
+   "id": "5uR2DC2m32Y",
+   "showId": "central-calcutta-boarding",
+   "kind": "reel",
+   "episode": null,
+   "title": "সেন্ট্রাল ক্যালকাটা বোর্ডিং || New Web Series || comedy series|| Reel-09|| CKB || Promo || Addabaaz",
+   "source": {
+    "type": "youtube",
+    "id": "5uR2DC2m32Y"
+   },
+   "duration": 22,
+   "publishedAt": "2026-06-11T12:30:07Z",
+   "views": 1195,
+   "access": "free"
+  },
+  {
+   "id": "89wX-i-m71g",
+   "showId": "central-calcutta-boarding",
+   "kind": "reel",
+   "episode": null,
+   "title": "সেন্ট্রাল ক্যালকাটা বোর্ডিং || New Web Series || comedy series|| Reel-08|| CKB || Promo || Addabaaz",
+   "source": {
+    "type": "youtube",
+    "id": "89wX-i-m71g"
+   },
+   "duration": 25,
+   "publishedAt": "2026-06-10T12:30:39Z",
+   "views": 1007,
+   "access": "free"
+  },
+  {
+   "id": "AY7lc6xvDk4",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 11,
+   "title": "Laugh Bite|| Addabaaz||Vaskar Manna || EP-11 || Addabaaz",
+   "source": {
+    "type": "youtube",
+    "id": "AY7lc6xvDk4"
+   },
+   "duration": 458,
+   "publishedAt": "2026-06-09T12:30:29Z",
+   "views": 60,
+   "access": "free"
+  },
+  {
+   "id": "tFz4hdrW5bI",
+   "showId": "central-calcutta-boarding",
+   "kind": "reel",
+   "episode": null,
+   "title": "সেন্ট্রাল ক্যালকাটা বোর্ডিং || New Web Series || comedy series|| Reel-07|| CKB || Promo || Addabaaz",
+   "source": {
+    "type": "youtube",
+    "id": "tFz4hdrW5bI"
+   },
+   "duration": 34,
+   "publishedAt": "2026-06-08T12:30:40Z",
+   "views": 197,
+   "access": "free"
+  },
+  {
+   "id": "IsJwBRe5KFI",
+   "showId": "central-calcutta-boarding",
+   "kind": "reel",
+   "episode": null,
+   "title": "সেন্ট্রাল ক্যালকাটা বোর্ডিং || New Web Series || comedy series|| Reel-06|| CKB || Promo || Addabaaz",
+   "source": {
+    "type": "youtube",
+    "id": "IsJwBRe5KFI"
+   },
+   "duration": 25,
+   "publishedAt": "2026-06-07T12:30:01Z",
+   "views": 370,
+   "access": "free"
+  },
+  {
+   "id": "Kx8UvKhDkgY",
+   "showId": "faltu-kotha",
+   "kind": "episode",
+   "episode": 9,
+   "title": "Gen Z কি করছে আজকাল? এই ইন্টারভিউ দেখলে অবাক হবেন | পর্ব ৯ | Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "Kx8UvKhDkgY"
+   },
+   "duration": 542,
+   "publishedAt": "2026-06-06T12:30:12Z",
+   "views": 2299,
+   "access": "free"
+  },
+  {
+   "id": "ffJEFljYyh8",
+   "showId": "central-calcutta-boarding",
+   "kind": "reel",
+   "episode": null,
+   "title": "সেন্ট্রাল ক্যালকাটা বোর্ডিং || New Web Series || comedy series|| Reel-05|| CKB || Promo || Addabaaz",
+   "source": {
+    "type": "youtube",
+    "id": "ffJEFljYyh8"
+   },
+   "duration": 30,
+   "publishedAt": "2026-06-05T12:30:17Z",
+   "views": 342,
+   "access": "free"
+  },
+  {
+   "id": "06XG7n0un1s",
+   "showId": "central-calcutta-boarding",
+   "kind": "reel",
+   "episode": null,
+   "title": "সেন্ট্রাল ক্যালকাটা বোর্ডিং || New Web Series || comedy series|| Reel-04|| CKB || Promo || Addabaaz",
+   "source": {
+    "type": "youtube",
+    "id": "06XG7n0un1s"
+   },
+   "duration": 30,
+   "publishedAt": "2026-06-04T12:30:31Z",
+   "views": 104,
+   "access": "free"
+  },
+  {
+   "id": "KdVgociXnnw",
+   "showId": "central-calcutta-boarding",
+   "kind": "reel",
+   "episode": null,
+   "title": "সেন্ট্রাল ক্যালকাটা বোর্ডিং || New Web Series || comedy series|| Reel-03|| CKB || Promo || Addabaaz",
+   "source": {
+    "type": "youtube",
+    "id": "KdVgociXnnw"
+   },
+   "duration": 26,
+   "publishedAt": "2026-06-03T12:30:26Z",
+   "views": 286,
+   "access": "free"
+  },
+  {
+   "id": "XfW-t3IlD5o",
+   "showId": "faltu-kotha",
+   "kind": "episode",
+   "episode": 8,
+   "title": "যাদবপুরের ললিপপ বিপ্লবী | আন্দোলন-লেনিনের প্রেম!| পর্ব ৮ ।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "XfW-t3IlD5o"
+   },
+   "duration": 782,
+   "publishedAt": "2026-06-02T12:30:35Z",
+   "views": 4232,
+   "access": "free"
+  },
+  {
+   "id": "BtnQg_Sn1YY",
+   "showId": "central-calcutta-boarding",
+   "kind": "reel",
+   "episode": null,
+   "title": "সেন্ট্রাল ক্যালকাটা বোর্ডিং || New Web Series || comedy series|| Reel-02|| CKB || Promo || Addabaaz",
+   "source": {
+    "type": "youtube",
+    "id": "BtnQg_Sn1YY"
+   },
+   "duration": 30,
+   "publishedAt": "2026-06-01T12:30:30Z",
+   "views": 2096,
+   "access": "free"
+  },
+  {
+   "id": "ekjbbpeDSko",
+   "showId": "central-calcutta-boarding",
+   "kind": "reel",
+   "episode": null,
+   "title": "সেন্ট্রাল ক্যালকাটা বোর্ডিং || New Web Series || comedy series|| Reel-01|| CKB || Promo || Addabaaz",
+   "source": {
+    "type": "youtube",
+    "id": "ekjbbpeDSko"
+   },
+   "duration": 34,
+   "publishedAt": "2026-05-31T12:30:03Z",
+   "views": 1062,
+   "access": "free"
+  },
+  {
+   "id": "DgsksdQwsnU",
+   "showId": "faltu-kotha",
+   "kind": "episode",
+   "episode": 7,
+   "title": "ফেক প্রোফাইলের আড়ালে কোটি খিস্তি! Netizen-এর আসল মুখ ফাঁস | পর্ব ৭ ।Fake Podcast | আড্ডাবাজ",
+   "source": {
+    "type": "youtube",
+    "id": "DgsksdQwsnU"
+   },
+   "duration": 560,
+   "publishedAt": "2026-05-30T12:30:15Z",
+   "views": 251,
+   "access": "free"
+  },
+  {
+   "id": "iKmdUTc8x9g",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "Blocked… কিন্তু Mind থেকে Delete হয়নি! 💔 || REELS || FALTU KOTHA || ADDABAAZ",
+   "source": {
+    "type": "youtube",
+    "id": "iKmdUTc8x9g"
+   },
+   "duration": 17,
+   "publishedAt": "2026-05-29T12:30:37Z",
+   "views": 247,
+   "access": "free"
+  },
+  {
+   "id": "xGwezpzpdds",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "অপারেশন থামিয়ে Message? তারপর যা হলো… || REELS || FALTU KOTHA || ADDABAAZ",
+   "source": {
+    "type": "youtube",
+    "id": "xGwezpzpdds"
+   },
+   "duration": 24,
+   "publishedAt": "2026-05-28T12:30:17Z",
+   "views": 129,
+   "access": "free"
+  },
+  {
+   "id": "7QXsnr7kQU0",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 10,
+   "title": "গোলাপ থাকে Love Bite পর্যন্ত || Laugh Bite || Addabaaz || Subhadip Ghosh || EP-10",
+   "source": {
+    "type": "youtube",
+    "id": "7QXsnr7kQU0"
+   },
+   "duration": 350,
+   "publishedAt": "2026-05-27T14:05:20Z",
+   "views": 152,
+   "access": "free"
+  },
+  {
+   "id": "LUzh-6hn8SE",
+   "showId": "faltu-kotha",
+   "kind": "episode",
+   "episode": 6,
+   "title": "আমি Toxic না!’ 😭 কিন্তু Boyfriend-এর সব Password চাই!| পর্ব ৬ ।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "LUzh-6hn8SE"
+   },
+   "duration": 775,
+   "publishedAt": "2026-05-26T12:30:15Z",
+   "views": 1375,
+   "access": "free"
+  },
+  {
+   "id": "z_VO6mwOjSM",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "Privacy vs Trust 🔥 প্রেমে ফোন চেক করা কি Wrong? || REELS || FALTU KOTHA || ADDABAAZ",
+   "source": {
+    "type": "youtube",
+    "id": "z_VO6mwOjSM"
+   },
+   "duration": 16,
+   "publishedAt": "2026-05-25T12:30:00Z",
+   "views": 477,
+   "access": "free"
+  },
+  {
+   "id": "mcA8r9So-4I",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "“Babu Khayecho শুনলেই Mood Off 😵” || REELS || FALTU KOTHA || ADDABAAZ",
+   "source": {
+    "type": "youtube",
+    "id": "mcA8r9So-4I"
+   },
+   "duration": 19,
+   "publishedAt": "2026-05-24T10:00:31Z",
+   "views": 221,
+   "access": "free"
+  },
+  {
+   "id": "Cd3qX4h0DVI",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "“Relationship এ আসল জিনিস কী? 😳” || REELS || FALTU KOTHA || ADDABAAZ",
+   "source": {
+    "type": "youtube",
+    "id": "Cd3qX4h0DVI"
+   },
+   "duration": 19,
+   "publishedAt": "2026-05-24T07:00:39Z",
+   "views": 164,
+   "access": "free"
+  },
+  {
+   "id": "A9ZB0IhJ228",
+   "showId": "faltu-kotha",
+   "kind": "episode",
+   "episode": 5,
+   "title": "“সাকসেস না স্ক্যাম? মোটিভেশনাল গুরুর ভয়ংকর সত্য | পর্ব ৫।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "A9ZB0IhJ228"
+   },
+   "duration": 435,
+   "publishedAt": "2026-05-23T12:30:21Z",
+   "views": 356,
+   "access": "free"
+  },
+  {
+   "id": "AQJ2UtuBixA",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "“২৪ ঘণ্টা Available থাকাই কি True Love? 🤯” || REELS || FALTU KOTHA || ADDABAAZ",
+   "source": {
+    "type": "youtube",
+    "id": "AQJ2UtuBixA"
+   },
+   "duration": 26,
+   "publishedAt": "2026-05-23T07:00:14Z",
+   "views": 136,
+   "access": "free"
+  },
+  {
+   "id": "vhn5kzfYiD4",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 9,
+   "title": "Laugh Bite|| Addabaaz||Vaskar Manna || EP-9 #addabaaz #comedy #bengalacomedy #standupcomedy",
+   "source": {
+    "type": "youtube",
+    "id": "vhn5kzfYiD4"
+   },
+   "duration": 420,
+   "publishedAt": "2026-05-21T13:30:39Z",
+   "views": 98,
+   "access": "free"
+  },
+  {
+   "id": "a8aubxLrcFE",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "“Netflix And Chill Gone Wrong 😭🍿” || REELS || FALTU KOTHA || ADDABAAZ",
+   "source": {
+    "type": "youtube",
+    "id": "a8aubxLrcFE"
+   },
+   "duration": 12,
+   "publishedAt": "2026-05-21T07:00:32Z",
+   "views": 151,
+   "access": "free"
+  },
+  {
+   "id": "Mfz_Xfkq184",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "“Good Night নাকি Love Party? 🤨💀” || REELS || FALTU KOTHA || ADDABAAZ",
+   "source": {
+    "type": "youtube",
+    "id": "Mfz_Xfkq184"
+   },
+   "duration": 21,
+   "publishedAt": "2026-05-20T07:00:16Z",
+   "views": 281,
+   "access": "free"
+  },
+  {
+   "id": "YYxRWpvK93Y",
+   "showId": "faltu-kotha",
+   "kind": "episode",
+   "episode": 4,
+   "title": "CCTVকাকিমা in action, Balcony থেকে গোটা পাড়া Control করে| পর্ব ৪ ।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "YYxRWpvK93Y"
+   },
+   "duration": 1009,
+   "publishedAt": "2026-05-19T11:30:32Z",
+   "views": 1651,
+   "access": "free"
+  },
+  {
+   "id": "Mt8Rm3_jP2s",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "“BF নাকি Customer Care Executive? 😭📞” || REELS || FALTU KOTHA || ADDABAAZ",
+   "source": {
+    "type": "youtube",
+    "id": "Mt8Rm3_jP2s"
+   },
+   "duration": 51,
+   "publishedAt": "2026-05-19T07:00:15Z",
+   "views": 803,
+   "access": "free"
+  },
+  {
+   "id": "5QWIbaYv3_4",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "“Seen করে Reply নেই? BREAKUP CONFIRMED 💔”| REEL।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "5QWIbaYv3_4"
+   },
+   "duration": 48,
+   "publishedAt": "2026-05-18T10:00:13Z",
+   "views": 220,
+   "access": "free"
+  },
+  {
+   "id": "iWNRlz3NfiQ",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "“Knife নিয়ে দৌড়ালেও সেটা Love? 🤣”| REEL।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "iWNRlz3NfiQ"
+   },
+   "duration": 21,
+   "publishedAt": "2026-05-18T07:00:36Z",
+   "views": 271,
+   "access": "free"
+  },
+  {
+   "id": "kJD_Zc4Kc40",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Subhadip Ghosh #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "kJD_Zc4Kc40"
+   },
+   "duration": 27,
+   "publishedAt": "2026-05-17T10:00:59Z",
+   "views": 140,
+   "access": "free"
+  },
+  {
+   "id": "erBlhjiv19c",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Subhadip Ghosh #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "erBlhjiv19c"
+   },
+   "duration": 35,
+   "publishedAt": "2026-05-17T07:00:27Z",
+   "views": 136,
+   "access": "free"
+  },
+  {
+   "id": "W3FPTBYPMy4",
+   "showId": "faltu-kotha",
+   "kind": "episode",
+   "episode": 3,
+   "title": "Hit না, শুধু Flop! ফ্লপ সিনেমা বানিয়েই Famous! 😂 | পর্ব ৩ ।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "W3FPTBYPMy4"
+   },
+   "duration": 394,
+   "publishedAt": "2026-05-16T11:30:32Z",
+   "views": 465,
+   "access": "free"
+  },
+  {
+   "id": "c5NrHzBl3w8",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Ami Soumyo #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "c5NrHzBl3w8"
+   },
+   "duration": 43,
+   "publishedAt": "2026-05-16T07:00:39Z",
+   "views": 133,
+   "access": "free"
+  },
+  {
+   "id": "qYlsmT-yGlE",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Subhadip Ghosh #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "qYlsmT-yGlE"
+   },
+   "duration": 19,
+   "publishedAt": "2026-05-15T10:01:29Z",
+   "views": 184,
+   "access": "free"
+  },
+  {
+   "id": "_pjpCoDGaQ0",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Subhadip Ghosh #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "_pjpCoDGaQ0"
+   },
+   "duration": 75,
+   "publishedAt": "2026-05-15T07:00:33Z",
+   "views": 16,
+   "access": "free"
+  },
+  {
+   "id": "9BdhbE7s5GE",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Ami Soumyo #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "9BdhbE7s5GE"
+   },
+   "duration": 37,
+   "publishedAt": "2026-05-14T10:00:13Z",
+   "views": 115,
+   "access": "free"
+  },
+  {
+   "id": "TPnO3agMZVM",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| VASKAR MANNA #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "TPnO3agMZVM"
+   },
+   "duration": 34,
+   "publishedAt": "2026-05-14T07:00:32Z",
+   "views": 111,
+   "access": "free"
+  },
+  {
+   "id": "u6a6zgKbFkM",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Ami Soumyo #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "u6a6zgKbFkM"
+   },
+   "duration": 32,
+   "publishedAt": "2026-05-13T10:01:30Z",
+   "views": 104,
+   "access": "free"
+  },
+  {
+   "id": "XQ2Bh0gZDbk",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ছবি নয়, জীবন EDIT হচ্ছে ! শিউরে উঠবেন এই গল্প শুনে | REEL- 01।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "XQ2Bh0gZDbk"
+   },
+   "duration": 28,
+   "publishedAt": "2026-05-12T18:14:51Z",
+   "views": 149,
+   "access": "free"
+  },
+  {
+   "id": "dQvC5URlb0Y",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 8,
+   "title": "Laugh Bite|| Addabaaz ||Subhadip Ghosh || EP-8 #addabaaz #comedy #bengalacomedy #standupcomedy",
+   "source": {
+    "type": "youtube",
+    "id": "dQvC5URlb0Y"
+   },
+   "duration": 366,
+   "publishedAt": "2026-05-12T09:30:30Z",
+   "views": 100,
+   "access": "free"
+  },
+  {
+   "id": "3Vqw0-I9DI4",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ছবি নয়, জীবন EDIT হচ্ছে ! শিউরে উঠবেন এই গল্প শুনে | REEL- 02।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "3Vqw0-I9DI4"
+   },
+   "duration": 23,
+   "publishedAt": "2026-05-12T04:30:04Z",
+   "views": 109,
+   "access": "free"
+  },
+  {
+   "id": "OrsLu_KqO7s",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "\"পকেটে টাকা না থাকলে প্রেমও নেই! AI Girlfriend Truth\" | REEL- 04।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "OrsLu_KqO7s"
+   },
+   "duration": 18,
+   "publishedAt": "2026-05-11T10:00:40Z",
+   "views": 107,
+   "access": "free"
+  },
+  {
+   "id": "w2z_q8BE_eg",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "\"পকেটে টাকা না থাকলে প্রেমও নেই! AI Girlfriend Truth\" | REEL- 05।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "w2z_q8BE_eg"
+   },
+   "duration": 24,
+   "publishedAt": "2026-05-11T07:00:56Z",
+   "views": 75,
+   "access": "free"
+  },
+  {
+   "id": "z8hIEm16iWI",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ছবি নয়, জীবন EDIT হচ্ছে ! শিউরে উঠবেন এই গল্প শুনে | REEL- 03।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "z8hIEm16iWI"
+   },
+   "duration": 19,
+   "publishedAt": "2026-05-10T10:52:54Z",
+   "views": 221,
+   "access": "free"
+  },
+  {
+   "id": "YM9jW3ZNqkM",
+   "showId": "faltu-kotha",
+   "kind": "episode",
+   "episode": 2,
+   "title": "“সত্যি না মিথ্যে?” 🤯 IT Cell কীভাবে ইতিহাস বদলায়! | পর্ব ২।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "YM9jW3ZNqkM"
+   },
+   "duration": 286,
+   "publishedAt": "2026-05-10T04:35:00Z",
+   "views": 2144,
+   "access": "free"
+  },
+  {
+   "id": "1VLe0L0HXvI",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "\"পকেটে টাকা না থাকলে প্রেমও নেই! AI Girlfriend Truth\" | REEL- 06।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "1VLe0L0HXvI"
+   },
+   "duration": 24,
+   "publishedAt": "2026-05-09T10:00:06Z",
+   "views": 94,
+   "access": "free"
+  },
+  {
+   "id": "XAslqnmpMfk",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "\"পকেটে টাকা না থাকলে প্রেমও নেই! AI Girlfriend Truth\" | REEL- 07।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "XAslqnmpMfk"
+   },
+   "duration": 32,
+   "publishedAt": "2026-05-09T07:00:34Z",
+   "views": 147,
+   "access": "free"
+  },
+  {
+   "id": "t3djL70W8P8",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ট্রোলিং থেকে থাইল্যান্ড ট্রিপ ! লোকটা জিনিয়াস না পাগল?| REEL- 08।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "t3djL70W8P8"
+   },
+   "duration": 40,
+   "publishedAt": "2026-05-08T10:01:28Z",
+   "views": 200,
+   "access": "free"
+  },
+  {
+   "id": "oeBZDcB664k",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ট্রোলিং থেকে থাইল্যান্ড ট্রিপ ! লোকটা জিনিয়াস না পাগল?| REEL- 09।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "oeBZDcB664k"
+   },
+   "duration": 29,
+   "publishedAt": "2026-05-08T07:00:46Z",
+   "views": 143,
+   "access": "free"
+  },
+  {
+   "id": "QcBkSc6lvYY",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ট্রোলিং থেকে থাইল্যান্ড ট্রিপ ! লোকটা জিনিয়াস না পাগল?| REEL- 10।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "QcBkSc6lvYY"
+   },
+   "duration": 27,
+   "publishedAt": "2026-05-07T09:30:11Z",
+   "views": 236,
+   "access": "free"
+  },
+  {
+   "id": "bR1xWnRjLgQ",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ট্রোলিং থেকে থাইল্যান্ড ট্রিপ ! লোকটা জিনিয়াস না পাগল?| REEL- 11।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "bR1xWnRjLgQ"
+   },
+   "duration": 23,
+   "publishedAt": "2026-05-07T07:00:36Z",
+   "views": 73,
+   "access": "free"
+  },
+  {
+   "id": "U4C_QnhSm6U",
+   "showId": "faltu-kotha",
+   "kind": "episode",
+   "episode": 1,
+   "title": "এই তর্ক দেখার পর আপনার মত বদলে যাবে! নারী বনাম পুরুষ | পর্ব ১ ।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "U4C_QnhSm6U"
+   },
+   "duration": 708,
+   "publishedAt": "2026-05-06T11:30:20Z",
+   "views": 21060,
+   "access": "free"
+  },
+  {
+   "id": "kqUg-5WAVSU",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "ট্রোলিং থেকে থাইল্যান্ড ট্রিপ ! লোকটা জিনিয়াস না পাগল?| REEL- 09।Fake Podcast | আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "kqUg-5WAVSU"
+   },
+   "duration": 23,
+   "publishedAt": "2026-05-06T07:00:44Z",
+   "views": 797,
+   "access": "free"
+  },
+  {
+   "id": "DZnPia9eAdM",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| VASKAR MANNA #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "DZnPia9eAdM"
+   },
+   "duration": 39,
+   "publishedAt": "2026-05-05T11:30:11Z",
+   "views": 329,
+   "access": "free"
+  },
+  {
+   "id": "UoBAYZb83h4",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| VASKAR MANNA #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "UoBAYZb83h4"
+   },
+   "duration": 28,
+   "publishedAt": "2026-05-05T07:00:26Z",
+   "views": 126,
+   "access": "free"
+  },
+  {
+   "id": "sLP48saRriw",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| VASKAR MANNA #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "sLP48saRriw"
+   },
+   "duration": 26,
+   "publishedAt": "2026-05-03T10:01:27Z",
+   "views": 473,
+   "access": "free"
+  },
+  {
+   "id": "Y_hKpNSRFec",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Ami Soumyo #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "Y_hKpNSRFec"
+   },
+   "duration": 54,
+   "publishedAt": "2026-05-03T07:20:00Z",
+   "views": 245,
+   "access": "free"
+  },
+  {
+   "id": "1AUTSwYkdsk",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 7,
+   "title": "Laugh Bite|| Addabaaz||VASKAR MANNA || EP-07 #addabaaz #comedy #bengalacomedy #standupcomedy",
+   "source": {
+    "type": "youtube",
+    "id": "1AUTSwYkdsk"
+   },
+   "duration": 435,
+   "publishedAt": "2026-05-02T13:30:03Z",
+   "views": 172,
+   "access": "free"
+  },
+  {
+   "id": "oI0kuaTj3IU",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| PTAMIT MITRA #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "oI0kuaTj3IU"
+   },
+   "duration": 35,
+   "publishedAt": "2026-05-02T07:30:32Z",
+   "views": 491,
+   "access": "free"
+  },
+  {
+   "id": "bYamM3HqEXo",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Subhadip Ghosh #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "bYamM3HqEXo"
+   },
+   "duration": 39,
+   "publishedAt": "2026-05-01T10:01:05Z",
+   "views": 280,
+   "access": "free"
+  },
+  {
+   "id": "N58kYlmLgSY",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| VASKAR MANNA #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "N58kYlmLgSY"
+   },
+   "duration": 48,
+   "publishedAt": "2026-05-01T07:00:31Z",
+   "views": 453,
+   "access": "free"
+  },
+  {
+   "id": "PgLH8nam0hA",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Subhadip Ghosh #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "PgLH8nam0hA"
+   },
+   "duration": 30,
+   "publishedAt": "2026-04-30T10:00:46Z",
+   "views": 806,
+   "access": "free"
+  },
+  {
+   "id": "gPLfLpcPoRs",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Subhadip Ghosh #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "gPLfLpcPoRs"
+   },
+   "duration": 28,
+   "publishedAt": "2026-04-30T07:00:40Z",
+   "views": 2175,
+   "access": "free"
+  },
+  {
+   "id": "N7siPX4p5WI",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 6,
+   "title": "Laugh Bite|| Addabaaz||Subhadip Ghosh || EP-06 #addabaaz #comedy #bengalacomedy #standupcomedy",
+   "source": {
+    "type": "youtube",
+    "id": "N7siPX4p5WI"
+   },
+   "duration": 460,
+   "publishedAt": "2026-04-29T13:30:22Z",
+   "views": 99,
+   "access": "free"
+  },
+  {
+   "id": "e-2hEURH514",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Subhadip Ghosh #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "e-2hEURH514"
+   },
+   "duration": 27,
+   "publishedAt": "2026-04-29T07:00:35Z",
+   "views": 573,
+   "access": "free"
+  },
+  {
+   "id": "iAb01ZTInyQ",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Subhadip Ghosh #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "iAb01ZTInyQ"
+   },
+   "duration": 29,
+   "publishedAt": "2026-04-28T10:01:11Z",
+   "views": 846,
+   "access": "free"
+  },
+  {
+   "id": "JT97wKMwtPU",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Subhadip Ghosh #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "JT97wKMwtPU"
+   },
+   "duration": 37,
+   "publishedAt": "2026-04-28T07:00:15Z",
+   "views": 562,
+   "access": "free"
+  },
+  {
+   "id": "6f5NQvAJ_JI",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Subhadip Ghosh #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "6f5NQvAJ_JI"
+   },
+   "duration": 27,
+   "publishedAt": "2026-04-27T10:00:11Z",
+   "views": 1117,
+   "access": "free"
+  },
+  {
+   "id": "ZAcR6uqXHv0",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| VASKAR MANNA #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "ZAcR6uqXHv0"
+   },
+   "duration": 52,
+   "publishedAt": "2026-04-27T07:00:28Z",
+   "views": 152,
+   "access": "free"
+  },
+  {
+   "id": "3rehYgxSpRU",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "FALTU KOTHA || FAKE PODCAST || ADDABAAZ|| PROMO #ytshorts #comedy #funny #comedyreels",
+   "source": {
+    "type": "youtube",
+    "id": "3rehYgxSpRU"
+   },
+   "duration": 49,
+   "publishedAt": "2026-04-26T13:30:08Z",
+   "views": 369,
+   "access": "free"
+  },
+  {
+   "id": "4tsQaM3H9OY",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 5,
+   "title": "Laugh Bite|| Addabaaz|| Pramit Mitra || EP-05 #addabaaz #comedy #bengalacomedy #standupcomedy",
+   "source": {
+    "type": "youtube",
+    "id": "4tsQaM3H9OY"
+   },
+   "duration": 295,
+   "publishedAt": "2026-04-26T09:30:02Z",
+   "views": 455,
+   "access": "free"
+  },
+  {
+   "id": "eQc27qM04W8",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "FALTU KOTHA || FAKE PODCAST || ADDABAAZ|| PROMO #ytshorts #comedy #funny #comedyreels",
+   "source": {
+    "type": "youtube",
+    "id": "eQc27qM04W8"
+   },
+   "duration": 31,
+   "publishedAt": "2026-04-25T14:30:28Z",
+   "views": 353,
+   "access": "free"
+  },
+  {
+   "id": "NkLCTDyPzl8",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "FALTU KOTHA || FAKE PODCAST || ADDABAAZ|| PROMO #ytshorts #comedy #funny #comedyreels",
+   "source": {
+    "type": "youtube",
+    "id": "NkLCTDyPzl8"
+   },
+   "duration": 44,
+   "publishedAt": "2026-04-25T12:19:29Z",
+   "views": 759,
+   "access": "free"
+  },
+  {
+   "id": "beXqA1EFixo",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 4,
+   "title": "Laugh Bite|| Addabaaz||ANAMITRA || EP-04 #addabaaz #comedy #bengalacomedy #standupcomedy",
+   "source": {
+    "type": "youtube",
+    "id": "beXqA1EFixo"
+   },
+   "duration": 376,
+   "publishedAt": "2026-04-24T13:30:06Z",
+   "views": 57,
+   "access": "free"
+  },
+  {
+   "id": "09eJiHOAzh8",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Ami Soumyo #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "09eJiHOAzh8"
+   },
+   "duration": 43,
+   "publishedAt": "2026-04-24T07:00:00Z",
+   "views": 175,
+   "access": "free"
+  },
+  {
+   "id": "bLavUns5h1w",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| PTAMIT MITRA #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "bLavUns5h1w"
+   },
+   "duration": 18,
+   "publishedAt": "2026-04-23T10:01:03Z",
+   "views": 446,
+   "access": "free"
+  },
+  {
+   "id": "_FtnL0Ld4V8",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| REELS #addabaaz #comedy #comedyreels #bengalacomedy #Promotion #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "_FtnL0Ld4V8"
+   },
+   "duration": 24,
+   "publishedAt": "2026-04-23T07:00:23Z",
+   "views": 458,
+   "access": "free"
+  },
+  {
+   "id": "U5WVciuEy5g",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Ami Soumyo #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "U5WVciuEy5g"
+   },
+   "duration": 37,
+   "publishedAt": "2026-04-22T10:01:01Z",
+   "views": 668,
+   "access": "free"
+  },
+  {
+   "id": "YMhMlJMW86Y",
+   "showId": "faltu-kotha",
+   "kind": "reel",
+   "episode": null,
+   "title": "FALTU KOTHA || FAKE PODCAST || ADDABAAZ|| PROMO||  Avisekk Sikdar Sukanya Dutta #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "YMhMlJMW86Y"
+   },
+   "duration": 47,
+   "publishedAt": "2026-04-22T07:00:35Z",
+   "views": 1187,
+   "access": "free"
+  },
+  {
+   "id": "WgqXiJGIz8w",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 3,
+   "title": "বিরিয়ানির নেশা ছাড়তে নেশামুক্তি কেন্দ্রে ভর্তি!|Laugh Bite|EP-03|Vaskar Manna| আড্ডাবাজ (Addabaaz)",
+   "source": {
+    "type": "youtube",
+    "id": "WgqXiJGIz8w"
+   },
+   "duration": 418,
+   "publishedAt": "2026-04-21T13:30:42Z",
+   "views": 217,
+   "access": "free"
+  },
+  {
+   "id": "sDs6NeuckkU",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| VASKAR MANNA #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "sDs6NeuckkU"
+   },
+   "duration": 18,
+   "publishedAt": "2026-04-21T10:01:32Z",
+   "views": 98,
+   "access": "free"
+  },
+  {
+   "id": "kcKRCO5KGBI",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| VASKAR MANNA #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "kcKRCO5KGBI"
+   },
+   "duration": 21,
+   "publishedAt": "2026-04-20T11:01:09Z",
+   "views": 4014,
+   "access": "free"
+  },
+  {
+   "id": "rzSI_K_w3To",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| VASKAR MANNA #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "rzSI_K_w3To"
+   },
+   "duration": 21,
+   "publishedAt": "2026-04-20T07:00:57Z",
+   "views": 307,
+   "access": "free"
+  },
+  {
+   "id": "8Rk_nbcxmOE",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| VASKAR MANNA #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "8Rk_nbcxmOE"
+   },
+   "duration": 32,
+   "publishedAt": "2026-04-19T10:00:23Z",
+   "views": 574,
+   "access": "free"
+  },
+  {
+   "id": "1fIHKqZh9ho",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| VASKAR MANNA #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "1fIHKqZh9ho"
+   },
+   "duration": 31,
+   "publishedAt": "2026-04-19T07:00:02Z",
+   "views": 1589,
+   "access": "free"
+  },
+  {
+   "id": "NBsrq9eUkfk",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 2,
+   "title": "Laugh Bite|| Addabaaz||Subhadip Ghosh || EP-02 #addabaaz #comedy #bengalacomedy #standupcomedy",
+   "source": {
+    "type": "youtube",
+    "id": "NBsrq9eUkfk"
+   },
+   "duration": 433,
+   "publishedAt": "2026-04-18T13:30:34Z",
+   "views": 290,
+   "access": "free"
+  },
+  {
+   "id": "ehATnUSaj8A",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Subhadip Ghosh #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "ehATnUSaj8A"
+   },
+   "duration": 22,
+   "publishedAt": "2026-04-18T09:30:31Z",
+   "views": 785,
+   "access": "free"
+  },
+  {
+   "id": "HBC_ONSGzqg",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Subhadip Ghosh #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "HBC_ONSGzqg"
+   },
+   "duration": 45,
+   "publishedAt": "2026-04-17T13:30:30Z",
+   "views": 552,
+   "access": "free"
+  },
+  {
+   "id": "9xc1_f0XqUg",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| Subhadip Ghosh #addabaaz #comedy #comedyreels #bengalacomedy #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "9xc1_f0XqUg"
+   },
+   "duration": 24,
+   "publishedAt": "2026-04-17T09:30:05Z",
+   "views": 1409,
+   "access": "free"
+  },
+  {
+   "id": "viYOzaxvxZk",
+   "showId": null,
+   "kind": "reel",
+   "episode": null,
+   "title": "নববর্ষ ! দন্ত বিকাশ মার্কা শুভেচ্ছা ও ভালোবাস।#addabaaz #song #funnyvideo #newsong #newbengalisong",
+   "source": {
+    "type": "youtube",
+    "id": "viYOzaxvxZk"
+   },
+   "duration": 50,
+   "publishedAt": "2026-04-16T14:30:44Z",
+   "views": 1360,
+   "access": "free"
+  },
+  {
+   "id": "tr_Ss-QzSS0",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ || PRAMIT #addabaaz #comedy #comedyreels #bengalacomedy #Promotion #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "tr_Ss-QzSS0"
+   },
+   "duration": 43,
+   "publishedAt": "2026-04-16T13:31:05Z",
+   "views": 775,
+   "access": "free"
+  },
+  {
+   "id": "PI_PaceVnM4",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ || PRAMIT #addabaaz #comedy #comedyreels #bengalacomedy #Promotion #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "PI_PaceVnM4"
+   },
+   "duration": 47,
+   "publishedAt": "2026-04-16T09:30:13Z",
+   "views": 402,
+   "access": "free"
+  },
+  {
+   "id": "9wwtkOdslzc",
+   "showId": "laugh-bite",
+   "kind": "episode",
+   "episode": 1,
+   "title": "বনগাঁ লোকাল কি ট্রেন ? ওর মধ্যে এতো লোকের যায় কি ভাবে? | Laugh Bite|EP-01| Addabaaz|| Pramit Mitra",
+   "source": {
+    "type": "youtube",
+    "id": "9wwtkOdslzc"
+   },
+   "duration": 401,
+   "publishedAt": "2026-04-15T14:30:06Z",
+   "views": 526,
+   "access": "free"
+  },
+  {
+   "id": "qJopz44zm7w",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| REELS #addabaaz #comedy #comedyreels #bengalacomedy #Promotion #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "qJopz44zm7w"
+   },
+   "duration": 19,
+   "publishedAt": "2026-04-15T09:30:26Z",
+   "views": 359,
+   "access": "free"
+  },
+  {
+   "id": "WSHBN0bIRE4",
+   "showId": "laugh-bite",
+   "kind": "clip",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| PROMO #addabaaz #comedy #comedyreels #bengalacomedy #Promotion #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "WSHBN0bIRE4"
+   },
+   "duration": 101,
+   "publishedAt": "2026-04-14T14:01:01Z",
+   "views": 280,
+   "access": "free"
+  },
+  {
+   "id": "xtftMJP4LLQ",
+   "showId": null,
+   "kind": "reel",
+   "episode": null,
+   "title": "নববর্ষর \"শুভেচ্ছা ও ভালোবাসা\" ||Buddhadeb Bhattacharya || Addabaaz #wish #ytshorts #reels",
+   "source": {
+    "type": "youtube",
+    "id": "xtftMJP4LLQ"
+   },
+   "duration": 42,
+   "publishedAt": "2026-04-14T09:30:36Z",
+   "views": 990,
+   "access": "free"
+  },
+  {
+   "id": "E0br6qGRCv8",
+   "showId": null,
+   "kind": "reel",
+   "episode": null,
+   "title": "নববর্ষর \"শুভেচ্ছা ও ভালোবাসা\" ||Annmary Tom || Addabaaz #wish #ytshorts #reels",
+   "source": {
+    "type": "youtube",
+    "id": "E0br6qGRCv8"
+   },
+   "duration": 45,
+   "publishedAt": "2026-04-13T12:30:16Z",
+   "views": 191,
+   "access": "free"
+  },
+  {
+   "id": "2Jj7oTsfw00",
+   "showId": "laugh-bite",
+   "kind": "reel",
+   "episode": null,
+   "title": "LAUGH BITE || ADDABAAZ|| PROMO #addabaaz #comedy #comedyreels #bengalacomedy #Promotion #ytshorts",
+   "source": {
+    "type": "youtube",
+    "id": "2Jj7oTsfw00"
+   },
+   "duration": 80,
+   "publishedAt": "2026-04-13T09:30:00Z",
+   "views": 1373,
+   "access": "free"
+  },
+  {
+   "id": "urIWSr67j2k",
+   "showId": null,
+   "kind": "reel",
+   "episode": null,
+   "title": "নববর্ষর \"শুভেচ্ছা ও ভালোবাসা\" ||Prantikk Banerjee || Addabaaz #wish #ytshorts #reels",
+   "source": {
+    "type": "youtube",
+    "id": "urIWSr67j2k"
+   },
+   "duration": 54,
+   "publishedAt": "2026-04-13T04:30:38Z",
+   "views": 183,
+   "access": "free"
+  }
+ ],
+ "upcoming": [
+  {
+   "id": "central-calcutta-boarding",
+   "title": "সেন্ট্রাল ক্যালকাটা বোর্ডিং",
+   "titleEn": "Central Calcutta Boarding",
+   "type": "series",
+   "genres": [
+    "Comedy"
+   ],
+   "note": "New comedy web series",
+   "showId": "central-calcutta-boarding",
+   "poster": "media/upcoming/chatgpt-image-jun-11-2026-02-53-40-am-lg.webp",
+   "backdrop": "media/upcoming/chatgpt-image-jun-11-2026-02-53-40-am-lg.webp"
+  },
+  {
+   "id": "trap",
+   "title": "Trap",
+   "type": "series",
+   "genres": [],
+   "poster": "media/upcoming/poster-1-sm.webp",
+   "posterLg": "media/upcoming/poster-1-lg.webp"
+  },
+  {
+   "id": "viral-live",
+   "title": "Viral Live",
+   "type": "series",
+   "genres": [],
+   "poster": "media/upcoming/poster-3-sm.webp",
+   "posterLg": "media/upcoming/poster-3-lg.webp"
+  },
+  {
+   "id": "xpress-health",
+   "title": "Xpress Health",
+   "type": "series",
+   "genres": [],
+   "poster": "media/upcoming/poster-4-sm.webp",
+   "posterLg": "media/upcoming/poster-4-lg.webp",
+   "backdrop": "media/upcoming/gemini-generated-image-d59vdwd59vdwd59v-lg.webp"
+  },
+  {
+   "id": "chiching-phank",
+   "title": "চিচিং ফাঁক",
+   "titleEn": "Chiching Phank",
+   "type": "series",
+   "genres": [],
+   "poster": "media/upcoming/poster-5-sm.webp",
+   "posterLg": "media/upcoming/poster-5-lg.webp"
+  },
+  {
+   "id": "probesh-nishedh",
+   "title": "প্রবেশ নিষেধ",
+   "titleEn": "Probesh Nishedh",
+   "type": "series",
+   "genres": [],
+   "poster": "media/upcoming/poster-6-sm.webp",
+   "posterLg": "media/upcoming/poster-6-lg.webp",
+   "backdrop": "media/upcoming/chatgpt-image-jun-11-2026-02-57-55-am-lg.webp"
+  },
+  {
+   "id": "mr-mrs-holmes",
+   "title": "Mr. & Mrs. Holmes",
+   "type": "series",
+   "genres": [],
+   "poster": "media/upcoming/poster-7-sm.webp",
+   "posterLg": "media/upcoming/poster-7-lg.webp",
+   "backdrop": "media/upcoming/chatgpt-image-jun-11-2026-03-03-30-am-lg.webp"
+  },
+  {
+   "id": "uttaran",
+   "title": "উত্তরণ",
+   "titleEn": "Uttaran",
+   "type": "series",
+   "genres": [],
+   "poster": "media/upcoming/poster-8-sm.webp",
+   "posterLg": "media/upcoming/poster-8-lg.webp",
+   "backdrop": "media/upcoming/chatgpt-image-jun-11-2026-03-00-37-am-lg.webp"
+  },
+  {
+   "id": "hothat-dekha",
+   "title": "হঠাৎ দেখা",
+   "titleEn": "Hothat Dekha",
+   "type": "series",
+   "genres": [],
+   "poster": "media/upcoming/untitled-may-10-2026-at-13-25-46-21-sm.webp",
+   "posterLg": "media/upcoming/untitled-may-10-2026-at-13-25-46-21-lg.webp"
+  }
+ ],
+ "gallery": [
+  {
+   "id": "uttran-bts-16",
+   "group": "Uttaran",
+   "image": "media/bts/uttran-bts-16-sm.webp",
+   "imageLg": "media/bts/uttran-bts-16-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "bina",
+   "group": "Shahid",
+   "image": "media/bts/bina-sm.webp",
+   "imageLg": "media/bts/bina-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "song-bts-2",
+   "group": "Song",
+   "image": "media/bts/song-bts-2-sm.webp",
+   "imageLg": "media/bts/song-bts-2-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "song-bts-3",
+   "group": "Song",
+   "image": "media/bts/song-bts-3-sm.webp",
+   "imageLg": "media/bts/song-bts-3-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "song-bts-4",
+   "group": "Song",
+   "image": "media/bts/song-bts-4-sm.webp",
+   "imageLg": "media/bts/song-bts-4-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "song-bts-5",
+   "group": "Song",
+   "image": "media/bts/song-bts-5-sm.webp",
+   "imageLg": "media/bts/song-bts-5-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "uttran-bts-2",
+   "group": "Uttaran",
+   "image": "media/bts/uttran-bts-2-sm.webp",
+   "imageLg": "media/bts/uttran-bts-2-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "uttran-bts-4",
+   "group": "Uttaran",
+   "image": "media/bts/uttran-bts-4-sm.webp",
+   "imageLg": "media/bts/uttran-bts-4-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "uttran-bts-5",
+   "group": "Uttaran",
+   "image": "media/bts/uttran-bts-5-sm.webp",
+   "imageLg": "media/bts/uttran-bts-5-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "uttran-bts-6",
+   "group": "Uttaran",
+   "image": "media/bts/uttran-bts-6-sm.webp",
+   "imageLg": "media/bts/uttran-bts-6-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "uttran-bts-7",
+   "group": "Uttaran",
+   "image": "media/bts/uttran-bts-7-sm.webp",
+   "imageLg": "media/bts/uttran-bts-7-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "uttran-bts-8",
+   "group": "Uttaran",
+   "image": "media/bts/uttran-bts-8-sm.webp",
+   "imageLg": "media/bts/uttran-bts-8-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "uttran-bts-9",
+   "group": "Uttaran",
+   "image": "media/bts/uttran-bts-9-sm.webp",
+   "imageLg": "media/bts/uttran-bts-9-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "uttran-bts-10",
+   "group": "Uttaran",
+   "image": "media/bts/uttran-bts-10-sm.webp",
+   "imageLg": "media/bts/uttran-bts-10-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "uttran-bts-11",
+   "group": "Uttaran",
+   "image": "media/bts/uttran-bts-11-sm.webp",
+   "imageLg": "media/bts/uttran-bts-11-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "uttran-bts-12",
+   "group": "Uttaran",
+   "image": "media/bts/uttran-bts-12-sm.webp",
+   "imageLg": "media/bts/uttran-bts-12-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "uttran-bts-13",
+   "group": "Uttaran",
+   "image": "media/bts/uttran-bts-13-sm.webp",
+   "imageLg": "media/bts/uttran-bts-13-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "uttran-bts-14",
+   "group": "Uttaran",
+   "image": "media/bts/uttran-bts-14-sm.webp",
+   "imageLg": "media/bts/uttran-bts-14-lg.webp",
+   "caption": ""
+  },
+  {
+   "id": "uttran-bts-15",
+   "group": "Uttaran",
+   "image": "media/bts/uttran-bts-15-sm.webp",
+   "imageLg": "media/bts/uttran-bts-15-lg.webp",
+   "caption": ""
+  }
+ ]
+}

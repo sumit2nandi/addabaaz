@@ -1,0 +1,22 @@
+{
+  "name": "addabaaz",
+  "version": "2.0.0",
+  "private": true,
+  "description": "ADDABAAZ OTT — web app (PWA), REST API and Capacitor wrapper for Android/iOS",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server/src/index.js",
+    "dev": "node --watch server/src/index.js",
+    "test": "node --test server/test/api.test.js",
+    "validate:catalog": "node scripts/validate-catalog.mjs",
+    "images": "bash scripts/optimize-images.sh",
+    "build:www": "node scripts/build-www.mjs",
+    "mobile:sync": "npm run build:www && npm --prefix mobile run sync",
+    "mobile:android": "npm run mobile:sync && npm --prefix mobile run open:android",
+    "mobile:ios": "npm run mobile:sync && npm --prefix mobile run open:ios"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

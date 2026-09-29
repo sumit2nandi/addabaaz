@@ -1,0 +1,131 @@
+import { norm } from '../util.js';
+
+const GENERIC = /^(laugh\s*bite|lught\s*bite|addabaaz|addabazz|আড্ডাবাজ.*|fake podcast|ফালতু কথা|faltu kotha|ep[-\s]?\d+|reels?[-\s]?\d*|part[-\s]?\d+|stand\s?up\s?comedy|standupcomedy|shahid|শহীদ|promo|trailer|ytshorts|new web series|comedy series|ckb|.*addabaaz reels.*|পর্ব\s*-?\s*[\d০-৯]+)$/i;
+
+/** Read-only, indexed view of data/catalog.json. */
+export class Catalog {
+  constructor(data) {
+    this.data = data;
+    this.shows = data.shows || [];
+    this.videos = data.videos || [];
+    this.upcoming = data.upcoming || [];
+    this.gallery = data.gallery || [];
+    this._show = new Map(this.shows.map((s) => [s.id, s]));
+    this._video = new Map(this.videos.map((v) => [v.id, v]));
+    this._soon = new Map(this.upcoming.map((u) => [u.id, u]));
+    this._byShow = new Map();
+    for (const v of this.videos) {
+      const k = v.showId || '_studio';
+      if (!this._byShow.has(k)) this._byShow.set(k, []);
+      this._byShow.get(k).push(v);
+    }
+    this._genres = [...new Set(this.shows.flatMap((s) => s.genres || []))].sort();
+  }
+
+  show(id) { return this._show.get(id); }
+  video(id) { return this._video.get(id); }
+  soon(id) { return this._soon.get(id); }
+  get genres() { return this._genres; }
+
+  /** Episodes of a show in watch order (EP 1 → n). */
+  episodes(showId) {
+    return (this._byShow.get(showId) || []).filter((v) => v.kind === 'episode')
+      .sort((a, b) => (a.episode ?? 1e9) - (b.episode ?? 1e9) || a.publishedAt.localeCompare(b.publishedAt));
+  }
+  /** Trailers, reels and clips for a show, newest first. */
+  extras(showId) {
+    return (this._byShow.get(showId) || []).filter((v) => v.kind !== 'episode')
+      .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+  }
+  allEpisodes() { return this.videos.filter((v) => v.kind === 'episode'); }
+  latestEpisodes(n = 12) {
+    return [...this.allEpisodes()].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)).slice(0, n);
+  }
+  latestEpisode(showId) {
+    return [...this.episodes(showId)].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))[0];
+  }
+  trending(n = 10) {
+    return [...this.allEpisodes()].sort((a, b) => b.views - a.views).slice(0, n);
+  }
+  reels() {
+    return this.videos.filter((v) => v.kind === 'reel').sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+  }
+  showViews(showId) { return (this._byShow.get(showId) || []).reduce((n, v) => n + (v.views || 0), 0); }
+
+  nextEpisode(video) {
+    if (!video || video.kind !== 'episode') return null;
+    const eps = this.episodes(video.showId);
+    const i = eps.findIndex((e) => e.id === video.id);
+    return i >= 0 ? eps[i + 1] || null : null;
+  }
+  /** First episode to play for a show (or the latest if it has no numbering). */
+  firstEpisode(showId) { return this.episodes(showId)[0] || null; }
+
+  related(show, n = 8) {
+    const g = new Set(show.genres || []);
+    return this.shows.filter((s) => s.id !== show.id && (s.genres || []).some((x) => g.has(x)))
+      .concat(this.shows.filter((s) => s.id !== show.id && !(s.genres || []).some((x) => g.has(x)))).slice(0, n);
+  }
+  relatedVideos(video, n = 10) {
+    const pool = (this._byShow.get(video.showId || '_studio') || []).filter((v) => v.id !== video.id && v.kind === video.kind);
+    return pool.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)).slice(0, n);
+  }
+
+  /** Human-friendly title: strips hashtags, cast/credit noise and generic segments. */
+  displayTitle(v) {
+    if (!v) return '';
+    if (v.shortTitle) return v.shortTitle;
+    const show = this.show(v.showId);
+    const parts = v.title.replace(/#\S+/g, '').split(/\s*\|{1,2}\s*/).map((p) => p.replace(/^[“"'‘’”\s]+|[“"'‘’”\s]+$/g, '').trim()).filter(Boolean);
+    const good = parts.find((p) => !GENERIC.test(p) && !(show?.cast || []).includes(p) && p.length > 3);
+    if (good) return good;
+    const performer = parts.find((p) => (show?.cast || []).includes(p) || (!GENERIC.test(p) && p.length > 3));
+    const name = show?.titleEn || show?.title || 'ADDABAAZ';
+    if (v.kind === 'episode' && v.episode) return performer ? `${name} · ${performer}` : `${name} · Episode ${v.episode}`;
+    return performer ? `${name} · ${performer}` : `${name} · ${v.kind === 'reel' ? 'Reel' : 'Clip'}`;
+  }
+  /** Small label for a card: "EP 05", "Trailer", "Reel". */
+  label(v) {
+    if (v.kind === 'episode') return v.episode ? `EP ${String(v.episode).padStart(2, '0')}` : 'Episode';
+    return { trailer: 'Trailer', reel: 'Reel', clip: 'Clip' }[v.kind] || 'Video';
+  }
+  thumb(v, q = 'hqdefault') {
+    if (v.thumbnail) return v.thumbnail;
+    if (v.source?.type === 'youtube') return `https://i.ytimg.com/vi/${v.source.id}/${q}.jpg`;
+    return '';
+  }
+
+  /** Ranked search over shows, videos and upcoming titles. */
+  search(query, { limit = 60 } = {}) {
+    const tokens = norm(query).split(/[\s|,]+/).filter(Boolean);
+    if (!tokens.length) return { shows: [], videos: [], upcoming: [] };
+    const score = (hay, boost = 1) => {
+      const h = norm(hay); let s = 0;
+      for (const t of tokens) { const i = h.indexOf(t); if (i < 0) return 0; s += (i === 0 ? 3 : 1) * boost; }
+      return s;
+    };
+    const shows = this.shows.map((s) => ({ s, sc: score([s.title, s.titleEn, ...(s.genres || []), ...(s.cast || []), s.tagline].join(' '), 2) }))
+      .filter((x) => x.sc).sort((a, b) => b.sc - a.sc).map((x) => x.s);
+    const videos = this.videos.map((v) => {
+      const show = this.show(v.showId);
+      const sc = score([v.title, show?.title, show?.titleEn, v.kind].join(' '));
+      return { v, sc: sc ? sc + (v.kind === 'episode' ? 1 : 0) : 0 };
+    }).filter((x) => x.sc).sort((a, b) => b.sc - a.sc || b.v.views - a.v.views).slice(0, limit).map((x) => x.v);
+    const upcoming = this.upcoming.filter((u) => score([u.title, u.titleEn, ...(u.genres || [])].join(' '), 2));
+    return { shows, videos, upcoming };
+  }
+}
+
+export async function loadCatalog(url, fallbackUrl = 'data/catalog.json') {
+  try {
+    const r = await fetch(url, { cache: 'no-cache' });
+    if (!r.ok) throw new Error('catalog ' + r.status);
+    return new Catalog(await r.json());
+  } catch (e) {
+    if (url === fallbackUrl) throw e;
+    console.warn('[catalog] falling back to bundled catalog', e);
+    const r = await fetch(fallbackUrl);
+    if (!r.ok) throw new Error('catalog ' + r.status);
+    return new Catalog(await r.json());
+  }
+}

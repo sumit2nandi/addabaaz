@@ -1,0 +1,9 @@
+node_modules
+.git
+BTS
+UpcomingReleases
+images
+resources
+mobile
+www
+server/data

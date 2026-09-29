@@ -1,0 +1,92 @@
+openapi: 3.0.3
+info:
+  title: ADDABAAZ API
+  version: 2.0.0
+  description: |
+    Backend for the ADDABAAZ web and mobile apps. Base path `/api/v1`.
+    Auth is a bearer JWT (`Authorization: Bearer <token>`) returned by signup/login.
+    Errors are `{ "error": { "code": "...", "message": "..." } }`. Write endpoints return `204` unless noted.
+servers:
+  - url: http://localhost:3000/api/v1
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    Error:
+      type: object
+      properties: { error: { type: object, properties: { code: { type: string }, message: { type: string } } } }
+    User: { type: object, properties: { id: { type: string }, name: { type: string }, email: { type: string } } }
+    Profile: { type: object, properties: { id: { type: string }, name: { type: string }, color: { type: integer } } }
+    Auth:
+      type: object
+      properties: { token: { type: string }, user: { $ref: '#/components/schemas/User' }, profiles: { type: array, items: { $ref: '#/components/schemas/Profile' } } }
+    Library:
+      type: object
+      properties:
+        list: { type: array, items: { type: object, properties: { type: { type: string, enum: [show, video, upcoming] }, id: { type: string }, addedAt: { type: string, format: date-time } } } }
+        progress: { type: object, additionalProperties: { type: object, properties: { position: { type: number }, duration: { type: number }, updatedAt: { type: string, format: date-time } } } }
+        reminders: { type: array, items: { type: object } }
+  parameters:
+    pid: { name: pid, in: path, required: true, schema: { type: string } }
+  responses:
+    NoContent: { description: Done }
+    Unauthorized: { description: Missing or invalid token, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+security: [ { bearer: [] } ]
+paths:
+  /health: { get: { security: [], summary: Liveness + service discovery (used by the app to detect API mode), responses: { '200': { description: OK } } } }
+  /catalog: { get: { security: [], summary: Full catalog (shows, videos, upcoming, gallery), responses: { '200': { description: catalog.json } } } }
+  /plans: { get: { security: [], summary: Subscription plans, responses: { '200': { description: '{ plans: [...] }' } } } }
+  /auth/signup:
+    post:
+      security: []
+      summary: Create account (+ first profile). Password 8–128 chars.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name, email, password], properties: { name: { type: string }, email: { type: string }, password: { type: string } } } } } }
+      responses: { '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Auth' } } } }, '409': { description: email_taken }, '429': { description: Rate limited } }
+  /auth/login:
+    post:
+      security: []
+      summary: Sign in
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [email, password], properties: { email: { type: string }, password: { type: string } } } } } }
+      responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Auth' } } } }, '401': { description: invalid_credentials } }
+  /contact:
+    post:
+      security: []
+      summary: Contact form. Honeypot field `website` must be empty. 5 requests / 10 min / IP.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name, email, message], properties: { name: { type: string }, email: { type: string }, message: { type: string }, website: { type: string } } } } } }
+      responses: { '202': { description: Accepted } }
+  /me:
+    get: { summary: Current user, profiles and subscription, responses: { '200': { description: OK }, '401': { $ref: '#/components/responses/Unauthorized' } } }
+    patch: { summary: Rename user, responses: { '200': { description: OK } } }
+    delete: { summary: Permanently delete the account and all its data (App Store 5.1.1(v)), responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /profiles:
+    get: { summary: List profiles, responses: { '200': { description: OK } } }
+    post: { summary: Create profile (max 5), responses: { '201': { description: Created }, '409': { description: profile_limit } } }
+  /profiles/{pid}:
+    parameters: [ { $ref: '#/components/parameters/pid' } ]
+    patch: { summary: Update name/colour, responses: { '200': { description: OK } } }
+    delete: { summary: Delete profile (not the last one), responses: { '204': { $ref: '#/components/responses/NoContent' }, '409': { description: last_profile } } }
+  /profiles/{pid}/library:
+    parameters: [ { $ref: '#/components/parameters/pid' } ]
+    get: { summary: My List, watch progress and reminders, responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Library' } } } } } }
+  /profiles/{pid}/list/{type}/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/pid' }
+      - { name: type, in: path, required: true, schema: { type: string, enum: [show, video, upcoming] } }
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put: { summary: Add to My List (idempotent), responses: { '204': { $ref: '#/components/responses/NoContent' }, '404': { description: not_found } } }
+    delete: { summary: Remove from My List, responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /profiles/{pid}/progress/{videoId}:
+    parameters: [ { $ref: '#/components/parameters/pid' }, { name: videoId, in: path, required: true, schema: { type: string } } ]
+    put:
+      summary: Save playback position (keeps the 500 most recent)
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [position, duration], properties: { position: { type: number }, duration: { type: number } } } } } }
+      responses: { '204': { $ref: '#/components/responses/NoContent' } }
+    delete: { summary: Remove from Continue Watching, responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /profiles/{pid}/reminders/{id}:
+    parameters: [ { $ref: '#/components/parameters/pid' }, { name: id, in: path, required: true, schema: { type: string } } ]
+    put: { summary: Set a reminder for an upcoming title, responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+    delete: { summary: Remove reminder, responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /subscription:
+    get: { summary: Current subscription, responses: { '200': { description: OK } } }
+    post: { summary: 'Start a plan. With PAYMENT_PROVIDER=mock this activates instantly and returns demo:true; other providers return 501 until implemented.', responses: { '200': { description: OK }, '501': { description: not_implemented } } }
+    delete: { summary: Cancel, responses: { '204': { $ref: '#/components/responses/NoContent' } } }
