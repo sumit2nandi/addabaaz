@@ -18,15 +18,16 @@ export default async function account(ctx) {
   const extras = accountExtras();
   ctx.root.innerHTML = html`<div class="page page-narrow">
     ${sectionHeader({ tag: 'You', title: 'Account & settings' })}
-    ${extras.html}
+    ${extras.banner}
     <section class="card-panel who">
       ${p ? avatar(p, { size: 64 }) : ''}
       <div><h2>${u.account ? u.account.name : p ? p.name : 'Guest'}</h2>
         <p class="muted">${u.account ? u.account.email + (u.account.providers?.length ? ' · ' + u.account.providers.map((x) => ({ google: 'Google', facebook: 'Facebook', apple: 'Apple' }[x] || x)).join(' & ') + ' sign-in' : '') : u.supportsAuth ? 'Browsing as a guest — sign in to sync across devices.' : 'Your list and progress are saved on this device.'}</p></div>
       <div class="who-actions">${u.supportsAuth ? (u.account ? html`<button class="btn btn-ghost" id="signout">${icon('logout', { size: 18 })} Sign out</button>` : html`<a class="btn btn-primary" href="#/signin">Sign in</a><a class="btn btn-ghost" href="#/signup">Create account</a>`) : ''}</div>
     </section>
+    ${extras.sections}
 
-    ${''}<h2 class="sub-h">Profiles</h2>
+    <h2 class="sub-h">Profiles</h2>
     <div class="card-panel list">${link('#/profiles', 'user', 'Who’s watching?', `${u.profiles.length} profile${u.profiles.length > 1 ? 's' : ''} · switch profile`)}${link('#/profiles?manage=1', 'edit', 'Manage profiles')}</div>
 
     <h2 class="sub-h">Playback</h2>

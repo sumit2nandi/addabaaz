@@ -378,3 +378,5 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .cm-main { min-width: 0; flex: 1; } .cm-head { display: flex; gap: 10px; align-items: baseline; font-size: 13.5px; } .cm-head time { color: var(--muted); font-size: 12px; } .cm p { margin-top: 2px; white-space: pre-line; overflow-wrap: anywhere; color: var(--text-2); } .cm-actions { margin-top: 4px; font-size: 12.5px; color: var(--muted); } .cm-empty { padding: 14px 0; }
 .card-panel.notice { display: flex; background: #2a2200; border-color: #5c4a00; margin-bottom: 18px; } .card-panel.notice > div:nth-child(2) { flex: 1; } .card-panel.notice p { font-size: 13.5px; }
 @media (max-width: 600px) { .card-panel.notice { flex-wrap: wrap; } }
+body.bare .consent-bar { bottom: 12px; }
+body:has(#consentBar) .auth-page { padding-bottom: 190px; } body:has(#consentBar) .footer { padding-bottom: 170px; }

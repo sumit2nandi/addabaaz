@@ -9,10 +9,10 @@ import { openConsentDialog } from '../consent.js';
 
 const row = (id, ic, label, sub) => html`<button class="row-link" id="${id}">${icon(ic, { size: 22 })}<span><b>${label}</b>${sub ? html`<small>${sub}</small>` : ''}</span>${icon('right', { size: 18, cls: 'chev' })}</button>`;
 
-/** Returns { html, wire(root) } — html goes into the page, wire() attaches the handlers once it is in the DOM. */
+/** Returns { banner, sections, wire(root) } — both go into the page, wire() attaches the handlers once it is in the DOM. */
 export function accountExtras() {
   const u = app.user, acc = u.account;
-  if (!u.supportsAuth || !acc) return { html: '', wire() {} };
+  if (!u.supportsAuth || !acc) return { banner: '', sections: '', wire() {} };
   const verified = acc.emailVerified !== false;
   const banner = verified ? '' : html`<section class="card-panel notice" id="verifyBanner"><div>${icon('mail', { size: 22 })}</div><div><b>Confirm your email</b><p class="muted">We sent a link to ${acc.email}. Confirming lets you buy a plan and post comments.</p></div><button class="btn btn-primary" id="resendVerify">Resend link</button></section>`;
   const sections = html`
@@ -107,5 +107,5 @@ export function accountExtras() {
       });
     }).catch(() => {});
   };
-  return { html: html`${banner}${sections}`, wire };
+  return { banner, sections, wire };
 }

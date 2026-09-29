@@ -1,5 +1,5 @@
 import { api, putFile } from '../api.js';
-import { html, raw, $, $$, icon, badge, empty, pager, pageHead, formModal, confirmBox, guard, toast, errMsg, imgSrc, fmtDur, parseDur, fmtDT, slug, ytId, plural, esc } from '../ui.js';
+import { html, raw, $, $$, icon, badge, empty, pager, pageHead, formModal, confirmBox, guard, toast, errMsg, imgSrc, fmtDur, parseDur, fmtDT, fmtD, slug, ytId, plural, esc } from '../ui.js';
 
 const SHOW_TYPES = [['series', 'Series'], ['standup', 'Stand-up'], ['podcast', 'Podcast'], ['film', 'Film']].map(([v, l]) => ({ v, l }));
 const ACCESS = [{ v: 'free', l: 'Free' }, { v: 'premium', l: 'Premium (login + paid plan)' }];
@@ -32,6 +32,7 @@ export default async function content(root, [section], ctx) {
     { k: 'genres', label: 'Genres', type: 'tags', wide: true }, { k: 'cast', label: 'Cast', type: 'tags', wide: true },
     { k: 'tagline', label: 'Tagline', wide: true, max: 300, help: 'One line. Shown under the title and used in Google results — about 60–120 characters works best.' },
     { k: 'description', label: 'Description', type: 'textarea', req: true, wide: true, help: 'Google shows roughly the first 155 characters — put the hook first, and name the show, genre and language.' },
+    ratingField,
     { k: 'featured', label: 'Feature on the home page (needs at least one episode)', type: 'bool', wide: true },
     { k: 'poster', label: 'Poster (card)', type: 'image', req: true, maxWidth: 700, wide: true }, { k: 'posterLg', label: 'Poster (large / hero)', type: 'image', maxWidth: 1600, wide: true },
   ];
@@ -66,6 +67,23 @@ export default async function content(root, [section], ctx) {
   /* ---------- videos ---------- */
   const F = { q: '', show: '', kind: '', access: '', offset: 0 };
   const showOptions = () => [{ v: '', l: '— none (studio-wide) —' }, ...data.shows.map((s) => ({ v: s.id, l: s.titleEn || s.title })), ...data.upcoming.map((u) => ({ v: u.id, l: `(coming soon) ${u.titleEn || u.title}` }))];
+  const RATING_OPTS = [{ v: '', l: 'Not rated (hidden from Kids profiles)' }, { v: 'U', l: 'U — everyone' }, { v: '7+', l: '7+' }, { v: '13+', l: '13+' }, { v: '16+', l: '16+' }, { v: '18+', l: '18+' }];
+  const ratingField = { k: 'rating', label: 'Maturity rating', type: 'select', options: RATING_OPTS, help: 'Kids profiles show only titles rated U or 7+.' };
+  const subRow = (t = {}) => html`<div class="sub-row row wrap"><input name="subLang" class="sm-in" placeholder="bn" maxlength="12" value="${t.lang || ''}" aria-label="Language code"><input name="subLabel" placeholder="Bengali" maxlength="40" value="${t.label || ''}" aria-label="Label"><input name="subUrl" class="grow" placeholder="uploaded file or https://….vtt" maxlength="500" value="${t.url || ''}" aria-label="File"><label class="btn sm">${icon('upload', 14)}<input type="file" name="subFile" accept=".srt,.vtt,text/vtt" hidden></label><button type="button" class="icon-btn danger" data-rm title="Remove">${icon('x', 14)}</button></div>`;
+  const subtitlesField = () => ({
+    type: 'custom',
+    render: (v) => html`<div class="field wide"><label>Subtitles <small class="muted">(optional · .srt or .vtt — plays with the caption button in the player; free YouTube videos use YouTube’s own captions)</small></label><div class="sub-rows">${(v.subtitles || []).map(subRow)}</div><button type="button" class="btn sm" data-add-sub>${icon('plus', 14)} Add subtitle track</button></div>`,
+    read: (f) => ({ subtitles: [...f.querySelectorAll('.sub-row')].map((r) => ({ lang: r.querySelector('[name=subLang]').value.trim().toLowerCase(), label: r.querySelector('[name=subLabel]').value.trim(), url: r.querySelector('[name=subUrl]').value.trim() })).filter((t) => t.lang || t.label || t.url) }),
+  });
+  const wireSubtitles = (form) => {
+    const rows = form.querySelector('.sub-rows');
+    form.querySelector('[data-add-sub]').onclick = () => rows.insertAdjacentHTML('beforeend', subRow().s);
+    rows.addEventListener('click', (e) => { if (e.target.closest('[data-rm]')) e.target.closest('.sub-row').remove(); });
+    rows.addEventListener('change', async (e) => {
+      if (e.target.name !== 'subFile' || !e.target.files[0]) return; const row = e.target.closest('.sub-row');
+      try { const r = await api.uploadSubtitle(e.target.files[0]); row.querySelector('[name=subUrl]').value = r.path; toast(`Uploaded — ${r.cues} cues`); } catch (x) { toast(errMsg(x), 'err'); } finally { e.target.value = ''; }
+    });
+  };
   const sourceField = () => ({
     type: 'custom',
     render: (v) => {
@@ -95,6 +113,8 @@ export default async function content(root, [section], ctx) {
     sourceField(),
     { k: 'thumbnail', label: 'Thumbnail', type: 'image', maxWidth: 1000, wide: true, help: 'Required for R2 videos; YouTube videos use their own thumbnail.' },
     { k: 'duration', label: 'Duration (mm:ss)', req: true, placeholder: '12:34' }, { k: 'publishedAt', label: 'Published', type: 'datetime', req: true },
+    { k: 'publishAt', label: 'Publish at (optional)', type: 'datetime', help: 'Leave empty to publish now. A future time hides the video from viewers, Google and the API until then — admins still see it, and followers get a notification when it goes live.' },
+    ratingField, subtitlesField(),
     { k: 'views', label: 'Views', type: 'number', min: 0 },
     { k: 'id', label: 'ID', req: true, readonly: !create, max: 64, help: create ? 'Filled in automatically; letters, digits, - and _.' : '', wide: true },
   ];
@@ -104,7 +124,7 @@ export default async function content(root, [section], ctx) {
     formModal({ title: create ? 'New video' : 'Edit video', wide: true, fields: videoFields(create), values: base, note,
       extra: (form, m) => {
         const sync = () => { const t = form.srcType.value; $$('[data-for]', form).forEach((d) => { d.hidden = d.dataset.for !== (t === 'mp4' || t === 'hls' ? 'url' : t); }); if (t === 'r2' && form.access.value === 'free' && create) form.access.value = 'premium'; };
-        form.srcType.addEventListener('change', sync); sync();
+        form.srcType.addEventListener('change', sync); sync(); wireSubtitles(form);
         let touched = !create; form.id.addEventListener('input', () => { touched = true; });
         const autoId = () => { if (touched) return; const y = form.srcType.value === 'youtube' ? ytId(form.ytUrl.value) : ''; form.id.value = y || slug(`${showTitle(form.showId.value)} ${form.title.value} ${form.episode.value}`) || ''; };
         for (const n of ['ytUrl', 'title', 'episode', 'showId', 'srcType']) form.elements[n].addEventListener('input', autoId);
@@ -144,7 +164,7 @@ export default async function content(root, [section], ctx) {
     const pageRows = rows.slice(F.offset, F.offset + PAGE);
     $('#list').innerHTML = html`<div class="card flush">${rows.length ? html`<table class="tbl"><thead><tr><th></th><th>Title</th><th>Show</th><th>Duration</th><th>Published</th><th class="end">Views</th><th></th></tr></thead><tbody>
       ${pageRows.map((v) => html`<tr><td class="thumb wide">${thumb(v) ? html`<img src="${thumb(v)}" alt="" loading="lazy">` : ''}</td>
-        <td class="title-cell"><strong class="clip">${v.shortTitle || v.title}</strong><br>${badge(v.kind === 'episode' && v.episode ? `EP ${v.episode}` : v.kind)} ${v.access === 'premium' ? badge('premium', 'gold') : ''} ${v.source.type === 'r2' ? badge('R2') : ''}</td>
+        <td class="title-cell"><strong class="clip">${v.shortTitle || v.title}</strong><br>${badge(v.kind === 'episode' && v.episode ? `EP ${v.episode}` : v.kind)} ${v.access === 'premium' ? badge('premium', 'gold') : ''} ${v.publishAt && new Date(v.publishAt) > new Date() ? badge(`goes live ${fmtD(v.publishAt)}`, 'warn') : ''} ${v.source.type === 'r2' ? badge('R2') : ''}</td>
         <td>${showTitle(v.showId) || html`<span class="muted">—</span>`}</td><td>${fmtDur(v.duration)}</td><td class="small">${fmtDT(v.publishedAt)}</td><td class="end">${v.views.toLocaleString('en-IN')}</td>
         <td class="end nowrap"><a class="icon-btn" href="/watch/${v.id}" target="_blank" rel="noopener" title="Open on site">${icon('external', 16)}</a><button class="icon-btn" data-edit="${v.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${v.id}" title="Delete">${icon('trash', 16)}</button></td></tr>`)}</tbody></table>` : empty('No videos match.')}</div>
       ${pager({ total: rows.length, offset: F.offset, limit: PAGE })}`.s;

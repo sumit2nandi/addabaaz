@@ -4,8 +4,9 @@ import { html, $, $$, icon, toast, errMsg, guard } from './ui.js';
 const NAV = [
   ['Overview', [['dashboard', 'Dashboard', 'dashboard']]],
   ['Content', [['shows', 'Shows', 'film'], ['videos', 'Videos & reels', 'tv'], ['upcoming', 'Coming soon', 'clock'], ['gallery', 'Gallery', 'image'], ['studio', 'Studio & team', 'building']]],
-  ['Customers', [['users', 'Users', 'users'], ['payments', 'Payments & refunds', 'card'], ['coupons', 'Coupons', 'ticket'], ['messages', 'Messages', 'inbox']]],
-  ['System', [['audit', 'Audit log', 'log']]],
+  ['Customers', [['users', 'Users', 'users'], ['payments', 'Payments & refunds', 'card'], ['refunds', 'Refund requests', 'refund'], ['coupons', 'Coupons', 'ticket'], ['messages', 'Messages', 'inbox'], ['comments', 'Comments', 'chat']]],
+  ['Growth', [['analytics', 'Analytics', 'chart'], ['notifications', 'Notifications', 'bell']]],
+  ['System', [['errors', 'Errors', 'bug'], ['audit', 'Audit log', 'log']]],
 ];
 const ROUTES = [
   [/^dashboard$/, () => import('./views/dashboard.js')],
@@ -17,6 +18,11 @@ const ROUTES = [
   [/^coupons$/, () => import('./views/coupons.js')],
   [/^messages$/, () => import('./views/messages.js')],
   [/^audit$/, () => import('./views/audit.js')],
+  [/^analytics$/, () => import('./views/analytics.js')],
+  [/^comments$/, () => import('./views/comments.js')],
+  [/^refunds$/, () => import('./views/refunds.js')],
+  [/^notifications$/, () => import('./views/notifications.js')],
+  [/^errors$/, () => import('./views/errors.js')],
 ];
 const app = $('#app');
 let admin = null, navToken = 0;
@@ -70,8 +76,8 @@ function shell() {
 }
 export async function refreshCounts() {
   try {
-    const m = await api.get('/messages?status=open&limit=1'); const c = $('[data-count="messages"]');
-    if (c) { c.textContent = m.total; c.hidden = !m.total; }
+    const [m, inbox] = await Promise.all([api.get('/messages?status=open&limit=1'), api.get('/inbox')]);
+    for (const [k, n] of [['messages', m.total], ['comments', inbox.comments], ['refunds', inbox.refunds], ['errors', inbox.errors]]) { const c = $(`[data-count="${k}"]`); if (c) { c.textContent = n; c.hidden = !n; } }
   } catch { /* the badge is a nicety */ }
 }
 

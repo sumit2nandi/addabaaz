@@ -47,6 +47,8 @@ export const api = {
     const a = Object.assign(document.createElement('a'), { href: url, download: filename }); document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
   },
+  /** Uploads a .srt/.vtt subtitle file (converted to WebVTT on the server) → { path, cues }. */
+  uploadSubtitle: (file) => send('POST', '/uploads/subtitle', { raw: file, headers: { 'Content-Type': 'application/octet-stream' } }),
   /** Uploads an image (already resized by prepareImage) → { path }. */
   uploadImage: (blob) => send('POST', '/uploads/image', { raw: blob, headers: { 'Content-Type': blob.type || 'application/octet-stream' } }),
 };

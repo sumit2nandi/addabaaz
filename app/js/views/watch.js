@@ -49,7 +49,7 @@ export default async function watch(ctx) {
           ${show ? html`<p class="watch-desc">${show.description}</p>` : ''}
           <details class="orig-title"><summary>Original title</summary><p class="bn">${v.title}</p></details>
         </div>
-        <div id="commentsBox"></div>
+        <div id="commentsBox" class="watch-info"></div>
         ${rail({ title: 'More from ADDABAAZ', items: cat.latestEpisodes(10).filter((x) => x.id !== v.id).map((x) => videoCard(x)), cls: 'r-video mobile-only' })}
       </div>
       <aside class="watch-side" aria-label="${v.kind === 'episode' ? 'Episodes' : 'Up next'}">${sideList}</aside>
