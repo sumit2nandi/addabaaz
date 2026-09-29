@@ -1,6 +1,7 @@
 import mysql from 'mysql2/promise';
 import { dbConfigFromEnv } from './config.js';
 import { billingDb } from './db-billing.js';
+import { adminDb } from './db-admin.js';
 
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
 export const isDuplicate = (e) => e?.code === 'ER_DUP_ENTRY';
@@ -41,7 +42,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
     } catch (e) { await c.rollback().catch(() => {}); throw e; } finally { c.release(); }
   }
 
-  const userRow = (r) => r && { id: r.id, email: r.email, name: r.name, passwordHash: r.password_hash, createdAt: iso(r.created_at) };
+  const userRow = (r) => r && { id: r.id, email: r.email, name: r.name, passwordHash: r.password_hash, createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabledAt: iso(r.disabled_at) };
   const profileRow = (r) => ({ id: r.id, name: r.name, color: r.color });
 
   const self = {
@@ -168,7 +169,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       /** Paid plans that end within `days` and haven't been reminded about this particular expiry date yet. */
       async dueForReminder(days, limit = 200) {
         return (await q(`SELECT s.user_id, s.plan_id, s.expires_at, u.email, u.name FROM subscriptions s JOIN users u ON u.id = s.user_id
-                         WHERE s.is_demo = 0 AND s.plan_id <> 'free' AND s.expires_at > UTC_TIMESTAMP(3) AND s.expires_at <= UTC_TIMESTAMP(3) + INTERVAL ? DAY
+                         WHERE s.is_demo = 0 AND (s.provider IS NULL OR s.provider <> 'admin') AND s.plan_id <> 'free' AND s.expires_at > UTC_TIMESTAMP(3) AND s.expires_at <= UTC_TIMESTAMP(3) + INTERVAL ? DAY
                            AND (s.expiry_reminder_for IS NULL OR s.expiry_reminder_for <> s.expires_at) LIMIT ?`, [days, limit]))
           .map((r) => ({ userId: r.user_id, planId: r.plan_id, expiresAt: r.expires_at, email: r.email, name: r.name }));
       },
@@ -225,11 +226,24 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
         for (const p of rows) { p.invoices = await self.invoices.forPayment(p.id); p.refunds = await self.refunds.forPayment(p.id); }
         return rows;
       },
-      async listRecent({ email = null, limit = 50 } = {}) {
-        const rows = (await q(`SELECT p.*, u.email AS user_email FROM payments p LEFT JOIN users u ON u.id = p.user_id ${email ? 'WHERE u.email = ?' : ''} ORDER BY p.created_at DESC LIMIT ?`, email ? [email, limit] : [limit]))
+      /** Payments for the admin console: filter by buyer (email or user id) and status, newest first. */
+      async listRecent({ email = null, userId = null, status = null, limit = 50, offset = 0 } = {}) {
+        const where = [], args = [];
+        if (email) { where.push('u.email = ?'); args.push(email); }
+        if (userId) { where.push('p.user_id = ?'); args.push(userId); }
+        if (status) { where.push('p.status = ?'); args.push(status); }
+        const w = where.length ? 'WHERE ' + where.join(' AND ') : '';
+        const rows = (await q(`SELECT p.*, u.email AS user_email FROM payments p LEFT JOIN users u ON u.id = p.user_id ${w} ORDER BY p.created_at DESC, p.id LIMIT ? OFFSET ?`, [...args, limit, offset]))
           .map((r) => ({ ...mapPayment(r), userEmail: r.user_email }));
         for (const p of rows) { p.invoices = await self.invoices.forPayment(p.id); p.refunds = await self.refunds.forPayment(p.id); }
         return rows;
+      },
+      async countAll({ email = null, userId = null, status = null } = {}) {
+        const where = [], args = [];
+        if (email) { where.push('u.email = ?'); args.push(email); }
+        if (userId) { where.push('p.user_id = ?'); args.push(userId); }
+        if (status) { where.push('p.status = ?'); args.push(status); }
+        return (await q(`SELECT COUNT(*) AS n FROM payments p LEFT JOIN users u ON u.id = p.user_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`, args))[0].n;
       },
     },
 
@@ -239,5 +253,6 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
     },
   };
   Object.assign(self, billingDb({ q, tx, self, iso }));      // coupons, invoices, refunds
+  Object.assign(self, adminDb({ q, tx, self, iso }));        // catalog, audit log, admin user/message queries, dashboard numbers
   return self;
 }

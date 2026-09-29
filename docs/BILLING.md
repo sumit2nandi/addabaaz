@@ -97,7 +97,7 @@ Emails are best-effort: a failing mail server never blocks or fails a payment (e
 
 ## 5. Admin API
 
-Set `ADMIN_TOKEN` (**24+ random characters**, e.g. `openssl rand -hex 24`) to switch it on; without it `/admin/*` answers 404. Send `Authorization: Bearer <token>`. It is a single shared secret meant for you, curl and scripts (rate-limited, compared in constant time) — keep it out of the web app, and put the API behind HTTPS. There is no admin web UI yet.
+Everything below is available in the web console at `/admin` (see [ADMIN.md](ADMIN.md)) — **Payments & refunds**, **Coupons**, **Users**. The same endpoints work from scripts: send an administrator's session token, or set `ADMIN_TOKEN` (**24+ random characters**, e.g. `openssl rand -hex 24`) and send `Authorization: Bearer <ADMIN_TOKEN>` (rate-limited, compared in constant time). Keep the token out of the web app and put the API behind HTTPS. Without a valid credential `/admin/*` answers 401.
 
 | | |
 |---|---|

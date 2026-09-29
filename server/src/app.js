@@ -12,28 +12,14 @@ import { paymentsFromEnv } from './payments.js';
 import { mailerFromEnv } from './mailer.js';
 import { createBilling, billingConfigFromEnv } from './billing.js';
 import { STATES } from './gst.js';
+import { HttpError, bad, wrap, rateLimit } from './http.js';
+import { createCatalogStore } from './catalog.js';
+import { createAdminRouter } from './admin.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 const MAX_PROFILES = 5, PALETTE = 8;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-class HttpError extends Error { constructor(status, code, message) { super(message); this.status = status; this.code = code; } }
-const bad = (msg, code = 'bad_request') => new HttpError(400, code, msg);
-const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
-
-/** Sliding-window in-memory rate limiter (per IP + bucket). Use Redis/edge limits when running multiple nodes. */
-function rateLimit(bucket, max, windowMs) {
-  const hits = new Map();
-  return (req, _res, next) => {
-    const key = `${bucket}:${req.ip}`; const now = Date.now();
-    const arr = (hits.get(key) || []).filter((t) => now - t < windowMs);
-    if (arr.length >= max) return next(new HttpError(429, 'rate_limited', 'Too many requests — please try again shortly.'));
-    arr.push(now); hits.set(key, arr);
-    if (hits.size > 5000) for (const [k, v] of hits) if (!v.some((t) => now - t < windowMs)) hits.delete(k);
-    next();
-  };
-}
 
 /**
  * @param {object} opts
@@ -47,10 +33,13 @@ export function createApp({
   payments = paymentsFromEnv(),                               // { provider: 'razorpay' | 'mock' | 'none' }
   mailer = mailerFromEnv(),                                   // SMTP (receipts, refunds, reminders); no-op without SMTP_URL
   billing = createBilling({ db, payments, mailer, config: billingConfigFromEnv() }),   // coupons, GST invoices, refunds
-  adminToken = process.env.ADMIN_TOKEN || '',                 // enables /admin/* (≥24 chars); unset = admin API is off
+  adminToken = process.env.ADMIN_TOKEN || '',                 // optional shared secret for scripts (≥24 chars); admin ACCOUNTS (users.is_admin) need no token
+  sessionHours = Number(process.env.ADMIN_SESSION_HOURS) || 12, // admin sessions are shorter than viewer sessions
+  uploadDir = process.env.UPLOAD_DIR || path.join(ROOT, 'uploads'),   // admin image uploads (mount a persistent volume in production)
   contactWebhook = process.env.CONTACT_WEBHOOK_URL || '',
   rate = true,
   catalogPath = path.join(ROOT, 'data/catalog.json'),
+  studioPath = path.join(path.dirname(catalogPath), 'studio.json'),
   r2 = createR2(),                                            // Cloudflare R2 (private bucket for premium video)
   social = socialFromEnv(),                                   // { config, verifiers: { google?, facebook? } }
   publicApiUrl = process.env.PUBLIC_API_URL || '',            // absolute base for HLS URLs when behind a proxy
@@ -61,13 +50,8 @@ export function createApp({
   if (production && !jwtSecret) throw new Error('JWT_SECRET must be set in production');
   if (!jwtSecret) console.warn('[auth] JWT_SECRET not set — using an insecure development secret. Set JWT_SECRET before deploying.');
   const secret = jwtSecret || 'insecure-development-secret';
-  const loadCatalog = () => JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
-  let catalog = loadCatalog(); let catalogMtime = fs.statSync(catalogPath).mtimeMs;
-  const cat = () => { const m = fs.statSync(catalogPath).mtimeMs; if (m !== catalogMtime) { catalog = loadCatalog(); catalogMtime = m; } return catalog; };
-  const exists = (type, id) => {
-    const c = cat();
-    return type === 'show' ? c.shows.some((s) => s.id === id) : type === 'video' ? c.videos.some((v) => v.id === id) : type === 'upcoming' ? c.upcoming.some((u) => u.id === id) : false;
-  };
+  const catalog = createCatalogStore({ db, catalogPath, studioPath });     // MySQL-backed (seeded once from the JSON files), edited in /admin
+  const exists = (type, id) => catalog.exists(type, id);
 
   const app = express();
   app.disable('x-powered-by');
@@ -94,7 +78,11 @@ export function createApp({
     const dbUp = await db.ping().then(() => true, () => false);
     res.status(dbUp ? 200 : 503).json({ ok: dbUp, db: dbUp ? 'up' : 'down' });
   }));
-  api.get('/catalog', (req, res) => { res.set('Cache-Control', 'public, max-age=60'); res.json(cat()); });
+  api.get('/catalog', wrap(async (_req, res) => { res.set('Cache-Control', 'public, max-age=15'); res.json((await catalog.get()).catalog); }));
+  api.get('/studio', wrap(async (_req, res) => {
+    const s = (await catalog.get()).studio; if (!s) throw new HttpError(404, 'not_found', 'No studio profile.');
+    res.set('Cache-Control', 'public, max-age=15'); res.json(s);
+  }));
   api.get('/plans', (_req, res) => res.json({
     plans: PLANS,
     payments: { provider: payments.provider, ...(payments.provider === 'razorpay' ? { keyId: payments.keyId } : {}), ...(payments.provider === 'mock' ? { demo: true } : {}) },
@@ -102,7 +90,8 @@ export function createApp({
   }));
 
   const authLimit = rate ? rateLimit('auth', 20, 60_000) : (_q, _s, n) => n();
-  const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name });
+  const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, ...(u.isAdmin ? { isAdmin: true } : {}) });
+  const notDisabled = (u) => { if (u.disabledAt) throw new HttpError(403, 'account_disabled', 'This account has been disabled. Please contact support.'); return u; };
 
   api.post('/auth/signup', authLimit, wrap(async (req, res) => {
     const { name = '', email = '', password = '' } = req.body || {};
@@ -125,6 +114,7 @@ export function createApp({
     // Always run a hash to keep timing similar whether or not the user exists.
     const ok = user?.passwordHash ? verifyPassword(String(password), user.passwordHash) : (verifyPassword(String(password), 'scrypt$00$00'), false);   // social-only accounts have no password
     if (!ok) throw new HttpError(401, 'invalid_credentials', 'Incorrect email or password.');
+    notDisabled(user);
     res.json({ token: signToken(user.id, secret), user: publicUser(user) });
   }));
 
@@ -156,6 +146,7 @@ export function createApp({
       }
     }
     if (!user) throw new HttpError(500, 'server_error', 'Something went wrong.');
+    notDisabled(user);
     await db.identities.touch(provider, claims.subject);
     return { token: signToken(user.id, secret), user: publicUser(user), profiles: await db.profiles.list(user.id), isNew };
   }
@@ -166,14 +157,14 @@ export function createApp({
   const userFromRequest = async (req) => {
     const h = req.headers.authorization || '';
     const payload = h.startsWith('Bearer ') ? verifyToken(h.slice(7), secret) : null;
-    return payload && !payload.aud && payload.sub ? db.users.byId(String(payload.sub)) : null;      // media/other scoped tokens are not sessions
+    const u = payload && !payload.aud && payload.sub ? await db.users.byId(String(payload.sub)) : null; return u && !u.disabledAt ? u : null;      // media/other scoped tokens are not sessions
   };
-  const findVideo = (id) => cat().videos.find((v) => v.id === id);
+  const findVideo = (id) => catalog.video(id);
   const originOf = (req) => (publicApiUrl || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
   const r2Format = (src) => src.format || (/\.m3u8$/i.test(src.key) ? 'hls' : 'mp4');
   /** Returns a playable URL for a video hosted in R2. Premium titles need a signed-in account with an active paid plan. */
   api.post('/videos/:id/stream', wrap(async (req, res) => {
-    const v = findVideo(req.params.id);
+    const v = await findVideo(req.params.id);
     if (!v) throw new HttpError(404, 'not_found', 'Unknown video.');
     if (v.source?.type !== 'r2') throw new HttpError(400, 'not_hosted', 'This video is not hosted in R2.');
     if (v.access === 'premium') {
@@ -195,7 +186,7 @@ export function createApp({
   api.get('/media/:token/*', wrap(async (req, res) => {
     const claims = verifyToken(req.params.token, secret);
     if (!claims || claims.aud !== 'media') throw new HttpError(401, 'invalid_token', 'This playback link has expired.');
-    const v = findVideo(claims.vid);
+    const v = await findVideo(claims.vid);
     if (!v || v.source?.type !== 'r2' || r2Format(v.source) !== 'hls') throw new HttpError(404, 'not_found', 'Unknown video.');
     if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video storage is not configured on this server.');
     const dir = path.posix.dirname(v.source.key);
@@ -235,64 +226,8 @@ export function createApp({
     res.json({ ok: true });                                               // always 200 for valid signatures so Razorpay doesn't retry forever
   }));
 
-  /* ---------- admin API (ADMIN_TOKEN) — refunds, coupons, accounting export ---------- */
-  const adminOn = adminToken.length >= 24;
-  if (adminToken && !adminOn) console.warn('[admin] ADMIN_TOKEN is shorter than 24 characters — the admin API stays disabled.');
-  const digest = (v) => crypto.createHash('sha256').update(String(v)).digest();
-  const adminAuth = (req, _res, next) => {
-    if (!adminOn) return next(new HttpError(404, 'not_found', 'Unknown endpoint.'));
-    const got = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-    if (!crypto.timingSafeEqual(digest(got), digest(adminToken))) return next(new HttpError(401, 'unauthorized', 'Invalid admin token.'));
-    next();
-  };
-  const admin = express.Router();
-  admin.use(rate ? rateLimit('admin', 60, 60_000) : (_q, _s, n) => n(), adminAuth);
-  const asInt = (v, what) => { if (v === undefined || v === null || v === '') return null; const n = Number(v); if (!Number.isInteger(n) || n < 0) throw bad(`${what} must be a whole number.`); return n; };
-  const asDate = (v, what) => { if (v === undefined || v === null || v === '') return null; const t = Date.parse(v); if (Number.isNaN(t)) throw bad(`${what} must be an ISO date.`); return new Date(t); };
-  admin.get('/payments', wrap(async (req, res) => res.json({ payments: await db.payments.listRecent({ email: typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : null, limit: Math.min(Number(req.query.limit) || 50, 200) }) })));
-  admin.post('/payments/:id/refund', wrap(async (req, res) => {
-    const b = req.body || {};
-    const rec = await billing.refund({ paymentId: req.params.id, amountPaise: b.amountPaise === undefined ? undefined : Number(b.amountPaise), reason: typeof b.reason === 'string' ? b.reason.trim() : '', revokeAccess: b.revokeAccess === true });
-    res.status(201).json({ refund: rec.refund, creditNote: rec.creditNote && { id: rec.creditNote.id, number: rec.creditNote.number }, accessRevoked: rec.revoked });
-  }));
-  admin.get('/coupons', wrap(async (_req, res) => res.json({ coupons: await db.coupons.list() })));
-  admin.post('/coupons', wrap(async (req, res) => {
-    const b = req.body || {}, code = String(b.code || '').trim().toUpperCase();
-    if (!/^[A-Z0-9_-]{3,30}$/.test(code)) throw bad('Code must be 3–30 characters: letters, digits, "-" or "_".');
-    if (!['percent', 'flat'].includes(b.kind)) throw bad('kind must be "percent" or "flat".');
-    const value = asInt(b.value, 'value');
-    if (b.kind === 'percent' ? !(value >= 1 && value <= 100) : !(value >= 100)) throw bad(b.kind === 'percent' ? 'A percent coupon must be 1–100.' : 'A flat coupon is in paise, at least 100 (₹1).');
-    const planIds = Array.isArray(b.planIds) && b.planIds.length ? b.planIds.map(String) : null;
-    if (planIds?.some((id) => !paidPlan(id))) throw bad('planIds must be paid plan ids.');
-    const perUserLimit = asInt(b.perUserLimit ?? 1, 'perUserLimit'); if (!(perUserLimit >= 1)) throw bad('perUserLimit must be at least 1.');
-    try {
-      res.status(201).json({ coupon: await db.coupons.create({ code, description: typeof b.description === 'string' ? b.description.slice(0, 120) : null, kind: b.kind, value, planIds, maxRedemptions: asInt(b.maxRedemptions, 'maxRedemptions'), perUserLimit, startsAt: asDate(b.startsAt, 'startsAt'), expiresAt: asDate(b.expiresAt, 'expiresAt') }) });
-    } catch (e) { if (isDuplicate(e)) throw new HttpError(409, 'exists', 'A coupon with that code already exists.'); throw e; }
-  }));
-  admin.patch('/coupons/:code', wrap(async (req, res) => {
-    const code = String(req.params.code).toUpperCase(), b = req.body || {};
-    if (!(await db.coupons.get(code))) throw new HttpError(404, 'not_found', 'Unknown coupon.');
-    const patch = {};
-    if (b.active !== undefined) patch.active = !!b.active;
-    if ('expiresAt' in b) patch.expiresAt = asDate(b.expiresAt, 'expiresAt');
-    if ('startsAt' in b) patch.startsAt = asDate(b.startsAt, 'startsAt');
-    if ('maxRedemptions' in b) patch.maxRedemptions = asInt(b.maxRedemptions, 'maxRedemptions');
-    if (b.perUserLimit !== undefined) { patch.perUserLimit = asInt(b.perUserLimit, 'perUserLimit'); if (!(patch.perUserLimit >= 1)) throw bad('perUserLimit must be at least 1.'); }
-    if (typeof b.description === 'string') patch.description = b.description.slice(0, 120);
-    res.json({ coupon: await db.coupons.update(code, patch) });
-  }));
-  /** Sales register as CSV. from/to are IST calendar dates (inclusive); default = the current calendar month. */
-  admin.get('/invoices.csv', wrap(async (req, res) => {
-    const ist = (d) => new Date(Date.parse(`${d}T00:00:00+05:30`));
-    const ok = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(ist(d).getTime());
-    const now = new Date(Date.now() + 5.5 * 3600_000), monthStart = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
-    const from = req.query.from === undefined ? monthStart : req.query.from, to = req.query.to === undefined ? now.toISOString().slice(0, 10) : req.query.to;
-    if (!ok(from) || !ok(to)) throw bad('from and to must be dates like 2026-04-01.');
-    res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="sales-register-${from}_${to}.csv"` });
-    res.send(await billing.registerCsv(ist(from), new Date(ist(to).getTime() + 86_400_000)));
-  }));
-  admin.get('/invoices/:id/pdf', wrap(async (req, res) => { const f = await billing.adminInvoicePdf(req.params.id); res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${f.filename}"`, 'Cache-Control': 'private, no-store' }); res.send(f.content); }));
-  api.use('/admin', admin);
+  /* ---------- admin console API (admin accounts, or ADMIN_TOKEN for scripts) — see server/src/admin.js ---------- */
+  api.use('/admin', createAdminRouter({ db, billing, catalog, r2, payments, mailer, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate }));
 
   /* ---------- authenticated ---------- */
   api.use(wrap(async (req, _res, next) => {
@@ -300,6 +235,7 @@ export function createApp({
     const payload = h.startsWith('Bearer ') ? verifyToken(h.slice(7), secret) : null;
     const user = payload && !payload.aud && await db.users.byId(String(payload.sub));
     if (!user) throw new HttpError(401, 'unauthorized', 'Please sign in.');
+    notDisabled(user);
     req.user = user; next();
   }));
   const ownProfile = async (req) => {
@@ -345,7 +281,7 @@ export function createApp({
   api.get('/profiles/:pid/library', wrap(async (req, res) => { const p = await ownProfile(req); res.json(await db.library.get(p.id)); }));
   api.put('/profiles/:pid/list/:type/:id', wrap(async (req, res) => {
     const p = await ownProfile(req); const { type, id } = req.params;
-    if (!exists(type, id)) throw new HttpError(404, 'not_found', 'Unknown title.');
+    if (!(await exists(type, id))) throw new HttpError(404, 'not_found', 'Unknown title.');
     await db.library.addListItem(p.id, type, id); res.sendStatus(204);
   }));
   api.delete('/profiles/:pid/list/:type/:id', wrap(async (req, res) => {
@@ -353,14 +289,14 @@ export function createApp({
   }));
   api.put('/profiles/:pid/progress/:videoId', wrap(async (req, res) => {
     const p = await ownProfile(req); const { position, duration } = req.body || {};
-    if (!exists('video', req.params.videoId)) throw new HttpError(404, 'not_found', 'Unknown video.');
+    if (!(await exists('video', req.params.videoId))) throw new HttpError(404, 'not_found', 'Unknown video.');
     if (!Number.isFinite(position) || position < 0 || !Number.isFinite(duration ?? 0) || (duration ?? 0) < 0) throw bad('position and duration must be non-negative numbers.');
     await db.library.saveProgress(p.id, req.params.videoId, Math.min(Math.floor(position), 4_294_967_295), Math.min(Math.floor(duration || 0), 4_294_967_295));
     res.sendStatus(204);
   }));
   api.delete('/profiles/:pid/progress/:videoId', wrap(async (req, res) => { const p = await ownProfile(req); await db.library.removeProgress(p.id, req.params.videoId); res.sendStatus(204); }));
   api.put('/profiles/:pid/reminders/:id', wrap(async (req, res) => {
-    const p = await ownProfile(req); if (!exists('upcoming', req.params.id)) throw new HttpError(404, 'not_found', 'Unknown title.');
+    const p = await ownProfile(req); if (!(await exists('upcoming', req.params.id))) throw new HttpError(404, 'not_found', 'Unknown title.');
     await db.library.addReminder(p.id, req.params.id); res.sendStatus(204);
   }));
   api.delete('/profiles/:pid/reminders/:id', wrap(async (req, res) => { const p = await ownProfile(req); await db.library.removeReminder(p.id, req.params.id); res.sendStatus(204); }));
@@ -426,6 +362,11 @@ export function createApp({
     app.use('/app', express.static(path.join(ROOT, 'app'), { ...opts(0), etag: true }));
     app.use('/data', express.static(path.join(ROOT, 'data'), opts(60_000)));
     app.use('/media', express.static(path.join(ROOT, 'media'), opts(86_400_000)));
+    app.use('/uploads', express.static(uploadDir, { maxAge: '365d', immutable: true, index: false, dotfiles: 'ignore' }));   // admin-uploaded images (content-hash names)
+    // The admin console: its own page + scripts, never cached, locked down with a strict CSP (no inline script, no framing).
+    const adminHeaders = (_q, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'self'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" }); next(); };
+    app.get(['/admin', '/admin/'], adminHeaders, (_q, res) => res.sendFile(path.join(ROOT, 'admin/index.html')));
+    app.use('/admin', adminHeaders, express.static(path.join(ROOT, 'admin'), { index: false, dotfiles: 'ignore', etag: true }));
   }
 
   app.use((err, _req, res, _next) => {
@@ -436,6 +377,7 @@ export function createApp({
     res.status(status).json({ error: { code: err.code || 'server_error', message: status === 500 ? 'Something went wrong.' : err.message } });
   });
   app.db = db;
+  app.locals.catalog = catalog;
   app.locals.billing = billing;          // exposed for jobs (expiry reminders) and tests
   return app;
 }

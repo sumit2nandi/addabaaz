@@ -41,13 +41,14 @@ npm run build:www        # static bundle in ./www  (what the mobile apps package
 ```
 index.html, manifest.webmanifest, sw.js   app shell, PWA manifest, service worker
 app/                 web app (css/, js/{views,ui,data,players}, env.js = deploy-time settings)
-data/catalog.json    ALL content: shows, videos, upcoming, gallery   ← edit this to publish
-data/studio.json     About / team / services / contact details
+admin/               the admin console (served at /admin) — manage content, users, payments, coupons
+data/catalog.json    content SEED + static/mobile bundle (live catalog is in MySQL; `npm run catalog:export` syncs it back)
+data/studio.json     About / team / services / contact details (same role)
 media/               optimised WebP artwork + app icons (generated)
 server/              REST API + static file server (Express), MySQL layer, SQL migrations, tests
 mobile/              Capacitor config for Android & iOS
 scripts/             optimize-images.sh, validate-catalog.mjs, build-www.mjs
-docs/                ARCHITECTURE.md · AUTH.md · PREMIUM.md · DATABASE.md · MOBILE.md · CONTENT.md · openapi.yaml
+docs/                ARCHITECTURE.md · ADMIN.md · AUTH.md · PREMIUM.md · DATABASE.md · MOBILE.md · CONTENT.md · openapi.yaml
 BTS/, UpcomingReleases/, images/, resources/   original artwork (untouched) & native icon/splash masters
 ```
 
@@ -55,6 +56,7 @@ BTS/, UpcomingReleases/, images/, resources/   original artwork (untouched) & na
 
 - [Architecture & roadmap](docs/ARCHITECTURE.md) — how the pieces fit, how to go to production, what to add next
 - [Sign-in: email, Google, Facebook](docs/AUTH.md) — who must log in, provider setup, native apps
+- [Admin console](docs/ADMIN.md) — `/admin`: content, users, payments, refunds, coupons, audit log
 - [Billing: GST invoices, coupons, refunds, emails](docs/BILLING.md) — setup, admin API, sales register
 - [Premium video on Cloudflare R2](docs/PREMIUM.md) — bucket, upload, catalog entry, access rules, Razorpay payments, security
 - [Database (MySQL)](docs/DATABASE.md) — schema, migrations, configuration, backups

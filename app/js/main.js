@@ -18,7 +18,7 @@ async function boot() {
   app.api = useApi ? new ApiClient(base === 'off' ? '' : base) : null;
   const catalogUrl = useApi ? `${base}/api/v1/catalog` : 'data/catalog.json';
 
-  const [catalog] = await Promise.all([loadCatalog(catalogUrl)]);
+  const [catalog] = await Promise.all([loadCatalog(catalogUrl, undefined, { mediaBase: useApi ? base : '' })]);
   app.catalog = catalog;
   app.user = new User(new LocalAdapter(), useApi ? new RemoteAdapter(app.api) : null);
   await app.user.init();

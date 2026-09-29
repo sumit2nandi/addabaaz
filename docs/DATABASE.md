@@ -13,7 +13,9 @@ users ──< profiles ──< list_items        (My List:   PK profile_id, item
    ├── payments ──< refunds              (kept if the user is deleted; user_id → NULL)
    │       └──< invoices                 (tax invoices + credit notes; numbered per financial year)
 
-contact_messages                         (standalone inbox for the Contact form)
+contact_messages                         (standalone inbox for the Contact form; handled_at/by set from the admin console)
+catalog_items, catalog_meta              (the catalog: one JSON document per show/video/upcoming/gallery/studio; edited in /admin)
+admin_audit                              (append-only log of admin actions)
 schema_migrations                        (applied migration files)
 ```
 
@@ -31,6 +33,10 @@ schema_migrations                        (applied migration files)
 | `refunds` | `id` PK · `payment_id` FK · `provider_refund_id` **UNIQUE** (a refund event is applied once) · `amount_paise` · `status` ENUM(pending, processed, failed) · `source` ENUM(admin, provider) · `revoked_access` |
 | `invoices` | `id` PK · `number` **UNIQUE** (e.g. `AB/2627/000001`) · `kind` ENUM(invoice, credit_note) · `doc_key` **UNIQUE** (one invoice per payment, one credit note per refund) · `payment_id` / `refund_id` / `parent_id` · `user_id` FK **ON DELETE SET NULL** · `fy` · `issued_at` · `taxable_paise` / `cgst_paise` / `sgst_paise` / `igst_paise` / `total_paise` · `gst_rate` · `doc` JSON (seller & buyer snapshot) |
 | `invoice_counters` | `(series, fy)` PK · `last_no` — row-locked while numbering, so numbers are gapless |
+| `catalog_items` | `(type, id)` PK · `position` (display order) · `doc` JSON — the item exactly as in `data/catalog.json`. Seeded once from the file; see `docs/ADMIN.md` for export/import |
+| `catalog_meta` | `k` PK · `n` — `version` (bumped on every catalog write; servers compare it to refresh their cache) and `seeded` |
+| `admin_audit` | `id` PK · `at` · `actor_id` / `actor` (email, or `token`) · `action` · `target` · `meta` JSON · `ip` |
+| `users` (additions) | `is_admin` · `disabled_at` (a disabled user is refused everywhere) |
 | `contact_messages` | `id` PK · `name` · `email` · `phone` · `message` TEXT · `created_at` |
 
 All foreign keys are `ON DELETE CASCADE` (except `payments.user_id` and `invoices.user_id`, which become NULL so payment and tax records survive account deletion), so `DELETE /me` (account deletion, required by the app stores) removes everything belonging to the user in one statement. Ids are UUID v4 strings. Video/list ids use `utf8mb4_bin` because YouTube ids are case-sensitive. Full DDL: [`001_init.sql`](../server/migrations/001_init.sql), social login in [`002_social_login.sql`](../server/migrations/002_social_login.sql), payments in [`003_payments.sql`](../server/migrations/003_payments.sql), coupons/invoices/refunds in [`004_billing.sql`](../server/migrations/004_billing.sql). `payments` also gained `list_price_paise`, `discount_paise`, `coupon_code`, `billing` (buyer name/state/GSTIN snapshot), `refunded_paise`.

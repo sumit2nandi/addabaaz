@@ -3,9 +3,9 @@
  * - data/*.json:        network-first, falls back to cache when offline
  * - media/*:            cache-first (immutable artwork)
  * - YouTube thumbnails: stale-while-revalidate (opaque responses allowed)
- * - /api/*, YouTube player, analytics: never intercepted
+ * - /api/*, /admin/*, YouTube player, analytics: never intercepted
  * Bump VERSION (or run `npm run build:www`, which stamps it) to force a refresh. */
-const VERSION = 'v2.3.0';
+const VERSION = 'v2.4.0';
 const SHELL = `ab-shell-${VERSION}`, DATA = `ab-data-${VERSION}`, MEDIA = `ab-media-${VERSION}`, THUMBS = `ab-thumbs-${VERSION}`;
 const PRECACHE = ['./', 'index.html', 'manifest.webmanifest', 'app/env.js', 'app/css/styles.css', 'app/js/main.js', 'app/js/app.js', 'app/js/config.js', 'app/js/util.js', 'app/js/icons.js',
   'app/js/router.js', 'app/js/platform.js', 'app/js/social.js', 'app/js/payments.js', 'app/js/data/catalog.js', 'app/js/data/api.js', 'app/js/data/adapters.js', 'app/js/data/user.js',
@@ -40,7 +40,8 @@ self.addEventListener('fetch', (e) => {
   const req = e.request; if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin === location.origin) {
-    if (url.pathname.includes('/api/')) return;
+    if (url.pathname.includes('/api/') || url.pathname === '/admin' || url.pathname.startsWith('/admin/')) return;   // the admin console is never cached or shadowed by the app shell
+    if (url.pathname.startsWith('/uploads/')) return e.respondWith(cacheFirst(req, MEDIA));   // admin uploads have content-hash names
     if (req.mode === 'navigate') return e.respondWith(networkFirst(new Request('./'), SHELL).catch(() => caches.match('./').then((r) => r || caches.match('index.html'))));
     if (url.pathname.includes('/data/')) return e.respondWith(networkFirst(req, DATA));
     if (url.pathname.includes('/media/')) return e.respondWith(cacheFirst(req, MEDIA));

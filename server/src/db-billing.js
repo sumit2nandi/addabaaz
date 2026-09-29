@@ -81,6 +81,11 @@ export function billingDb({ q, tx, self, iso }) {
       if (set.length) await q(`UPDATE coupons SET ${set.join(', ')} WHERE code = ?`, [...v, code]);
       return this.get(code);
     },
+    /** Deletes a coupon that has never been used (anything used is kept for the records — deactivate it instead). Returns false if it was used. */
+    async remove(code) {
+      if ((await q('SELECT COUNT(*) AS n FROM payments WHERE coupon_code = ?', [code]))[0].n) return false;
+      await q('DELETE FROM coupons WHERE code = ?', [code]); return true;
+    },
     usage: (code, userId) => usage({ query: q }, code, userId),
     /** Re-checks the limits under a row lock, then runs `insert` — two buyers can't both take the last redemption. */
     async reserve(coupon, userId, insert) {

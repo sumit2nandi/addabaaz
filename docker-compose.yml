@@ -22,6 +22,8 @@ services:
     depends_on:
       db: { condition: service_healthy }
     ports: ["3000:3000"]
+    volumes:
+      - uploads:/app/uploads      # images uploaded from the admin console
     environment:
       NODE_ENV: production
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
@@ -58,3 +60,4 @@ services:
       R2_BUCKET: ${R2_BUCKET:-}
 volumes:
   db-data:
+  uploads:

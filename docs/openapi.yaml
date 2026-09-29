@@ -11,7 +11,7 @@ servers:
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
-    admin: { type: http, scheme: bearer, description: 'The ADMIN_TOKEN environment variable (24+ characters)' }
+    admin: { type: http, scheme: bearer, description: 'An administrator account’s session token (users.is_admin; valid 12h after sign-in), or the optional ADMIN_TOKEN environment variable (24+ characters) for scripts' }
   schemas:
     Error:
       type: object
@@ -36,6 +36,7 @@ security: [ { bearer: [] } ]
 paths:
   /health: { get: { security: [], summary: 'Liveness + service discovery (used by the app to detect API mode). Body includes db: up|down.', responses: { '200': { description: OK } } } }
   /health/ready: { get: { security: [], summary: 'Readiness probe — 503 when MySQL is unreachable.', responses: { '200': { description: Ready }, '503': { description: Database down } } } }
+  /studio: { get: { security: [], summary: 'About / team / services / contact details (edited in the admin console)', responses: { '200': { description: studio.json } } } }
   /catalog: { get: { security: [], summary: Full catalog (shows, videos, upcoming, gallery), responses: { '200': { description: catalog.json } } } }
   /plans: { get: { security: [], summary: 'Plans plus the active payment provider', responses: { '200': { description: '{ plans: [...], payments: { provider: razorpay|mock|none, keyId? }, billing: { gst: bool, coupons: bool, states: [{code,name}] } }' } } } }
   /auth/signup:
@@ -155,7 +156,7 @@ paths:
       summary: 'Razorpay → API. Signed with RAZORPAY_WEBHOOK_SECRET over the raw body (X-Razorpay-Signature). Handles payment.captured / order.paid (activates the plan + issues the invoice, even if the buyer never returned), payment.failed, and refund.created / processed / failed.'
       responses: { '200': { description: ok }, '400': { description: invalid_signature } }
   /admin/payments:
-    get: { summary: 'Admin (Bearer ADMIN_TOKEN): recent payments, ?email=&limit=', security: [ { admin: [] } ], responses: { '200': { description: '{ payments }' }, '401': { description: unauthorized }, '404': { description: admin API disabled } } }
+    get: { summary: 'Admin (Bearer ADMIN_TOKEN): recent payments, ?email=&limit=', security: [ { admin: [] } ], responses: { '200': { description: '{ payments }' }, '401': { description: unauthorized }, '403': { description: not an administrator } } }
   /admin/payments/{id}/refund:
     post:
       summary: 'Admin: refund a Razorpay payment (fully or partly). Issues a credit note once processed; a full refund ends the access.'
@@ -176,3 +177,41 @@ paths:
     get: { summary: 'Admin: sales register CSV (invoices +, credit notes -), ?from=YYYY-MM-DD&to=YYYY-MM-DD in IST', security: [ { admin: [] } ], responses: { '200': { description: text/csv } } }
   /admin/invoices/{id}/pdf:
     get: { summary: 'Admin: any invoice as PDF', security: [ { admin: [] } ], parameters: [ { name: id, in: path, required: true, schema: { type: string } } ], responses: { '200': { description: PDF } } }
+  /admin/session:
+    get: { summary: 'Admin: who am I (also proves the session is an admin one)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/stats:
+    get: { summary: 'Admin: dashboard numbers (revenue, subscribers, sign-ups, recent activity)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/health:
+    get: { summary: 'Admin: setup checklist (GSTIN, SMTP, R2, Razorpay, secrets…)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/users:
+    get: { summary: 'Admin: users, ?q=&filter=all|paid|free|expiring|expired|admin|disabled&limit=&offset=', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/users/{id}:
+    get: { summary: 'Admin: one user with profiles, subscription and payments', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '404': { description: unknown user } } }
+    patch: { summary: 'Admin: change name / isAdmin / disabled (cannot lock yourself out or remove the last admin)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '409': { description: cannot_lock_yourself_out | last_admin } } }
+    delete: { summary: 'Admin: delete a user (payment and invoice records are kept)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '409': { description: cannot_lock_yourself_out | last_admin } } }
+  /admin/users/{id}/grant:
+    post: { summary: 'Admin: give free access { days, planId?, note? } — no payment or invoice', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/users/{id}/revoke-plan:
+    post: { summary: 'Admin: end the current plan now (does not refund)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/messages:
+    get: { summary: 'Admin: contact messages, ?status=open|handled|all', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/messages/{id}:
+    patch: { summary: 'Admin: mark handled / reopen { handled }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+    delete: { summary: 'Admin: delete a message', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/audit:
+    get: { summary: 'Admin: audit log, newest first, ?action=&before=<id>&limit=', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/catalog:
+    get: { summary: 'Admin: the whole catalog including the studio profile', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/catalog/{type}:
+    post: { summary: 'Admin: add an item; type = shows|videos|upcoming|gallery. Validated like `npm run validate:catalog`', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '400': { description: validation }, '409': { description: exists } } }
+  /admin/catalog/{type}/order:
+    put: { summary: 'Admin: set display order { ids: [...] }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/catalog/{type}/{id}:
+    put: { summary: 'Admin: replace an item', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '404': { description: unknown } } }
+    delete: { summary: 'Admin: delete an item (shows: ?cascade=1 also deletes their videos)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '409': { description: has_videos } } }
+  /admin/studio:
+    put: { summary: 'Admin: replace the studio profile (About / Services / Contact)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '400': { description: validation } } }
+  /admin/uploads/image:
+    post: { summary: 'Admin: upload an image (raw body, png/jpeg/webp/gif, ≤ 4 MB) → { path: uploads/<hash>.<ext> }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '413': { description: too large }, '400': { description: unsupported_image } } }
+  /admin/uploads/video:
+    post: { summary: 'Admin: presigned PUT URL for a premium video in R2 { filename, slug } → { key, uploadUrl, expiresInSeconds }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '503': { description: storage_not_configured } } }

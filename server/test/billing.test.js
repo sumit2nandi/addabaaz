@@ -185,15 +185,15 @@ test('without a GSTIN the document is a plain receipt: no tax lines, no state ne
 });
 
 /* ---------------- coupons ---------------- */
-test('admin API: off without a token, locked with a wrong one', async () => {
+test('admin API: the shared token only works when it is long enough; viewers are refused', async () => {
   const off = await mk({ adminToken: '' }); const short = await mk({ adminToken: 'short' });
   try {
-    assert.equal((await call('GET', '/admin/coupons', null, null, { url: off.url, admin: ADMIN })).status, 404);
-    assert.equal((await call('GET', '/admin/coupons', null, null, { url: short.url, admin: 'short' })).status, 404);
+    assert.equal((await call('GET', '/admin/coupons', null, null, { url: off.url, admin: ADMIN })).status, 401, 'no ADMIN_TOKEN configured → the token is not accepted');
+    assert.equal((await call('GET', '/admin/coupons', null, null, { url: short.url, admin: 'short' })).status, 401, 'a too-short token is ignored');
   } finally { off.s.close(); short.s.close(); }
   assert.equal((await call('GET', '/admin/coupons')).status, 401);
   assert.equal((await call('GET', '/admin/coupons', null, null, { admin: 'x'.repeat(32) })).status, 401);
-  const u = await signup(); assert.equal((await call('GET', '/admin/coupons', null, u.token)).status, 401, 'a user session is not an admin token');
+  const u = await signup(); assert.equal((await call('GET', '/admin/coupons', null, u.token)).status, 403, 'a viewer session is not an admin');
   assert.equal((await adm('GET', '/coupons')).status, 200);
 });
 

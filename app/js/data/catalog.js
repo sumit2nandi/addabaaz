@@ -116,11 +116,23 @@ export class Catalog {
   }
 }
 
-export async function loadCatalog(url, fallbackUrl = 'data/catalog.json') {
+/** Admin uploads are stored as `uploads/<hash>.webp`. When the app is served from a different origin than the API (native apps, split hosting), point them at the API host. */
+export function rebaseUploads(data, base) {
+  if (!base || base === 'off') return data;
+  const walk = (v) => {
+    if (typeof v === 'string') return v.startsWith('uploads/') ? `${base}/${v}` : v;
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]));
+    return v;
+  };
+  return walk(data);
+}
+
+export async function loadCatalog(url, fallbackUrl = 'data/catalog.json', { mediaBase = '' } = {}) {
   try {
     const r = await fetch(url, { cache: 'no-cache' });
     if (!r.ok) throw new Error('catalog ' + r.status);
-    return new Catalog(await r.json());
+    return new Catalog(rebaseUploads(await r.json(), mediaBase));
   } catch (e) {
     if (url === fallbackUrl) throw e;
     console.warn('[catalog] falling back to bundled catalog', e);

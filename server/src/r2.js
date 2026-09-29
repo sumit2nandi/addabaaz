@@ -41,6 +41,12 @@ export function createR2(env = process.env) {
       const { queryString } = presign({ host: base.host, path, accessKeyId, secretAccessKey, expires: Math.min(Math.max(ttl, 1), 604800), now });
       return `${base.origin}${path}?${queryString}`;
     },
+    /** Time-limited PUT URL — lets the admin console upload a video straight from the browser to the bucket (needs a read/write token + bucket CORS, see docs/ADMIN.md). */
+    presignPut(key, { ttl = 3600, now } = {}) {
+      const path = `${base.pathname.replace(/\/$/, '')}/${enc(bucket)}/${encPath(key)}`;
+      const { queryString } = presign({ method: 'PUT', host: base.host, path, accessKeyId, secretAccessKey, expires: Math.min(Math.max(ttl, 1), 86400), now });
+      return `${base.origin}${path}?${queryString}`;
+    },
     /** Reads a small text object (HLS playlists). Returns null when the object doesn't exist. */
     async getText(key) {
       const res = await fetch(r2.presignGet(key, { ttl: 60 }));

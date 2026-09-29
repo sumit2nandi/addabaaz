@@ -22,5 +22,6 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm run validate:catalog
+      - run: for f in $(find admin app -name '*.js'); do node --check "$f" || exit 1; done   # the browser code has no build step
       - run: npm test
       - run: npm run build:www
