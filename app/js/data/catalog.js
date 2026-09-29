@@ -1,8 +1,10 @@
 import { norm } from '../util.js';
 
+// Words that make a poor display title (channel/brand names); they are skipped when deriving a title from a long YouTube title.
 const GENERIC = /^(laugh\s*bite|lught\s*bite|addabaaz|addabazz|আড্ডাবাজ.*|fake podcast|ফালতু কথা|faltu kotha|ep[-\s]?\d+|reels?[-\s]?\d*|part[-\s]?\d+|stand\s?up\s?comedy|standupcomedy|shahid|শহীদ|promo|trailer|ytshorts|new web series|comedy series|ckb|.*addabaaz reels.*|পর্ব\s*-?\s*[\d০-৯]+)$/i;
 
 /** Read-only, indexed view of data/catalog.json. */
+// All lookups the UI needs (by id, by show, search, ranking). Built once from the catalog JSON with Maps for speed.
 export class Catalog {
   constructor(data) {
     this.data = data;
@@ -35,6 +37,7 @@ export class Catalog {
   get genres() { return this._genres; }
 
   /** Episodes of a show in watch order (EP 1 → n). */
+  // Query helpers used by the pages: episodes in order, extras, latest, trending, reels, next episode, related titles.
   episodes(showId) {
     return (this._byShow.get(showId) || []).filter((v) => v.kind === 'episode')
       .sort((a, b) => (a.episode ?? 1e9) - (b.episode ?? 1e9) || a.publishedAt.localeCompare(b.publishedAt));
@@ -79,6 +82,7 @@ export class Catalog {
   }
 
   /** Human-friendly title: strips hashtags, cast/credit noise and generic segments. */
+  // Cleans long, hashtag-filled video titles into something readable for cards and headings.
   displayTitle(v) {
     if (!v) return '';
     if (v.shortTitle) return v.shortTitle;
@@ -103,6 +107,7 @@ export class Catalog {
   }
 
   /** Ranked search over shows, videos and upcoming titles. */
+  // Simple ranked search: every word must match; matches at the start of a word score higher; shows outrank videos.
   search(query, { limit = 60 } = {}) {
     const tokens = norm(query).split(/[\s|,]+/).filter(Boolean);
     if (!tokens.length) return { shows: [], videos: [], upcoming: [] };
@@ -124,6 +129,7 @@ export class Catalog {
 }
 
 /** Admin uploads are stored as `uploads/<hash>.webp`. When the app is served from a different origin than the API (native apps, split hosting), point them at the API host. */
+// Rewrites `uploads/...` paths to absolute URLs.
 export function rebaseUploads(data, base) {
   if (!base || base === 'off') return data;
   const walk = (v) => {
@@ -135,6 +141,7 @@ export function rebaseUploads(data, base) {
   return walk(data);
 }
 
+// Fetch the catalog; if the API is unreachable fall back to the JSON file bundled with the app (so the site still works offline).
 export async function loadCatalog(url, fallbackUrl = 'data/catalog.json', { mediaBase = '' } = {}) {
   try {
     const r = await fetch(url, { cache: 'no-cache' });

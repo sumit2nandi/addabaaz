@@ -1,6 +1,7 @@
 import { storage, store } from '../util.js';
 
 /** A random id for this browser/app install: lets the server count how many screens are watching and list "your devices". */
+// Identifies this browser/app install to the server (used for the "screens at once" limit and the device list).
 export const deviceId = () => { try { let d = localStorage.getItem('ab.device'); if (!d) { d = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join(''); localStorage.setItem('ab.device', d); } return d; } catch { return 'anon'; } };
 export const deviceLabel = () => {
   const ua = navigator.userAgent, os = /iPhone|iPad/.test(ua) ? 'iPhone / iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'Device';
@@ -8,11 +9,14 @@ export const deviceLabel = () => {
   return `${os} · ${app}`;
 };
 
+// Error thrown for failed API calls: `status` (0 = offline), user-readable `message`, and the API's `code`.
 export class ApiError extends Error {
   constructor(status, message, code) { super(message); this.status = status; this.code = code; }
 }
 
 /** Thin fetch wrapper for the ADDABAAZ REST API (docs/openapi.yaml). */
+// Every API call goes through `req()`: it adds the sign-in token and device headers, parses JSON, and turns errors into ApiError.
+// A 401 clears the token and fires an `ab:unauthorized` event so the app signs the user out.
 export class ApiClient {
   constructor(base) { this.base = base; this.token = storage('ab.token', null); }
   setToken(t) { this.token = t; if (t) store('ab.token', t); else localStorage.removeItem('ab.token'); }
@@ -34,6 +38,7 @@ export class ApiClient {
     return data;
   }
   /** Authenticated download (e.g. invoice PDFs) → Blob. */
+  // Download helper for files such as invoice PDFs.
   async blob(path) {
     let res;
     try { res = await fetch(`${this.base}/api/v1${path}`, { headers: this.token ? { Authorization: `Bearer ${this.token}` } : {} }); }
@@ -41,6 +46,7 @@ export class ApiClient {
     if (!res.ok) { const d = await res.json().catch(() => ({})); throw new ApiError(res.status, d.error?.message || `Download failed (${res.status})`, d.error?.code); }
     return res.blob();
   }
+  // Shorthand methods for each HTTP verb.
   get(p, o) { return this.req('GET', p, null, o); }
   post(p, b, o) { return this.req('POST', p, b ?? {}, o); }
   put(p, b, o) { return this.req('PUT', p, b ?? {}, o); }
@@ -53,6 +59,7 @@ export class ApiClient {
 }
 
 /** Returns true when a compatible ADDABAAZ API answers at `base` ('' = same origin). */
+// Probe /api/v1/health (2.5 s timeout): is an ADDABAAZ API available here? If not, the app runs in local-only mode.
 export async function detectApi(base) {
   if (base === 'off') return false;
   const ctl = new AbortController();

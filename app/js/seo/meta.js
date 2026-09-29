@@ -9,13 +9,17 @@
 import { matchRoute } from '../routes.js';
 
 import { legalDoc, LEGAL_PAGES, LEGAL_UPDATED } from '../legal-text.js';
+// Labels and constants used in titles and descriptions.
 export const SITE = 'ADDABAAZ';
 export const TYPE_LABEL = { series: 'Bengali web series', standup: 'Stand-up comedy', podcast: 'Fake podcast', film: 'Bengali short film' };
 const KIND_LABEL = { episode: 'episode', trailer: 'trailer', reel: 'reel', clip: 'clip' };
+// Pages that must never be indexed (they show personal data); value = the page name used in their title.
 const PRIVATE = { mylist: 'My List', account: 'Account', profiles: 'Choose a profile', billing: 'Billing & invoices', recover: 'Account recovery' };
+// The robots directive for normal, indexable pages (allows large image and video previews).
 const ROBOTS_INDEX = 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1';
 
 /** Collapse whitespace and cut at a word boundary. */
+// Shortens text for meta descriptions: prefers ending on a full sentence, otherwise a whole word, and adds an ellipsis.
 export function clip(text, max) {
   const t = String(text ?? '').replace(/\s+/g, ' ').trim();
   if (t.length <= max) return t;
@@ -32,6 +36,7 @@ export function isoDuration(sec) {
   return 'PT' + (h ? h + 'H' : '') + (m ? m + 'M' : '') + (r || (!h && !m) ? r + 'S' : '');
 }
 /** First candidate title that fits in ~65 characters (search results cut longer ones), else the last one shortened. */
+// Titles longer than ~65 characters get cut off in search results, so pick the first candidate that fits.
 const fit = (options, max = 65) => options.find((t) => t.length <= max) || clip(options.at(-1), max);
 const names = (list) => list.filter(Boolean);
 const showName = (s) => s.titleEn || s.title;
@@ -50,6 +55,7 @@ export function videoDescription(v, show, cat) {
 /** Reels are short and repetitive; they are only put in the index when someone wrote a real description for them. */
 export const videoIndexable = (v) => v.kind !== 'reel' || !!(v.description && v.description.trim().length >= 40);
 
+// JSON-LD structured data builders (schema.org): the organisation, breadcrumbs, item lists and VideoObject. Search engines use these for rich results.
 const org = (origin, studio) => {
   const st = studio?.studio || {}, addr = st.address || [];
   const m = /^(.+?),\s*(.+?)\s+(\d{6})$/.exec(addr[1] || '');
@@ -73,10 +79,13 @@ const video = (origin, v, cat, show, { url, full = true } = {}) => ({
   ...(v.views ? { interactionStatistic: { '@type': 'InteractionCounter', interactionType: { '@type': 'WatchAction' }, userInteractionCount: v.views } } : {}),
 });
 
+// MAIN FUNCTION: given a URL path, returns everything a page's <head> needs. One `if` branch per page type below.
+// Unknown paths return status 404; renamed or duplicate URLs return a `redirect`.
 export function pageMeta({ path, query = {}, cat, studio = null, origin, plans = null }) {
   path = (path || '/').replace(/\/+$/, '') || '/';
   const m = matchRoute(path);
   const out = { status: 200, title: '', description: '', canonical: path, robots: ROBOTS_INDEX, image: '', imageAlt: '', ogType: 'website', jsonld: [] };
+  // Fallback share image: the featured show's poster.
   const defaultImage = () => { const f = cat.shows.find((s) => s.featured) || cat.shows[0]; return f ? absUrl(origin, f.posterLg || f.poster) : `${origin}/media/icons/icon-512.png`; };
   const finish = () => { if (!out.image) out.image = defaultImage(); return out; };
   const notFound = () => Object.assign(out, { status: 404, title: `Page not found — ${SITE}`, description: 'This page does not exist on ADDABAAZ.', canonical: null, robots: 'noindex,follow' });
@@ -85,6 +94,7 @@ export function pageMeta({ path, query = {}, cat, studio = null, origin, plans =
   const site = org(origin, studio);
   const home = ['Home', '/'];
 
+  // Home page.
   if (view === 'home') {
     const feat = cat.shows.filter((s) => s.featured).slice(0, 3), list = feat.length ? feat : cat.shows.slice(0, 3);
     out.title = `${SITE} — Bengali Web Series, Comedy & Originals`;
@@ -92,10 +102,12 @@ export function pageMeta({ path, query = {}, cat, studio = null, origin, plans =
     out.image = list[0] ? absUrl(origin, list[0].posterLg || list[0].poster) : '';
     out.jsonld = [{ '@type': 'WebSite', '@id': `${origin}/#website`, url: origin + '/', name: SITE, inLanguage: ['en', 'bn'], publisher: orgRef(origin),
       potentialAction: { '@type': 'SearchAction', target: { '@type': 'EntryPoint', urlTemplate: `${origin}/search?q={search_term_string}` }, 'query-input': 'required name=search_term_string' } }, site];
+  // All shows.
   } else if (view === 'browse') {
     out.title = `All Shows — Bengali Web Series, Comedy & Podcasts | ${SITE}`; out.canonical = '/shows';
     out.description = clip(`Browse every ${SITE} show: ${joinList(cat.shows.map(showName))}. Bengali web series, stand-up comedy and fake podcasts — watch free online.`, 158);
     out.jsonld = [{ '@type': 'CollectionPage', name: 'All shows', url: `${origin}/shows` }, itemList(origin, cat.shows.map((s) => [showName(s), `/show/${s.id}`])), crumbs(origin, [home, ['Shows', '/shows']])];
+  // A show page: TVSeries / CreativeWorkSeries data with breadcrumbs.
   } else if (view === 'show') {
     const s = cat.show(params.id);
     if (!s) return finish(cat.soon(params.id) ? Object.assign(out, { redirect: `/soon/${encodeURIComponent(params.id)}`, status: 301 }) : notFound());
@@ -112,6 +124,7 @@ export function pageMeta({ path, query = {}, cat, studio = null, origin, plans =
       productionCompany: orgRef(origin),
       ...(trailer ? { trailer: video(origin, trailer, cat, s, { full: false }) } : {}),
     }, crumbs(origin, [home, ['Shows', '/shows'], [showName(s), out.canonical]])];
+  // A video page: VideoObject data. Reels without a real description are marked noindex to avoid thin content.
   } else if (view === 'watch' || (view === 'reels' && params.id)) {
     const v = cat.video(params.id);
     if (!v) return finish(notFound());
@@ -123,14 +136,17 @@ export function pageMeta({ path, query = {}, cat, studio = null, origin, plans =
     if (!videoIndexable(v)) out.robots = 'noindex,follow';
     out.jsonld = [video(origin, v, cat, s, { url: `${origin}${out.canonical}` }),
       crumbs(origin, [home, ...(s ? [['Shows', '/shows'], [showName(s), `/show/${s.id}`]] : []), [dt, out.canonical]])];
+  // Reels listing.
   } else if (view === 'reels') {
     out.title = `Bengali Comedy & Drama Reels | ${SITE}`; out.canonical = '/reels';
     out.description = `Quick Bengali reels from ${SITE}: comedy sketches, stand-up clips and scenes from our web series. Swipe through and watch free.`;
     out.jsonld = [{ '@type': 'CollectionPage', name: 'Reels', url: `${origin}/reels` }, crumbs(origin, [home, ['Reels', '/reels']])];
+  // Coming-soon listing.
   } else if (view === 'upcoming') {
     out.title = `Coming Soon — New Bengali Web Series & Films | ${SITE}`; out.canonical = '/upcoming';
     out.description = clip(`Upcoming ${SITE} releases: ${joinList(cat.upcoming.map(showName))}. Get a first look and set a reminder for launch day.`, 158);
     out.jsonld = [{ '@type': 'CollectionPage', name: 'Coming soon', url: `${origin}/upcoming` }, itemList(origin, cat.upcoming.map((u) => [showName(u), `/soon/${u.id}`])), crumbs(origin, [home, ['Coming soon', '/upcoming']])];
+  // A single upcoming title.
   } else if (view === 'soon') {
     const u = cat.soon(params.id);
     if (!u) return finish(notFound());
@@ -139,16 +155,19 @@ export function pageMeta({ path, query = {}, cat, studio = null, origin, plans =
     out.image = absUrl(origin, u.backdrop || u.posterLg || u.poster); out.imageAlt = `${showName(u)} poster`;
     out.jsonld = [{ '@type': 'CreativeWork', name: u.title, ...(u.titleEn && u.titleEn !== u.title ? { alternateName: u.titleEn } : {}), url: `${origin}${out.canonical}`, image: out.image, genre: u.genres || [], inLanguage: 'bn', producer: orgRef(origin) },
       crumbs(origin, [home, ['Coming soon', '/upcoming'], [showName(u), out.canonical]])];
+  // Behind-the-scenes gallery.
   } else if (view === 'gallery') {
     out.title = `Behind the Scenes — ${SITE} Sets, Shoots & Making-of Photos`; out.canonical = '/gallery';
     out.description = `Photos from the sets of ${SITE} productions${cat.gallery.length ? ` — ${joinList([...new Set(cat.gallery.map((g) => g.group))].slice(0, 4))}` : ''}: behind-the-scenes moments from our Kolkata film and web-series shoots.`;
     out.jsonld = [{ '@type': 'ImageGallery', name: 'Behind the scenes', url: `${origin}/gallery` }, crumbs(origin, [home, ['Behind the scenes', '/gallery']])];
+  // Pricing page: describes the paid plans as schema.org offers.
   } else if (view === 'plans') {
     out.title = `Plans & Pricing — ${SITE} Plus | ${SITE}`; out.canonical = '/plans';
     out.description = `Watch free episodes and reels on ${SITE}, or go Plus from ₹99 a month for premium originals, early access and ad-free viewing on any device.`;
     const paid = (plans || []).filter((p) => p.priceINR > 0);
     out.jsonld = [...(paid.length ? [{ '@type': 'Product', name: `${SITE} Plus`, description: 'Premium originals, early access and ad-free viewing.', brand: { '@type': 'Brand', name: SITE }, url: `${origin}/plans`,
       offers: paid.map((p) => ({ '@type': 'Offer', name: p.name, price: String(p.priceINR), priceCurrency: 'INR', availability: 'https://schema.org/InStock', url: `${origin}/plans` })) }] : []), crumbs(origin, [home, ['Plans', '/plans']])];
+  // About / Services / Contact pages.
   } else if (view === 'studio') {
     const st = studio?.studio || {};
     const page = { '/about': ['About ADDABAAZ — Kolkata Film & Ad Production House', `${st.tagline ? st.tagline.replace(/\.$/, '') + '. ' : ''}${SITE} makes Bengali web series, stand-up specials, films and commercial ad films — meet the team and our mission.`, 'AboutPage', 'About'],
@@ -156,17 +175,21 @@ export function pageMeta({ path, query = {}, cat, studio = null, origin, plans =
       '/contact': ['Contact ADDABAAZ — Production House in Kolkata', `Get in touch with ${SITE}: ${[st.email, (st.phones || [])[0]].filter(Boolean).join(' · ') || 'send us a message'}${(st.address || [])[1] ? ` — ${st.address[1]}` : ''}.`, 'ContactPage', 'Contact'] }[path];
     out.title = page[0]; out.description = clip(page[1], 158); out.canonical = path;
     out.jsonld = [{ '@type': page[2], name: page[3], url: `${origin}${path}` }, site, crumbs(origin, [home, [page[3], path]])];
+  // Privacy, Terms and Refund policy.
   } else if (view === 'legal') {
     const d = legalDoc(LEGAL_PAGES[path], { studio: studio?.studio });
     out.title = `${d.title} — ${SITE}`; out.description = clip(d.intro, 158); out.canonical = path;
     out.jsonld = [{ '@type': 'WebPage', name: d.title, url: `${origin}${path}`, dateModified: LEGAL_UPDATED }, crumbs(origin, [home, [d.title, path]])];
+  // Search and sign-in pages are indexable shells; personal pages (below) are noindex.
   } else if (view === 'search') {
     out.title = `Search — ${SITE}`; out.description = `Search ${SITE} shows, episodes and reels.`; out.canonical = '/search'; out.robots = 'noindex,follow';
   } else if (view === 'auth') {
     out.title = `${path === '/signup' ? 'Create your account' : 'Sign in'} — ${SITE}`; out.description = `${path === '/signup' ? 'Create a free' : 'Sign in to your'} ${SITE} account.`; out.canonical = null; out.robots = 'noindex,nofollow';
+  // Private pages: titled, but robots is set to noindex by the PRIVATE table.
   } else if (PRIVATE[view]) {
     out.title = `${PRIVATE[view]} — ${SITE}`; out.description = `${PRIVATE[view]} on ${SITE}.`; out.canonical = null; out.robots = 'noindex,nofollow';
   }
+  // Wrap every structured-data node with its schema.org context.
   if (out.jsonld.length) out.jsonld = out.jsonld.map((n) => ({ '@context': 'https://schema.org', ...n }));
   return finish(out);
 }
