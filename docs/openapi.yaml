@@ -36,7 +36,7 @@ paths:
   /health: { get: { security: [], summary: 'Liveness + service discovery (used by the app to detect API mode). Body includes db: up|down.', responses: { '200': { description: OK } } } }
   /health/ready: { get: { security: [], summary: 'Readiness probe — 503 when MySQL is unreachable.', responses: { '200': { description: Ready }, '503': { description: Database down } } } }
   /catalog: { get: { security: [], summary: Full catalog (shows, videos, upcoming, gallery), responses: { '200': { description: catalog.json } } } }
-  /plans: { get: { security: [], summary: Subscription plans, responses: { '200': { description: '{ plans: [...] }' } } } }
+  /plans: { get: { security: [], summary: 'Plans plus the active payment provider', responses: { '200': { description: '{ plans: [...], payments: { provider: razorpay|mock|none, keyId? } }' } } } }
   /auth/signup:
     post:
       security: []
@@ -71,7 +71,7 @@ paths:
         '200': { description: '{ type: mp4|hls, url, expiresAt }', content: { application/json: { schema: { type: object, properties: { type: { type: string, enum: [mp4, hls] }, url: { type: string }, expiresAt: { type: string, format: date-time } } } } } }
         '400': { description: not_hosted (video isn't an R2 source) }
         '401': { description: login_required }
-        '402': { description: subscription_required (only if PREMIUM_REQUIRES_SUBSCRIPTION) }
+        '402': { description: subscription_required (signed in, but no active paid plan) }
         '404': { description: unknown video }
         '503': { description: storage_not_configured }
   /media/{token}/{path}:
@@ -120,5 +120,19 @@ paths:
     delete: { summary: Remove reminder, responses: { '204': { $ref: '#/components/responses/NoContent' } } }
   /subscription:
     get: { summary: Current subscription, responses: { '200': { description: OK } } }
-    post: { summary: 'Start a plan. With PAYMENT_PROVIDER=mock this activates instantly and returns demo:true; other providers return 501 until implemented.', responses: { '200': { description: OK }, '501': { description: not_implemented } } }
-    delete: { summary: Cancel, responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+    delete: { summary: 'End a DEMO plan. Real plans are prepaid and cannot be cancelled here (409 not_cancellable).', responses: { '200': { description: '{ subscription }' }, '409': { description: not_cancellable } } }
+  /payments/checkout:
+    post:
+      summary: 'Start a purchase. razorpay → creates an order (returns keyId, orderId, amount, currency, prefill) for Razorpay Checkout; mock (dev only) → activates instantly; none → 501.'
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [planId], properties: { planId: { type: string, enum: [plus-monthly, plus-yearly] } } } } } }
+      responses: { '201': { description: 'created' }, '400': { description: unknown_plan }, '501': { description: payments_not_configured }, '502': { description: provider_error } }
+  /payments/verify:
+    post:
+      summary: 'Report a finished Razorpay payment. The HMAC signature is verified with the key secret; the plan is activated once (idempotent). The order must belong to the caller.'
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [orderId, paymentId, signature], properties: { orderId: { type: string }, paymentId: { type: string }, signature: { type: string } } } } } }
+      responses: { '200': { description: '{ subscription }' }, '400': { description: invalid_signature }, '404': { description: unknown order }, '501': { description: payments_not_configured } }
+  /payments/webhook:
+    post:
+      security: []
+      summary: 'Razorpay → API. Signed with RAZORPAY_WEBHOOK_SECRET over the raw body (X-Razorpay-Signature). Activates the plan for payment.captured / order.paid even if the buyer never returned to the site.'
+      responses: { '200': { description: ok }, '400': { description: invalid_signature } }

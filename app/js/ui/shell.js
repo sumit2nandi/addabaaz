@@ -51,7 +51,7 @@ export function renderProfileMenu() {
       <hr>
       <a class="menu-item" href="#/list">${icon('list', { size: 18 })}<span>My List</span></a>
       <a class="menu-item" href="#/account">${icon('user', { size: 18 })}<span>Account &amp; settings</span></a>
-      ${CONFIG.premiumEnabled ? html`<a class="menu-item" href="#/plans">${icon('crown', { size: 18 })}<span>Plans</span></a>` : ''}
+      ${u.supportsAuth ? html`<a class="menu-item" href="#/plans">${icon('crown', { size: 18 })}<span>Plans</span></a>` : ''}
       ${u.supportsAuth ? (u.account
         ? html`<button type="button" class="menu-item" data-signout>${icon('logout', { size: 18 })}<span>Sign out</span></button>`
         : html`<a class="menu-item" href="#/signin">${icon('user', { size: 18 })}<span>Sign in</span></a>`) : ''}

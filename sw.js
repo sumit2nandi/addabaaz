@@ -5,10 +5,10 @@
  * - YouTube thumbnails: stale-while-revalidate (opaque responses allowed)
  * - /api/*, YouTube player, analytics: never intercepted
  * Bump VERSION (or run `npm run build:www`, which stamps it) to force a refresh. */
-const VERSION = 'v2.1.0';
+const VERSION = 'v2.2.0';
 const SHELL = `ab-shell-${VERSION}`, DATA = `ab-data-${VERSION}`, MEDIA = `ab-media-${VERSION}`, THUMBS = `ab-thumbs-${VERSION}`;
 const PRECACHE = ['./', 'index.html', 'manifest.webmanifest', 'app/env.js', 'app/css/styles.css', 'app/js/main.js', 'app/js/app.js', 'app/js/config.js', 'app/js/util.js', 'app/js/icons.js',
-  'app/js/router.js', 'app/js/platform.js', 'app/js/social.js', 'app/js/data/catalog.js', 'app/js/data/api.js', 'app/js/data/adapters.js', 'app/js/data/user.js',
+  'app/js/router.js', 'app/js/platform.js', 'app/js/social.js', 'app/js/payments.js', 'app/js/data/catalog.js', 'app/js/data/api.js', 'app/js/data/adapters.js', 'app/js/data/user.js',
   'app/js/ui/shell.js', 'app/js/ui/components.js', 'app/js/ui/dialog.js', 'app/js/ui/lightbox.js', 'app/js/views/home.js', 'app/js/views/show.js', 'app/js/views/watch.js',
   'app/js/players/index.js', 'app/js/players/youtube.js', 'app/js/players/html5.js', 'data/catalog.json', 'data/studio.json', 'media/icons/icon-192.png', 'media/icons/logo-96.webp'];
 

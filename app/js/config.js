@@ -3,7 +3,6 @@ export const CONFIG = {
   appName: 'ADDABAAZ',
   version: '2.0.0',
   apiBase: (env.API_BASE || '').replace(/\/$/, ''),   // '' = auto-detect, 'off' = local mode
-  premiumEnabled: !!env.PREMIUM_ENABLED,
   googleForm: env.GOOGLE_FORM || null,
   maxProfiles: 5,
   homeRailSize: 12,

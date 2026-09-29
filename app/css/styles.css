@@ -307,6 +307,7 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .plan .price { font-size: 38px; font-weight: 800; } .plan .price small { font-size: 14px; color: var(--muted); font-weight: 500; } .plan li { display: flex; gap: 8px; align-items: flex-start; color: var(--text-2); font-size: 14px; margin-bottom: 8px; } .plan li svg { color: var(--ok); margin-top: 3px; }
 .badge { position: absolute; top: -12px; right: 20px; background: var(--gold); color: #000; font-size: 12px; font-weight: 800; padding: 4px 12px; border-radius: 999px; }
 .notice { display: flex; gap: 10px; align-items: center; background: #2a2200; border: 1px solid #5c4a00; color: var(--gold); padding: 12px 16px; border-radius: 12px; font-size: 14px; }
+.notice.ok { background: #0f2415; border-color: #1f5c31; color: #7be495; } .page > .notice { margin-top: 14px; }
 
 /* ---------- studio pages ---------- */
 .mission { display: grid; gap: 12px; } .mission li { position: relative; padding-left: 22px; color: var(--text-2); } .mission li::before { content: ''; position: absolute; left: 0; top: .6em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }

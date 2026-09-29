@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node server/src/index.js",
     "dev": "node --watch server/src/index.js",
-    "test": "node --test server/test/api.test.js server/test/social-premium.test.js",
+    "test": "node --test server/test/api.test.js server/test/social-premium.test.js server/test/payments.test.js",
     "validate:catalog": "node scripts/validate-catalog.mjs",
     "images": "bash scripts/optimize-images.sh",
     "build:www": "node scripts/build-www.mjs",

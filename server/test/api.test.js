@@ -83,12 +83,19 @@ test('profiles + library (list, progress, reminders) are isolated per user', asy
   assert.equal((await call('DELETE', `/profiles/${pid}`, null, a.token)).status, 409);          // last profile
 });
 
-test('subscription lifecycle (mock provider)', async () => {
+test('subscription lifecycle (demo provider): prepaid plan with an expiry', async () => {
   const u = (await call('POST', '/auth/signup', { name: 'Su', email: 'su@example.com', password: 'password123' })).body;
-  assert.equal((await call('POST', '/subscription', { planId: 'nope' }, u.token)).status, 400);
-  const s = await call('POST', '/subscription', { planId: 'plus-monthly' }, u.token); assert.equal(s.status, 201); assert.equal(s.body.subscription.planId, 'plus-monthly');
+  assert.equal((await call('POST', '/payments/checkout', { planId: 'nope' }, u.token)).status, 400);
+  assert.equal((await call('POST', '/payments/checkout', { planId: 'free' }, u.token)).status, 400);
+  assert.equal((await call('POST', '/payments/checkout')).status, 401);
+  const s = await call('POST', '/payments/checkout', { planId: 'plus-monthly' }, u.token); assert.equal(s.status, 201); assert.equal(s.body.provider, 'mock');
+  assert.equal(s.body.subscription.planId, 'plus-monthly'); assert.equal(s.body.subscription.demo, true);
+  const days = (Date.parse(s.body.subscription.expiresAt) - Date.now()) / 86_400_000; assert.ok(days > 29.9 && days <= 30);
   assert.equal((await call('GET', '/me', null, u.token)).body.subscription.planId, 'plus-monthly');
-  assert.equal((await call('DELETE', '/subscription', null, u.token)).body.subscription.planId, 'free');
+  const again = await call('POST', '/payments/checkout', { planId: 'plus-monthly' }, u.token);      // buying again extends
+  assert.ok((Date.parse(again.body.subscription.expiresAt) - Date.now()) / 86_400_000 > 59.9);
+  assert.equal((await call('DELETE', '/subscription', null, u.token)).body.subscription.planId, 'free');   // demo plans can be cancelled
+  assert.equal((await call('GET', '/plans')).body.payments.provider, 'mock');
 });
 
 test('contact form: validates, honeypot ignored, stored', async () => {

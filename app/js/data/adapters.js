@@ -5,6 +5,7 @@
  * Supabase later means writing a third adapter with these same methods. */
 import { storage, store, uid } from '../util.js';
 import { ApiError } from './api.js';
+import { openCheckout } from '../payments.js';
 
 const emptyLib = () => ({ list: [], progress: {}, reminders: [] });
 
@@ -20,7 +21,7 @@ export class LocalAdapter {
   async init() {
     let profiles = storage('ab.profiles', null);
     if (!profiles?.length) { profiles = [{ id: uid(), name: 'Me', color: 0 }]; store('ab.profiles', profiles); }
-    return { account: null, profiles, subscription: storage('ab.sub', { planId: 'free', status: 'active' }) };
+    return { account: null, profiles, subscription: { planId: 'free', status: 'active' } };
   }
   async createProfile(p) { const list = storage('ab.profiles', []); const n = { id: uid(), ...p }; list.push(n); store('ab.profiles', list); return n; }
   async updateProfile(id, patch) {
@@ -32,9 +33,9 @@ export class LocalAdapter {
   async saveLibrary(pid, lib) { store('ab.lib.' + pid, lib); }
   // Fine-grained ops are no-ops locally: the facade persists the whole library object via saveLibrary().
   async addToList() {} async removeFromList() {} async saveProgress() {} async clearProgress() {} async setReminder() {}
-  async plans() { return PLANS_FALLBACK; }
-  async subscribe(planId) { const s = { planId, status: 'active', demo: true, startedAt: new Date().toISOString() }; store('ab.sub', s); return s; }
-  async cancelSubscription() { const s = { planId: 'free', status: 'active' }; store('ab.sub', s); return s; }
+  async plans() { return { plans: PLANS_FALLBACK, payments: { provider: 'none' } }; }
+  async checkout() { throw new ApiError(400, 'Subscriptions need the ADDABAAZ API (see docs/PREMIUM.md).'); }
+  async cancelSubscription() { return { planId: 'free', status: 'active' }; }
   async signUp() { throw new ApiError(400, 'Accounts need the ADDABAAZ API (see docs/ARCHITECTURE.md).'); }
   signIn() { return this.signUp(); }
   async signOut() {}
@@ -79,8 +80,15 @@ export class RemoteAdapter {
   saveProgress(pid, videoId, position, duration) { return this.api.put(`/profiles/${pid}/progress/${encodeURIComponent(videoId)}`, { position, duration }); }
   clearProgress(pid, videoId) { return this.api.del(`/profiles/${pid}/progress/${encodeURIComponent(videoId)}`); }
   setReminder(pid, id, on) { return on ? this.api.put(`/profiles/${pid}/reminders/${id}`) : this.api.del(`/profiles/${pid}/reminders/${id}`); }
-  async plans() { try { return (await this.api.get('/plans')).plans; } catch { return PLANS_FALLBACK; } }
-  async subscribe(planId) { return (await this.api.post('/subscription', { planId })).subscription; }
+  async plans() { try { const r = await this.api.get('/plans'); return { plans: r.plans, payments: r.payments || { provider: 'none' } }; } catch { return { plans: PLANS_FALLBACK, payments: { provider: 'none' } }; } }
+  /** Buy / renew a plan. Razorpay: server creates the order → Checkout takes the payment → server verifies the signature.
+   *  Rejects with `.cancelled` if the viewer closes the payment window. Resolves with the new subscription. */
+  async checkout(planId) {
+    const c = await this.api.post('/payments/checkout', { planId });
+    if (c.provider === 'mock') return c.subscription;                         // dev/demo provider: instantly active
+    const paid = await openCheckout(c);
+    return (await this.api.post('/payments/verify', { orderId: paid.razorpay_order_id, paymentId: paid.razorpay_payment_id, signature: paid.razorpay_signature })).subscription;
+  }
   async cancelSubscription() { return (await this.api.del('/subscription'))?.subscription ?? { planId: 'free', status: 'active' }; }
   submitContact(payload) { return this.api.post('/contact', payload); }
 }

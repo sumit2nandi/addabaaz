@@ -2,7 +2,7 @@
 /* Produces ./www — the exact static bundle that Capacitor packages into the Android/iOS apps
  * (and that you can also upload to any static host / CDN).
  *
- *   API_BASE=https://api.addabaaz.in PREMIUM_ENABLED=false npm run build:www
+ *   API_BASE=https://api.addabaaz.in npm run build:www
  *
  * - copies only what the app needs (never server/, scripts/, originals)
  * - writes app/env.js from environment variables
@@ -24,10 +24,8 @@ for (const item of ['index.html', 'manifest.webmanifest', 'sw.js', 'app', 'data'
 const envFile = path.join(out, 'app/env.js');
 const src = fs.readFileSync(envFile, 'utf8');
 const apiBase = process.env.API_BASE ?? '';
-const premium = String(process.env.PREMIUM_ENABLED ?? 'false') === 'true';
 const patched = src
-  .replace(/API_BASE:\s*'[^']*'/, `API_BASE: ${JSON.stringify(apiBase)}`)
-  .replace(/PREMIUM_ENABLED:\s*(true|false)/, `PREMIUM_ENABLED: ${premium}`);
+  .replace(/API_BASE:\s*'[^']*'/, `API_BASE: ${JSON.stringify(apiBase)}`);
 fs.writeFileSync(envFile, patched);
 
 let stamp = String(Date.now());
@@ -36,4 +34,4 @@ const swFile = path.join(out, 'sw.js');
 fs.writeFileSync(swFile, fs.readFileSync(swFile, 'utf8').replace(/const VERSION = '[^']*'/, `const VERSION = 'v2.0.0-${stamp}'`));
 
 const size = (dir) => fs.readdirSync(dir, { withFileTypes: true }).reduce((n, e) => n + (e.isDirectory() ? size(path.join(dir, e.name)) : fs.statSync(path.join(dir, e.name)).size), 0);
-console.log(`✔ www/ built (${(size(out) / 1048576).toFixed(1)} MB) · API_BASE=${apiBase || '(auto-detect)'} · premium=${premium} · sw=${stamp}`);
+console.log(`✔ www/ built (${(size(out) / 1048576).toFixed(1)} MB) · API_BASE=${apiBase || '(auto-detect)'} · sw=${stamp}`);

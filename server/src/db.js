@@ -37,7 +37,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
   const userRow = (r) => r && { id: r.id, email: r.email, name: r.name, passwordHash: r.password_hash, createdAt: iso(r.created_at) };
   const profileRow = (r) => ({ id: r.id, name: r.name, color: r.color });
 
-  return {
+  const self = {
     pool,
     async ping() { await q('SELECT 1'); return true; },
     async close() { await pool.end(); },
@@ -137,16 +137,50 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
     },
 
     subscriptions: {
+      /** Effective subscription. An expired plan reads as free (status 'expired') so every access check is a simple planId test. */
       async get(userId) {
         const r = (await q('SELECT * FROM subscriptions WHERE user_id = ?', [userId]))[0];
         if (!r || r.plan_id === 'free') return { planId: 'free', status: 'active' };
-        return { planId: r.plan_id, status: r.status, provider: r.provider, demo: !!r.is_demo, startedAt: iso(r.started_at) };
+        if (r.expires_at && r.expires_at.getTime() <= Date.now()) return { planId: 'free', status: 'expired', expiredPlanId: r.plan_id, expiresAt: iso(r.expires_at) };
+        return { planId: r.plan_id, status: r.status, provider: r.provider, demo: !!r.is_demo, startedAt: iso(r.started_at), expiresAt: iso(r.expires_at) };
       },
-      async set(userId, { planId, status = 'active', provider = null, demo = false }) {
-        await q(`INSERT INTO subscriptions (user_id, plan_id, status, provider, is_demo, started_at) VALUES (?,?,?,?,?,UTC_TIMESTAMP(3))
-                 ON DUPLICATE KEY UPDATE plan_id = VALUES(plan_id), status = VALUES(status), provider = VALUES(provider),
-                                         is_demo = VALUES(is_demo), started_at = VALUES(started_at), updated_at = UTC_TIMESTAMP(3)`,
-          [userId, planId, status, provider, demo ? 1 : 0]);
+      /** Grants `days` of access; an unexpired plan is extended rather than replaced. */
+      async extend(userId, { planId, days, provider, demo = false }, t = { query: q }) {
+        const [row] = await t.query('SELECT * FROM subscriptions WHERE user_id = ? FOR UPDATE', [userId]);
+        const now = Date.now();
+        const live = row && row.expires_at && row.expires_at.getTime() > now;
+        const base = live ? row.expires_at.getTime() : now;
+        const expires = new Date(base + days * 86_400_000);
+        const started = live && row.started_at ? row.started_at : new Date(now);
+        await t.query(`INSERT INTO subscriptions (user_id, plan_id, status, provider, is_demo, started_at, expires_at) VALUES (?,?,?,?,?,?,?)
+                       ON DUPLICATE KEY UPDATE plan_id = VALUES(plan_id), status = 'active', provider = VALUES(provider), is_demo = VALUES(is_demo),
+                                               started_at = VALUES(started_at), expires_at = VALUES(expires_at), updated_at = UTC_TIMESTAMP(3)`,
+          [userId, planId, 'active', provider, demo ? 1 : 0, started, expires]);
+      },
+      async clear(userId) { await q('DELETE FROM subscriptions WHERE user_id = ?', [userId]); },
+      /** Demo-only: activate for `days` without a payment. */
+      async activateDemo(userId, planId, days) { await tx(async (t) => this.extend(userId, { planId, days, provider: 'mock', demo: true }, t)); },
+    },
+
+    payments: {
+      async create({ id, userId, planId, provider, orderId, amountPaise, currency = 'INR' }) {
+        await q('INSERT INTO payments (id, user_id, plan_id, provider, provider_order_id, amount_paise, currency) VALUES (?,?,?,?,?,?,?)', [id, userId, planId, provider, orderId, amountPaise, currency]);
+      },
+      async byOrder(provider, orderId) {
+        const r = (await q('SELECT * FROM payments WHERE provider = ? AND provider_order_id = ?', [provider, orderId]))[0];
+        return r && { id: r.id, userId: r.user_id, planId: r.plan_id, provider: r.provider, orderId: r.provider_order_id, paymentId: r.provider_payment_id, amountPaise: r.amount_paise, status: r.status };
+      },
+      /**
+       * Marks the order paid and grants the plan in ONE transaction. Safe to call repeatedly (browser verify + webhook):
+       * only the call that flips created→paid extends access. Returns true if this call granted it.
+       */
+      async settle(payment, providerPaymentId, days) {
+        return tx(async (t) => {
+          const res = await t.query("UPDATE payments SET status = 'paid', provider_payment_id = ?, paid_at = UTC_TIMESTAMP(3) WHERE id = ? AND status = 'created'", [providerPaymentId, payment.id]);
+          if (!res.affectedRows) return false;
+          if (payment.userId) await self.subscriptions.extend(payment.userId, { planId: payment.planId, days, provider: payment.provider }, t);
+          return true;
+        });
       },
     },
 
@@ -155,4 +189,5 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       async count() { return (await q('SELECT COUNT(*) AS n FROM contact_messages'))[0].n; },
     },
   };
+  return self;
 }

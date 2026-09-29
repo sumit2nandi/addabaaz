@@ -92,15 +92,14 @@ const social = {
   },
 };
 
-let db, server, root, sub;   // `sub` = server variant that requires a subscription for premium
-const mkServer = async (opts) => { const app = createApp({ db, jwtSecret: 'test-secret', rate: false, catalogPath: path.join(tmp, 'catalog.json'), r2: fakeR2, social, ...opts }); const s = app.listen(0); await new Promise((r) => s.once('listening', r)); return { s, url: `http://127.0.0.1:${s.address().port}/api/v1` }; };
+let db, server, root;
+const mkServer = async (opts) => { const app = createApp({ db, jwtSecret: 'test-secret', rate: false, catalogPath: path.join(tmp, 'catalog.json'), r2: fakeR2, social, payments: { provider: 'mock' }, ...opts }); const s = app.listen(0); await new Promise((r) => s.once('listening', r)); return { s, url: `http://127.0.0.1:${s.address().port}/api/v1` }; };
 test.before(async () => {
   try { db = await createDb({ config, ensureDatabase: true }); } catch (e) { throw new Error(`MySQL is not reachable (${e.code || e.message}). Set TEST_DATABASE_URL.`); }
   await migrate(db);
   const a = await mkServer(); server = a.s; root = a.url;
-  const b = await mkServer({ requireSubscription: true }); sub = b;
 });
-test.after(async () => { server?.close(); sub?.s.close(); if (db) { await db.dropDatabase(); await db.close(); } });
+test.after(async () => { server?.close(); if (db) { await db.dropDatabase(); await db.close(); } });
 
 const call = async (method, p, body, token, url = root, redirect = 'follow') => {
   const r = await fetch(url + p, { method, redirect, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
@@ -162,38 +161,45 @@ test('social: deleting the account removes linked identities', async () => {
 });
 
 const signup = async (email) => (await call('POST', '/auth/signup', { name: 'Vee', email, password: 'password123' })).body;
+const pay = (token) => call('POST', '/payments/checkout', { planId: 'plus-monthly' }, token);          // demo provider: instant
+const paidUser = async (email) => { const u = await signup(email); await pay(u.token); return u; };
 
-test('premium (R2): login is required, free R2 videos are public', async () => {
+test('premium (R2): needs sign-in AND a paid plan; free R2 videos are public', async () => {
   const anon = await call('POST', '/videos/prem-mp4/stream'); assert.equal(anon.status, 401); assert.equal(anon.body.error.code, 'login_required');
   assert.equal((await call('POST', '/videos/prem-mp4/stream', null, 'a.b.c')).status, 401);
   assert.equal((await call('POST', '/videos/nope/stream')).status, 404);
   assert.equal((await call('POST', `/videos/${base.id}/stream`)).status, 400);                    // YouTube video: nothing to sign
   const free = await call('POST', '/videos/free-r2/stream'); assert.equal(free.status, 200); assert.match(free.body.url, /^https:\/\/r2\.test\/free\/free-r2\.mp4\?ttl=21600$/);
-  const u = await signup('viewer@example.com');
+  const u = await signup('viewer@example.com');                                                    // signed in but NOT paid
+  const unpaid = await call('POST', '/videos/prem-mp4/stream', null, u.token); assert.equal(unpaid.status, 402); assert.equal(unpaid.body.error.code, 'subscription_required');
+  assert.equal((await call('POST', '/videos/free-r2/stream', null, u.token)).status, 200);        // free titles are never gated
+  await pay(u.token);
   const r = await call('POST', '/videos/prem-mp4/stream', null, u.token);
   assert.equal(r.status, 200); assert.equal(r.body.type, 'mp4'); assert.equal(r.body.url, 'https://r2.test/premium/prem-mp4/video.mp4?ttl=21600'); assert.ok(Date.parse(r.body.expiresAt) > Date.now());
   assert.equal(r.headers.get('cache-control'), 'no-store');
-  const viaGoogle = (await call('POST', '/auth/google', { idToken: 'g-new' })).body;                // social login also unlocks premium
-  assert.equal((await call('POST', '/videos/prem-mp4/stream', null, viaGoogle.token)).status, 200);
+  const viaGoogle = (await call('POST', '/auth/google', { idToken: 'g-new' })).body;                // social login is signed in, but still needs a plan
+  assert.equal((await call('POST', '/videos/prem-mp4/stream', null, viaGoogle.token)).status, 402);
+  await pay(viaGoogle.token); assert.equal((await call('POST', '/videos/prem-mp4/stream', null, viaGoogle.token)).status, 200);
 });
 
-test('premium (R2): optional subscription requirement', async () => {
-  const u = await signup('payer@example.com');
-  const denied = await call('POST', '/videos/prem-mp4/stream', null, u.token, sub.url); assert.equal(denied.status, 402); assert.equal(denied.body.error.code, 'subscription_required');
-  assert.equal((await call('POST', '/videos/free-r2/stream', null, null, sub.url)).status, 200);   // free titles are never gated
-  await call('POST', '/subscription', { planId: 'plus-monthly' }, u.token);
-  assert.equal((await call('POST', '/videos/prem-mp4/stream', null, u.token, sub.url)).status, 200);
+test('premium (R2): an expired plan stops working', async () => {
+  const u = await paidUser('lapsed@example.com');
+  assert.equal((await call('POST', '/videos/prem-mp4/stream', null, u.token)).status, 200);
+  await db.pool.query("UPDATE subscriptions SET expires_at = UTC_TIMESTAMP(3) - INTERVAL 1 DAY WHERE user_id = ?", [u.user.id]);
+  const denied = await call('POST', '/videos/prem-mp4/stream', null, u.token); assert.equal(denied.status, 402);
+  const sub = (await call('GET', '/me', null, u.token)).body.subscription; assert.equal(sub.planId, 'free'); assert.equal(sub.status, 'expired'); assert.equal(sub.expiredPlanId, 'plus-monthly');
+  await pay(u.token); assert.equal((await call('POST', '/videos/prem-mp4/stream', null, u.token)).status, 200);   // renewing restores access
 });
 
 test('premium (R2): storage not configured', async () => {
-  const off = await mkServer({ r2: { configured: false } }); const u = await signup('nostorage@example.com');
+  const off = await mkServer({ r2: { configured: false } }); const u = await paidUser('nostorage@example.com');
   assert.equal((await call('POST', '/videos/prem-mp4/stream', null, u.token, off.url)).status, 503); off.s.close();
 });
 
 const rawGet = (p) => new Promise((resolve, reject) => { const u = new URL(root); http.get({ host: u.hostname, port: u.port, path: p }, (res) => { res.resume(); resolve({ status: res.statusCode, location: res.headers.location }); }).on('error', reject); });
 
 test('premium HLS gateway: proxied playlists, redirected segments, scoped tokens, no path escape', async () => {
-  const u = await signup('hls@example.com');
+  const u = await paidUser('hls@example.com');
   const s = await call('POST', '/videos/prem-hls/stream', null, u.token);
   assert.equal(s.status, 200); assert.equal(s.body.type, 'hls'); assert.match(s.body.url, /\/api\/v1\/media\/[^/]+\/master\.m3u8$/);
   const master = await fetch(s.body.url); assert.equal(master.status, 200); assert.match(master.headers.get('content-type'), /mpegurl/); assert.match(await master.text(), /720p\/index\.m3u8/);

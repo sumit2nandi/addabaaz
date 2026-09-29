@@ -53,7 +53,7 @@ Free content never needs an account. Titles marked `access: "premium"` require o
 
 ## Roadmap — what a v3 would add
 
-1. **Real payments:** Razorpay (web) + StoreKit/Play Billing via RevenueCat (apps); webhook → `subscriptions`. Hook point: `POST /subscription` in `server/src/app.js`.
+1. **Payments:** Razorpay prepaid passes on the web are built (`server/src/payments.js`, `docs/PREMIUM.md`). Still to do: StoreKit/Play Billing via RevenueCat for in-app purchase in the store apps, GST invoicing, refunds/dispute handling.
 2. **Own video pipeline:** upload → transcode to HLS (Mux, Cloudflare Stream, AWS MediaConvert) → signed URLs → DRM (Widevine/FairPlay) for premium; enables downloads and Chromecast/AirPlay.
 3. **Social login** (Google/Apple; Apple is mandatory in iOS apps that offer other social logins) and email verification / password reset (needs an email provider).
 4. **Push notifications** for reminders and new episodes (FCM/APNs).

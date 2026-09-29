@@ -10,7 +10,6 @@
  * --------------------------------------------------------------- */
 window.ADDABAAZ_ENV = {
   API_BASE: '',              // '' = auto-detect same-origin API, 'off' = force local mode
-  PREMIUM_ENABLED: false,    // false = premium titles need a sign-in only. true = also require an ADDABAAZ Plus plan (and show Plans). Match PREMIUM_REQUIRES_SUBSCRIPTION on the server.
   GOOGLE_FORM: {             // contact-form fallback when no API is present
     action: 'https://docs.google.com/forms/d/e/1FAIpQLSefTIXeGfnzRR7oumsp1wsSvoOjEWjtK-opcCN5T1LR0ZE7fA/formResponse',
     fields: { name: 'entry.1034004557', email: 'entry.608979481', phone: 'entry.641949480', message: 'entry.548756118' }

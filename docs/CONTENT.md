@@ -21,7 +21,7 @@ Append to `videos`:
   "duration": 905,                  // seconds
   "publishedAt": "2026-10-04T13:30:00Z",
   "views": 0,
-  "access": "free"                  // free | premium (premium is enforced when PREMIUM_ENABLED=true)
+  "access": "free"                  // free | premium (premium = signed in AND an active paid plan; see docs/PREMIUM.md)
 }
 ```
 

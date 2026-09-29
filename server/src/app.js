@@ -7,7 +7,8 @@ import { isDuplicate } from './db.js';
 import { hashPassword, verifyPassword, signToken, signJwt, verifyToken } from './auth.js';
 import { createR2 } from './r2.js';
 import { socialFromEnv, SocialError } from './social.js';
-import { PLANS } from './plans.js';
+import { PLANS, paidPlan } from './plans.js';
+import { paymentsFromEnv, PaymentError } from './payments.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
@@ -40,13 +41,12 @@ export function createApp({
   jwtSecret = process.env.JWT_SECRET,
   corsOrigins = process.env.CORS_ORIGINS || '*',
   serveStatic = true,
-  paymentProvider = process.env.PAYMENT_PROVIDER || 'mock',
+  payments = paymentsFromEnv(),                               // { provider: 'razorpay' | 'mock' | 'none' }
   contactWebhook = process.env.CONTACT_WEBHOOK_URL || '',
   rate = true,
   catalogPath = path.join(ROOT, 'data/catalog.json'),
   r2 = createR2(),                                            // Cloudflare R2 (private bucket for premium video)
   social = socialFromEnv(),                                   // { config, verifiers: { google?, facebook? } }
-  requireSubscription = /^(1|true)$/i.test(process.env.PREMIUM_REQUIRES_SUBSCRIPTION || ''),   // premium = login only, unless this is on
   publicApiUrl = process.env.PUBLIC_API_URL || '',            // absolute base for HLS URLs when behind a proxy
   streamTtl = Number(process.env.STREAM_URL_TTL) || 6 * 3600, // seconds a signed video URL stays valid
 } = {}) {
@@ -77,19 +77,22 @@ export function createApp({
   });
 
   const api = express.Router();
-  api.use(express.json({ limit: '50kb' }));
+  api.use(express.json({ limit: '50kb', verify: (req, _res, buf) => { req.rawBody = buf; } }));   // rawBody: payment webhooks are signed over the exact bytes
 
   /* ---------- public ---------- */
   api.get('/health', wrap(async (_req, res) => {                 // liveness + discovery: always 200; `db` reports the database state
     const dbUp = await db.ping().then(() => true, () => false);
-    res.json({ ok: true, service: 'addabaaz', version: VERSION, db: dbUp ? 'up' : 'down', storage: r2.configured ? 'r2' : 'none', time: new Date().toISOString() });
+    res.json({ ok: true, service: 'addabaaz', version: VERSION, db: dbUp ? 'up' : 'down', storage: r2.configured ? 'r2' : 'none', payments: payments.provider, time: new Date().toISOString() });
   }));
   api.get('/health/ready', wrap(async (_req, res) => {           // readiness for load balancers / orchestrators: 503 when MySQL is unreachable
     const dbUp = await db.ping().then(() => true, () => false);
     res.status(dbUp ? 200 : 503).json({ ok: dbUp, db: dbUp ? 'up' : 'down' });
   }));
   api.get('/catalog', (req, res) => { res.set('Cache-Control', 'public, max-age=60'); res.json(cat()); });
-  api.get('/plans', (_req, res) => res.json({ plans: PLANS }));
+  api.get('/plans', (_req, res) => res.json({
+    plans: PLANS,
+    payments: { provider: payments.provider, ...(payments.provider === 'razorpay' ? { keyId: payments.keyId } : {}), ...(payments.provider === 'mock' ? { demo: true } : {}) },
+  }));
 
   const authLimit = rate ? rateLimit('auth', 20, 60_000) : (_q, _s, n) => n();
   const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name });
@@ -161,7 +164,7 @@ export function createApp({
   const findVideo = (id) => cat().videos.find((v) => v.id === id);
   const originOf = (req) => (publicApiUrl || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
   const r2Format = (src) => src.format || (/\.m3u8$/i.test(src.key) ? 'hls' : 'mp4');
-  /** Returns a playable URL for a video hosted in R2. Premium titles need a signed-in account (and a plan, if the server requires one). */
+  /** Returns a playable URL for a video hosted in R2. Premium titles need a signed-in account with an active paid plan. */
   api.post('/videos/:id/stream', wrap(async (req, res) => {
     const v = findVideo(req.params.id);
     if (!v) throw new HttpError(404, 'not_found', 'Unknown video.');
@@ -169,7 +172,7 @@ export function createApp({
     if (v.access === 'premium') {
       const user = await userFromRequest(req);
       if (!user) throw new HttpError(401, 'login_required', 'Please sign in to watch premium videos.');
-      if (requireSubscription && (await db.subscriptions.get(user.id)).planId === 'free') throw new HttpError(402, 'subscription_required', 'An ADDABAAZ Plus plan is required for this video.');
+      if ((await db.subscriptions.get(user.id)).planId === 'free') throw new HttpError(402, 'subscription_required', 'Subscribe to ADDABAAZ Plus to watch this video.');   // premium = signed in AND paid
       req.user = user;
     }
     if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video storage is not configured on this server.');
@@ -209,6 +212,19 @@ export function createApp({
     await db.contacts.add(entry);
     if (contactWebhook) fetch(contactWebhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch((e) => console.warn('[contact] webhook failed', e.message));
     res.status(202).json({ ok: true });
+  }));
+
+  /** Razorpay → us. Public but signed: activates the plan even if the buyer closed the tab after paying. */
+  api.post('/payments/webhook', wrap(async (req, res) => {
+    if (payments.provider !== 'razorpay') return res.sendStatus(404);
+    if (!payments.verifyWebhook(req.rawBody, req.headers['x-razorpay-signature'])) throw bad('Bad signature.', 'invalid_signature');
+    const ev = req.body?.event, pe = req.body?.payload?.payment?.entity;
+    if ((ev === 'payment.captured' || ev === 'order.paid') && pe?.order_id && pe?.id && (pe.status === 'captured' || ev === 'order.paid')) {
+      const pay = await db.payments.byOrder('razorpay', pe.order_id);
+      if (pay && pay.amountPaise === pe.amount && pe.currency === 'INR') await db.payments.settle(pay, pe.id, paidPlan(pay.planId).days);
+      else console.warn('[payments] webhook for unknown order or amount mismatch', pe.order_id);
+    }
+    res.json({ ok: true });                                               // always 200 for valid signatures so Razorpay doesn't retry forever
   }));
 
   /* ---------- authenticated ---------- */
@@ -282,17 +298,46 @@ export function createApp({
   }));
   api.delete('/profiles/:pid/reminders/:id', wrap(async (req, res) => { const p = await ownProfile(req); await db.library.removeReminder(p.id, req.params.id); res.sendStatus(204); }));
 
-  /* subscription — `mock` provider activates instantly (demo). Wire Razorpay/Stripe/Play Billing/StoreKit here. */
+  /* ---------- subscription & payments ---------- */
   api.get('/subscription', wrap(async (req, res) => res.json({ subscription: await db.subscriptions.get(req.user.id) })));
-  api.post('/subscription', wrap(async (req, res) => {
-    const plan = PLANS.find((p) => p.id === req.body?.planId);
-    if (!plan) throw bad('Unknown plan.', 'unknown_plan');
-    if (plan.id === 'free') { await db.subscriptions.set(req.user.id, { planId: 'free' }); return res.json({ subscription: await db.subscriptions.get(req.user.id) }); }
-    if (paymentProvider !== 'mock') throw new HttpError(501, 'payments_not_configured', `Payment provider "${paymentProvider}" is not implemented yet.`);
-    await db.subscriptions.set(req.user.id, { planId: plan.id, provider: 'mock', demo: true });
-    res.status(201).json({ subscription: await db.subscriptions.get(req.user.id) });
+  const payLimit = rate ? rateLimit('pay', 20, 60_000) : (_q, _s, n) => n();
+  const asHttp = (e) => (e instanceof PaymentError ? new HttpError(e.status, e.code, e.message) : e);
+
+  /** Step 1: start a purchase. Razorpay → returns the order for Checkout. Demo provider → activates immediately. */
+  api.post('/payments/checkout', payLimit, wrap(async (req, res) => {
+    const plan = paidPlan(req.body?.planId);
+    if (!plan) throw bad('Choose a paid plan.', 'unknown_plan');
+    if (payments.provider === 'none') throw new HttpError(501, 'payments_not_configured', 'Payments are not configured on this server.');
+    if (payments.provider === 'mock') {
+      await db.subscriptions.activateDemo(req.user.id, plan.id, plan.days);
+      return res.status(201).json({ provider: 'mock', demo: true, subscription: await db.subscriptions.get(req.user.id) });
+    }
+    const id = crypto.randomUUID();
+    let order;
+    try { order = await payments.createOrder({ amountPaise: plan.priceINR * 100, receipt: `ab_${id.slice(0, 30)}`, notes: { userId: req.user.id, planId: plan.id } }); }
+    catch (e) { throw asHttp(e); }
+    await db.payments.create({ id, userId: req.user.id, planId: plan.id, provider: 'razorpay', orderId: order.orderId, amountPaise: order.amountPaise });
+    res.status(201).json({ provider: 'razorpay', keyId: payments.keyId, orderId: order.orderId, amount: order.amountPaise, currency: order.currency, plan: { id: plan.id, name: plan.name }, prefill: { name: req.user.name, email: req.user.email } });
   }));
-  api.delete('/subscription', wrap(async (req, res) => { await db.subscriptions.set(req.user.id, { planId: 'free' }); res.json({ subscription: await db.subscriptions.get(req.user.id) }); }));
+
+  /** Step 3: the browser reports a finished payment. Nothing is granted unless the signature is valid for OUR order. */
+  api.post('/payments/verify', payLimit, wrap(async (req, res) => {
+    if (payments.provider !== 'razorpay') throw new HttpError(501, 'payments_not_configured', 'Payments are not configured on this server.');
+    const { orderId, paymentId, signature } = req.body || {};
+    const pay = typeof orderId === 'string' ? await db.payments.byOrder('razorpay', orderId) : null;
+    if (!pay || pay.userId !== req.user.id) throw new HttpError(404, 'not_found', 'Unknown order.');            // also blocks using someone else's order
+    if (!payments.verifyPayment({ orderId, paymentId, signature })) throw new HttpError(400, 'invalid_signature', 'Payment could not be verified. If money was deducted it will be reversed automatically, or contact support.');
+    await db.payments.settle(pay, paymentId, paidPlan(pay.planId).days);                                           // idempotent
+    res.json({ subscription: await db.subscriptions.get(req.user.id) });
+  }));
+
+  /** Cancelling only applies to demo plans: real plans are prepaid, don't renew and simply run out. */
+  api.delete('/subscription', wrap(async (req, res) => {
+    const sub = await db.subscriptions.get(req.user.id);
+    if (sub.planId !== 'free' && !sub.demo) throw new HttpError(409, 'not_cancellable', `Your plan is prepaid and doesn’t renew automatically — it stays active until ${new Date(sub.expiresAt).toDateString()}.`);
+    await db.subscriptions.clear(req.user.id);
+    res.json({ subscription: await db.subscriptions.get(req.user.id) });
+  }));
 
   api.use((_req, _res, next) => next(new HttpError(404, 'not_found', 'Unknown endpoint.')));
   app.use('/api/v1', api);

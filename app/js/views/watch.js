@@ -7,7 +7,7 @@ import { createPlayer } from '../players/index.js';
 import { go } from '../router.js';
 import { listBtn, videoCard, rail, enhanceRails, metaLine, toast, img } from '../ui/components.js';
 import { epRow } from './show.js';
-import { shareUrl } from '../platform.js';
+import { shareUrl, isNative } from '../platform.js';
 
 export default async function watch(ctx) {
   const cat = app.catalog, u = app.user;
@@ -65,7 +65,9 @@ export default async function watch(ctx) {
     msg.innerHTML = kind === 'login'
       ? html`${icon('lock', { size: 40 })}<h2>Sign in to watch</h2><p>This is ADDABAAZ Premium. Sign in or create a free account to watch it — everything else on ADDABAAZ stays open to everyone.</p><div class="row"><a class="btn btn-primary btn-lg" href="#/signin?next=${here}">Sign in</a><a class="btn btn-ghost btn-lg" href="#/signup?next=${here}">Create account</a></div>`.s
       : kind === 'plan'
-        ? html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><p>Subscribe to watch this title and get early access to every new original.</p><a class="btn btn-primary btn-lg" href="#/plans">${icon('crown', { size: 20 })} See plans</a>`.s
+        ? isNative
+          ? html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><p>This title needs an active ADDABAAZ Plus plan. Plans are managed on the ADDABAAZ website — once you’ve subscribed with this account it unlocks here.</p><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s
+          : html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><p>You’re signed in — subscribe to watch this title and get early access to every new original.</p><a class="btn btn-primary btn-lg" href="#/plans?next=${here}">${icon('crown', { size: 20 })} See plans</a>`.s
         : html`${icon('lock', { size: 40 })}<h2>Premium video needs an account</h2><p>This copy of ADDABAAZ runs without the ADDABAAZ API, so premium titles can’t be unlocked here.</p><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s;
   };
   if (gate !== 'ok') { wall(gate); return; }

@@ -23,10 +23,11 @@ schema_migrations                        (applied migration files)
 | `list_items` | `profile_id` FK · `item_type` ENUM(show, video, upcoming) · `item_id` (case-sensitive) · `added_at` |
 | `watch_progress` | `profile_id` FK · `video_id` (case-sensitive) · `position_sec` · `duration_sec` · `updated_at` — capped at the 500 most recent rows per profile |
 | `reminders` | `profile_id` FK · `upcoming_id` · `created_at` |
-| `subscriptions` | `user_id` PK/FK · `plan_id` · `status` · `provider` · `is_demo` · `started_at` · `updated_at` |
+| `subscriptions` | `user_id` PK/FK · `plan_id` · `status` · `provider` · `is_demo` · `started_at` · **`expires_at`** (prepaid access ends here; past = treated as free) · `updated_at` |
+| `payments` | `id` PK · `user_id` FK→users **ON DELETE SET NULL** (kept for accounting) · `plan_id` · `provider` · `provider_order_id` / `provider_payment_id` (each UNIQUE per provider → a payment can only ever be applied once) · `amount_paise` · `currency` · `status` ENUM(created, paid, failed) · `created_at` · `paid_at` |
 | `contact_messages` | `id` PK · `name` · `email` · `phone` · `message` TEXT · `created_at` |
 
-All foreign keys are `ON DELETE CASCADE`, so `DELETE /me` (account deletion, required by the app stores) removes everything belonging to the user in one statement. Ids are UUID v4 strings. Video/list ids use `utf8mb4_bin` because YouTube ids are case-sensitive. Full DDL: [`001_init.sql`](../server/migrations/001_init.sql), social login in [`002_social_login.sql`](../server/migrations/002_social_login.sql).
+All foreign keys are `ON DELETE CASCADE` (except `payments.user_id`, which becomes NULL so payment records survive account deletion), so `DELETE /me` (account deletion, required by the app stores) removes everything belonging to the user in one statement. Ids are UUID v4 strings. Video/list ids use `utf8mb4_bin` because YouTube ids are case-sensitive. Full DDL: [`001_init.sql`](../server/migrations/001_init.sql), social login in [`002_social_login.sql`](../server/migrations/002_social_login.sql), payments in [`003_payments.sql`](../server/migrations/003_payments.sql).
 
 Concurrency: the unique email index makes simultaneous sign-ups safe; the 5-profile limit and "can't delete your last profile" rules run in transactions that lock the user row; progress uses `INSERT … ON DUPLICATE KEY UPDATE`.
 

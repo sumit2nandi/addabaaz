@@ -5,8 +5,9 @@ Free titles stay on YouTube. **Premium titles live as files in a private Cloudfl
 ```
 Viewer opens a premium title
   └─ not signed in? → "Sign in to watch"           (UI)
+  └─ signed in, no active plan? → Plans → pay        (UI, see "Payments")
   └─ POST /api/v1/videos/:id/stream  (Bearer)
-        ├─ 401 login_required / 402 subscription_required
+        ├─ 401 login_required (not signed in) / 402 subscription_required (signed in, no active paid plan)
         └─ 200 { type: 'mp4' | 'hls', url, expiresAt }
               mp4 → presigned R2 URL (Range requests / seeking work)
               hls → /api/v1/media/<token>/master.m3u8  (playlists via API, segments 302 → presigned R2)
@@ -82,10 +83,32 @@ Add (or change) a video in `data/catalog.json`; `access: "premium"` is what requ
 |---|---|
 | Free title (YouTube or R2) | Plays for everyone |
 | Premium, signed out | `401 login_required` → "Sign in to watch" |
-| Premium, signed in (email, Google or Facebook) | Plays |
-| Premium, signed in, `PREMIUM_REQUIRES_SUBSCRIPTION=true` and no plan | `402 subscription_required` → Plans page (also set `PREMIUM_ENABLED: true` in `app/env.js` so the Plans UI is shown) |
+| Premium, signed in (email, Google or Facebook), no plan or plan expired | `402 subscription_required` → "ADDABAAZ Plus exclusive" → Plans page (`#/plans?next=/watch/<id>`) |
+| Premium, signed in **and** an active paid plan | Plays |
 | `R2_*` not configured | `503 storage_not_configured` |
 | Static-only hosting (no API) | "Premium video needs an account" message |
+
+## Payments (Razorpay)
+
+Premium plays only for **a signed-in viewer with an active paid plan** — always, there is no switch to turn that off. Plans are **prepaid passes** (₹99 → 30 days, ₹799 → 365 days, edit `server/src/plans.js`): no auto-renewal, nothing to cancel; buying again *adds* time to the end of the current pass. When `expires_at` passes, access locks again automatically (no cron needed).
+
+```
+Plans page → POST /payments/checkout {planId}        API creates a Razorpay order + a `payments` row (status created)
+          → Razorpay Checkout (UPI / cards / netbanking / wallets; card data never touches our servers)
+          → POST /payments/verify {orderId, paymentId, signature}
+                 API checks HMAC_SHA256(orderId|paymentId, KEY_SECRET) and that the order is the caller's → plan activated (once)
+Razorpay  → POST /payments/webhook  (payment.captured)   same activation if the buyer closed the tab; signed with the webhook secret,
+                                                          amount must match the order; replays are harmless (unique payment id)
+```
+
+Set up:
+1. Razorpay dashboard → Settings → **API Keys** → generate keys (use `rzp_test_…` first). Put `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` in the server environment (`.env.example`). The secret never leaves the server; only the key id is sent to the browser.
+2. Dashboard → Settings → **Webhooks** → URL `https://<your-api>/api/v1/payments/webhook`, a secret of your choice (= `RAZORPAY_WEBHOOK_SECRET`), event **`payment.captured`**.
+3. Test with Razorpay's test cards/UPI before switching to live keys (KYC required for live).
+
+Without keys, **development** uses a labelled *demo checkout* (activates instantly, no money); in **production** there is no checkout at all (`501 payments_not_configured`) unless you deliberately set `ALLOW_MOCK_PAYMENTS=true` (staging only — it lets anyone grant themselves a plan).
+
+Not included (decide with your accountant before launch): **GST invoices/receipts**, refunds (do them in the Razorpay dashboard, then shorten the user's `subscriptions.expires_at` by hand), failed-payment emails, coupon codes. In the store apps plans aren't sold (see `docs/MOBILE.md`). The Razorpay flow was verified in tests against a faked Razorpay API and a scripted browser checkout — run one real test-mode payment before going live.
 
 ## Security notes — read these
 

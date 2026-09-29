@@ -59,12 +59,12 @@ export class User extends Emitter {
     return r;
   }
   providers() { return this.remote ? this.remote.providers() : Promise.resolve({ password: false }); }
-  /** Can this viewer play `video` right now?  'ok' | 'login' (sign in first) | 'plan' (needs a Plus plan) | 'unavailable' (no accounts in local mode) */
+  /** Can this viewer play `video` right now?  'ok' | 'login' (sign in first) | 'plan' (signed in but no active Plus plan) | 'unavailable' (no accounts in local mode) */
   gateFor(video) {
     if (video?.access !== 'premium') return 'ok';
     if (!this.supportsAuth) return 'unavailable';
     if (!this.account) return 'login';
-    return CONFIG.premiumEnabled && !this.isPremium ? 'plan' : 'ok';
+    return this.isPremium ? 'ok' : 'plan';
   }
   /** Signed playback URL for a video stored in R2 → { type: 'mp4'|'hls', url, expiresAt } */
   streamUrl(video) { if (!this.remote) throw new Error('Streaming needs the ADDABAAZ API.'); return this.remote.streamUrl(video.id); }
@@ -193,8 +193,8 @@ export class User extends Emitter {
   /* ---------- prefs & plan ---------- */
   pref(k) { return this.prefs[k]; }
   setPref(k, v) { this.prefs = { ...this.prefs, [k]: v }; store('ab.prefs', this.prefs); this.emit('prefs'); }
-  get isPremium() { return this.subscription?.planId && this.subscription.planId !== 'free' && this.subscription.status === 'active'; }
-  async subscribe(planId) { this.subscription = await this.adapter.subscribe(planId); this.emit('subscription'); return this.subscription; }
+  get isPremium() { const s = this.subscription; return !!(s?.planId && s.planId !== 'free' && s.status === 'active' && (!s.expiresAt || Date.parse(s.expiresAt) > Date.now())); }
+  async checkout(planId) { this.subscription = await this.adapter.checkout(planId); this.emit('subscription'); return this.subscription; }
   async cancelSubscription() { this.subscription = await this.adapter.cancelSubscription(); this.emit('subscription'); }
   plans() { return this.adapter.plans(); }
   submitContact(p) { return (this.remote || this.local).submitContact(p); }
