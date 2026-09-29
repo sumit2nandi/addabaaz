@@ -8,7 +8,10 @@ import { hashPassword, verifyPassword, signToken, signJwt, verifyToken } from '.
 import { createR2 } from './r2.js';
 import { socialFromEnv, SocialError } from './social.js';
 import { PLANS, paidPlan } from './plans.js';
-import { paymentsFromEnv, PaymentError } from './payments.js';
+import { paymentsFromEnv } from './payments.js';
+import { mailerFromEnv } from './mailer.js';
+import { createBilling, billingConfigFromEnv } from './billing.js';
+import { STATES } from './gst.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
@@ -42,6 +45,9 @@ export function createApp({
   corsOrigins = process.env.CORS_ORIGINS || '*',
   serveStatic = true,
   payments = paymentsFromEnv(),                               // { provider: 'razorpay' | 'mock' | 'none' }
+  mailer = mailerFromEnv(),                                   // SMTP (receipts, refunds, reminders); no-op without SMTP_URL
+  billing = createBilling({ db, payments, mailer, config: billingConfigFromEnv() }),   // coupons, GST invoices, refunds
+  adminToken = process.env.ADMIN_TOKEN || '',                 // enables /admin/* (≥24 chars); unset = admin API is off
   contactWebhook = process.env.CONTACT_WEBHOOK_URL || '',
   rate = true,
   catalogPath = path.join(ROOT, 'data/catalog.json'),
@@ -92,6 +98,7 @@ export function createApp({
   api.get('/plans', (_req, res) => res.json({
     plans: PLANS,
     payments: { provider: payments.provider, ...(payments.provider === 'razorpay' ? { keyId: payments.keyId } : {}), ...(payments.provider === 'mock' ? { demo: true } : {}) },
+    billing: { gst: billing.config.gstEnabled, coupons: payments.provider === 'razorpay', states: STATES },
   }));
 
   const authLimit = rate ? rateLimit('auth', 20, 60_000) : (_q, _s, n) => n();
@@ -218,14 +225,74 @@ export function createApp({
   api.post('/payments/webhook', wrap(async (req, res) => {
     if (payments.provider !== 'razorpay') return res.sendStatus(404);
     if (!payments.verifyWebhook(req.rawBody, req.headers['x-razorpay-signature'])) throw bad('Bad signature.', 'invalid_signature');
-    const ev = req.body?.event, pe = req.body?.payload?.payment?.entity;
+    const ev = req.body?.event, pe = req.body?.payload?.payment?.entity, re = req.body?.payload?.refund?.entity;
     if ((ev === 'payment.captured' || ev === 'order.paid') && pe?.order_id && pe?.id && (pe.status === 'captured' || ev === 'order.paid')) {
       const pay = await db.payments.byOrder('razorpay', pe.order_id);
-      if (pay && pay.amountPaise === pe.amount && pe.currency === 'INR') await db.payments.settle(pay, pe.id, paidPlan(pay.planId).days);
+      if (pay && pay.amountPaise === pe.amount && pe.currency === 'INR') await billing.settle(pay, pe.id);
       else console.warn('[payments] webhook for unknown order or amount mismatch', pe.order_id);
-    }
+    } else if (ev === 'payment.failed') await billing.onPaymentFailed(pe);
+    else if (/^refund\.(created|processed|failed)$/.test(ev || '')) await billing.onRefundEvent(re);
     res.json({ ok: true });                                               // always 200 for valid signatures so Razorpay doesn't retry forever
   }));
+
+  /* ---------- admin API (ADMIN_TOKEN) — refunds, coupons, accounting export ---------- */
+  const adminOn = adminToken.length >= 24;
+  if (adminToken && !adminOn) console.warn('[admin] ADMIN_TOKEN is shorter than 24 characters — the admin API stays disabled.');
+  const digest = (v) => crypto.createHash('sha256').update(String(v)).digest();
+  const adminAuth = (req, _res, next) => {
+    if (!adminOn) return next(new HttpError(404, 'not_found', 'Unknown endpoint.'));
+    const got = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    if (!crypto.timingSafeEqual(digest(got), digest(adminToken))) return next(new HttpError(401, 'unauthorized', 'Invalid admin token.'));
+    next();
+  };
+  const admin = express.Router();
+  admin.use(rate ? rateLimit('admin', 60, 60_000) : (_q, _s, n) => n(), adminAuth);
+  const asInt = (v, what) => { if (v === undefined || v === null || v === '') return null; const n = Number(v); if (!Number.isInteger(n) || n < 0) throw bad(`${what} must be a whole number.`); return n; };
+  const asDate = (v, what) => { if (v === undefined || v === null || v === '') return null; const t = Date.parse(v); if (Number.isNaN(t)) throw bad(`${what} must be an ISO date.`); return new Date(t); };
+  admin.get('/payments', wrap(async (req, res) => res.json({ payments: await db.payments.listRecent({ email: typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : null, limit: Math.min(Number(req.query.limit) || 50, 200) }) })));
+  admin.post('/payments/:id/refund', wrap(async (req, res) => {
+    const b = req.body || {};
+    const rec = await billing.refund({ paymentId: req.params.id, amountPaise: b.amountPaise === undefined ? undefined : Number(b.amountPaise), reason: typeof b.reason === 'string' ? b.reason.trim() : '', revokeAccess: b.revokeAccess === true });
+    res.status(201).json({ refund: rec.refund, creditNote: rec.creditNote && { id: rec.creditNote.id, number: rec.creditNote.number }, accessRevoked: rec.revoked });
+  }));
+  admin.get('/coupons', wrap(async (_req, res) => res.json({ coupons: await db.coupons.list() })));
+  admin.post('/coupons', wrap(async (req, res) => {
+    const b = req.body || {}, code = String(b.code || '').trim().toUpperCase();
+    if (!/^[A-Z0-9_-]{3,30}$/.test(code)) throw bad('Code must be 3–30 characters: letters, digits, "-" or "_".');
+    if (!['percent', 'flat'].includes(b.kind)) throw bad('kind must be "percent" or "flat".');
+    const value = asInt(b.value, 'value');
+    if (b.kind === 'percent' ? !(value >= 1 && value <= 100) : !(value >= 100)) throw bad(b.kind === 'percent' ? 'A percent coupon must be 1–100.' : 'A flat coupon is in paise, at least 100 (₹1).');
+    const planIds = Array.isArray(b.planIds) && b.planIds.length ? b.planIds.map(String) : null;
+    if (planIds?.some((id) => !paidPlan(id))) throw bad('planIds must be paid plan ids.');
+    const perUserLimit = asInt(b.perUserLimit ?? 1, 'perUserLimit'); if (!(perUserLimit >= 1)) throw bad('perUserLimit must be at least 1.');
+    try {
+      res.status(201).json({ coupon: await db.coupons.create({ code, description: typeof b.description === 'string' ? b.description.slice(0, 120) : null, kind: b.kind, value, planIds, maxRedemptions: asInt(b.maxRedemptions, 'maxRedemptions'), perUserLimit, startsAt: asDate(b.startsAt, 'startsAt'), expiresAt: asDate(b.expiresAt, 'expiresAt') }) });
+    } catch (e) { if (isDuplicate(e)) throw new HttpError(409, 'exists', 'A coupon with that code already exists.'); throw e; }
+  }));
+  admin.patch('/coupons/:code', wrap(async (req, res) => {
+    const code = String(req.params.code).toUpperCase(), b = req.body || {};
+    if (!(await db.coupons.get(code))) throw new HttpError(404, 'not_found', 'Unknown coupon.');
+    const patch = {};
+    if (b.active !== undefined) patch.active = !!b.active;
+    if ('expiresAt' in b) patch.expiresAt = asDate(b.expiresAt, 'expiresAt');
+    if ('startsAt' in b) patch.startsAt = asDate(b.startsAt, 'startsAt');
+    if ('maxRedemptions' in b) patch.maxRedemptions = asInt(b.maxRedemptions, 'maxRedemptions');
+    if (b.perUserLimit !== undefined) { patch.perUserLimit = asInt(b.perUserLimit, 'perUserLimit'); if (!(patch.perUserLimit >= 1)) throw bad('perUserLimit must be at least 1.'); }
+    if (typeof b.description === 'string') patch.description = b.description.slice(0, 120);
+    res.json({ coupon: await db.coupons.update(code, patch) });
+  }));
+  /** Sales register as CSV. from/to are IST calendar dates (inclusive); default = the current calendar month. */
+  admin.get('/invoices.csv', wrap(async (req, res) => {
+    const ist = (d) => new Date(Date.parse(`${d}T00:00:00+05:30`));
+    const ok = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(ist(d).getTime());
+    const now = new Date(Date.now() + 5.5 * 3600_000), monthStart = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+    const from = req.query.from === undefined ? monthStart : req.query.from, to = req.query.to === undefined ? now.toISOString().slice(0, 10) : req.query.to;
+    if (!ok(from) || !ok(to)) throw bad('from and to must be dates like 2026-04-01.');
+    res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="sales-register-${from}_${to}.csv"` });
+    res.send(await billing.registerCsv(ist(from), new Date(ist(to).getTime() + 86_400_000)));
+  }));
+  admin.get('/invoices/:id/pdf', wrap(async (req, res) => { const f = await billing.adminInvoicePdf(req.params.id); res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${f.filename}"`, 'Cache-Control': 'private, no-store' }); res.send(f.content); }));
+  api.use('/admin', admin);
 
   /* ---------- authenticated ---------- */
   api.use(wrap(async (req, _res, next) => {
@@ -301,9 +368,14 @@ export function createApp({
   /* ---------- subscription & payments ---------- */
   api.get('/subscription', wrap(async (req, res) => res.json({ subscription: await db.subscriptions.get(req.user.id) })));
   const payLimit = rate ? rateLimit('pay', 20, 60_000) : (_q, _s, n) => n();
-  const asHttp = (e) => (e instanceof PaymentError ? new HttpError(e.status, e.code, e.message) : e);
 
-  /** Step 1: start a purchase. Razorpay → returns the order for Checkout. Demo provider → activates immediately. */
+  /** Price preview: applies a coupon (and tells the viewer why it doesn't work). */
+  api.post('/payments/quote', payLimit, wrap(async (req, res) => {
+    if (payments.provider !== 'razorpay') throw new HttpError(501, 'payments_not_configured', 'Coupons need live payments.');
+    res.json({ quote: billing.quoteView(await billing.quote(req.user.id, req.body?.planId, req.body?.couponCode)) });
+  }));
+
+  /** Step 1: start a purchase. Razorpay → returns the order for Checkout (coupon + GST billing details applied). Demo provider → activates immediately. */
   api.post('/payments/checkout', payLimit, wrap(async (req, res) => {
     const plan = paidPlan(req.body?.planId);
     if (!plan) throw bad('Choose a paid plan.', 'unknown_plan');
@@ -312,12 +384,7 @@ export function createApp({
       await db.subscriptions.activateDemo(req.user.id, plan.id, plan.days);
       return res.status(201).json({ provider: 'mock', demo: true, subscription: await db.subscriptions.get(req.user.id) });
     }
-    const id = crypto.randomUUID();
-    let order;
-    try { order = await payments.createOrder({ amountPaise: plan.priceINR * 100, receipt: `ab_${id.slice(0, 30)}`, notes: { userId: req.user.id, planId: plan.id } }); }
-    catch (e) { throw asHttp(e); }
-    await db.payments.create({ id, userId: req.user.id, planId: plan.id, provider: 'razorpay', orderId: order.orderId, amountPaise: order.amountPaise });
-    res.status(201).json({ provider: 'razorpay', keyId: payments.keyId, orderId: order.orderId, amount: order.amountPaise, currency: order.currency, plan: { id: plan.id, name: plan.name }, prefill: { name: req.user.name, email: req.user.email } });
+    res.status(201).json(await billing.checkout({ user: req.user, planId: plan.id, couponCode: req.body?.couponCode, billing: req.body?.billing }));
   }));
 
   /** Step 3: the browser reports a finished payment. Nothing is granted unless the signature is valid for OUR order. */
@@ -327,9 +394,17 @@ export function createApp({
     const pay = typeof orderId === 'string' ? await db.payments.byOrder('razorpay', orderId) : null;
     if (!pay || pay.userId !== req.user.id) throw new HttpError(404, 'not_found', 'Unknown order.');            // also blocks using someone else's order
     if (!payments.verifyPayment({ orderId, paymentId, signature })) throw new HttpError(400, 'invalid_signature', 'Payment could not be verified. If money was deducted it will be reversed automatically, or contact support.');
-    await db.payments.settle(pay, paymentId, paidPlan(pay.planId).days);                                           // idempotent
+    await billing.settle(pay, paymentId);                                                                          // idempotent; issues the invoice
     res.json({ subscription: await db.subscriptions.get(req.user.id) });
   }));
+
+  /* ---------- billing history & documents ---------- */
+  api.get('/billing', wrap(async (req, res) => res.json({ payments: await billing.history(req.user.id) })));
+  api.get('/invoices/:id/pdf', wrap(async (req, res) => {
+    const f = await billing.invoicePdf(req.user.id, req.params.id);
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${f.filename}"`, 'Cache-Control': 'private, no-store' }); res.send(f.content);
+  }));
+  api.post('/invoices/:id/email', payLimit, wrap(async (req, res) => { await billing.emailInvoice(req.user, req.params.id); res.sendStatus(204); }));
 
   /** Cancelling only applies to demo plans: real plans are prepaid, don't renew and simply run out. */
   api.delete('/subscription', wrap(async (req, res) => {
@@ -361,5 +436,6 @@ export function createApp({
     res.status(status).json({ error: { code: err.code || 'server_error', message: status === 500 ? 'Something went wrong.' : err.message } });
   });
   app.db = db;
+  app.locals.billing = billing;          // exposed for jobs (expiry reminders) and tests
   return app;
 }

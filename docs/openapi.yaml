@@ -11,6 +11,7 @@ servers:
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+    admin: { type: http, scheme: bearer, description: 'The ADMIN_TOKEN environment variable (24+ characters)' }
   schemas:
     Error:
       type: object
@@ -36,7 +37,7 @@ paths:
   /health: { get: { security: [], summary: 'Liveness + service discovery (used by the app to detect API mode). Body includes db: up|down.', responses: { '200': { description: OK } } } }
   /health/ready: { get: { security: [], summary: 'Readiness probe — 503 when MySQL is unreachable.', responses: { '200': { description: Ready }, '503': { description: Database down } } } }
   /catalog: { get: { security: [], summary: Full catalog (shows, videos, upcoming, gallery), responses: { '200': { description: catalog.json } } } }
-  /plans: { get: { security: [], summary: 'Plans plus the active payment provider', responses: { '200': { description: '{ plans: [...], payments: { provider: razorpay|mock|none, keyId? } }' } } } }
+  /plans: { get: { security: [], summary: 'Plans plus the active payment provider', responses: { '200': { description: '{ plans: [...], payments: { provider: razorpay|mock|none, keyId? }, billing: { gst: bool, coupons: bool, states: [{code,name}] } }' } } } }
   /auth/signup:
     post:
       security: []
@@ -124,8 +125,25 @@ paths:
   /payments/checkout:
     post:
       summary: 'Start a purchase. razorpay → creates an order (returns keyId, orderId, amount, currency, prefill) for Razorpay Checkout; mock (dev only) → activates instantly; none → 501.'
-      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [planId], properties: { planId: { type: string, enum: [plus-monthly, plus-yearly] } } } } } }
-      responses: { '201': { description: 'created' }, '400': { description: unknown_plan }, '501': { description: payments_not_configured }, '502': { description: provider_error } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [planId], properties: { planId: { type: string, enum: [plus-monthly, plus-yearly] }, couponCode: { type: string }, billing: { type: object, description: 'Required when GST invoicing is on: state (name or 2-digit code) or a valid gstin + name', properties: { state: { type: string }, gstin: { type: string }, name: { type: string } } } } } } } }
+      responses: { '201': { description: 'razorpay: order for Checkout · coupon: free grant · mock: demo activation (all include quote/subscription)' }, '400': { description: 'unknown_plan | invalid_coupon | billing_state_required | invalid_gstin | business_name_required' }, '501': { description: payments_not_configured }, '502': { description: provider_error } }
+  /payments/quote:
+    post:
+      summary: 'Price preview with a coupon (Razorpay provider only).'
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [planId], properties: { planId: { type: string }, couponCode: { type: string } } } } } }
+      responses: { '200': { description: '{ quote: { planId, listPaise, discountPaise, finalPaise, coupon } }' }, '400': { description: invalid_coupon (message says why) }, '501': { description: payments_not_configured } }
+  /billing:
+    get: { summary: 'Paid plans with their invoice, credit notes and refund status', responses: { '200': { description: '{ payments: [...] }' } } }
+  /invoices/{id}/pdf:
+    get:
+      summary: 'Download a GST invoice or credit note (owner only)'
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: PDF, content: { application/pdf: { schema: { type: string, format: binary } } } }, '404': { description: not found } }
+  /invoices/{id}/email:
+    post:
+      summary: 'Email the invoice PDF to the account address'
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '204': { $ref: '#/components/responses/NoContent' }, '404': { description: not found } }
   /payments/verify:
     post:
       summary: 'Report a finished Razorpay payment. The HMAC signature is verified with the key secret; the plan is activated once (idempotent). The order must belong to the caller.'
@@ -134,5 +152,27 @@ paths:
   /payments/webhook:
     post:
       security: []
-      summary: 'Razorpay → API. Signed with RAZORPAY_WEBHOOK_SECRET over the raw body (X-Razorpay-Signature). Activates the plan for payment.captured / order.paid even if the buyer never returned to the site.'
+      summary: 'Razorpay → API. Signed with RAZORPAY_WEBHOOK_SECRET over the raw body (X-Razorpay-Signature). Handles payment.captured / order.paid (activates the plan + issues the invoice, even if the buyer never returned), payment.failed, and refund.created / processed / failed.'
       responses: { '200': { description: ok }, '400': { description: invalid_signature } }
+  /admin/payments:
+    get: { summary: 'Admin (Bearer ADMIN_TOKEN): recent payments, ?email=&limit=', security: [ { admin: [] } ], responses: { '200': { description: '{ payments }' }, '401': { description: unauthorized }, '404': { description: admin API disabled } } }
+  /admin/payments/{id}/refund:
+    post:
+      summary: 'Admin: refund a Razorpay payment (fully or partly). Issues a credit note once processed; a full refund ends the access.'
+      security: [ { admin: [] } ]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { amountPaise: { type: integer, minimum: 100 }, reason: { type: string }, revokeAccess: { type: boolean } } } } } }
+      responses: { '201': { description: '{ refund, creditNote, accessRevoked }' }, '409': { description: not_refundable | refund_exceeds_payment }, '502': { description: provider_error } }
+  /admin/coupons:
+    get: { summary: 'Admin: list coupons with redemption counts', security: [ { admin: [] } ], responses: { '200': { description: '{ coupons }' } } }
+    post:
+      summary: 'Admin: create a coupon'
+      security: [ { admin: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [code, kind, value], properties: { code: { type: string }, kind: { type: string, enum: [percent, flat] }, value: { type: integer, description: 'percent 1-100, or paise' }, description: { type: string }, planIds: { type: array, items: { type: string } }, maxRedemptions: { type: integer }, perUserLimit: { type: integer, default: 1 }, startsAt: { type: string, format: date-time }, expiresAt: { type: string, format: date-time } } } } } }
+      responses: { '201': { description: '{ coupon }' }, '400': { description: validation }, '409': { description: exists } }
+  /admin/coupons/{code}:
+    patch: { summary: 'Admin: change active / dates / limits / description', security: [ { admin: [] } ], parameters: [ { name: code, in: path, required: true, schema: { type: string } } ], responses: { '200': { description: '{ coupon }' }, '404': { description: unknown } } }
+  /admin/invoices.csv:
+    get: { summary: 'Admin: sales register CSV (invoices +, credit notes -), ?from=YYYY-MM-DD&to=YYYY-MM-DD in IST', security: [ { admin: [] } ], responses: { '200': { description: text/csv } } }
+  /admin/invoices/{id}/pdf:
+    get: { summary: 'Admin: any invoice as PDF', security: [ { admin: [] } ], parameters: [ { name: id, in: path, required: true, schema: { type: string } } ], responses: { '200': { description: PDF } } }

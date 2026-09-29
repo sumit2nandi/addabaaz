@@ -194,7 +194,11 @@ export class User extends Emitter {
   pref(k) { return this.prefs[k]; }
   setPref(k, v) { this.prefs = { ...this.prefs, [k]: v }; store('ab.prefs', this.prefs); this.emit('prefs'); }
   get isPremium() { const s = this.subscription; return !!(s?.planId && s.planId !== 'free' && s.status === 'active' && (!s.expiresAt || Date.parse(s.expiresAt) > Date.now())); }
-  async checkout(planId) { this.subscription = await this.adapter.checkout(planId); this.emit('subscription'); return this.subscription; }
+  async checkout(planId, opts) { this.subscription = await this.adapter.checkout(planId, opts); this.emit('subscription'); return this.subscription; }
+  quote(planId, couponCode) { return this.adapter.quote(planId, couponCode); }
+  billingHistory() { return this.adapter.billingHistory(); }
+  invoiceBlob(id) { return this.adapter.invoiceBlob(id); }
+  emailInvoice(id) { return this.adapter.emailInvoice(id); }
   async cancelSubscription() { this.subscription = await this.adapter.cancelSubscription(); this.emit('subscription'); }
   plans() { return this.adapter.plans(); }
   submitContact(p) { return (this.remote || this.local).submitContact(p); }

@@ -12,10 +12,19 @@ if (process.env.DB_MIGRATE !== 'false') {                       // set DB_MIGRAT
 }
 const app = createApp({ db });
 const server = app.listen(port, '0.0.0.0', () => console.log(`ADDABAAZ running on http://localhost:${port}  (site + API at /api/v1, MySQL connected)`));
+// Renewal reminders: hourly, once per expiry date (the claim is atomic, so running several instances is fine).
+const billing = app.locals.billing;
+const remind = () => billing.sendExpiryReminders().catch((e) => console.error('[billing] reminder run failed:', e.message));
+setTimeout(remind, 30_000).unref();
+setInterval(remind, 3600_000).unref();
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.SMTP_URL) console.warn('[mail] SMTP_URL is not set — receipts, refund and reminder emails will NOT be sent.');
+  if (process.env.RAZORPAY_KEY_ID && !billing.config.gstEnabled) console.warn('[billing] GSTIN is not set — invoices are issued as plain receipts without GST.');
+}
 let stopping = false;
 const stop = () => {
   if (stopping) return; stopping = true;
-  server.close(async () => { await db.close().catch(() => {}); process.exit(0); });
+  server.close(async () => { await billing.idle().catch(() => {}); await db.close().catch(() => {}); process.exit(0); });
   setTimeout(() => process.exit(0), 5000).unref();
 };
 process.on('SIGINT', stop); process.on('SIGTERM', stop);

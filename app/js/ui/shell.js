@@ -15,7 +15,7 @@ const section = (path) => {
   if (path === '/' ) return 'home';
   const seg = path.split('/')[1];
   return { shows: 'shows', show: 'shows', watch: 'shows', reels: 'reels', upcoming: 'upcoming', soon: 'upcoming', gallery: 'gallery', list: 'list',
-    about: 'studio', services: 'studio', contact: 'studio', search: 'search', account: 'account', profiles: 'account', plans: 'account', signin: 'account', signup: 'account' }[seg] || '';
+    about: 'studio', services: 'studio', contact: 'studio', search: 'search', account: 'account', profiles: 'account', plans: 'account', billing: 'account', signin: 'account', signup: 'account' }[seg] || '';
 };
 
 export function renderShell() {

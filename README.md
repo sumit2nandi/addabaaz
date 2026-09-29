@@ -55,6 +55,7 @@ BTS/, UpcomingReleases/, images/, resources/   original artwork (untouched) & na
 
 - [Architecture & roadmap](docs/ARCHITECTURE.md) — how the pieces fit, how to go to production, what to add next
 - [Sign-in: email, Google, Facebook](docs/AUTH.md) — who must log in, provider setup, native apps
+- [Billing: GST invoices, coupons, refunds, emails](docs/BILLING.md) — setup, admin API, sales register
 - [Premium video on Cloudflare R2](docs/PREMIUM.md) — bucket, upload, catalog entry, access rules, Razorpay payments, security
 - [Database (MySQL)](docs/DATABASE.md) — schema, migrations, configuration, backups
 - [Android & iOS](docs/MOBILE.md) — build, sign and publish the apps

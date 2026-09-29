@@ -346,3 +346,15 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .chip-premium { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 4px; background: var(--gold); color: #000; font-weight: 800; font-size: 10.5px; letter-spacing: .4px; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; }
 .ep-thumb .chip-premium { top: 4px; right: 4px; padding: 3px 5px; }
 .player-overlay .row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 6px; }
+
+/* ---------- checkout dialog & billing history ---------- */
+.dialog .dlg-body { padding: 24px; } .dialog .dlg-body h2 { margin: 0 0 14px; }
+.co-total { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 14px 16px; background: var(--bg-2); border: 1px solid var(--border-2); border-radius: 12px; } .co-total b { font-size: 24px; }
+.co-row { display: flex; gap: 8px; } .co-row input { flex: 1; min-width: 0; text-transform: uppercase !important; }
+.form select { width: 100%; background: var(--bg-2); border: 1px solid var(--border-2); color: #fff; border-radius: 10px; padding: 13px 14px; font-size: 16px; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.form label.check { display: flex; align-items: center; gap: 10px; text-transform: none; letter-spacing: 0; font-size: 14px; font-weight: 500; color: var(--text-2); cursor: pointer; }
+.co-note { font-size: 12.5px; margin: 0; text-align: center; }
+.bill { display: grid; gap: 14px; } .bill-item { background: var(--panel); border: 1px solid var(--border-2); border-radius: 16px; padding: 18px 20px; display: grid; gap: 12px; }
+.bill-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; } .bill-head b { font-size: 17px; } .bill-amt { font-size: 20px; font-weight: 800; }
+.bill-docs { display: flex; flex-wrap: wrap; gap: 8px; } .bill-docs .btn { padding: 8px 12px; font-size: 13px; }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 700; background: #2a2200; color: var(--gold); } .pill.ok { background: #0f2415; color: #7be495; }

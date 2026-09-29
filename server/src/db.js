@@ -1,9 +1,16 @@
 import mysql from 'mysql2/promise';
 import { dbConfigFromEnv } from './config.js';
+import { billingDb } from './db-billing.js';
 
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
 export const isDuplicate = (e) => e?.code === 'ER_DUP_ENTRY';
 const MAX_PROGRESS = 500;
+const mapPayment = (r) => r && ({
+  id: r.id, userId: r.user_id, planId: r.plan_id, provider: r.provider, orderId: r.provider_order_id, paymentId: r.provider_payment_id,
+  amountPaise: r.amount_paise, listPricePaise: r.list_price_paise ?? r.amount_paise, discountPaise: r.discount_paise, couponCode: r.coupon_code,
+  billing: typeof r.billing === 'string' ? JSON.parse(r.billing) : r.billing || null, refundedPaise: r.refunded_paise, currency: r.currency,
+  status: r.status, createdAt: iso(r.created_at), paidAt: iso(r.paid_at),
+});
 
 /**
  * MySQL data-access layer. Every method is async and uses parameterised queries.
@@ -146,41 +153,83 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       },
       /** Grants `days` of access; an unexpired plan is extended rather than replaced. */
       async extend(userId, { planId, days, provider, demo = false }, t = { query: q }) {
+        // Make sure the row exists first, so the FOR UPDATE below locks a record rather than a gap (gap locks deadlock under concurrent purchases).
+        await t.query("INSERT IGNORE INTO subscriptions (user_id, plan_id, status) VALUES (?, 'free', 'active')", [userId]);
         const [row] = await t.query('SELECT * FROM subscriptions WHERE user_id = ? FOR UPDATE', [userId]);
         const now = Date.now();
-        const live = row && row.expires_at && row.expires_at.getTime() > now;
+        const live = row.plan_id !== 'free' && row.expires_at && row.expires_at.getTime() > now;
         const base = live ? row.expires_at.getTime() : now;
         const expires = new Date(base + days * 86_400_000);
         const started = live && row.started_at ? row.started_at : new Date(now);
-        await t.query(`INSERT INTO subscriptions (user_id, plan_id, status, provider, is_demo, started_at, expires_at) VALUES (?,?,?,?,?,?,?)
-                       ON DUPLICATE KEY UPDATE plan_id = VALUES(plan_id), status = 'active', provider = VALUES(provider), is_demo = VALUES(is_demo),
-                                               started_at = VALUES(started_at), expires_at = VALUES(expires_at), updated_at = UTC_TIMESTAMP(3)`,
-          [userId, planId, 'active', provider, demo ? 1 : 0, started, expires]);
+        await t.query("UPDATE subscriptions SET plan_id = ?, status = 'active', provider = ?, is_demo = ?, started_at = ?, expires_at = ?, updated_at = UTC_TIMESTAMP(3) WHERE user_id = ?",
+          [planId, provider, demo ? 1 : 0, started, expires, userId]);
       },
       async clear(userId) { await q('DELETE FROM subscriptions WHERE user_id = ?', [userId]); },
+      /** Paid plans that end within `days` and haven't been reminded about this particular expiry date yet. */
+      async dueForReminder(days, limit = 200) {
+        return (await q(`SELECT s.user_id, s.plan_id, s.expires_at, u.email, u.name FROM subscriptions s JOIN users u ON u.id = s.user_id
+                         WHERE s.is_demo = 0 AND s.plan_id <> 'free' AND s.expires_at > UTC_TIMESTAMP(3) AND s.expires_at <= UTC_TIMESTAMP(3) + INTERVAL ? DAY
+                           AND (s.expiry_reminder_for IS NULL OR s.expiry_reminder_for <> s.expires_at) LIMIT ?`, [days, limit]))
+          .map((r) => ({ userId: r.user_id, planId: r.plan_id, expiresAt: r.expires_at, email: r.email, name: r.name }));
+      },
+      /** Multi-instance safe: exactly one caller gets `true` for a given expiry date. */
+      async claimReminder(userId, expiresAt) {
+        return (await q('UPDATE subscriptions SET expiry_reminder_for = expires_at WHERE user_id = ? AND expires_at = ? AND (expiry_reminder_for IS NULL OR expiry_reminder_for <> expires_at)', [userId, expiresAt])).affectedRows === 1;
+      },
       /** Demo-only: activate for `days` without a payment. */
       async activateDemo(userId, planId, days) { await tx(async (t) => this.extend(userId, { planId, days, provider: 'mock', demo: true }, t)); },
     },
 
     payments: {
-      async create({ id, userId, planId, provider, orderId, amountPaise, currency = 'INR' }) {
-        await q('INSERT INTO payments (id, user_id, plan_id, provider, provider_order_id, amount_paise, currency) VALUES (?,?,?,?,?,?,?)', [id, userId, planId, provider, orderId, amountPaise, currency]);
+      /** `coupon` (a coupons row) makes the insert happen under the coupon's row lock so its limits can't be beaten by parallel checkouts. */
+      async create(p, { coupon = null } = {}) {
+        const insert = (t) => t.query(
+          'INSERT INTO payments (id, user_id, plan_id, provider, provider_order_id, amount_paise, list_price_paise, discount_paise, coupon_code, billing, currency) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+          [p.id, p.userId, p.planId, p.provider, p.orderId, p.amountPaise, p.listPricePaise ?? p.amountPaise, p.discountPaise ?? 0, p.couponCode ?? null, p.billing ? JSON.stringify(p.billing) : null, p.currency || 'INR']);
+        if (coupon) await self.coupons.reserve(coupon, p.userId, insert); else await insert({ query: q });
       },
-      async byOrder(provider, orderId) {
-        const r = (await q('SELECT * FROM payments WHERE provider = ? AND provider_order_id = ?', [provider, orderId]))[0];
-        return r && { id: r.id, userId: r.user_id, planId: r.plan_id, provider: r.provider, orderId: r.provider_order_id, paymentId: r.provider_payment_id, amountPaise: r.amount_paise, status: r.status };
+      async byOrder(provider, orderId) { return mapPayment((await q('SELECT * FROM payments WHERE provider = ? AND provider_order_id = ?', [provider, orderId]))[0]); },
+      async byProviderPayment(provider, providerPaymentId) { return mapPayment((await q('SELECT * FROM payments WHERE provider = ? AND provider_payment_id = ?', [provider, providerPaymentId]))[0]); },
+      async byId(id) { return mapPayment((await q('SELECT * FROM payments WHERE id = ?', [id]))[0]); },
+      /** An unpaid, recent order for the same purchase — reopened instead of creating a second one (keeps coupon accounting honest). */
+      async openOrder({ userId, planId, amountPaise, couponCode, provider, maxAgeMin = 30 }) {
+        const r = (await q(`SELECT * FROM payments WHERE user_id = ? AND plan_id = ? AND provider = ? AND amount_paise = ? AND status = 'created' AND (coupon_code <=> ?)
+                            AND created_at > UTC_TIMESTAMP(3) - INTERVAL ? MINUTE ORDER BY created_at DESC LIMIT 1`, [userId, planId, provider, amountPaise, couponCode ?? null, maxAgeMin]))[0];
+        return mapPayment(r);
       },
+      async setBilling(id, billing) { await q("UPDATE payments SET billing = ? WHERE id = ? AND status = 'created'", [JSON.stringify(billing), id]); },
+      /** Atomically claims the right to send the "payment failed" email for an order (once). */
+      async claimFailedNotice(id) { return (await q('UPDATE payments SET failed_notified_at = UTC_TIMESTAMP(3) WHERE id = ? AND failed_notified_at IS NULL AND status = \'created\'', [id])).affectedRows === 1; },
       /**
-       * Marks the order paid and grants the plan in ONE transaction. Safe to call repeatedly (browser verify + webhook):
-       * only the call that flips created→paid extends access. Returns true if this call granted it.
+       * Marks the order paid, grants the plan and (optionally) issues the tax invoice in ONE transaction. Safe to call repeatedly
+       * (browser verify + webhook): only the call that flips created→paid grants access. `invoice(paymentRow)` returns the invoice
+       * fields to store (see billing.js) or null. Returns { applied, invoice }.
        */
-      async settle(payment, providerPaymentId, days) {
+      async settle(payment, providerPaymentId, days, { invoice = null } = {}) {
+        if (invoice) await self.invoices.ensureCounter('INV');
         return tx(async (t) => {
           const res = await t.query("UPDATE payments SET status = 'paid', provider_payment_id = ?, paid_at = UTC_TIMESTAMP(3) WHERE id = ? AND status = 'created'", [providerPaymentId, payment.id]);
-          if (!res.affectedRows) return false;
+          if (!res.affectedRows) return { applied: false, invoice: null };
           if (payment.userId) await self.subscriptions.extend(payment.userId, { planId: payment.planId, days, provider: payment.provider }, t);
-          return true;
+          let issued = null;
+          if (invoice) {
+            const fields = invoice(mapPayment((await t.query('SELECT * FROM payments WHERE id = ?', [payment.id]))[0]));
+            if (fields) issued = await self.invoices.issue(t, { kind: 'invoice', paymentId: payment.id, userId: payment.userId, ...fields });
+          }
+          return { applied: true, invoice: issued };
         });
+      },
+      /** A user's payment history, newest first, with invoices, credit notes and refunds attached. */
+      async listForUser(userId, limit = 100) {
+        const rows = (await q("SELECT * FROM payments WHERE user_id = ? AND status = 'paid' ORDER BY paid_at DESC LIMIT ?", [userId, limit])).map(mapPayment);
+        for (const p of rows) { p.invoices = await self.invoices.forPayment(p.id); p.refunds = await self.refunds.forPayment(p.id); }
+        return rows;
+      },
+      async listRecent({ email = null, limit = 50 } = {}) {
+        const rows = (await q(`SELECT p.*, u.email AS user_email FROM payments p LEFT JOIN users u ON u.id = p.user_id ${email ? 'WHERE u.email = ?' : ''} ORDER BY p.created_at DESC LIMIT ?`, email ? [email, limit] : [limit]))
+          .map((r) => ({ ...mapPayment(r), userEmail: r.user_email }));
+        for (const p of rows) { p.invoices = await self.invoices.forPayment(p.id); p.refunds = await self.refunds.forPayment(p.id); }
+        return rows;
       },
     },
 
@@ -189,5 +238,6 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       async count() { return (await q('SELECT COUNT(*) AS n FROM contact_messages'))[0].n; },
     },
   };
+  Object.assign(self, billingDb({ q, tx, self, iso }));      // coupons, invoices, refunds
   return self;
 }

@@ -29,6 +29,19 @@ export function createRazorpay({ keyId, keySecret, webhookSecret = '', fetchImpl
       if (!r.ok || !body.id) { console.error('[razorpay] order failed', r.status, body?.error?.description); throw new PaymentError(r.status >= 500 ? 503 : 502, 'provider_error', 'The payment provider rejected the request.'); }
       return { orderId: body.id, amountPaise: body.amount, currency: body.currency };
     },
+    /** Refunds (part of) a captured payment. Razorpay answers { id: 'rfnd_…', status: 'pending' | 'processed' | 'failed' }; the final state also arrives by webhook. */
+    async createRefund({ paymentId, amountPaise, notes, receipt }) {
+      let r;
+      try { r = await fetchImpl(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/refund`, { method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: amountPaise, speed: 'normal', notes, receipt }) }); }
+      catch { throw new PaymentError(503, 'provider_unavailable', 'Could not reach the payment provider. Please try again.'); }
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok || !body.id) {
+        const why = body?.error?.description || `HTTP ${r.status}`;
+        console.error('[razorpay] refund failed', r.status, why);
+        throw new PaymentError(r.status >= 500 ? 503 : 502, 'provider_error', `The payment provider rejected the refund: ${why}`);
+      }
+      return { refundId: body.id, amountPaise: body.amount, status: body.status === 'processed' ? 'processed' : body.status === 'failed' ? 'failed' : 'pending' };
+    },
     /** Checkout callback signature: HMAC_SHA256(order_id + "|" + payment_id, key_secret). */
     verifyPayment({ orderId, paymentId, signature }) { return typeof orderId === 'string' && typeof paymentId === 'string' && safeEqualHex(hmacHex(keySecret, `${orderId}|${paymentId}`), signature); },
     /** Webhook signature: HMAC_SHA256(raw request body, webhook secret) in X-Razorpay-Signature. */

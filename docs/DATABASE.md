@@ -10,6 +10,8 @@ users ──< profiles ──< list_items        (My List:   PK profile_id, item
    │           └─────< reminders         (Coming-soon reminders: PK profile_id, upcoming_id)
    ├── auth_identities                   (linked Google / Facebook accounts: PK provider, subject)
    ├── subscriptions                     (1:1, no row = free plan)
+   ├── payments ──< refunds              (kept if the user is deleted; user_id → NULL)
+   │       └──< invoices                 (tax invoices + credit notes; numbered per financial year)
 
 contact_messages                         (standalone inbox for the Contact form)
 schema_migrations                        (applied migration files)
@@ -25,9 +27,13 @@ schema_migrations                        (applied migration files)
 | `reminders` | `profile_id` FK · `upcoming_id` · `created_at` |
 | `subscriptions` | `user_id` PK/FK · `plan_id` · `status` · `provider` · `is_demo` · `started_at` · **`expires_at`** (prepaid access ends here; past = treated as free) · `updated_at` |
 | `payments` | `id` PK · `user_id` FK→users **ON DELETE SET NULL** (kept for accounting) · `plan_id` · `provider` · `provider_order_id` / `provider_payment_id` (each UNIQUE per provider → a payment can only ever be applied once) · `amount_paise` · `currency` · `status` ENUM(created, paid, failed) · `created_at` · `paid_at` |
+| `coupons` | `code` PK · `kind` ENUM(percent, flat) · `value` (percent, or paise) · `plan_ids` · `max_redemptions` · `per_user_limit` · `starts_at` / `expires_at` · `active`. Redemptions are counted from `payments.coupon_code` |
+| `refunds` | `id` PK · `payment_id` FK · `provider_refund_id` **UNIQUE** (a refund event is applied once) · `amount_paise` · `status` ENUM(pending, processed, failed) · `source` ENUM(admin, provider) · `revoked_access` |
+| `invoices` | `id` PK · `number` **UNIQUE** (e.g. `AB/2627/000001`) · `kind` ENUM(invoice, credit_note) · `doc_key` **UNIQUE** (one invoice per payment, one credit note per refund) · `payment_id` / `refund_id` / `parent_id` · `user_id` FK **ON DELETE SET NULL** · `fy` · `issued_at` · `taxable_paise` / `cgst_paise` / `sgst_paise` / `igst_paise` / `total_paise` · `gst_rate` · `doc` JSON (seller & buyer snapshot) |
+| `invoice_counters` | `(series, fy)` PK · `last_no` — row-locked while numbering, so numbers are gapless |
 | `contact_messages` | `id` PK · `name` · `email` · `phone` · `message` TEXT · `created_at` |
 
-All foreign keys are `ON DELETE CASCADE` (except `payments.user_id`, which becomes NULL so payment records survive account deletion), so `DELETE /me` (account deletion, required by the app stores) removes everything belonging to the user in one statement. Ids are UUID v4 strings. Video/list ids use `utf8mb4_bin` because YouTube ids are case-sensitive. Full DDL: [`001_init.sql`](../server/migrations/001_init.sql), social login in [`002_social_login.sql`](../server/migrations/002_social_login.sql), payments in [`003_payments.sql`](../server/migrations/003_payments.sql).
+All foreign keys are `ON DELETE CASCADE` (except `payments.user_id` and `invoices.user_id`, which become NULL so payment and tax records survive account deletion), so `DELETE /me` (account deletion, required by the app stores) removes everything belonging to the user in one statement. Ids are UUID v4 strings. Video/list ids use `utf8mb4_bin` because YouTube ids are case-sensitive. Full DDL: [`001_init.sql`](../server/migrations/001_init.sql), social login in [`002_social_login.sql`](../server/migrations/002_social_login.sql), payments in [`003_payments.sql`](../server/migrations/003_payments.sql), coupons/invoices/refunds in [`004_billing.sql`](../server/migrations/004_billing.sql). `payments` also gained `list_price_paise`, `discount_paise`, `coupon_code`, `billing` (buyer name/state/GSTIN snapshot), `refunded_paise`.
 
 Concurrency: the unique email index makes simultaneous sign-ups safe; the 5-profile limit and "can't delete your last profile" rules run in transactions that lock the user row; progress uses `INSERT … ON DUPLICATE KEY UPDATE`.
 

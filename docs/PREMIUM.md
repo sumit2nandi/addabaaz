@@ -103,12 +103,12 @@ Razorpay  → POST /payments/webhook  (payment.captured)   same activation if th
 
 Set up:
 1. Razorpay dashboard → Settings → **API Keys** → generate keys (use `rzp_test_…` first). Put `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` in the server environment (`.env.example`). The secret never leaves the server; only the key id is sent to the browser.
-2. Dashboard → Settings → **Webhooks** → URL `https://<your-api>/api/v1/payments/webhook`, a secret of your choice (= `RAZORPAY_WEBHOOK_SECRET`), event **`payment.captured`**.
+2. Dashboard → Settings → **Webhooks** → URL `https://<your-api>/api/v1/payments/webhook`, a secret of your choice (= `RAZORPAY_WEBHOOK_SECRET`), events **`payment.captured`, `payment.failed`, `refund.created`, `refund.processed`, `refund.failed`**. Keep Razorpay's **automatic capture** on (Settings → Payment capture) — refunds and invoices assume captured payments.
 3. Test with Razorpay's test cards/UPI before switching to live keys (KYC required for live).
 
 Without keys, **development** uses a labelled *demo checkout* (activates instantly, no money); in **production** there is no checkout at all (`501 payments_not_configured`) unless you deliberately set `ALLOW_MOCK_PAYMENTS=true` (staging only — it lets anyone grant themselves a plan).
 
-Not included (decide with your accountant before launch): **GST invoices/receipts**, refunds (do them in the Razorpay dashboard, then shorten the user's `subscriptions.expires_at` by hand), failed-payment emails, coupon codes. In the store apps plans aren't sold (see `docs/MOBILE.md`). The Razorpay flow was verified in tests against a faked Razorpay API and a scripted browser checkout — run one real test-mode payment before going live.
+GST invoices, coupons, refunds and payment emails are documented in [BILLING.md](BILLING.md). Not included: failed-payment retries beyond Razorpay's own, subscriptions that renew automatically, and in-app purchase in the store apps (see `docs/MOBILE.md`). The Razorpay flow was verified in tests against a faked Razorpay API and a scripted browser checkout — run one real test-mode payment before going live.
 
 ## Security notes — read these
 

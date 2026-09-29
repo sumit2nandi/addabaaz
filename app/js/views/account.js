@@ -32,7 +32,7 @@ export default async function account(ctx) {
       <button class="row-link" id="clearHist">${icon('trash', { size: 22 })}<span><b>Clear watch history</b><small>Removes Continue Watching for this profile.</small></span></button>
     </div>
 
-    ${u.supportsAuth ? html`<h2 class="sub-h">Subscription</h2><div class="card-panel list">${link('#/plans', 'crown', plan === 'free' ? 'Free plan' : 'ADDABAAZ Plus', plan === 'free' ? 'Subscribe to watch premium originals' : (u.subscription.expiresAt ? `Active until ${fmtDate(u.subscription.expiresAt)}` : 'Manage your plan'))}</div>` : ''}
+    ${u.supportsAuth ? html`<h2 class="sub-h">Subscription</h2><div class="card-panel list">${link('#/plans', 'crown', plan === 'free' ? 'Free plan' : 'ADDABAAZ Plus', plan === 'free' ? 'Subscribe to watch premium originals' : (u.subscription.expiresAt ? `Active until ${fmtDate(u.subscription.expiresAt)}` : 'Manage your plan'))}${u.account ? link('#/billing', 'download', 'Billing & invoices', 'GST invoices, credit notes and refunds') : ''}</div>` : ''}
 
     <h2 class="sub-h">Explore</h2>
     <div class="card-panel list">

@@ -25,6 +25,14 @@ export class ApiClient {
     }
     return data;
   }
+  /** Authenticated download (e.g. invoice PDFs) → Blob. */
+  async blob(path) {
+    let res;
+    try { res = await fetch(`${this.base}/api/v1${path}`, { headers: this.token ? { Authorization: `Bearer ${this.token}` } : {} }); }
+    catch { throw new ApiError(0, 'You appear to be offline.', 'network'); }
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new ApiError(res.status, d.error?.message || `Download failed (${res.status})`, d.error?.code); }
+    return res.blob();
+  }
   get(p, o) { return this.req('GET', p, null, o); }
   post(p, b) { return this.req('POST', p, b ?? {}); }
   put(p, b) { return this.req('PUT', p, b ?? {}); }

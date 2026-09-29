@@ -15,6 +15,8 @@ export const PLANS_FALLBACK = [
   { id: 'plus-yearly', name: 'ADDABAAZ Plus (Yearly)', priceINR: 799, interval: 'year', features: ['Everything in Plus', '2 months free'] },
 ];
 
+const NO_BILLING = { gst: false, coupons: false, states: [] };
+
 export class LocalAdapter {
   mode = 'local';
   supportsAuth = false;
@@ -33,7 +35,11 @@ export class LocalAdapter {
   async saveLibrary(pid, lib) { store('ab.lib.' + pid, lib); }
   // Fine-grained ops are no-ops locally: the facade persists the whole library object via saveLibrary().
   async addToList() {} async removeFromList() {} async saveProgress() {} async clearProgress() {} async setReminder() {}
-  async plans() { return { plans: PLANS_FALLBACK, payments: { provider: 'none' } }; }
+  async plans() { return { plans: PLANS_FALLBACK, payments: { provider: 'none' }, billing: NO_BILLING }; }
+  async quote() { throw new ApiError(400, 'Coupons need the ADDABAAZ API.'); }
+  async billingHistory() { return []; }
+  async invoiceBlob() { throw new ApiError(400, 'Invoices need the ADDABAAZ API.'); }
+  async emailInvoice() { throw new ApiError(400, 'Invoices need the ADDABAAZ API.'); }
   async checkout() { throw new ApiError(400, 'Subscriptions need the ADDABAAZ API (see docs/PREMIUM.md).'); }
   async cancelSubscription() { return { planId: 'free', status: 'active' }; }
   async signUp() { throw new ApiError(400, 'Accounts need the ADDABAAZ API (see docs/ARCHITECTURE.md).'); }
@@ -80,12 +86,16 @@ export class RemoteAdapter {
   saveProgress(pid, videoId, position, duration) { return this.api.put(`/profiles/${pid}/progress/${encodeURIComponent(videoId)}`, { position, duration }); }
   clearProgress(pid, videoId) { return this.api.del(`/profiles/${pid}/progress/${encodeURIComponent(videoId)}`); }
   setReminder(pid, id, on) { return on ? this.api.put(`/profiles/${pid}/reminders/${id}`) : this.api.del(`/profiles/${pid}/reminders/${id}`); }
-  async plans() { try { const r = await this.api.get('/plans'); return { plans: r.plans, payments: r.payments || { provider: 'none' } }; } catch { return { plans: PLANS_FALLBACK, payments: { provider: 'none' } }; } }
+  async plans() { try { const r = await this.api.get('/plans'); return { plans: r.plans, payments: r.payments || { provider: 'none' }, billing: r.billing || NO_BILLING }; } catch { return { plans: PLANS_FALLBACK, payments: { provider: 'none' }, billing: NO_BILLING }; } }
+  async quote(planId, couponCode) { return (await this.api.post('/payments/quote', { planId, couponCode })).quote; }
+  async billingHistory() { return (await this.api.get('/billing')).payments; }
+  invoiceBlob(id) { return this.api.blob(`/invoices/${encodeURIComponent(id)}/pdf`); }
+  async emailInvoice(id) { await this.api.post(`/invoices/${encodeURIComponent(id)}/email`); }
   /** Buy / renew a plan. Razorpay: server creates the order → Checkout takes the payment → server verifies the signature.
    *  Rejects with `.cancelled` if the viewer closes the payment window. Resolves with the new subscription. */
-  async checkout(planId) {
-    const c = await this.api.post('/payments/checkout', { planId });
-    if (c.provider === 'mock') return c.subscription;                         // dev/demo provider: instantly active
+  async checkout(planId, { couponCode, billing } = {}) {
+    const c = await this.api.post('/payments/checkout', { planId, couponCode: couponCode || undefined, billing });
+    if (c.provider === 'mock' || c.provider === 'coupon') return c.subscription;   // demo provider / 100%-off coupon: active immediately
     const paid = await openCheckout(c);
     return (await this.api.post('/payments/verify', { orderId: paid.razorpay_order_id, paymentId: paid.razorpay_payment_id, signature: paid.razorpay_signature })).subscription;
   }
