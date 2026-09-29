@@ -217,7 +217,7 @@ git archive --format=zip -o addabaaz.zip HEAD
 
 `git archive` only includes committed files, so `node_modules`, `.env` and local uploads are left out automatically, and the paths inside the ZIP are the ones Linux expects. Avoid *right-click → Send to → Compressed folder* on the project folder: it would include `node_modules` and your `.env`, and it wraps everything in an extra top-level folder, which breaks Hostinger's detection (`package.json` must be at the top of the ZIP). If you have to zip without git: `tar -a -c -f addabaaz.zip --exclude node_modules --exclude .git --exclude .env --exclude www --exclude mobile --exclude backups --exclude uploads *` (`tar` is built into Windows 10/11 and writes correct paths; `Compress-Archive` in Windows PowerShell 5.1 does not).
 
-Check the result: `tar -tf addabaaz.zip | Select-String -Pattern "^(package.json|server.js)$"` should print both names.
+Check the result: `tar -tf addabaaz.zip | Select-String -Pattern "^(package.json|server.cjs)$"` should print both names.
 
 ---
 
