@@ -18,6 +18,7 @@ import { initPlatform } from './platform.js';
 import { initConsent, trackPage } from './consent.js';
 import { initErrorReporting } from './errors.js';
 import { initPush } from './push.js';
+import { initPullToRefresh } from './ui/ptr.js';
 
 // Native-shell hooks must run before anything else.
 initPlatform();
@@ -41,7 +42,7 @@ async function boot() {
 
   renderShell();
   // Create the router, which draws each page into #view.
-  const router = app.router = new Router($('#view'), { onRoute: (r) => { markActive(r); syncButtons(document); window.dispatchEvent(new Event('ab:ready')); $('#boot')?.remove(); } });
+  const router = app.router = new Router($('#view'), { onRoute: (r) => { markActive(r); syncButtons(document); window.dispatchEvent(new Event('ab:ready')); $('#boot')?.remove(); document.body.classList.add('booted'); } });
   wireGlobalActions();
 
   app.user.on('library', () => syncButtons(document));
@@ -56,6 +57,7 @@ async function boot() {
   }
   router.start();
   networkStatus();
+  initPullToRefresh();
   initConsent(); initErrorReporting(); initPush();
   window.addEventListener('ab:ready', trackPage);
   installPrompt();

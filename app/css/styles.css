@@ -45,6 +45,14 @@ ul { margin: 0; padding: 0; list-style: none; }
 /* ---------- boot / loading ---------- */
 .boot, .page-loading { display: grid; place-items: center; gap: 22px; min-height: 70vh; align-content: center; }
 .boot img { border-radius: 50%; }
+/* The boot splash is an in-flow block, not a full-screen overlay — without this the footer/tab bar
+   show a stray "ADDABAAZ" line at the bottom of the screen while the app loads. Hidden until the
+   first page replaces #boot (JS marks the body .booted; the :has() rule covers a stalled boot). */
+body:not(.booted) .footer, body:not(.booted) .tabbar { display: none; }
+main:has(#boot) ~ .footer, main:has(#boot) ~ .tabbar { display: none; }
+/* Pull-to-refresh indicator (see ui/ptr.js): parked above the viewport until a pull drags it in. */
+.ptr { position: fixed; z-index: 240; top: calc(10px + var(--sat)); left: 50%; margin-left: -17px; transform: translateY(-80px); opacity: 0; transition: transform .15s ease, opacity .15s ease; pointer-events: none; }
+.ptr.on { opacity: 1; }
 .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,.15); border-top-color: var(--accent); animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .offline-bar { position: fixed; z-index: 250; left: 0; right: 0; top: 0; padding: calc(6px + var(--sat)) 12px 6px; background: #3b2a00; color: var(--gold); text-align: center; font-size: 13px; font-weight: 600; }

@@ -54,22 +54,42 @@ let nativeInit = false;
 function nativePlugin(providers) {
   const SL = window.Capacitor?.Plugins?.SocialLogin;
   if (!SL) throw new Error('Social sign-in isn’t set up in this build of the app yet.');
-  return { SL, ready: nativeInit ? Promise.resolve() : SL.initialize({
-    ...(providers.google ? { google: { webClientId: providers.google.clientId, iOSClientId: providers.google.iosClientId, iOSServerClientId: providers.google.clientId, mode: 'online' } } : {}),
-    ...(providers.apple ? { apple: {} } : {}),
-    ...(providers.facebook ? { facebook: { appId: providers.facebook.appId, clientToken: providers.facebook.clientToken } } : {}),
-  }).then(() => { nativeInit = true; }) };
+  const ios = window.Capacitor?.getPlatform?.() === 'ios';
+  const ready = nativeInit ? Promise.resolve() : Promise.race([
+    SL.initialize({
+      ...(providers.google ? { google: { webClientId: providers.google.clientId, iOSClientId: providers.google.iosClientId, iOSServerClientId: providers.google.clientId, mode: 'online' } } : {}),
+      // Apple is iOS-only here: sending `apple: {}` to Android makes initialize reject (it wants
+      // redirectUrl/clientId) and takes the other providers down with it — Capgo issue #197.
+      ...(providers.apple && ios ? { apple: {} } : {}),
+      ...(providers.facebook ? { facebook: { appId: providers.facebook.appId, clientToken: providers.facebook.clientToken } } : {}),
+    }).then(() => { nativeInit = true; }),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('Sign-in couldn’t start — please try again.')), 12000)),
+  ]);
+  return { SL, ready };
 }
 // Native flow: get an ID token (Google/Apple) or access token (Facebook) from the platform SDK; user cancellation is flagged, not treated as an error.
+// Every native call also races a timeout: a stuck SDK must produce a visible message, never a dead button.
 async function nativeCredential(provider, providers) {
   const { SL, ready } = nativePlugin(providers); await ready;
+  const call = (opts, msg) => Promise.race([
+    SL.login(opts),
+    new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), 30000)),
+  ]);
   try {
-    if (provider === 'apple') { const r = await SL.login({ provider: 'apple', options: { scopes: ['email', 'name'] } }); const n = r.result?.profile; return { identityToken: r.result?.idToken, name: n ? [n.givenName, n.familyName].filter(Boolean).join(' ') : '' }; }
+    if (provider === 'apple') { const r = await call({ provider: 'apple', options: { scopes: ['email', 'name'] } }, 'Apple sign-in didn’t respond — please try again.'); const n = r.result?.profile; return { identityToken: r.result?.idToken, name: n ? [n.givenName, n.familyName].filter(Boolean).join(' ') : '' }; }
     // No `scopes` on the Google call on purpose: the plugin ALWAYS requests email+profile+openid
     // itself, and passing custom scopes is rejected on Android unless MainActivity implements the
     // plugin's marker interface ("You CANNOT use scopes without modifying the main activity").
-    if (provider === 'google') { const r = await SL.login({ provider: 'google' }); return r.result?.idToken; }
-    const r = await SL.login({ provider: 'facebook', options: { permissions: ['email', 'public_profile'] } }); return r.result?.accessToken?.token;
+    if (provider === 'google') {
+      const r = await call({ provider: 'google' }, 'Google sign-in didn’t respond — please try again.');
+      const idToken = r?.result?.idToken;
+      if (!idToken) throw new Error('Google sign-in returned nothing — please try again.');
+      return idToken;
+    }
+    const r = await call({ provider: 'facebook', options: { permissions: ['email', 'public_profile'] } }, 'Facebook sign-in didn’t respond — please try again.');
+    const token = r?.result?.accessToken?.token;
+    if (!token) throw new Error('Facebook sign-in returned nothing — please try again.');
+    return token;
   } catch (e) { if (/cancel/i.test(`${e?.code} ${e?.message}`)) e.cancelled = true; throw e; }
 }
 

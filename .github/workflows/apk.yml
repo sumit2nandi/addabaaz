@@ -72,6 +72,12 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('mobile/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
+      # A stable debug keystore: Google sign-in validates the app's SHA-1 against the OAuth client,
+      # so a keystore regenerated on every CI run could never be allowlisted in Google Cloud Console.
+      # (Same file as the classic ~/.android/debug.keystore — password "android", alias androiddebugkey.)
+      - name: Install the pinned debug keystore (stable SHA-1)
+        run: mkdir -p "$HOME/.android" && cp mobile/debug.keystore "$HOME/.android/debug.keystore"
+
       - name: Assemble debug APK
         working-directory: mobile/android
         run: ./gradlew assembleDebug --no-daemon

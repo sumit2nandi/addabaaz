@@ -48,6 +48,15 @@ Per the plugin docs you still need to do the native configuration once after `np
 
 **Android + Google:** do **not** pass custom `scopes` to `SocialLogin.login({ provider: 'google' })`. The plugin always requests `email`, `profile` and `openid` itself, and any explicit scope makes it reject with *"You CANNOT use scopes without modifying the main activity"* unless `MainActivity` implements its `ModifiedMainActivityForSocialLoginPlugin` marker interface (not needed here — the defaults are exactly what the API verifies).
 
+**Google Android sign-in — allowlist the app's SHA-1** (Google Cloud Console → *APIs & Services → Credentials → OAuth 2.0 Client IDs* → new/edit an **Android** client):
+
+- Package name: `in.addabaaz.app`
+- SHA-1 (all CI / debug builds): `FB:47:C5:A4:00:89:BB:39:7C:C3:F1:91:CE:A2:37:69:DB:37:47:70`
+
+That fingerprint belongs to the **pinned debug keystore** `mobile/debug.keystore` (alias `androiddebugkey`, password `android`): the APK workflow copies it to `~/.android/debug.keystore` before building, so every cloud build signs with the same key and the allowlisting never goes stale. For local Android Studio builds, copy it once — `cp mobile/debug.keystore ~/.android/debug.keystore` — or additionally allowlist your own keystore's SHA-1 (`keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`).
+
+**Why sign-in used to hang:** `@capgo/capacitor-social-login@7.20.0` finishes its Google authorization with activity results (request codes `583892990…+128`) that it never registers with Capacitor, so the consent result was dropped and the JS call never settled — "nothing happens after picking an account". `mobile/scripts/patch-social-login.mjs` (run automatically by `add:android` / `sync`) registers the codes and forwards them to `GoogleProvider`.
+
 **App Store rule 4.8:** an iOS app that offers Google/Facebook login must also offer **Sign in with Apple**. It is implemented: `POST /auth/apple { identityToken, name? }` verifies Apple's RS256 token against Apple's published keys, issuer and audience.
 
 Setup (needs a paid Apple Developer account):
