@@ -6,7 +6,7 @@ import { CONFIG } from '../config.js';
 import { ApiError } from '../data/api.js';
 import { html, $, fmtDate, fmtViews, fmtDuration, timeAgo, shareOrCopy } from '../util.js';
 import { icon } from '../icons.js';
-import { createPlayer } from '../players/index.js';
+import { createPlayer, loadYouTube } from '../players/index.js';
 import { go } from '../router.js';
 import { listBtn, videoCard, rail, enhanceRails, metaLine, toast, img } from '../ui/components.js';
 import { epRow } from './show.js';
@@ -22,6 +22,9 @@ export default async function watch(ctx) {
   const show = cat.show(v.showId), soon = !show && cat.soon(v.showId);
   const next = cat.nextEpisode(v);
   const title = cat.displayTitle(v);
+  // Fetch the YouTube IFrame API while the page renders — script + handshake is the slowest part of playback
+  // starting on mobile networks, so overlap it with everything else rather than starting it inside the player.
+  if (v.source.type === 'youtube') loadYouTube().catch(() => {});
   // Can this viewer play it? 'ok' | 'login' | 'plan' | 'unavailable' (premium in static mode).
   const gate = u.gateFor(v);                       // 'ok' | 'login' | 'plan' | 'unavailable'
   const here = encodeURIComponent('/watch/' + v.id);
@@ -56,9 +59,10 @@ export default async function watch(ctx) {
           ${show ? html`<p class="watch-desc">${show.description}</p>` : ''}
           <details class="orig-title"><summary>Original title</summary><p class="bn">${v.title}</p></details>
         </div>
-        ${rail({ title: 'More from ADDABAAZ', items: cat.latestEpisodes(10).filter((x) => x.id !== v.id).map((x) => videoCard(x)), cls: 'r-video mobile-only' })}
       </div>
       <aside class="watch-side" aria-label="${v.kind === 'episode' ? 'Episodes' : 'Up next'}">${sideList}</aside>
+      <!-- mobile-only: comes AFTER the episodes/up-next list in the stacked phone layout -->
+      ${rail({ title: 'More from ADDABAAZ', items: cat.latestEpisodes(10).filter((x) => x.id !== v.id).map((x) => videoCard(x)), cls: 'r-video mobile-only' })}
     </div>`.s;
   // Wire up interactive bits: rails, auto-play switch, share button, likes and comments.
   enhanceRails(ctx.root);

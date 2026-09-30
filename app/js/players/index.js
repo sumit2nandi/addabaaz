@@ -14,6 +14,16 @@ import { createHtml5Player } from './html5.js';
 // How long the browser gets to start sound-autoplay before we check whether it was blocked.
 const AUTOPLAY_WAIT_MS = 2200;
 
+/* Phones: sound autoplay is refused in the large majority of cases, and the refusal is visible almost
+ * immediately (a video that IS allowed moves to BUFFERING within ~1s of the API being ready — YouTube starts
+ * loading the moment it may play). Polling the desktop cadence (~2.2s + 4×0.7s ≈ 5s) therefore just makes
+ * mobile playback start needlessly late "by design". On touch devices check earlier and give up sooner:
+ * playback then begins (muted, with the unmute pill) about 2.5s after the player is ready instead of ~5s. */
+const coarseTouch = () => {
+  try { if (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) return true; } catch { /* no media queries */ }
+  return (typeof navigator !== 'undefined' && navigator.maxTouchPoints || 0) > 1;
+};
+
 /** Options (all optional): start, autoplay, muted, controls (false for reels), onProgress, onEnded, onState,
  *  onAutoplayMuted() - autoplay with sound was blocked, so we restarted it muted (show a "tap to unmute" hint),
  *  onAutoplayBlocked() - even muted playback did not start (Low Power Mode etc.); the viewer has to tap play. */
@@ -64,14 +74,16 @@ export async function createPlayer(container, video, opts = {}) {
   } else if (ctl.state) {
     // YouTube IFrame: no play promise. Poll the player state — if it sits in unstarted(-1)/cued(5) for long enough
     // after the API is ready, sound autoplay was refused; if it ever reaches buffering/playing, it was just slow.
+    const touch = coarseTouch();
+    const firstCheck = touch ? 1200 : AUTOPLAY_WAIT_MS, gap = touch ? 500 : 700, rounds = touch ? 3 : 4;
     const poll = (roundsLeft) => {
       if (gone || playing || fellBack) return;
       const st = ctl.state();
       if (st === 3 || st === 1) return;                       // loading or playing: sound autoplay works
-      if (roundsLeft > 0) timers.push(setTimeout(() => poll(roundsLeft - 1), 700));
+      if (roundsLeft > 0) timers.push(setTimeout(() => poll(roundsLeft - 1), gap));
       else startMuted();                                       // still unstarted/cued → blocked
     };
-    timers.push(setTimeout(() => poll(4), AUTOPLAY_WAIT_MS)); // ~2.2s + 4×0.7s ≈ 5s of unstarted == blocked
+    timers.push(setTimeout(() => poll(rounds), firstCheck));   // desktop: ~2.2s + 4×0.7s ≈ 5s; phones: ~1.2s + 3×0.5s ≈ 2.7s
   }
 
   const destroy = ctl.destroy;

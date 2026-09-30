@@ -66,6 +66,26 @@ test('youtube: muted playback also blocked (Low Power Mode) → onAutoplayBlocke
   ctl.destroy();
 });
 
+test('youtube on a touch device: blocked sound → muted fallback starts in ~2.7s, not ~5s (phone autostart "very late" fix)', async () => {
+  const prevMM = globalThis.matchMedia;
+  globalThis.matchMedia = (q) => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+  try {
+    globalThis.__ytScenario = { startState: 5, delayToPlayMs: null, playsWithSound: false, mutedPlays: true };
+    let mutedCb = 0, blockedCb = 0; const t0 = Date.now(); let mutedAt = -1;
+    const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
+      autoplay: true,
+      onAutoplayMuted: () => { mutedCb++; mutedAt = Date.now() - t0; },
+      onAutoplayBlocked: () => blockedCb++,
+    });
+    await wait(3500);
+    assert.equal(mutedCb, 1, 'muted fallback must fire on touch devices too');
+    assert.ok(mutedAt >= 2000 && mutedAt < 3200, `touch fallback should land ~2.7s (got ${mutedAt}ms) — the 5s desktop wait is what made phones start "very late"`);
+    await wait(2500);
+    assert.equal(blockedCb, 0, 'muted playback succeeded → no blocked callback');
+    ctl.destroy();
+  } finally { if (prevMM === undefined) delete globalThis.matchMedia; else globalThis.matchMedia = prevMM; }
+});
+
 test('youtube: no user gesture yet (deep link/reload) → instant muted start, no 5s dead time', async () => {
   const stubbed = setActivation(false);
   globalThis.__ytScenario = { startState: 5, delayToPlayMs: null, playsWithSound: false, mutedPlays: true };

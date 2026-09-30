@@ -53,8 +53,10 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
   });
   return {
     engine: 'youtube',
-    /** PlayerState code (-1 unstarted, 5 cued, 3 buffering, 1 playing…) so the autoplay fallback can tell "blocked" from "still loading". */
-    state: () => { try { return player.getPlayerState(); } catch { return 1; } },
+    /** PlayerState code (-1 unstarted, 5 cued, 3 buffering, 1 playing…) so the autoplay fallback can tell "blocked" from "still loading".
+     *  A player whose state is unreadable is NOT playing: report unstarted so the muted fallback still fires
+     *  (returning "playing" here used to leave broken embeds stuck on the loading spinner forever on phones). */
+    state: () => { try { return player.getPlayerState(); } catch { return -1; } },
     time: () => { try { return player.getCurrentTime(); } catch { return 0; } },
     duration: () => { try { return player.getDuration(); } catch { return 0; } },
     seek: (s) => player.seekTo?.(s, true),

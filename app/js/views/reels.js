@@ -2,7 +2,7 @@
 import { app } from '../app.js';
 import { html, $, $$, shareOrCopy } from '../util.js';
 import { icon } from '../icons.js';
-import { createPlayer } from '../players/index.js';
+import { createPlayer, loadYouTube } from '../players/index.js';
 import { img, toast } from '../ui/components.js';
 import { shareUrl } from '../platform.js';
 
@@ -24,6 +24,9 @@ export default async function reels(ctx) {
   const start = ctx.params.id && cat.video(ctx.params.id);
   if (start && !list.some((v) => v.id === start.id)) list = [start, ...list];
   let startIdx = Math.max(0, list.findIndex((v) => v.id === ctx.params.id));
+  // Fetch the YouTube IFrame API while the feed renders — on mobile networks the script + handshake is the
+  // slowest part of the first reel starting, so begin it before the player ever asks for it.
+  if (list.some((v) => v.source?.type === 'youtube')) loadYouTube().catch(() => {});
   ctx.setTitle('Reels');
   document.body.classList.add('reels-mode'); ctx.onCleanup(() => document.body.classList.remove('reels-mode'));
 

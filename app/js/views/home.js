@@ -30,7 +30,6 @@ function heroHtml(slides) {
             <h1 class="hero-title bn">${show.title}</h1>
             ${show.titleEn && show.titleEn !== show.title ? html`<div class="hero-title-en">${show.titleEn}</div>` : ''}
             ${showMeta(show)}
-            <p class="hero-desc">${show.description}</p>
             <div class="hero-actions">
               <a class="btn btn-primary btn-lg" href="#/watch/${(t?.video || latest).id}">${icon('play', { size: 20 })} ${label}</a>
               ${listBtn('show', show.id, { cls: 'btn btn-glass btn-lg' })}
