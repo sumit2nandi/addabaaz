@@ -65,7 +65,10 @@ async function nativeCredential(provider, providers) {
   const { SL, ready } = nativePlugin(providers); await ready;
   try {
     if (provider === 'apple') { const r = await SL.login({ provider: 'apple', options: { scopes: ['email', 'name'] } }); const n = r.result?.profile; return { identityToken: r.result?.idToken, name: n ? [n.givenName, n.familyName].filter(Boolean).join(' ') : '' }; }
-    if (provider === 'google') { const r = await SL.login({ provider: 'google', options: { scopes: ['email', 'profile'] } }); return r.result?.idToken; }
+    // No `scopes` on the Google call on purpose: the plugin ALWAYS requests email+profile+openid
+    // itself, and passing custom scopes is rejected on Android unless MainActivity implements the
+    // plugin's marker interface ("You CANNOT use scopes without modifying the main activity").
+    if (provider === 'google') { const r = await SL.login({ provider: 'google' }); return r.result?.idToken; }
     const r = await SL.login({ provider: 'facebook', options: { permissions: ['email', 'public_profile'] } }); return r.result?.accessToken?.token;
   } catch (e) { if (/cancel/i.test(`${e?.code} ${e?.message}`)) e.cancelled = true; throw e; }
 }

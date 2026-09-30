@@ -46,6 +46,8 @@ Google and Facebook block or break their web flows inside app WebViews, so the a
 
 Per the plugin docs you still need to do the native configuration once after `npx cap add android|ios`: Facebook `strings.xml` / `Info.plist` entries and the `AppDelegate` snippet, the Google Android SHA-1 / iOS URL scheme, then `npm run mobile:sync`. **This native path could not be exercised in the development environment (no Android/iOS toolchain) — test it on real devices before release.**
 
+**Android + Google:** do **not** pass custom `scopes` to `SocialLogin.login({ provider: 'google' })`. The plugin always requests `email`, `profile` and `openid` itself, and any explicit scope makes it reject with *"You CANNOT use scopes without modifying the main activity"* unless `MainActivity` implements its `ModifiedMainActivityForSocialLoginPlugin` marker interface (not needed here — the defaults are exactly what the API verifies).
+
 **App Store rule 4.8:** an iOS app that offers Google/Facebook login must also offer **Sign in with Apple**. It is implemented: `POST /auth/apple { identityToken, name? }` verifies Apple's RS256 token against Apple's published keys, issuer and audience.
 
 Setup (needs a paid Apple Developer account):
