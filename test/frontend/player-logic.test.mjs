@@ -1,6 +1,8 @@
-// Unit tests for the createPlayer() autoplay fallback logic (app/js/players/index.js).
-// These guard the "videos start muted on mobile" regression: the mute fallback must fire ONLY when the
-// browser genuinely refused sound autoplay — never when the video is merely slow to load.
+// Unit tests for the createPlayer() autoplay logic (app/js/players/index.js).
+// The strategy under test is the main branch's: every autoplaying player is BUILT muted
+// (autoplay=1&mute=1 → motion starts instantly on every phone) and the mute is then lifted on
+// main's 600/1500/3000ms schedule so playback comes up with VOLUME — no gesture required, no
+// multi-second sound-first wait, and no "blocked" signal for a merely slow load.
 //
 // Run:  node --test test/frontend/
 import { test, beforeEach } from 'node:test';
@@ -12,10 +14,12 @@ const { createPlayer } = await import('../../app/js/players/index.js');
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const container = { innerHTML: '' };
+// createPlayer()'s block/pill windows: block check at 2200*1.5ms, "still muted" check 600ms after the last lift.
+const BLOCK_AT = 3300, PILL_AT = 3900;
 
 function setActivation(active) {
   try { Object.defineProperty(navigator, 'userActivation', { value: { hasBeenActive: active }, configurable: true }); }
-  catch { /* environment without a settable navigator: skip activation-dependent assumptions */ }
+  catch { /* environment without a settable navigator */ }
   return typeof navigator.userActivation?.hasBeenActive === 'boolean';
 }
 
@@ -24,111 +28,69 @@ beforeEach(() => {
   setActivation(true);   // default: the user HAS interacted with the page
 });
 
-test('youtube: slow buffering (4.5s) must NOT be force-muted — sound autoplay keeps working', async () => {
-  globalThis.__ytScenario = { startState: 5, delayToPlayMs: 4500, playsWithSound: true };
+test('autoplay builds the player MUTED (instant start) and the lifts give volume with NO gesture', async () => {
+  globalThis.__ytScenario = { playAfterMs: 400 };
   let mutedCb = 0, blockedCb = 0;
   const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
     autoplay: true, onAutoplayMuted: () => mutedCb++, onAutoplayBlocked: () => blockedCb++,
   });
-  await wait(6000);
-  assert.equal(mutedCb, 0, 'onAutoplayMuted must not fire for a slow (but allowed) start');
-  assert.equal(blockedCb, 0);
-  assert.equal(globalThis.__muted, false, 'the video must not be muted');
+  assert.equal(globalThis.__createdMuted, true, 'built muted like main autoplay=1&mute=1 → starts playing instantly everywhere');
+  await wait(800);   // first lift lands at 600ms
+  assert.equal(globalThis.__unmuted, true, 'the 600ms lift unmuted the player without any user gesture (main\'s schedule)');
+  assert.equal(globalThis.__muted, false, 'volume is on');
+  await wait(PILL_AT - 800 + 300);
+  assert.equal(mutedCb, 0, 'no "tap for sound" pill: the lift gave sound');
+  assert.equal(blockedCb, 0, 'playback started → no blocked signal');
   ctl.destroy();
 });
 
-test('youtube: blocked sound autoplay → muted fallback after ~5s, muted playback starts (no "blocked" error)', async () => {
-  globalThis.__ytScenario = { startState: 5, delayToPlayMs: null, playsWithSound: false, mutedPlays: true };
-  let mutedCb = 0, blockedCb = 0;
-  const t0 = Date.now(); let mutedAt = -1;
-  const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
-    autoplay: true,
-    onAutoplayMuted: () => { mutedCb++; mutedAt = Date.now() - t0; },
-    onAutoplayBlocked: () => blockedCb++,
-  });
-  await wait(8000);
-  assert.equal(mutedCb, 1, 'onAutoplayMuted must fire exactly once');
-  assert.ok(mutedAt >= 4500 && mutedAt <= 6000, `fallback should land ~5s (got ${mutedAt}ms)`);
-  assert.equal(blockedCb, 0, 'muted playback succeeded → no blocked callback');
-  assert.equal(globalThis.__muted, true, 'the video now runs muted (tap-to-unmute affordance shown by the page)');
-  ctl.destroy();
-});
-
-test('youtube: muted playback also blocked (Low Power Mode) → onAutoplayBlocked, page shows play button', async () => {
-  globalThis.__ytScenario = { startState: 5, delayToPlayMs: null, playsWithSound: false, mutedPlays: false };
+test('slow playback (starts playing at 4.5s) is NOT mistaken for a block', async () => {
+  globalThis.__ytScenario = { bufferingAfterMs: 100, playAfterMs: 4500 };
   let mutedCb = 0, blockedCb = 0;
   const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
     autoplay: true, onAutoplayMuted: () => mutedCb++, onAutoplayBlocked: () => blockedCb++,
   });
-  await wait(8000);
-  assert.equal(mutedCb, 1);
-  assert.equal(blockedCb, 1, 'page gets onAutoplayBlocked so it can show the big play button');
+  await wait(BLOCK_AT + 400);   // buffering already happened → the block check must pass
+  assert.equal(blockedCb, 0, 'a buffering player is not blocked');
+  await wait(1500);
+  assert.equal(blockedCb, 0, 'still not blocked once it reaches playing');
+  assert.equal(mutedCb, 0, 'and it was never force-muted');
+  assert.equal(globalThis.__muted, false, 'volume via the lifts');
   ctl.destroy();
 });
 
-test('youtube on a touch device before ANY page gesture: muted-autoplay build at once — no seconds of dead wait', async () => {
-  const prevMM = globalThis.matchMedia;
-  globalThis.matchMedia = (q) => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
-  try {
-    setActivation(false);   // fresh page load / deep link: no interaction yet on this page
-    // The embed autoplays by itself once it may (muted is always allowed) — modelled by the delayed play.
-    globalThis.__ytScenario = { startState: 5, delayToPlayMs: 300, playsWithSound: true };
-    let mutedCb = 0, blockedCb = 0; const t0 = Date.now(); let mutedAt = -1;
-    const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
-      autoplay: true,
-      onAutoplayMuted: () => { mutedCb++; mutedAt = Date.now() - t0; },
-      onAutoplayBlocked: () => blockedCb++,
-    });
-    assert.equal(mutedCb, 1, 'the page is told once to show its tap-for-sound affordance');
-    assert.ok(mutedAt >= 0 && mutedAt < 300, `muted start is announced immediately (got ${mutedAt}ms), not after a multi-second sound-first attempt`);
-    assert.equal(globalThis.__createdMuted, true, 'the player itself is built muted (autoplay=1&mute=1) — nothing to discover or poll for');
-    await wait(4000);
-    assert.equal(blockedCb, 0, 'the muted embed played: no blocked callback');
-    ctl.destroy();
-  } finally { if (prevMM === undefined) delete globalThis.matchMedia; else globalThis.matchMedia = prevMM; }
+test('muted playback also refused (Low Power Mode) → onAutoplayBlocked once, no misleading mute pill', async () => {
+  globalThis.__ytScenario = { autoplayBlocked: true };
+  let mutedCb = 0, blockedCb = 0;
+  const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
+    autoplay: true, onAutoplayMuted: () => mutedCb++, onAutoplayBlocked: () => blockedCb++,
+  });
+  await wait(BLOCK_AT + 500);
+  assert.equal(blockedCb, 1, 'the page gets onAutoplayBlocked so it can show the big play button');
+  await wait(5000);
+  assert.equal(blockedCb, 1, 'exactly once');
+  assert.equal(mutedCb, 0, 'the player is not playing at all — the play affordance, not the unmute pill, is the right offer');
+  ctl.destroy();
 });
 
-test('youtube on a touch device: even muted playback refused (Low Power Mode) → blocked callback for the tap-to-play affordance', async () => {
-  const prevMM = globalThis.matchMedia;
-  globalThis.matchMedia = (q) => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+test('fresh page load (no user activation at all): still instant + lifts still run — activation no longer gates anything', async () => {
+  const stubbed = setActivation(false);   // deep link / reload: no gesture yet on this page
+  globalThis.__ytScenario = { playAfterMs: 400 };
+  let mutedCb = 0;
   try {
-    setActivation(false);
-    globalThis.__ytScenario = { startState: 5, delayToPlayMs: null, playsWithSound: false, mutedPlays: false };
-    let mutedCb = 0, blockedCb = 0;
     const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
-      autoplay: true, onAutoplayMuted: () => mutedCb++, onAutoplayBlocked: () => blockedCb++,
+      autoplay: true, onAutoplayMuted: () => mutedCb++,
     });
-    assert.equal(mutedCb, 1);
-    await wait(5000);
-    assert.equal(blockedCb, 1, 'a totally blocked device still gets the blocked signal so the page can offer one tap');
+    assert.equal(globalThis.__createdMuted, true, 'instant muted build');
+    await wait(800);
+    if (stubbed) assert.equal(globalThis.__unmuted, true, 'the lift runs even before any gesture (main unmutes on a timer)');
+    await wait(PILL_AT);
+    assert.equal(mutedCb, 0, 'mock reports unmuted after the lifts → no pill');
     ctl.destroy();
-  } finally { if (prevMM === undefined) delete globalThis.matchMedia; else globalThis.matchMedia = prevMM; }
+  } finally { setActivation(true); }
 });
 
-test('youtube on a touch device AFTER a page gesture (normal in-app open): sound-first, never muted when allowed', async () => {
-  const prevMM = globalThis.matchMedia;
-  globalThis.matchMedia = (q) => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
-  try {
-    // default activation (beforeEach) is TRUE: the tap that opened this video already activated the page,
-    // so browsers grant sound playback now — we must build the player UNMUTED and let it play.
-    globalThis.__ytScenario = { startState: 5, delayToPlayMs: 400, playsWithSound: true };
-    let mutedCb = 0, blockedCb = 0;
-    const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
-      autoplay: true, onAutoplayMuted: () => mutedCb++, onAutoplayBlocked: () => blockedCb++,
-    });
-    assert.equal(globalThis.__createdMuted, false, 'post-gesture phone plays build sound-first — audio starts immediately');
-    await wait(4000);
-    assert.equal(mutedCb, 0, 'sound autoplay succeeded → no mute fallback, no pill');
-    assert.equal(blockedCb, 0);
-    assert.equal(globalThis.__muted, false);
-    ctl.destroy();
-  } finally { if (prevMM === undefined) delete globalThis.matchMedia; else globalThis.matchMedia = prevMM; }
-});
-
-test('youtube on a touch device: the FIRST gesture anywhere unmutes a muted-started player (sound policy satisfied)', async () => {
-  const prevMM = globalThis.matchMedia;
-  globalThis.matchMedia = (q) => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
-  // Minimal window stand-in capturing the adapter's gesture listeners.
+test('a page-muted build (viewer chose silence) gets NO lifts and no pill — but the first gesture still unmutes', async () => {
   const listeners = {};
   const prevWin = globalThis.window;
   globalThis.window = {
@@ -137,121 +99,106 @@ test('youtube on a touch device: the FIRST gesture anywhere unmutes a muted-star
   };
   const fireGesture = () => Object.values(listeners).flat().slice().forEach((fn) => fn({ type: 'pointerdown' }));
   try {
-    setActivation(false);
-    globalThis.__ytScenario = { startState: 5, delayToPlayMs: 300, playsWithSound: true };   // embed autoplays (muted)
+    globalThis.__ytScenario = { playAfterMs: 400 };
     let mutedCb = 0, unmutedCb = 0;
     const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
-      autoplay: true,
-      onAutoplayMuted: () => mutedCb++,
-      onGestureUnmuted: () => unmutedCb++,
+      autoplay: true, muted: true, onAutoplayMuted: () => mutedCb++, onGestureUnmuted: () => unmutedCb++,
     });
-    assert.equal(mutedCb, 1, 'started muted (pre-gesture instant path)');
-    assert.ok((listeners.pointerdown || []).length > 0, 'a first-gesture listener is armed');
-    await wait(800);                                  // muted playback underway
-    fireGesture();                                    // viewer taps/scrolls anywhere
-    assert.equal(unmutedCb, 1, 'the page is told sound switched on so it can hide the pill');
-    assert.equal(globalThis.__unmuted, true, 'player.unMute() ran inside the gesture');
-    assert.ok((listeners.pointerdown || []).length === 0, 'the listener disarms after one gesture');
+    assert.equal(globalThis.__createdMuted, true, 'explicit-muted builds are muted too');
+    await wait(1000);   // past the 600ms lift — it must NOT have run
+    assert.equal(globalThis.__unmuted, false, 'no unmute lift when the page asked for silence');
+    assert.equal(globalThis.__muted, true, 'still muted');
+    assert.ok((listeners.pointerdown || []).length > 0, 'the first-gesture unmute safety net is armed');
+    fireGesture();
+    assert.equal(unmutedCb, 1, 'the page is told sound switched on');
+    assert.equal(globalThis.__unmuted, true, 'gesture unmute ran');
+    assert.equal(mutedCb, 0, 'the viewer\'s own mute choice never shows a pill');
+    await wait(PILL_AT);
+    assert.equal(mutedCb, 0, 'and the pill check stays quiet for page-muted builds');
     ctl.destroy();
   } finally {
     if (prevWin === undefined) delete globalThis.window; else globalThis.window = prevWin;
-    if (prevMM === undefined) delete globalThis.matchMedia; else globalThis.matchMedia = prevMM;
   }
 });
 
-test('a reel built muted by PAGE choice (muted: true) still unmutes at the next swipe/tap', async () => {
-  // Reels pre-set soundOff after a muted start — later reels come in with an explicit muted flag, which used
-  // to skip both the pill AND the gesture arm, so every later reel stayed silent indefinitely. Every muted
-  // autostart must arm first-gesture unmute.
-  const prevMM = globalThis.matchMedia;
-  globalThis.matchMedia = (q) => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+test('a viewer mute during the lift window cancels the remaining lifts — their choice sticks', async () => {
+  globalThis.__ytScenario = { playAfterMs: 400 };
+  let mutedCb = 0;
+  const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
+    autoplay: true, onAutoplayMuted: () => mutedCb++,
+  });
+  await wait(800);                 // first lift already gave sound
+  assert.equal(globalThis.__unmuted, true, 'lifted');
+  ctl.mute();                      // the reels sound button (or any page-driven mute)
+  assert.equal(globalThis.__muted, true, 'muted on request');
+  await wait(PILL_AT);             // past the 1500/3000ms lifts and the pill check
+  assert.equal(globalThis.__muted, true, 'no later lift un-mutes the viewer\'s explicit choice');
+  assert.equal(mutedCb, 0, 'and no misleading "tap for sound" pill');
+  ctl.destroy();
+});
+
+test('autoplay: false → no lifts, no gesture listeners, no block signal', async () => {
   const listeners = {};
   const prevWin = globalThis.window;
   globalThis.window = {
     addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); },
     removeEventListener: (t, fn) => { listeners[t] = (listeners[t] || []).filter((x) => x !== fn); },
   };
-  const fireGesture = () => Object.values(listeners).flat().slice().forEach((fn) => fn({ type: 'touchstart' }));
   try {
-    setActivation(false);
-    globalThis.__ytScenario = { startState: 5, delayToPlayMs: 300, playsWithSound: true };
-    let unmutedCb = 0;
+    let mutedCb = 0, blockedCb = 0;
     const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
-      autoplay: true, muted: true, onGestureUnmuted: () => unmutedCb++,
+      autoplay: false, onAutoplayMuted: () => mutedCb++, onAutoplayBlocked: () => blockedCb++,
     });
-    assert.ok((listeners.touchstart || []).length > 0, 'explicit-muted builds arm the gesture unmute too');
-    await wait(800);
-    fireGesture();
-    assert.equal(unmutedCb, 1, 'the swipe that brought the next reel unmutes it');
-    assert.equal(globalThis.__unmuted, true);
+    assert.equal(globalThis.__createdMuted, false, 'viewer asked for no autoplay: built as requested, not force-muted');
+    await wait(BLOCK_AT + 700);
+    assert.equal(globalThis.__unmuted, false, 'no lifts');
+    assert.equal(mutedCb, 0);
+    assert.equal(blockedCb, 0, 'nothing to block — the viewer presses play themselves');
+    assert.equal((listeners.pointerdown || []).length + (listeners.touchstart || []).length, 0, 'no gesture listener');
     ctl.destroy();
   } finally {
     if (prevWin === undefined) delete globalThis.window; else globalThis.window = prevWin;
-    if (prevMM === undefined) delete globalThis.matchMedia; else globalThis.matchMedia = prevMM;
   }
 });
 
-test('youtube: no user gesture yet (deep link/reload) → instant muted start, no 5s dead time', async () => {
-  const stubbed = setActivation(false);
-  globalThis.__ytScenario = { startState: 5, delayToPlayMs: null, playsWithSound: false, mutedPlays: true };
-  let mutedCb = 0; const t0 = Date.now(); let mutedAt = -1;
-  const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
-    autoplay: true, onAutoplayMuted: () => { mutedCb++; mutedAt = Date.now() - t0; },
-  });
-  await wait(500);
-  if (stubbed) {
-    assert.equal(mutedCb, 1, 'onAutoplayMuted must fire immediately when activation is impossible');
-    assert.ok(mutedAt < 200, `fallback should be near-instant (got ${mutedAt}ms)`);
-  }
-  ctl.destroy();
-});
-
-test('youtube: sound autoplay starts quickly → nothing is muted', async () => {
-  globalThis.__ytScenario = { startState: 5, delayToPlayMs: 300, playsWithSound: true };
+test('html5: built muted → plays instantly, the lift turns the volume on, nothing is blocked', async () => {
+  globalThis.__html5Scenario = { reject: null, playsAfterMs: 80 };
   let mutedCb = 0, blockedCb = 0;
-  const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
+  const ctl = await createPlayer(container, { source: { type: 'mp4', url: 'x' } }, {
     autoplay: true, onAutoplayMuted: () => mutedCb++, onAutoplayBlocked: () => blockedCb++,
   });
-  await wait(1500);
-  assert.equal(mutedCb, 0);
-  assert.equal(blockedCb, 0);
+  assert.equal(globalThis.__createdMuted, true, 'mp4/hls also start muted for instant motion');
+  await wait(1200);
+  assert.equal(globalThis.__unmuted, true, 'lifted to volume');
   assert.equal(globalThis.__muted, false);
+  await wait(PILL_AT - 1200 + 200);
+  assert.equal(mutedCb, 0);
+  assert.equal(blockedCb, 0, 'it played');
   ctl.destroy();
 });
 
-test('html5: play() rejected with NotAllowedError → muted fallback', async () => {
+test('html5: play() rejected outright (NotAllowedError) → onAutoplayBlocked for the tap-to-play affordance', async () => {
   globalThis.__html5Scenario = { reject: 'autoplay' };
   let mutedCb = 0, blockedCb = 0;
   const ctl = await createPlayer(container, { source: { type: 'mp4', url: 'x' } }, {
     autoplay: true, onAutoplayMuted: () => mutedCb++, onAutoplayBlocked: () => blockedCb++,
   });
-  await wait(600);
-  assert.equal(mutedCb, 1, 'onAutoplayMuted must fire on a genuine autoplay rejection');
-  assert.equal(blockedCb, 0, 'muted retry plays fine');
+  await wait(BLOCK_AT + 500);
+  assert.equal(blockedCb, 1, 'the genuine rejection reaches the page as a block');
+  assert.equal(mutedCb, 0, 'not as a mute pill');
   ctl.destroy();
 });
 
-test('html5: play() resolves → no fallback, video keeps sound', async () => {
-  globalThis.__html5Scenario = { reject: null, playsAfterMs: 150 };
-  let mutedCb = 0, blockedCb = 0;
+test('html5: media error (NotSupportedError) must NOT be treated as an autoplay block', async () => {
+  globalThis.__html5Scenario = { reject: 'media' };
+  let mutedCb = 0, blockedCb = 0, errorCode = null;
   const ctl = await createPlayer(container, { source: { type: 'mp4', url: 'x' } }, {
     autoplay: true, onAutoplayMuted: () => mutedCb++, onAutoplayBlocked: () => blockedCb++,
+    onState: (s, code) => { if (s === 'error') errorCode = code; },
   });
-  await wait(1500);
-  assert.equal(mutedCb, 0);
-  assert.equal(blockedCb, 0);
-  assert.equal(globalThis.__muted, false);
-  ctl.destroy();
-});
-
-test('html5: media error (NotSupportedError) must NOT trigger the mute fallback', async () => {
-  globalThis.__html5Scenario = { reject: 'media' };
-  let mutedCb = 0, errorCode = null;
-  const ctl = await createPlayer(container, { source: { type: 'mp4', url: 'x' } }, {
-    autoplay: true, onAutoplayMuted: () => mutedCb++, onState: (s, code) => { if (s === 'error') errorCode = code; },
-  });
-  await wait(7500); // past the 6.6s safety net: a broken file must not get "recovered" by muting
-  assert.equal(mutedCb, 0, 'a broken media file is not an autoplay block — the error event is the only signal');
-  assert.equal(errorCode, 4, 'the media error must still reach the page');
+  await wait(7500); // well past the block window
+  assert.equal(blockedCb, 0, 'a broken file is not an autoplay block — the error event is the only signal');
+  assert.equal(mutedCb, 0, 'and it is never "recovered" by muting');
+  assert.equal(errorCode, 4, 'the media error still reaches the page');
   ctl.destroy();
 });

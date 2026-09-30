@@ -26,7 +26,7 @@ DB_CREATE=true npm start # creates the database if needed, applies migrations, s
 # or everything in containers (app + MySQL):
 docker compose up --build
 # or, no backend at all:
-python3 -m http.server 8080   # local mode: list/progress stored on the device
+python3 -m http.server 8080   # local mode: list/profiles on the device; watch history needs an account
 ```
 
 The server does not read `.env` by itself — export the variables or use `node --env-file=.env server/src/index.js` (Node 20.6+) / `docker compose`.

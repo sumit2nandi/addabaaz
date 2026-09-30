@@ -155,7 +155,8 @@ export default async function watch(ctx) {
       $('#unmutePill', ctx.root)?.remove(); $('#playPill', ctx.root)?.remove();
       ctl = await createPlayer(slot, media, {
         start, autoplay: true,
-        // The browser refused autoplay with sound (usual on phones), so the video runs muted: offer one tap to turn the sound on.
+        // The player still runs muted after main's unmute lifts (rare — the browser refused sound):
+        // offer one tap to turn the sound on.
         onAutoplayMuted: () => {
           if (dead || $('#unmutePill', ctx.root)) return;
           const b = document.createElement('button'); b.type = 'button'; b.id = 'unmutePill'; b.className = 'unmute-pill';

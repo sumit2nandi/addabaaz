@@ -163,7 +163,8 @@ export class User extends Emitter {
   /** "Because you watched …": shows in the genres of what this profile watched or liked, that it hasn't started yet. Computed on the device from the library. */
   recommendations(catalog, n = 12) {
     const seenShows = new Map();      // showId → weight
-    for (const [vid, p] of Object.entries(this.lib.progress)) { const v = catalog.video(vid); if (v?.showId && p.position >= CONFIG.resumeMinSeconds) seenShows.set(v.showId, Math.max(seenShows.get(v.showId) || 0, p.updatedAt || '1')); }
+    // Only signed-in accounts have watch history to seed from (guests: My List and likes still count).
+    if (this.account) for (const [vid, p] of Object.entries(this.lib.progress)) { const v = catalog.video(vid); if (v?.showId && p.position >= CONFIG.resumeMinSeconds) seenShows.set(v.showId, Math.max(seenShows.get(v.showId) || 0, p.updatedAt || '1')); }
     for (const it of this.lib.list) if (it.type === 'show') seenShows.set(it.id, seenShows.get(it.id) || it.addedAt || '1');
     for (const [k, v] of Object.entries(this.ratings)) { if (v > 0 && k.startsWith('show:')) seenShows.set(k.slice(5), seenShows.get(k.slice(5)) || 'z'); }
     const anchors = [...seenShows.entries()].filter(([id]) => catalog.show(id)).sort((a, b) => String(b[1]).localeCompare(String(a[1])));
@@ -201,8 +202,11 @@ export class User extends Emitter {
     return on;
   }
 
-  /* ---------- watch progress ---------- */
-  progressOf(videoId) { return this.lib.progress[videoId] || null; }
+  /* ---------- watch progress ----------
+   * Watch history (progress bars, resume, Continue Watching, "Because you watched") is maintained ONLY
+   * for a signed-in account. Guests / non-logged-in visitors never accumulate a history on the device:
+   * saveProgress() is a no-op for them and every read (progressOf/continueWatching/resume) comes back empty. */
+  progressOf(videoId) { return this.account ? this.lib.progress[videoId] || null : null; }
   fraction(videoId, fallbackDuration) {
     const p = this.progressOf(videoId); if (!p) return 0;
     const d = p.duration || fallbackDuration || 0;
@@ -210,6 +214,7 @@ export class User extends Emitter {
   }
   isFinished(videoId, fallbackDuration) { return this.fraction(videoId, fallbackDuration) >= CONFIG.watchedThreshold; }
   saveProgress(videoId, position, duration, { flush = false } = {}) {
+    if (!this.account) return;   // guest / signed-out: no history is maintained
     if (!this.activeId || !(position >= 0)) return;
     this.lib.progress[videoId] = { position: Math.floor(position), duration: Math.floor(duration || 0), updatedAt: new Date().toISOString() };
     this.#persistLib();
@@ -221,8 +226,9 @@ export class User extends Emitter {
     delete this.lib.progress[videoId]; this.#persistLib(); this.emit('library');
     if (this.activeId) this.adapter.clearProgress(this.activeId, videoId).catch(() => {});
   }
-  /** Videos partially watched, newest first. */
+  /** Videos partially watched, newest first. Signed-in accounts only — guests have no history. */
   continueWatching(catalog) {
+    if (!this.account) return [];
     return Object.entries(this.lib.progress)
       .map(([id, p]) => ({ video: catalog.video(id), p }))
       .filter(({ video, p }) => video && p.position >= CONFIG.resumeMinSeconds && !(p.duration && p.position / p.duration >= CONFIG.watchedThreshold))

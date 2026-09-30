@@ -120,6 +120,15 @@ export function enhanceRails(root) {
     const upd = () => { l.disabled = track.scrollLeft < 4; r.disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 4; wrap.classList.toggle('no-scroll', track.scrollWidth <= track.clientWidth + 4); };
     track.addEventListener('scroll', upd, { passive: true }); new ResizeObserver(upd).observe(track); upd();
   });
+  // main-style row rise (its setupRowAnimations): home rails animate from translateY(40px) to place
+  // the first time they scroll into view — the same motion main shows while the site loads.
+  const rows = [...root.querySelectorAll('.rails-lean .rail')].filter((r) => !r.classList.contains('in-view'));
+  if (!rows.length) return;
+  if (typeof IntersectionObserver !== 'function') { rows.forEach((r) => r.classList.add('in-view')); return; }
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in-view'); io.unobserve(e.target); }
+  }, { threshold: 0.06, rootMargin: '0px 0px -60px 0px' });
+  rows.forEach((r) => io.observe(r));
 }
 export function scrollRail(btn) {
   const track = btn.parentElement.querySelector('.rail-track');

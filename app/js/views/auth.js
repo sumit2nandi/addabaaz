@@ -18,6 +18,7 @@ export default async function auth(ctx) {
   ctx.root.innerHTML = html`<div class="auth-page">
     <a href="#/" class="auth-brand"><img src="media/icons/icon-96.png" width="56" height="56" alt=""><span class="brand-text"><b>ADDA</b><i>BAAZ</i></span></a>
     <form class="auth-card form" id="af" novalidate>
+      <button type="button" class="auth-close" id="authClose" aria-label="Close">${icon('x', { size: 16 })}</button>
       <h1>${signup ? 'Create your account' : 'Welcome back'}</h1>
       <p class="muted">${signup ? 'Sync My List and Continue Watching across all your devices.' : 'Sign in to pick up where you left off.'}</p>
       <div class="social" id="social" hidden></div>
@@ -50,6 +51,7 @@ export default async function auth(ctx) {
   });
 
   $('#pwt', ctx.root).addEventListener('click', () => { const i = $('[name=password]', ctx.root); i.type = i.type === 'password' ? 'text' : 'password'; });
+  $('#authClose', ctx.root).addEventListener('click', () => go(next));   // round × at the top-right corner closes the form
   $('#af', ctx.root).addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = new FormData(e.target); const st = $('#as', ctx.root), btn = $('#asub', ctx.root);

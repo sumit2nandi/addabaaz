@@ -67,9 +67,21 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
   };
 }
 
-// Last-resort embed with no API (no progress tracking).
+// Last-resort embed with no API (no progress tracking). Same trick as main's createVideoPlayer(): the
+// iframe loads with mute=1 (autoplay is then allowed instantly) and the mute is lifted through the
+// postMessage command API on the 600/1500/3000ms schedule, so it still starts with volume.
 function plainIframe(container, videoId, start, autoplay, muted, controls) {
   const o = httpOrigin();
-  container.innerHTML = `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=${autoplay ? 1 : 0}&mute=${muted ? 1 : 0}&controls=${controls ? 1 : 0}&playsinline=1&rel=0&modestbranding=1&start=${Math.floor(start)}${o ? '&origin=' + encodeURIComponent(o) : ''}" title="Video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
-  return { engine: 'iframe', mute() {}, unmute() {}, isMuted: () => false, time: () => 0, duration: () => 0, seek() {}, play() {}, pause() {}, destroy() { container.innerHTML = ''; } };
+  container.innerHTML = `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=${autoplay ? 1 : 0}&mute=${muted ? 1 : 0}&enablejsapi=1&controls=${controls ? 1 : 0}&playsinline=1&rel=0&modestbranding=1&start=${Math.floor(start)}${o ? '&origin=' + encodeURIComponent(o) : ''}" title="Video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+  const iframe = container.querySelector('iframe');
+  let isMuted = !!muted;
+  const cmd = (line) => { try { iframe?.contentWindow?.postMessage(line, '*'); } catch { /* frame already gone */ } };
+  return {
+    engine: 'iframe',
+    mute() { isMuted = true; cmd('{"event":"command","func":"mute","args":""}'); },
+    unmute() { isMuted = false; cmd('{"event":"command","func":"unMute","args":""}'); cmd('{"event":"command","func":"setVolume","args":"[100]"}'); },
+    isMuted: () => isMuted,
+    time: () => 0, duration: () => 0, seek() {}, play() {}, pause() {},
+    destroy() { container.innerHTML = ''; },
+  };
 }

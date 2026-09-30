@@ -22,7 +22,7 @@
 
 ## Key decisions
 
-- **Progressive enhancement of the backend.** On boot the app probes `GET {API_BASE}/api/v1/health`. If a compatible API answers, sign-in and cloud sync are enabled; otherwise it silently runs in *local mode* (profiles/list/progress on the device). The same code therefore runs on a free static host, on the Node server, and inside the mobile apps.
+- **Progressive enhancement of the backend.** On boot the app probes `GET {API_BASE}/api/v1/health`. If a compatible API answers, sign-in and cloud sync are enabled; otherwise it silently runs in *local mode* (profiles/list on the device — watch history is maintained only for signed-in accounts). The same code therefore runs on a free static host, on the Node server, and inside the mobile apps.
 - **Adapters, not conditionals.** `User` never knows where data lives; `LocalAdapter`/`RemoteAdapter` implement one interface (`data/adapters.js`). Adding Supabase/Firebase = one more adapter. While signed out the app keeps using the local adapter, and sign-up migrates the guest's list/progress into the new account.
 - **Optimistic writes.** UI state changes instantly; the adapter call follows (playback progress is sampled about every 5 s, debounced ~4 s before it is sent to the API, and flushed immediately on pause/end/leave).
 - **Player abstraction.** `players/index.js` exposes `createPlayer(container, video, opts)`; the engine is chosen from `video.source.type` (`youtube | mp4 | hls`). Moving titles to your own CDN is a data change, not a code change.

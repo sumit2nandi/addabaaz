@@ -231,7 +231,7 @@ API_BASE=off npm run build:www       # writes ./www  — upload the contents of 
 
 or, to just try it locally: `python3 -m http.server 8080` in the repo root (Windows: `npx serve -l 8080 .`) and open <http://localhost:8080>.
 
-In this mode the website falls back to "local mode": My List, progress and profiles live in the browser, and pages such as sign-in say accounts aren't enabled. To connect a static site to a separately hosted API instead, build with `API_BASE=https://api.example.com npm run build:www` (and add the site's address to the API's `CORS_ORIGINS`). Leaving `API_BASE` unset means "use the same origin, auto-detect".
+In this mode the website falls back to "local mode": My List and profiles live in the browser (watch history / Continue Watching is maintained only for signed-in accounts), and pages such as sign-in say accounts aren't enabled. To connect a static site to a separately hosted API instead, build with `API_BASE=https://api.example.com npm run build:www` (and add the site's address to the API's `CORS_ORIGINS`). Leaving `API_BASE` unset means "use the same origin, auto-detect".
 
 ---
 

@@ -1,4 +1,4 @@
-// Reels page (#/reels): a vertical, snap-scrolling feed where only the reel on screen plays (sound is muted until the viewer unmutes once).
+// Reels page (#/reels): a vertical, snap-scrolling feed where only the reel on screen plays (built muted for an instant start; main's unmute lifts bring the volume on).
 import { app } from '../app.js';
 import { html, $, $$, shareOrCopy } from '../util.js';
 import { icon } from '../icons.js';
@@ -78,7 +78,8 @@ export default async function reels(ctx) {
         autoplay: true, muted: !soundOn, controls: false,
         onEnded: () => sections[i + 1]?.scrollIntoView({ behavior: 'smooth' }),
         onState: (st) => { if (my !== token) return; if (st === 'playing') sec.classList.remove('paused'); else if (st === 'paused') sec.classList.add('paused'); },
-        // Phones refuse autoplay with sound: the reel runs muted, the sound button must say so,
+        // The player starts muted for instant motion and lifts the mute on main's 600/1500/3000ms
+        // schedule; if it is STILL muted by then, the reel runs muted, the sound button must say so,
         // and a one-time pill tells the viewer exactly how to get sound back.
         onAutoplayMuted: () => {
           if (my !== token) return;
