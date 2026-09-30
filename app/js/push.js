@@ -8,7 +8,13 @@ export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager'
 
 // The service worker registration owns the push subscription.
 const registration = async () => { const r = await navigator.serviceWorker.getRegistration(); return r || (await navigator.serviceWorker.ready); };
-async function currentSubscription() { try { return await (await registration()).pushManager.getSubscription(); } catch { return null; } }
+async function currentSubscription() {
+  // Native apps (and any browser without push) must never wait on `serviceWorker.ready` —
+  // the SW isn't registered there (main.js skips it under Capacitor), so `.ready` would hang
+  // forever and, with it, `detachPush()` → `user.signOut()` → the Sign out button.
+  if (!pushSupported()) return null;
+  try { return await (await registration()).pushManager.getSubscription(); } catch { return null; }
+}
 
 /** → { supported, enabled (server has VAPID keys), permission, subscribed, prefs } */
 export async function pushState() {

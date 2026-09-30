@@ -40,11 +40,11 @@ export default async function auth(ctx) {
     if (!$('#social', ctx.root)) return;                             // navigated away meanwhile
     const shown = mountSocialButtons($('#social', ctx.root), prov, {
       signup,
-      onError: (m) => { st0().textContent = m; },
+      onError: (m) => { st0().textContent = m; toast(m); },
       onCredential: async (provider, cred) => {
         st0().textContent = '';
         try { const r = await u.signInSocial(provider, cred); finish(r.isNew ? 'Welcome to ADDABAAZ!' : 'Signed in'); }
-        catch (err) { st0().textContent = err.message; }
+        catch (err) { st0().textContent = err.message; toast(err.message); }
       },
     });
     if (shown) { $('#social', ctx.root).hidden = false; $('#or', ctx.root).hidden = false; }

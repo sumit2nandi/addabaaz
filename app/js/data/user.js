@@ -95,7 +95,7 @@ export class User extends Emitter {
   // Sign out: detach push notifications, clear all in-memory state and fall back to the guest profile.
   async signOut() {
     try { if (this.account) await (await import('../push.js')).detachPush(); } catch { /* best effort */ }
-    await this.remote?.signOut();
+    try { await this.remote?.signOut(); } catch { /* the local sign-out below must happen regardless */ }
     this.pin = null; this.ratings = {};
     this.account = null; this.activeId = null; this.lib = { list: [], progress: {}, reminders: [] };
     sessionStorage.removeItem('ab.profileChosen'); localStorage.removeItem('ab.activeProfile');

@@ -55,7 +55,7 @@ export default async function account(ctx) {
   </div>`.s;
 
   extras.wire(ctx.root);
-  $('#signout', ctx.root)?.addEventListener('click', async () => { await u.signOut(); toast('Signed out'); go('/', { replace: true }); });
+  $('#signout', ctx.root)?.addEventListener('click', async () => { try { await u.signOut(); } catch { /* local state is already cleared */ } toast('Signed out'); go('/', { replace: true }); });
   $('#autoNext', ctx.root).addEventListener('change', (e) => u.setPref('autoplayNext', e.target.checked));
   $('#clearHist', ctx.root).addEventListener('click', async () => {
     if (await confirmDialog({ title: 'Clear watch history?', text: 'This removes Continue Watching for this profile.', confirm: 'Clear', danger: true })) { u.clearHistory(); toast('Watch history cleared'); }
