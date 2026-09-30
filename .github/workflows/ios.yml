@@ -1,0 +1,130 @@
+# Builds the iOS app in the cloud — same idea as the APK workflow, no Mac needed to compile.
+#
+# Without Apple signing secrets it produces a SIMULATOR build (zip containing App.app, runs only
+# in Xcode's Simulator). To get an installable iPhone .ipa, configure the four APPLE_* repository
+# secrets (Settings → Secrets and variables → Actions) — then the signed build runs too:
+#   APPLE_P12_BASE64       base64 of a Development .p12 (certificate + private key)
+#   APPLE_P12_PASSWORD     password of that .p12
+#   APPLE_PROFILE_BASE64   base64 of a Development provisioning profile for in.addabaaz.app
+#   APPLE_TEAM_ID          your Apple Developer Team ID
+name: iOS
+
+on:
+  push:
+    branches: [arena/01a0f2b3-addabaaz]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  API_BASE: https://addabaazott.onrender.com   # baked into www/app/env.js — the app talks to production
+
+jobs:
+  build:
+    name: Build iOS app
+    runs-on: macos-latest
+    env:
+      HAS_APPLE_CERT: ${{ secrets.APPLE_P12_BASE64 != '' && secrets.APPLE_PROFILE_BASE64 != '' && secrets.APPLE_TEAM_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # CocoaPods download cache only — never cache mobile/ios itself: `cap add ios` must create
+      # the project fresh every run and fails when the folder already exists.
+      - name: Cache CocoaPods downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: pods-${{ runner.os }}-${{ hashFiles('mobile/package.json') }}
+          restore-keys: pods-${{ runner.os }}-
+
+      - name: Build the web bundle (www/)
+        run: npm run build:www
+
+      - name: Install Capacitor tooling
+        run: npm install --prefix mobile
+
+      - name: Generate iOS project + icons/splash
+        run: |
+          npm --prefix mobile run add:ios    # cap add ios (mobile/ios is git-ignored, created fresh)
+          npm --prefix mobile run assets     # icons + splash from resources/ (website logo)
+
+      - name: Sync www/ into the iOS project
+        run: npm --prefix mobile run sync    # cap sync + pod install + android patches (no-op here)
+
+      - name: Build (Simulator)
+        run: |
+          xcodebuild -workspace mobile/ios/App/App.xcworkspace -scheme App \
+            -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" build CODE_SIGNING_ALLOWED=NO
+          (cd "$RUNNER_TEMP/dd/Build/Products/Debug-iphonesimulator" && zip -qry "$GITHUB_WORKSPACE/addabaaz-ios-simulator.zip" App.app)
+
+      - name: Upload Simulator build
+        uses: actions/upload-artifact@v4
+        with:
+          name: addabaaz-ios-simulator
+          path: addabaaz-ios-simulator.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      # ---- Signed iPhone .ipa: runs only when the APPLE_* secrets are configured (see header). ----
+      - name: Build signed .ipa (iPhone)
+        if: env.HAS_APPLE_CERT == 'true'
+        env:
+          APPLE_P12_BASE64: ${{ secrets.APPLE_P12_BASE64 }}
+          APPLE_P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
+          APPLE_PROFILE_BASE64: ${{ secrets.APPLE_PROFILE_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          KC="$RUNNER_TEMP/ci.keychain-db"; KCPASS="ci-$RANDOM-$RANDOM"
+          security create-keychain -p "$KCPASS" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KCPASS" "$KC"
+          security list-keychains -d user -s "$KC" login.keychain
+          echo "$APPLE_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$APPLE_P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -k "$KCPASS" "$KC" > /dev/null
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILE_DIR"
+          echo "$APPLE_PROFILE_BASE64" | base64 --decode > "$PROFILE_DIR/in.addabaaz.app.mobileprovision"
+          UUID=$(security cms -D -i "$PROFILE_DIR/in.addabaaz.app.mobileprovision" | plutil -extract UUID raw -)
+          printf '%s\n' \
+            '<?xml version="1.0" encoding="UTF-8"?>' \
+            '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+            '<plist version="1.0">' \
+            '<dict>' \
+            '  <key>method</key><string>development</string>' \
+            "  <key>teamID</key><string>${APPLE_TEAM_ID}</string>" \
+            '  <key>signingStyle</key><string>manual</string>' \
+            '  <key>signingCertificate</key><string>Apple Development</string>' \
+            '  <key>provisioningProfiles</key>' \
+            '  <dict>' \
+            "    <key>in.addabaaz.app</key><string>${UUID}</string>" \
+            '  </dict>' \
+            '</dict>' \
+            '</plist>' > "$RUNNER_TEMP/ExportOptions.plist"
+          xcodebuild -workspace mobile/ios/App/App.xcworkspace -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            archive CODE_SIGNING_ALLOWED=NO
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Upload iPhone .ipa
+        if: env.HAS_APPLE_CERT == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: addabaaz-ios-ipa
+          path: ${{ runner.temp }}/export/*.ipa
+          if-no-files-found: error
+          retention-days: 14

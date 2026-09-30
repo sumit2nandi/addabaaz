@@ -26,6 +26,15 @@ npm run open:android                 # or open:ios
 
 Each later release: `npm run mobile:sync` from the repo root, then build/run from Android Studio / Xcode. `mobile/android` and `mobile/ios` are git-ignored by default — remove those lines from `.gitignore` if you want to commit the native projects (recommended once you add signing config / custom native code).
 
+## Cloud builds (no laptop)
+
+GitHub Actions builds both apps from this branch — no local toolchain needed:
+
+- **Android** (`.github/workflows/apk.yml`): every push produces an installable debug APK — Actions run → Artifacts → `addabaaz-debug-apk`. It signs with the pinned `mobile/debug.keystore`, so the Google SHA-1 allowlisting (see [AUTH.md](AUTH.md)) never goes stale.
+- **iOS** (`.github/workflows/ios.yml`): every push produces `addabaaz-ios-simulator` (a zip with `App.app` for Xcode's Simulator). To also get an installable `addabaaz-ios-ipa`, set the four `APPLE_*` repository secrets listed in the workflow header (Development .p12 + password, provisioning profile for `in.addabaaz.app`, Team ID).
+
+The manual toolchain above stays useful for day-to-day native debugging (`open:android` / `open:ios`).
+
 ## Configuration checklist
 
 1. **`mobile/capacitor.config.json`** — `appId` (`in.addabaaz.app`, change if you own a different reverse-DNS id) and `server.hostname`. The app is served from `https://<hostname>` inside the WebView; pick a hostname you control that isn't used by a live site. YouTube's embedded player rejects `capacitor://` / `file://` origins (error 153), which is why `androidScheme`/`iosScheme` are `https`.
