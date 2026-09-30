@@ -18,11 +18,11 @@ const AUTOPLAY_WAIT_MS = 2200;
  *  onAutoplayMuted() - autoplay with sound was blocked, so we restarted it muted (show a "tap to unmute" hint),
  *  onAutoplayBlocked() - even muted playback did not start (Low Power Mode etc.); the viewer has to tap play. */
 export async function createPlayer(container, video, opts = {}) {
-  let playing = false, gone = false, preMuted = false;
-  // Chrome can tell us up front that the viewer has not touched the page yet (deep link, reload): sound autoplay is certain to be blocked, so go straight to muted.
-  if (opts.autoplay !== false && !opts.muted && navigator.userActivation && !navigator.userActivation.hasBeenActive) { opts = { ...opts, muted: true }; preMuted = true; }
+  let playing = false, gone = false;
+  // REMOVED: Forced mute based on userActivation.hasBeenActive.
+  // Let the browser decide. If it blocks autoplay with sound, onAutoplayMuted will fire.
   const timers = [];
-  const wrapped = { ...opts, onState: (s, code) => { if (s === 'playing' || s === 'buffering') playing = true; /* buffering = the browser did start it, just slowly */ opts.onState?.(s, code); } };
+  const wrapped = { ...opts, onState: (s, code) => { if (s === 'playing' || s === 'buffering') playing = true; opts.onState?.(s, code); } };
   const src = video.source || {};
   let ctl;
   if (src.type === 'youtube') ctl = await createYouTubePlayer(container, src.id, wrapped);
@@ -43,7 +43,6 @@ export async function createPlayer(container, video, opts = {}) {
   } else if (opts.autoplay !== false) {
     timers.push(setTimeout(() => { if (!gone && !playing) opts.onAutoplayBlocked?.(); }, AUTOPLAY_WAIT_MS * 1.5));
   }
-  if (preMuted) queueMicrotask(() => { if (!gone) opts.onAutoplayMuted?.(); });
   const destroy = ctl.destroy;
   ctl.destroy = () => { gone = true; timers.forEach(clearTimeout); destroy(); };
   return ctl;

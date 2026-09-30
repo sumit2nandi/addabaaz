@@ -60,16 +60,20 @@ export default async function reels(ctx) {
       if (my !== token) { c.destroy(); h.remove(); return; }
       ctl = c; host = h; sec.classList.add('playing');
     } catch (e) {
-      h.remove(); console.warn(e);
+      h.remove(); console.warn('[Reels] Error:', e);
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       const locked = e?.status === 401 || e?.status === 402;
-      const autoplayBlocked = isMobile && (e?.name === 'NotAllowedError' || e?.message?.includes('autoplay') || e?.message?.includes('play'));
-      if (autoplayBlocked) {
+      const isAutoplayError = e?.name === 'NotAllowedError' || 
+        e?.message?.includes('autoplay') || 
+        e?.message?.includes('play') ||
+        e?.message?.includes('Autoplay') ||
+        e?.name === 'AbortError';
+      if (isMobile && isAutoplayError) {
         toast('Tap the video to play — autoplay blocked on this browser');
         sec.classList.add('paused');
         return;
       }
-      toast(e?.status === 401 ? 'Sign in to watch this premium reel.' : e?.status === 402 ? 'This reel needs an active plan.' : 'Could not load this reel.');
+      toast(e?.status === 401 ? 'Sign in to watch this premium reel.' : e?.status === 402 ? 'This reel needs an active plan.' : 'Could not load this reel. Check connection.');
       if (locked) sec.classList.add('paused');
     }
   }
