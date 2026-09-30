@@ -135,4 +135,10 @@ export class Router {
 const siteOrigin = () => { try { return new URL(document.querySelector('link[rel="canonical"]')?.href || location.href).origin; } catch { return location.origin; } };
 
 const notFound = () => html`<div class="empty">${icon('film', { size: 44 })}<h2>Scene not found</h2><p>The page you're looking for doesn't exist.</p><a class="btn btn-primary" href="#/">Back to home</a></div>`.s;
-const errorView = (err) => html`<div class="empty">${icon('wifioff', { size: 44 })}<h2>Something went wrong</h2><p>${err?.message || 'Please check your connection and try again.'}</p><button class="btn btn-primary" onclick="location.reload()">Reload</button></div>`.s;
+// A view module that cannot be fetched (deploy in progress, stale page after an update…) is almost always
+// cured by a reload — say so instead of showing the browser's cryptic "Failed to fetch dynamically imported module".
+const errorView = (err) => {
+  const moduleLoad = /dynamically imported|module script failed|error loading dynamically/i.test(String(err?.message || ''));
+  const msg = moduleLoad ? 'This page did not load completely — a reload usually fixes it (the app may have just been updated).' : err?.message || 'Please check your connection and try again.';
+  return html`<div class="empty">${icon('wifioff', { size: 44 })}<h2>Something went wrong</h2><p>${msg}</p><button class="btn btn-primary" onclick="location.reload()">Reload</button></div>`.s;
+};
