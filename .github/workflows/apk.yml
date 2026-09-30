@@ -1,0 +1,85 @@
+# Builds the Android APK in the cloud — no laptop required.
+# Every push to this branch (or a manual run from the Actions tab, which works
+# from a phone too) produces an installable debug APK as a run Artifact:
+#   Actions → APK run → Artifacts → addabaaz-debug-apk (zip) → app-debug.apk
+name: APK
+
+on:
+  push:
+    branches: [arena/01a0f2b3-addabaaz]
+  workflow_dispatch:                      # "Run workflow" button in the Actions tab
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true                # a newer push replaces an in-flight build
+
+env:
+  API_BASE: https://addabaazott.onrender.com   # baked into www/app/env.js — the app talks to production
+
+jobs:
+  build:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm                      # root lockfile; the script below needs no deps anyway
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'              # required by AGP 8.9.1 (see mobile/scripts/patch-android.mjs)
+
+      # Bakes API_BASE into www/app/env.js and stamps sw.js. Uses only Node built-ins + git,
+      # so no `npm ci` is needed at the repo root for this step.
+      - name: Build the web bundle (www/)
+        run: npm run build:www
+
+      - name: Install Capacitor tooling
+        run: npm install --prefix mobile
+
+      # Order matters: the Android project must exist before icons/splash can be written
+      # into it, and www/ must exist before `cap sync`.
+      - name: Generate Android project + icons
+        run: |
+          npm --prefix mobile run add:android   # cap add android, then raise AGP -> 8.9.1 / SDK -> 36
+          npm --prefix mobile run assets        # icons + splash from resources/
+
+      # Direct `npm --prefix mobile run sync` on purpose: the repo-root `mobile:sync` script
+      # rebuilds www/ WITHOUT API_BASE and would silently ship a local-mode APK.
+      - name: Sync www/ into the Android project
+        run: npm --prefix mobile run sync       # cap sync, then re-run the AGP/SDK patch
+
+      - name: Ensure Android SDK 36 is installed
+        run: |
+          SDKMANAGER="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER=sdkmanager
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Assemble debug APK
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: addabaaz-debug-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
