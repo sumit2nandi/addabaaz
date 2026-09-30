@@ -18,9 +18,9 @@ const AUTOPLAY_WAIT_MS = 2200;
  *  onAutoplayMuted() - autoplay with sound was blocked, so we restarted it muted (show a "tap to unmute" hint),
  *  onAutoplayBlocked() - even muted playback did not start (Low Power Mode etc.); the viewer has to tap play. */
 export async function createPlayer(container, video, opts = {}) {
-  let playing = false, gone = false, fellBack = false;
+  let playing = false, gone = false, fellBack = false, errored = false;
   const timers = [];
-  const wrapped = { ...opts, onState: (s, code) => { if (s === 'playing' || s === 'buffering') playing = true; /* buffering = the browser did start it, just slowly */ opts.onState?.(s, code); } };
+  const wrapped = { ...opts, onState: (s, code) => { if (s === 'playing' || s === 'buffering') playing = true; else if (s === 'error') errored = true; /* buffering = the browser did start it, just slowly; errored = a mute "recovery" would be pointless */ opts.onState?.(s, code); } };
   const src = video.source || {};
   let ctl;
   if (src.type === 'youtube') ctl = await createYouTubePlayer(container, src.id, wrapped);
@@ -33,7 +33,7 @@ export async function createPlayer(container, video, opts = {}) {
    * button. We must NOT do this merely because the video is slow to load — that used to mute perfectly good
    * sound-autoplay on mobile networks. */
   const startMuted = () => {
-    if (gone || playing || fellBack) return;
+    if (gone || playing || fellBack || errored) return;   // a broken file is not an autoplay block: the page shows the error instead
     fellBack = true;
     try { ctl.mute(); Promise.resolve(ctl.play()).catch(() => {}); } catch { /* player already gone */ }
     opts.onAutoplayMuted?.();
