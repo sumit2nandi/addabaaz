@@ -57,16 +57,12 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
     navigator.mediaSession.setActionHandler('seekbackward', () => { v.currentTime = Math.max(0, v.currentTime - 10); });
     navigator.mediaSession.setActionHandler('seekforward', () => { v.currentTime += 10; });
   }
-  // The play() promise is the definitive signal for an autoplay-with-sound block: it rejects with
-  // NotAllowedError when the browser refuses, and only rejects (media error) when the file itself is broken.
-  let playPromise = null;
-  if (autoplay) { playPromise = v.play(); playPromise.catch(() => { /* needs a tap – native controls are visible */ }); }
+  if (autoplay) v.play().catch(() => { /* needs a tap – native controls are visible */ });
   await Promise.race([subs, new Promise((r) => setTimeout(r, 1500))]);   // give small subtitle files a moment so the first cue isn't missed
   // Casting support: Remote Playback API where available, AirPlay on Safari.
   const remote = v.remote, airplay = typeof v.webkitShowPlaybackTargetPicker === 'function';
   return {
     engine: type,
-    playPromise, // initial play() attempt: rejects with NotAllowedError if autoplay-with-sound was blocked
     /** Chromecast/Android/Edge via the Remote Playback API, AirPlay on Safari. false when neither exists. */
     castSupported: () => !!(remote?.prompt || airplay),
     cast: async () => { if (remote?.prompt) await remote.prompt(); else if (airplay) v.webkitShowPlaybackTargetPicker(); },

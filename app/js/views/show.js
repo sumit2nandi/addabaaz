@@ -5,8 +5,8 @@ import { html, $, fmtDuration, fmtViews, fmtDate, timeAgo, fmtRuntime } from '..
 import { icon } from '../icons.js';
 import { rail, enhanceRails, showCard, videoCard, reelCard, listBtn, img, heroBg, showMeta, toast } from '../ui/components.js';
 import { shareOrCopy } from '../util.js';
+import { mountRating } from './engage.js';
 import { shareUrl } from '../platform.js';
-// mountRating removed: like/dislike removed from the show page per requirement
 
 // One episode row (shared with the watch page's side list).
 export function epRow(v, { current = false } = {}) {
@@ -48,6 +48,7 @@ export default async function showView(ctx) {
             ${t ? html`<a class="btn btn-primary btn-lg" href="#/watch/${t.video.id}">${icon('play', { size: 20 })} ${label}</a>` : ''}
             ${trailer ? html`<a class="btn btn-glass btn-lg" href="#/watch/${trailer.id}">${icon('film', { size: 20 })} Trailer</a>` : ''}
             ${listBtn('show', s.id, { cls: 'btn btn-glass btn-lg' })}
+            <span id="rateBox" class="rate-box glass"></span>
             <button type="button" class="btn btn-glass btn-lg icon-only" id="shareBtn" aria-label="Share">${icon('share', { size: 20 })}</button>
           </div>
           <dl class="facts">
@@ -70,6 +71,7 @@ export default async function showView(ctx) {
     </div>`.s;
 
   enhanceRails(ctx.root);
+  mountRating($('#rateBox', ctx.root), { type: 'show', id: s.id, label: s.titleEn || s.title });
   let order = 'asc';
   $('#sortEps', ctx.root)?.addEventListener('click', (e) => {
     order = order === 'asc' ? 'desc' : 'asc';

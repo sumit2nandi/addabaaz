@@ -116,7 +116,9 @@ function installPrompt() {
 // Offline support. Skipped inside native apps and on non-http(s) pages.
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator) || window.Capacitor || !/^https?:$/.test(location.protocol)) return;
-  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('[sw]', e));
+  // updateViaCache: 'none' — update checks always go straight to the network, so a version bump
+  // (sw.js VERSION) reaches users behind proxies/CDNs that ignore Cache-Control.
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch((e) => console.warn('[sw]', e));
 }
 
 // Last resort: show a message instead of a blank page.
