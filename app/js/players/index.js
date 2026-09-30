@@ -40,11 +40,18 @@ export async function createPlayer(container, video, opts = {}) {
     timers.push(setTimeout(() => { if (!gone && !playing) opts.onAutoplayBlocked?.(); }, AUTOPLAY_WAIT_MS));
   };
 
+  // Chrome/Firefox/Safari all refuse autoplay-with-sound until the user has interacted with the page.
+  // `hasBeenActive` tells us that up front (deep link / reload): skip the wait and go straight to muted.
+  const noActivation = !!(navigator.userActivation && !navigator.userActivation.hasBeenActive);
+
   if (ctl.engine === 'iframe') { /* plain-iframe fallback has no state events to watch */ }
   else if (opts.autoplay === false) { /* viewer asked for no autoplay: nothing to recover from */ }
   else if (opts.muted) {
     // Started muted on purpose: only detect a total block (Low Power Mode, data saver…).
     timers.push(setTimeout(() => { if (!gone && !playing) opts.onAutoplayBlocked?.(); }, AUTOPLAY_WAIT_MS * 1.5));
+  } else if (noActivation) {
+    // No gesture on this page yet → sound autoplay is certain to be blocked → start muted right away.
+    startMuted();
   } else if (ctl.playPromise) {
     // HTML5: the initial play() promise is the definitive signal — it rejects with NotAllowedError exactly when
     // autoplay-with-sound is blocked. Nothing else (slow network, cold cache) may trigger the mute fallback.
