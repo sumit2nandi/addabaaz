@@ -6,7 +6,7 @@ import { createPlayer } from '../players/index.js';
 import { img, toast } from '../ui/components.js';
 import { shareUrl } from '../platform.js';
 
-let soundOn = false;   // sticky: once the viewer unmutes, later reels start with sound
+let soundOn = true;   // sticky: once the viewer unmutes, later reels start with sound
 
 export default async function reels(ctx) {
   const cat = app.catalog;
@@ -61,7 +61,14 @@ export default async function reels(ctx) {
       ctl = c; host = h; sec.classList.add('playing');
     } catch (e) {
       h.remove(); console.warn(e);
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       const locked = e?.status === 401 || e?.status === 402;
+      const autoplayBlocked = isMobile && (e?.name === 'NotAllowedError' || e?.message?.includes('autoplay') || e?.message?.includes('play'));
+      if (autoplayBlocked) {
+        toast('Tap the video to play — autoplay blocked on this browser');
+        sec.classList.add('paused');
+        return;
+      }
       toast(e?.status === 401 ? 'Sign in to watch this premium reel.' : e?.status === 402 ? 'This reel needs an active plan.' : 'Could not load this reel.');
       if (locked) sec.classList.add('paused');
     }
