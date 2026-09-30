@@ -20,7 +20,7 @@ function setActivation(active) {
 }
 
 beforeEach(() => {
-  globalThis.__ytScenario = null; globalThis.__html5Scenario = null; globalThis.__muted = false;
+  globalThis.__ytScenario = null; globalThis.__html5Scenario = null; globalThis.__muted = false; globalThis.__createdMuted = false;
   setActivation(true);   // default: the user HAS interacted with the page
 });
 
@@ -66,22 +66,39 @@ test('youtube: muted playback also blocked (Low Power Mode) → onAutoplayBlocke
   ctl.destroy();
 });
 
-test('youtube on a touch device: blocked sound → muted fallback starts in ~2.7s, not ~5s (phone autostart "very late" fix)', async () => {
+test('youtube on a touch device: player is built muted-autoplay at once — motion starts as soon as the embed is ready (no seconds of dead wait)', async () => {
   const prevMM = globalThis.matchMedia;
   globalThis.matchMedia = (q) => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
   try {
-    globalThis.__ytScenario = { startState: 5, delayToPlayMs: null, playsWithSound: false, mutedPlays: true };
+    // The embed autoplays by itself once it may (muted is always allowed) — modelled by the delayed play.
+    globalThis.__ytScenario = { startState: 5, delayToPlayMs: 300, playsWithSound: true };
     let mutedCb = 0, blockedCb = 0; const t0 = Date.now(); let mutedAt = -1;
     const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
       autoplay: true,
       onAutoplayMuted: () => { mutedCb++; mutedAt = Date.now() - t0; },
       onAutoplayBlocked: () => blockedCb++,
     });
-    await wait(3500);
-    assert.equal(mutedCb, 1, 'muted fallback must fire on touch devices too');
-    assert.ok(mutedAt >= 2000 && mutedAt < 3200, `touch fallback should land ~2.7s (got ${mutedAt}ms) — the 5s desktop wait is what made phones start "very late"`);
-    await wait(2500);
-    assert.equal(blockedCb, 0, 'muted playback succeeded → no blocked callback');
+    assert.equal(mutedCb, 1, 'the page is told once to show its tap-for-sound affordance');
+    assert.ok(mutedAt >= 0 && mutedAt < 300, `muted start is announced immediately (got ${mutedAt}ms), not after a multi-second sound-first attempt`);
+    assert.equal(globalThis.__createdMuted, true, 'the player itself is built muted (autoplay=1&mute=1) — nothing to discover or poll for');
+    await wait(4000);
+    assert.equal(blockedCb, 0, 'the muted embed played: no blocked callback');
+    ctl.destroy();
+  } finally { if (prevMM === undefined) delete globalThis.matchMedia; else globalThis.matchMedia = prevMM; }
+});
+
+test('youtube on a touch device: even muted playback refused (Low Power Mode) → blocked callback for the tap-to-play affordance', async () => {
+  const prevMM = globalThis.matchMedia;
+  globalThis.matchMedia = (q) => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+  try {
+    globalThis.__ytScenario = { startState: 5, delayToPlayMs: null, playsWithSound: false, mutedPlays: false };
+    let mutedCb = 0, blockedCb = 0;
+    const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
+      autoplay: true, onAutoplayMuted: () => mutedCb++, onAutoplayBlocked: () => blockedCb++,
+    });
+    assert.equal(mutedCb, 1);
+    await wait(5000);
+    assert.equal(blockedCb, 1, 'a totally blocked device still gets the blocked signal so the page can offer one tap');
     ctl.destroy();
   } finally { if (prevMM === undefined) delete globalThis.matchMedia; else globalThis.matchMedia = prevMM; }
 });

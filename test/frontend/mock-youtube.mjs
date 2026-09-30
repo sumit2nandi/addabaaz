@@ -5,6 +5,7 @@
 // - playsWithSound: if true and autoplay allowed, it will actually start; otherwise it stays cued
 export function createYouTubePlayer(container, videoId, opts) {
   const sc = globalThis.__ytScenario || { startState: 5, delayToPlayMs: null, playsWithSound: false };
+  globalThis.__createdMuted = !!opts.muted;   // records whether the adapter built the player muted (instant phone path)
   let state = sc.startState;
   let destroyed = false;
   const timers = [];

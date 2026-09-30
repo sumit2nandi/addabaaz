@@ -32,10 +32,19 @@ export async function createPlayer(container, video, opts = {}) {
   const timers = [];
   const wrapped = { ...opts, onState: (s, code) => { if (s === 'playing' || s === 'buffering') playing = true; else if (s === 'error') errored = true; /* buffering = the browser did start it, just slowly; errored = a mute "recovery" would be pointless */ opts.onState?.(s, code); } };
   const src = video.source || {};
+  /* Phones: build the player MUTED with autoplay from the first frame instead of trying sound first and
+   * discovering the refusal seconds later (API ready → sound attempt → poll → muted restart ≈ 2.5–5s of dead
+   * screen). Muted autoplay is allowed everywhere, so motion starts the moment the embed is ready — the same
+   * instant behaviour as an `autoplay=1&mute=1` plain embed. The page's unmute pill is shown immediately
+   * (one tap gives sound; the tap is the gesture the browser was waiting for). Desktop keeps sound-first. */
+  const touchMuted = coarseTouch() && opts.autoplay !== false && !opts.muted;
+  const effectiveMuted = !!opts.muted || touchMuted;
+  const playerOpts = touchMuted ? { ...wrapped, muted: true } : wrapped;
   let ctl;
-  if (src.type === 'youtube') ctl = await createYouTubePlayer(container, src.id, wrapped);
-  else if (src.type === 'mp4' || src.type === 'hls') ctl = await createHtml5Player(container, video, wrapped);
+  if (src.type === 'youtube') ctl = await createYouTubePlayer(container, src.id, playerOpts);
+  else if (src.type === 'mp4' || src.type === 'hls') ctl = await createHtml5Player(container, video, playerOpts);
   else throw new Error('Unsupported source type: ' + src.type);
+  if (touchMuted) opts.onAutoplayMuted?.();   // tells the page to show its "tap for sound" affordance now
 
   /* Mobile browsers (Chrome Android, iOS Safari) only allow autoplay WITH sound after a gesture, and the player is
    * created asynchronously, so that permission is often gone. Standard remedy: if the browser actually refused sound
@@ -56,8 +65,9 @@ export async function createPlayer(container, video, opts = {}) {
 
   if (ctl.engine === 'iframe') { /* plain-iframe fallback has no state events to watch */ }
   else if (opts.autoplay === false) { /* viewer asked for no autoplay: nothing to recover from */ }
-  else if (opts.muted) {
-    // Started muted on purpose: only detect a total block (Low Power Mode, data saver…).
+  else if (effectiveMuted) {
+    // Started muted on purpose (viewer choice, or the instant phone path above): only detect a total block
+    // (Low Power Mode, data saver…). If muted playback can run at all, motion starts on its own.
     timers.push(setTimeout(() => { if (!gone && !playing) opts.onAutoplayBlocked?.(); }, AUTOPLAY_WAIT_MS * 1.5));
   } else if (noActivation) {
     // No gesture on this page yet → sound autoplay is certain to be blocked → start muted right away.
