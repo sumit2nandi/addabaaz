@@ -52,8 +52,8 @@ ul { margin: 0; padding: 0; list-style: none; }
 #view { padding-top: 0; }
 body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) #view { padding-top: calc(var(--topbar-h) + var(--sat)); }
 .brand { display: flex; align-items: center; gap: 10px; flex: none; }
-.brand img { border-radius: 50%; }
-.brand-text { font-weight: 800; font-size: 19px; letter-spacing: 1.6px; text-transform: uppercase; white-space: nowrap; line-height: 1; display: inline-flex; }
+.brand img { border-radius: 50%; transition: transform .25s var(--ease); }
+.brand-text { font-weight: 800; font-size: 19px; letter-spacing: 1.6px; text-transform: uppercase; white-space: nowrap; line-height: 1; display: inline-flex; transition: filter .25s ease; }
 .brand-text b { font-weight: 800; background: linear-gradient(180deg, #fff, #a8a8b4); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .brand-text i { font-style: normal; color: var(--accent); }
 .nav { display: none; align-items: center; gap: 22px; }
@@ -126,8 +126,10 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .hero-shade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(5,5,5,.94) 0%, rgba(5,5,5,.7) 38%, rgba(5,5,5,.15) 75%), linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.5) 22%, rgba(5,5,5,0) 50%), linear-gradient(180deg, rgba(5,5,5,.8), rgba(5,5,5,0) 22%); }
 .hero-inner { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; padding: calc(var(--topbar-h) + var(--sat) + 40px) var(--pad) 72px; }
 .hero-copy { max-width: 620px; display: grid; gap: 14px; }
-.hero-title { font-size: clamp(34px, 6vw, 64px); font-weight: 800; line-height: 1.05; text-shadow: 0 4px 30px rgba(0,0,0,.6); }
-.hero-title.bn { font-weight: 400; }
+/* Uniform across every slide: same stack for all titles — Latin glyphs take the display sans, Bengali glyphs
+ * fall back to Tiro Bangla in the SAME weight (the old .bn override rendered Bengali titles serif + thin,
+ * looking like a completely different banner on Bengali-titled shows). */
+.hero-title { font-family: var(--font), 'Tiro Bangla', 'Noto Sans Bengali', sans-serif; font-size: clamp(34px, 6vw, 64px); font-weight: 800; line-height: 1.05; text-shadow: 0 4px 30px rgba(0,0,0,.6); }
 .hero-title-en { font-size: 16px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-2); font-weight: 700; margin-top: -6px; }
 .hero-desc { color: var(--text-2); font-size: 15.5px; max-width: 56ch; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .tagline { color: var(--gold); font-size: 18px; }
@@ -184,6 +186,9 @@ img.img-failed { opacity: 0; }
   .card:hover .poster, .card:hover .thumb { box-shadow: 0 16px 40px rgba(0,0,0,.65), 0 0 0 1px var(--border-2); }
   .card:hover img { transform: scale(1.05); }
   .card:hover .play-overlay { opacity: 1; transform: none; }
+  /* Brand hover from the old site (dropped in the rebuild; restored): logo lifts, wordmark brightens+glows. */
+  .brand:hover img { transform: translateY(-2px) scale(1.04); }
+  .brand:hover .brand-text { filter: brightness(1.15) drop-shadow(0 0 6px rgba(229, 9, 20, .35)); }
 }
 .play-overlay { position: absolute; inset: 0; margin: auto; width: 52px; height: 52px; display: grid; place-items: center; border-radius: 50%; background: rgba(229,9,20,.92); color: #fff; opacity: 0; transform: scale(.8); transition: .25s var(--ease); padding-left: 3px; }
 .card-quick { position: absolute; top: 8px; right: 8px; opacity: 0; transition: opacity .2s; } .card-quick .icon-btn { width: 36px; height: 36px; background: rgba(0,0,0,.65); border: 1px solid var(--border-2); }
@@ -219,9 +224,11 @@ img.img-failed { opacity: 0; }
   .grid-reels { grid-template-columns: repeat(3, 1fr); }          /* reels grids on phones: 3 across */
   .card-reel .card-title { font-size: 12px; }
 }
-/* Home rails stay lean: just the title in small type, no show-name/views/date meta. */
+/* Home rails stay lean: just the title in small type, no show-name/views/date meta.
+ * Titles never wrap past one line — overflow truncates with an ellipsis ('…') like the old catalog rows. */
 .rails-lean .card-video .card-meta, .rails-lean .card-reel .card-meta { display: none; }
 .rails-lean .card-video .card-title { font-size: 13px; }
+.rails-lean .card-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rail-arrow { position: absolute; top: 8px; bottom: 14px; width: 54px; z-index: 5; border: 0; color: #fff; display: none; place-items: center; opacity: 0; transition: opacity .2s; }
 .rail-arrow.left { left: 0; background: linear-gradient(90deg, rgba(5,5,5,.9), transparent); } .rail-arrow.right { right: 0; background: linear-gradient(270deg, rgba(5,5,5,.9), transparent); }
 .rail-arrow[disabled] { display: none !important; }
@@ -352,6 +359,8 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
   .topbar { gap: 12px; } .brand-text { font-size: 17px; } #installBtn { display: none !important; }
   .hero { min-height: 74vh; min-height: 74svh; } .hero-inner { padding-bottom: 60px; } .hero-desc { -webkit-line-clamp: 3; font-size: 14.5px; }
   .hero-actions .btn-lg { padding: 11px 18px; font-size: 15px; } .hero-actions .btn-glass:last-child { display: none; }
+  /* The "Have a story to tell? / Start a project" band is for producers finding us on desktop — drop it on phones. */
+  .cta-band { display: none; }
 }
 @media (max-width: 759px) {
   .hero-bg img { object-position: center 15%; }

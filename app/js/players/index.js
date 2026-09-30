@@ -24,21 +24,38 @@ const coarseTouch = () => {
   return (typeof navigator !== 'undefined' && navigator.maxTouchPoints || 0) > 1;
 };
 
+/* Per-device learned autoplay policy. Browsers allow autoplay WITH sound only after the viewer has engaged
+ * with the site enough (Chrome's Media Engagement Index, Safari's similar heuristic) — so "always try sound
+ * first" wastes 2–3s on phones where it can never work, while "always start muted" punishes phones where it
+ * works fine. First play(s): attempt sound and learn the outcome ('1' = sound worked here, '0' = refused).
+ * Once a refusal was seen, later plays skip the doomed attempt and start muted instantly with the unmute pill.
+ * '1' is only written the first time; '0' always overwrites (policy can tighten, e.g. after a reload profile). */
+const SOUND_KEY = 'addabaaz.autoplaySound';
+const soundLearned = () => { try { return localStorage.getItem(SOUND_KEY); } catch { return null; } };
+const learnSound = (v, { force = false } = {}) => { try { if (force || soundLearned() == null) localStorage.setItem(SOUND_KEY, v); } catch { /* storage unavailable (private mode) */ } };
+
 /** Options (all optional): start, autoplay, muted, controls (false for reels), onProgress, onEnded, onState,
  *  onAutoplayMuted() - autoplay with sound was blocked, so we restarted it muted (show a "tap to unmute" hint),
  *  onAutoplayBlocked() - even muted playback did not start (Low Power Mode etc.); the viewer has to tap play. */
 export async function createPlayer(container, video, opts = {}) {
   let playing = false, gone = false, fellBack = false, errored = false;
   const timers = [];
-  const wrapped = { ...opts, onState: (s, code) => { if (s === 'playing' || s === 'buffering') playing = true; else if (s === 'error') errored = true; /* buffering = the browser did start it, just slowly; errored = a mute "recovery" would be pointless */ opts.onState?.(s, code); } };
   const src = video.source || {};
-  /* Phones: build the player MUTED with autoplay from the first frame instead of trying sound first and
-   * discovering the refusal seconds later (API ready → sound attempt → poll → muted restart ≈ 2.5–5s of dead
-   * screen). Muted autoplay is allowed everywhere, so motion starts the moment the embed is ready — the same
-   * instant behaviour as an `autoplay=1&mute=1` plain embed. The page's unmute pill is shown immediately
-   * (one tap gives sound; the tap is the gesture the browser was waiting for). Desktop keeps sound-first. */
-  const touchMuted = coarseTouch() && opts.autoplay !== false && !opts.muted;
+  /* Phones WITH a known sound refusal (learnSound '0'): build the player MUTED with autoplay from the first
+   * frame instead of re-running the doomed sound-first attempt (API ready → attempt → poll → muted restart
+   * ≈ 2.5–5s of dead screen). Muted autoplay is allowed everywhere, so motion starts the moment the embed is
+   * ready — the instant behaviour of an `autoplay=1&mute=1` plain embed. The page's unmute pill is shown
+   * immediately (one tap gives sound; the tap is the gesture the browser was waiting for).
+   * Phones where sound is unknown or known to work: try SOUND FIRST below (same as desktop), and learn. */
+  const touchMuted = coarseTouch() && opts.autoplay !== false && !opts.muted && soundLearned() === '0';
   const effectiveMuted = !!opts.muted || touchMuted;
+  /* A sound-first player that reaches buffering/playing proves this device allows autoplay-with-sound — learn it
+   * ('1'). Playback that started muted on purpose, or after a refusal fallback, proves nothing about sound. */
+  const wrapped = { ...opts, onState: (s, code) => {
+    if (s === 'playing' || s === 'buffering') { playing = true; if (!effectiveMuted && !fellBack) learnSound('1'); }
+    else if (s === 'error') errored = true;   // buffering = the browser did start it, just slowly; errored = a mute "recovery" would be pointless
+    opts.onState?.(s, code);
+  } };
   const playerOpts = touchMuted ? { ...wrapped, muted: true } : wrapped;
   let ctl;
   if (src.type === 'youtube') ctl = await createYouTubePlayer(container, src.id, playerOpts);
@@ -51,9 +68,10 @@ export async function createPlayer(container, video, opts = {}) {
    * autoplay, restart it muted (muted autoplay is always allowed) and tell the page so it can offer a "tap to unmute"
    * button. We must NOT do this merely because the video is slow to load — that used to mute perfectly good
    * sound-autoplay on mobile networks. */
-  const startMuted = () => {
+  const startMuted = (learn = false) => {
     if (gone || playing || fellBack || errored) return;   // a broken file is not an autoplay block: the page shows the error instead
     fellBack = true;
+    if (learn) learnSound('0', { force: true });          // genuine refusal → later plays on this device start muted instantly
     try { ctl.mute(); Promise.resolve(ctl.play()).catch(() => {}); } catch { /* player already gone */ }
     opts.onAutoplayMuted?.();
     timers.push(setTimeout(() => { if (!gone && !playing) opts.onAutoplayBlocked?.(); }, AUTOPLAY_WAIT_MS));
@@ -75,8 +93,8 @@ export async function createPlayer(container, video, opts = {}) {
   } else if (ctl.playPromise) {
     // HTML5: the initial play() promise is the definitive signal — it rejects with NotAllowedError exactly when
     // autoplay-with-sound is blocked. Nothing else (slow network, cold cache) may trigger the mute fallback.
-    ctl.playPromise.then(null, (err) => {
-      if (err && (err.name === 'NotAllowedError' || err.name === 'AbortError')) startMuted();
+    ctl.playPromise.then(() => learnSound('1'), (err) => {   // resolved → sound autoplay is allowed on this device
+      if (err && (err.name === 'NotAllowedError' || err.name === 'AbortError')) startMuted(true);
       // Any other rejection is a real media error: the video element's 'error' event reports it.
     });
     // Safety net for exotic cases where the promise neither resolves nor rejects.
@@ -89,9 +107,9 @@ export async function createPlayer(container, video, opts = {}) {
     const poll = (roundsLeft) => {
       if (gone || playing || fellBack) return;
       const st = ctl.state();
-      if (st === 3 || st === 1) return;                       // loading or playing: sound autoplay works
+      if (st === 3 || st === 1) { learnSound('1'); return; }   // loading or playing: sound autoplay works here
       if (roundsLeft > 0) timers.push(setTimeout(() => poll(roundsLeft - 1), gap));
-      else startMuted();                                       // still unstarted/cued → blocked
+      else startMuted(true);                                   // still unstarted/cued → refused; remember it
     };
     timers.push(setTimeout(() => poll(rounds), firstCheck));   // desktop: ~2.2s + 4×0.7s ≈ 5s; phones: ~1.2s + 3×0.5s ≈ 2.7s
   }
