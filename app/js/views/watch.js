@@ -148,7 +148,7 @@ export default async function watch(ctx) {
         const s = await u.streamUrl(v);
         media = { ...v, source: { type: s.type, url: s.url }, poster: cat.thumb(v) };
       }
-      $('#unmutePill', ctx.root)?.remove();
+      $('#unmutePill', ctx.root)?.remove(); $('#playPill', ctx.root)?.remove();
       ctl = await createPlayer(slot, media, {
         start, autoplay: true,
         // The browser refused autoplay with sound (usual on phones), so the video runs muted: offer one tap to turn the sound on.
@@ -159,9 +159,18 @@ export default async function watch(ctx) {
           b.onclick = () => { ctl?.unmute(); b.remove(); };
           $('#playerBox', ctx.root).appendChild(b);
         },
+        // Even muted autoplay was refused (Low Power Mode, aggressive data saver): one obvious tap starts it —
+        // the tap itself is the gesture the browser was waiting for (reels shows a play glyph in this case).
+        onAutoplayBlocked: () => {
+          if (dead || $('#playPill', ctx.root)) return;
+          const b = document.createElement('button'); b.type = 'button'; b.id = 'playPill'; b.className = 'unmute-pill';
+          b.innerHTML = icon('play', { size: 18 }).s + '<span>Tap to play</span>';
+          b.onclick = () => { Promise.resolve(ctl?.play?.()).catch(() => {}); b.remove(); };
+          $('#playerBox', ctx.root).appendChild(b);
+        },
         onProgress: (t, d) => persist(t, d),
         onEnded: () => { u.saveProgress(v.id, lastD || v.duration, lastD || v.duration, { flush: true }); if (next && u.pref('autoplayNext')) showNextUp(); },
-        onState: (s, code) => { if (s === 'playing') onPlaying(); else if (s === 'paused') onIdle(false); else if (s === 'ended') onIdle(true); else if (s === 'error') { onIdle(true); failed(code); } },
+        onState: (s, code) => { if (s === 'playing') { $('#playPill', ctx.root)?.remove(); onPlaying(); } else if (s === 'paused') onIdle(false); else if (s === 'ended') onIdle(true); else if (s === 'error') { onIdle(true); failed(code); } },
       });
       if (dead) ctl.destroy();
       if (ctl.castSupported?.()) { const cb = $('#castBtn', ctx.root); cb.hidden = false; cb.onclick = () => ctl.cast().catch((e) => { if (e?.name !== 'NotAllowedError') toast('No cast devices found nearby.'); }); }
