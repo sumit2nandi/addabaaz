@@ -7,6 +7,7 @@ import { img, toast } from '../ui/components.js';
 import { shareUrl } from '../platform.js';
 
 let soundOn = true;   // sticky: once the viewer unmutes, later reels start with sound
+let muteHinted = false; // one-time toast when a browser forces autoplay muted
 
 export default async function reels(ctx) {
   const cat = app.catalog;
@@ -53,24 +54,31 @@ export default async function reels(ctx) {
         autoplay: true, muted: !soundOn, controls: false,
         onEnded: () => sections[i + 1]?.scrollIntoView({ behavior: 'smooth' }),
         onState: (st) => { if (my !== token) return; if (st === 'playing') sec.classList.remove('paused'); else if (st === 'paused') sec.classList.add('paused'); },
-        // Phones refuse autoplay with sound: the reel runs muted, and the sound button must say so.
-        onAutoplayMuted: () => { if (my !== token) return; soundOn = false; sections.forEach(setIcon); },
+        // Phones refuse autoplay with sound: the reel runs muted, the sound button must say so,
+        // and a one-time pill tells the viewer exactly how to get sound back.
+        onAutoplayMuted: () => {
+          if (my !== token) return;
+          soundOn = false; sections.forEach(setIcon);
+          if (!muteHinted) {
+            muteHinted = true;
+            const b = document.createElement('button'); b.type = 'button'; b.className = 'unmute-pill reel-unmute';
+            b.innerHTML = icon('mute', { size: 18 }).s + '<span>Tap for sound</span>';
+            b.onclick = () => { soundOn = true; if (ctl) ctl.unmute(); sections.forEach(setIcon); b.remove(); };
+            sec.querySelector('.reel-frame')?.appendChild(b);
+            setTimeout(() => b.remove(), 6000);
+          }
+        },
         onAutoplayBlocked: () => { if (my === token) sec.classList.add('paused'); },   // shows the big play glyph: one tap starts it
       });
       if (my !== token) { c.destroy(); h.remove(); return; }
       ctl = c; host = h; sec.classList.add('playing');
     } catch (e) {
       h.remove(); console.warn('[Reels] Error:', e);
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       const locked = e?.status === 401 || e?.status === 402;
-      const isAutoplayError = e?.name === 'NotAllowedError' || 
-        e?.message?.includes('autoplay') || 
-        e?.message?.includes('play') ||
-        e?.message?.includes('Autoplay') ||
-        e?.name === 'AbortError';
-      if (isMobile && isAutoplayError) {
-        toast('Tap the video to play — autoplay blocked on this browser');
-        sec.classList.add('paused');
+      // Only genuine browser autoplay rejections get the friendly "tap to play" treatment.
+      const isAutoplayError = e?.name === 'NotAllowedError' || e?.name === 'AbortError' || /autoplay/i.test(e?.message || '');
+      if (isAutoplayError) {
+        sec.classList.add('paused');   // shows the big play glyph: one tap starts it with sound
         return;
       }
       toast(e?.status === 401 ? 'Sign in to watch this premium reel.' : e?.status === 402 ? 'This reel needs an active plan.' : 'Could not load this reel. Check connection.');
