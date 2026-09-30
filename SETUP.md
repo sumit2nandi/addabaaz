@@ -259,6 +259,7 @@ All settings are environment variables (see `.env.example`, which has the same l
 | `DATABASE_URL` | — | `mysql://user:password@host:3306/database` |
 | `DB_HOST` `DB_PORT` `DB_USER` `DB_PASSWORD` `DB_NAME` | `127.0.0.1` `3306` `root` (empty) `addabaaz` | Use these instead of `DATABASE_URL` if you prefer. |
 | `DB_SSL` / `DB_SSL_VERIFY` | off | `DB_SSL=true` for managed MySQL. `DB_SSL_VERIFY=false` skips certificate checks (not recommended). |
+| `DB_SSL_CA` / `DB_SSL_CA_FILE` | empty | The provider's CA certificate, for databases whose certificates are signed by a private CA (Aiven): pasted as text (`DB_SSL_CA`) or a file path (`DB_SSL_CA_FILE`). Either one turns TLS on. `DB_SSL_VERIFY_IDENTITY=true` also checks the host name. |
 | `DB_POOL_SIZE` | `10` | Connection pool size. |
 | `DB_CREATE` | `false` | `true` = create the database if it doesn't exist. |
 | `DB_MIGRATE` | `true` | `false` = don't migrate on start; run `npm run db:migrate` in your deploy step instead. |
@@ -585,6 +586,12 @@ If you created a mailbox in hPanel (*Emails*), you can send through it:
 
 * **Static-only fallback:** `npm run build:www` produces a `www/` folder you can upload to `public_html` with File Manager on *any* Hostinger plan; you get browsing and free videos, but no accounts, premium video or admin (section 5).
 * Anything not covered here: read the **Runtime logs** and **Deployments** build log in hPanel first, then the troubleshooting table (section 15), then Hostinger support (they can confirm your database engine, connection limits and whether the app may write outside its folder).
+
+---
+
+### 10.4 Another way to host: Render + Aiven MySQL
+
+Not on Hostinger? The full guide for **Render** (web service) with **Aiven** (managed MySQL) is in [`docs/DEPLOY-RENDER-AIVEN.md`](docs/DEPLOY-RENDER-AIVEN.md); the repository contains a matching `render.yaml`.
 
 ---
 

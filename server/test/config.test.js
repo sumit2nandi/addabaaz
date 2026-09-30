@@ -1,0 +1,34 @@
+// Database settings from the environment: URL vs DB_* variables, and the TLS options used by managed MySQL (Aiven, RDS, ...). No database needed.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { dbConfigFromEnv } from '../src/config.js';
+
+const PEM = '-----BEGIN CERTIFICATE-----\nMIIBfake\n-----END CERTIFICATE-----\n';
+
+test('plain settings: no TLS unless asked for', () => {
+  const c = dbConfigFromEnv({ DB_HOST: 'h', DB_USER: 'u', DB_PASSWORD: 'p', DB_NAME: 'd', DB_PORT: '3307' });
+  assert.deepEqual([c.host, c.port, c.user, c.password, c.database], ['h', 3307, 'u', 'p', 'd']); assert.equal(c.ssl, undefined);
+});
+
+test('Aiven-style URL: ssl-mode=REQUIRED switches TLS on (certificate verified), special characters decoded', () => {
+  const c = dbConfigFromEnv({ DATABASE_URL: 'mysql://avnadmin:p%40ss%23w@mysql-x.aivencloud.com:21345/defaultdb?ssl-mode=REQUIRED' });
+  assert.equal(c.host, 'mysql-x.aivencloud.com'); assert.equal(c.port, 21345); assert.equal(c.password, 'p@ss#w'); assert.equal(c.database, 'defaultdb');
+  assert.equal(c.ssl.rejectUnauthorized, true); assert.equal(c.ssl.minVersion, 'TLSv1.2');
+  assert.equal(dbConfigFromEnv({ DATABASE_URL: 'mysql://u:p@h:3306/d?ssl-mode=DISABLED' }).ssl, undefined);
+});
+
+test('private CA: from a file path or pasted text (\\n allowed); a missing file is a clear error', () => {
+  const f = path.join(os.tmpdir(), `ca-${process.pid}.pem`); fs.writeFileSync(f, PEM);
+  try {
+    assert.equal(dbConfigFromEnv({ DB_HOST: 'h', DB_SSL: 'true', DB_SSL_CA_FILE: f }).ssl.ca, PEM);
+    assert.equal(dbConfigFromEnv({ DB_HOST: 'h', DB_SSL_CA: PEM.replace(/\n/g, '\\n') }).ssl.ca, PEM);   // a CA alone also turns TLS on
+  } finally { fs.unlinkSync(f); }
+  assert.throws(() => dbConfigFromEnv({ DB_HOST: 'h', DB_SSL_CA_FILE: '/nope/ca.pem' }), /DB_SSL_CA_FILE: cannot read/);
+});
+
+test('DB_SSL_VERIFY=false skips certificate checks (lab servers only)', () => {
+  assert.equal(dbConfigFromEnv({ DB_HOST: 'h', DB_SSL: '1', DB_SSL_VERIFY: 'false' }).ssl.rejectUnauthorized, false);
+});

@@ -2,9 +2,15 @@
  * Database configuration from the environment.
  *   DATABASE_URL=mysql://user:pass@host:3306/addabaaz          (preferred; e.g. PlanetScale/RDS/Railway style)
  *   or DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
- *   DB_SSL=true            enable TLS (managed MySQL: RDS, Cloud SQL, PlanetScale, Azure…)
+ *   DB_SSL=true            enable TLS (managed MySQL: RDS, Cloud SQL, PlanetScale, Azure, Aiven…)
+ *   DB_SSL_CA_FILE=/etc/secrets/ca.pem   CA certificate to trust (Aiven, some others, sign with their own CA) - a file path, or
+ *   DB_SSL_CA="-----BEGIN CERTIFICATE-----..."   the same certificate pasted as text (\n written as \\n is fine)
+ *   DB_SSL_VERIFY_IDENTITY=true   with a CA, also require the certificate's host name to match DB_HOST (default: chain check only)
+ *   A URL ending in ?ssl-mode=REQUIRED (what Aiven shows) turns TLS on by itself.
  *   DB_POOL_SIZE=10
  */
+import fs from 'node:fs';
+
 // Turns environment variables into a mysql2 pool config.
 // `env` is injectable so tests can pass a fake environment.
 export function dbConfigFromEnv(env = process.env) {
@@ -27,7 +33,19 @@ export function dbConfigFromEnv(env = process.env) {
     cfg = { host: env.DB_HOST || '127.0.0.1', port: Number(env.DB_PORT) || 3306, user: env.DB_USER || 'root', password: env.DB_PASSWORD || '', database: env.DB_NAME || 'addabaaz' };
   }
   // Optional TLS. Certificates are verified unless DB_SSL_VERIFY=false (only for self-signed lab servers).
-  if (/^(1|true|yes)$/i.test(env.DB_SSL || '')) cfg.ssl = { minVersion: 'TLSv1.2', rejectUnauthorized: !/^(0|false)$/i.test(env.DB_SSL_VERIFY || '') };
+  const urlSslMode = (u?.searchParams.get('ssl-mode') || u?.searchParams.get('sslmode') || '').toUpperCase();
+  const wantSsl = /^(1|true|yes)$/i.test(env.DB_SSL || '') || !!env.DB_SSL_CA || !!env.DB_SSL_CA_FILE || (urlSslMode && urlSslMode !== 'DISABLED' && urlSslMode !== 'DISABLE');
+  if (wantSsl) {
+    cfg.ssl = { minVersion: 'TLSv1.2', rejectUnauthorized: !/^(0|false)$/i.test(env.DB_SSL_VERIFY || '') };
+    // A private CA (Aiven signs every service with its own): from a file (Render "Secret Files") or pasted as an environment variable.
+    if (env.DB_SSL_CA_FILE) {
+      try { cfg.ssl.ca = fs.readFileSync(env.DB_SSL_CA_FILE, 'utf8'); }
+      catch (e) { throw new Error(`DB_SSL_CA_FILE: cannot read "${env.DB_SSL_CA_FILE}" (${e.code || e.message}). Upload the CA certificate as a secret file at that path.`); }
+    } else if (env.DB_SSL_CA) cfg.ssl.ca = env.DB_SSL_CA.replace(/\\n/g, '\n');
+    // With a private CA we check the certificate chain (same as the mysql client's VERIFY_CA); managed providers' certificates are not always
+    // issued for the exact host name. Set DB_SSL_VERIFY_IDENTITY=true to also require the host name to match.
+    if (cfg.ssl.ca && !/^(1|true|yes)$/i.test(env.DB_SSL_VERIFY_IDENTITY || '')) cfg.ssl.checkServerIdentity = () => undefined;
+  }
   // How many connections the pool may keep open.
   cfg.connectionLimit = Number(env.DB_POOL_SIZE) || 10;
   return cfg;

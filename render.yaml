@@ -1,0 +1,40 @@
+# Render Blueprint: one web service for the whole site + API (the database lives on Aiven, so it is not listed here).
+# Use it via Render dashboard -> New -> Blueprint, or ignore this file and create the Web Service by hand
+# (docs/DEPLOY-RENDER-AIVEN.md explains both). Values marked `sync: false` are asked for when the Blueprint is created.
+services:
+  - type: web
+    name: addabaaz
+    runtime: node
+    region: singapore            # pick the region closest to your Aiven database (Aiven: AWS ap-southeast-1 / Singapore)
+    plan: free                   # free sleeps after 15 min idle and loses uploaded files on every deploy; use `starter` (+ a disk) for real use
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/v1/health/ready
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true      # Render creates a long random value; keep it stable (changing it signs everyone out)
+      - key: TRUST_PROXY
+        value: "1"               # Render sits behind a proxy
+      - key: PUBLIC_SITE_URL
+        sync: false              # https://<your-service>.onrender.com  (no trailing slash) or your own domain
+      - key: DB_HOST
+        sync: false              # from Aiven: Host
+      - key: DB_PORT
+        sync: false              # from Aiven: Port (NOT 3306)
+      - key: DB_USER
+        value: avnadmin
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        value: defaultdb
+      - key: DB_SSL
+        value: "true"
+      - key: DB_SSL_CA
+        sync: false              # paste Aiven's CA certificate (the whole -----BEGIN CERTIFICATE----- block); or use a Secret File + DB_SSL_CA_FILE
+      - key: DB_POOL_SIZE
+        value: "5"

@@ -45,7 +45,7 @@ Concurrency: the unique email index makes simultaneous sign-ups safe; the 5-prof
 
 ## Configuration
 
-Set either `DATABASE_URL=mysql://user:pass@host:3306/addabaaz` or `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME`. Extras: `DB_SSL=true` (managed MySQL), `DB_POOL_SIZE`, `DB_CREATE=true` (create the database on start), `DB_MIGRATE=false` (skip auto-migrate). See [`.env.example`](../.env.example).
+Set either `DATABASE_URL=mysql://user:pass@host:3306/addabaaz` or `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME`. Extras: `DB_SSL=true` (managed MySQL; `DB_SSL_CA_FILE`/`DB_SSL_CA` for providers with their own CA, e.g. Aiven), `DB_POOL_SIZE`, `DB_CREATE=true` (create the database on start), `DB_MIGRATE=false` (skip auto-migrate). See [`.env.example`](../.env.example).
 
 Create a dedicated least-privilege user:
 
