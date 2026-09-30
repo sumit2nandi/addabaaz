@@ -11,7 +11,8 @@ import { go } from '../router.js';
 import { listBtn, videoCard, rail, enhanceRails, metaLine, toast, img } from '../ui/components.js';
 import { epRow } from './show.js';
 import { shareUrl, isNative } from '../platform.js';
-import { mountRating, mountComments } from './engage.js';
+
+// mountRating, mountComments removed: like/dislike/comments disabled per requirement
 
 // Renders the page, then starts the player and wires progress saving. Cleanup (timers, listeners) is registered with ctx.onCleanup.
 export default async function watch(ctx) {
@@ -48,7 +49,6 @@ export default async function watch(ctx) {
             ${show ? listBtn('show', show.id, { label: 'Add show to My List', cls: 'btn btn-ghost' }) : ''}
             ${listBtn('video', v.id, { label: 'Save video', cls: 'btn btn-ghost' })}
             ${next ? html`<a class="btn btn-ghost" href="#/watch/${next.id}">${icon('next', { size: 18 })} Next: ${cat.label(next)}</a>` : ''}
-            <span id="rateBox" class="rate-box"></span>
             <button type="button" class="btn btn-ghost" id="castBtn" hidden>${icon('cast', { size: 18 })} Cast</button>
             <button type="button" class="btn btn-ghost" id="shareBtn">${icon('share', { size: 18 })} Share</button>
             <label class="switch" title="Play the next episode automatically"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span><span>Autoplay next</span></label>
@@ -56,7 +56,6 @@ export default async function watch(ctx) {
           ${show ? html`<p class="watch-desc">${show.description}</p>` : ''}
           <details class="orig-title"><summary>Original title</summary><p class="bn">${v.title}</p></details>
         </div>
-        <div id="commentsBox" class="watch-info"></div>
         ${rail({ title: 'More from ADDABAAZ', items: cat.latestEpisodes(10).filter((x) => x.id !== v.id).map((x) => videoCard(x)), cls: 'r-video mobile-only' })}
       </div>
       <aside class="watch-side" aria-label="${v.kind === 'episode' ? 'Episodes' : 'Up next'}">${sideList}</aside>
@@ -71,8 +70,9 @@ export default async function watch(ctx) {
     if (r === 'copied') toast('Link copied');
   });
 
-  mountRating($('#rateBox', ctx.root), { type: 'video', id: v.id, label: 'this video' });
-  mountComments($('#commentsBox', ctx.root), { video: v });
+  // mountRating, mountComments removed: like/dislike/comments disabled per requirement
+  // mountRating($('#rateBox', ctx.root), { type: 'video', id: v.id, label: 'this video' });
+  // mountComments($('#commentsBox', ctx.root), { video: v });
   // The player area shows a message instead of the player when the viewer is locked out.
   const msg = $('#playerMsg', ctx.root), slot = $('#playerSlot', ctx.root);
   const wall = (kind) => {
@@ -81,9 +81,9 @@ export default async function watch(ctx) {
       ? html`${icon('lock', { size: 40 })}<h2>Sign in to watch</h2><p>This is ADDABAAZ Premium. Sign in or create a free account to watch it — everything else on ADDABAAZ stays open to everyone.</p><div class="row"><a class="btn btn-primary btn-lg" href="#/signin?next=${here}">Sign in</a><a class="btn btn-ghost btn-lg" href="#/signup?next=${here}">Create account</a></div>`.s
       : kind === 'plan'
         ? isNative
-          ? html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><p>This title needs an active ADDABAAZ Plus plan. Plans are managed on the ADDABAAZ website — once you’ve subscribed with this account it unlocks here.</p><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s
-          : html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><p>You’re signed in — subscribe to watch this title and get early access to every new original.</p><a class="btn btn-primary btn-lg" href="#/plans?next=${here}">${icon('crown', { size: 20 })} See plans</a>`.s
-        : html`${icon('lock', { size: 40 })}<h2>Premium video needs an account</h2><p>This copy of ADDABAAZ runs without the ADDABAAZ API, so premium titles can’t be unlocked here.</p><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s;
+          ? html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><p>This title needs an active ADDABAAZ Plus plan. Plans are managed on the ADDABAAZ website — once you've subscribed with this account it unlocks here.</p><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s
+          : html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><p>You're signed in — subscribe to watch this title and get early access to every new original.</p><a class="btn btn-primary btn-lg" href="#/plans?next=${here}">${icon('crown', { size: 20 })} See plans</a>`.s
+        : html`${icon('lock', { size: 40 })}<h2>Premium video needs an account</h2><p>This copy of ADDABAAZ runs without the ADDABAAZ API, so premium titles can't be unlocked here.</p><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s;
   };
   // Locked: show the wall and stop; no player is created.
   if (gate !== 'ok') { wall(gate); return; }
@@ -104,7 +104,7 @@ export default async function watch(ctx) {
   const failed = (code) => {
     msg.hidden = false;
     const yt = v.source.type === 'youtube' ? `https://www.youtube.com/watch?v=${encodeURIComponent(v.source.id)}` : '';
-    msg.innerHTML = html`${icon('wifioff', { size: 40 })}<h2>Can’t play this video here</h2><p>${code === 101 || code === 150 || code === 153 ? 'The owner restricted embedded playback.' : 'Check your connection and try again.'}</p><div class="row"><button class="btn btn-primary" id="retry">Try again</button>${yt ? html`<a class="btn btn-ghost" href="${yt}" target="_blank" rel="noopener">Open on YouTube</a>` : ''}</div>`.s;
+    msg.innerHTML = html`${icon('wifioff', { size: 40 })}<h2>Can't play this video here</h2><p>${code === 101 || code === 150 || code === 153 ? 'The owner restricted embedded playback.' : 'Check your connection and try again.'}</p><div class="row"><button class="btn btn-primary" id="retry">Try again</button>${yt ? html`<a class="btn btn-ghost" href="${yt}" target="_blank" rel="noopener">Open on YouTube</a>` : ''}</div>`.s;
     $('#retry', msg).onclick = () => { msg.hidden = true; startPlayer(); };
   };
   // Shown when the plan's simultaneous-screens limit is reached.
@@ -133,7 +133,7 @@ export default async function watch(ctx) {
   const showNextUp = () => {
     const box = $('#nextUp', ctx.root);
     let n = CONFIG.autoplayCountdown;
-    const draw = () => { box.innerHTML = html`<div class="next-card">${img(cat.thumb(next, 'hqdefault'), '')}<div><div class="eyebrow">Up next in ${n}s</div><strong>${cat.label(next)} · ${cat.displayTitle(next)}</strong><div class="row"><button class="btn btn-primary btn-sm" id="nuPlay">${icon('play', { size: 16 })} Play now</button><button class="btn btn-ghost btn-sm" id="nuCancel">Cancel</button></div></div></div>`.s; };
+    const draw = () => { box.innerHTML = html`<div class="next-card">${img(cat.thumb(next, 'hqdefault'), '')}<div><div class="eyebrow">Up next in ${n}s</div><strong>${cat.label(next)} \u00b7 ${cat.displayTitle(next)}</strong><div class="row"><button class="btn btn-primary btn-sm" id="nuPlay">${icon('play', { size: 16 })} Play now</button><button class="btn btn-ghost btn-sm" id="nuCancel">Cancel</button></div></div></div>`.s; };
     box.hidden = false; draw();
     const stop = () => { clearInterval(countdown); box.hidden = true; };
     countdown = setInterval(() => { n -= 1; if (n <= 0) { stop(); go('/watch/' + next.id, { replace: true }); } else draw(); }, 1000);
