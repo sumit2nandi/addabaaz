@@ -69,6 +69,10 @@ function nativePlugin(providers) {
 }
 // Native flow: get an ID token (Google/Apple) or access token (Facebook) from the platform SDK; user cancellation is flagged, not treated as an error.
 // Every native call also races a timeout: a stuck SDK must produce a visible message, never a dead button.
+// Silent ONLY for a plain dismissal ("…canceled", "Login cancelled"). Long errors that merely mention
+// cancelling — notably "…activity is cancelled by the user", which actually means the Google OAuth
+// client / SHA-1 is misconfigured — must be shown, or sign-in dies with no feedback at all.
+const benignCancel = (e) => /(^|[\s:])(cancel(ed|led)?)\.?$/i.test(String(e?.message || '').trim());
 async function nativeCredential(provider, providers) {
   const { SL, ready } = nativePlugin(providers); await ready;
   const call = (opts, msg) => Promise.race([
@@ -90,7 +94,7 @@ async function nativeCredential(provider, providers) {
     const token = r?.result?.accessToken?.token;
     if (!token) throw new Error('Facebook sign-in returned nothing — please try again.');
     return token;
-  } catch (e) { if (/cancel/i.test(`${e?.code} ${e?.message}`)) e.cancelled = true; throw e; }
+  } catch (e) { if (benignCancel(e)) e.cancelled = true; throw e; }
 }
 
 // Brand logos for the buttons.

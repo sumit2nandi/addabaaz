@@ -82,6 +82,11 @@ jobs:
         working-directory: mobile/android
         run: ./gradlew assembleDebug --no-daemon
 
+      # The definitive fingerprint of THIS build: it must match the Android OAuth client saved in
+      # Google Cloud Console or Google sign-in fails after the account picker ("cancelled by the user").
+      - name: Show the APK signing certificate SHA-1
+        run: keytool -printcert -jarfile mobile/android/app/build/outputs/apk/debug/app-debug.apk | grep -E "Owner|SHA1:|SHA256:"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
