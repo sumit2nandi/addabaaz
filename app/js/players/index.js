@@ -72,8 +72,8 @@ export async function createPlayer(container, video, opts = {}) {
   if (src.type === 'youtube') ctl = await createYouTubePlayer(container, src.id, playerOpts);
   else if (src.type === 'mp4' || src.type === 'hls') ctl = await createHtml5Player(container, video, playerOpts);
   else throw new Error('Unsupported source type: ' + src.type);
-  if (touchMuted) { opts.onAutoplayMuted?.();   // tells the page to show its "tap for sound" affordance now
-    armGestureUnmute(); }                       // and its first gesture unmutes without needing the pill
+  if (touchMuted) opts.onAutoplayMuted?.();   // tells the page to show its "tap for sound" affordance now
+  // (gesture-unmute is armed for every muted autostart below — the touchMuted path included).
 
   /* Mobile browsers (Chrome Android, iOS Safari) only allow autoplay WITH sound after a gesture, and the player is
    * created asynchronously, so that permission is often gone. Standard remedy: if the browser actually refused sound
@@ -96,8 +96,11 @@ export async function createPlayer(container, video, opts = {}) {
   if (ctl.engine === 'iframe') { /* plain-iframe fallback has no state events to watch */ }
   else if (opts.autoplay === false) { /* viewer asked for no autoplay: nothing to recover from */ }
   else if (effectiveMuted) {
-    // Started muted on purpose (viewer choice, or the instant phone path above): only detect a total block
-    // (Low Power Mode, data saver…). If muted playback can run at all, motion starts on its own.
+    /* Started muted on purpose — viewer choice (reels) or the instant phone path above. ANY muted autostart
+     * arms the first-gesture unmute below, so a reel built muted still gains sound at the next swipe/tap
+     * even when it was muted by the page rather than by the phone path. Also watch for a total block
+     * (Low Power Mode, data saver…): if muted playback can run at all, motion starts on its own. */
+    armGestureUnmute();
     timers.push(setTimeout(() => { if (!gone && !playing) opts.onAutoplayBlocked?.(); }, AUTOPLAY_WAIT_MS * 1.5));
   } else if (noActivation) {
     // No gesture on this page yet → sound autoplay is certain to be blocked → start muted right away.

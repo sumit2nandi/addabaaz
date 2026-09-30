@@ -159,6 +159,38 @@ test('youtube on a touch device: the FIRST gesture anywhere unmutes a muted-star
   }
 });
 
+test('a reel built muted by PAGE choice (muted: true) still unmutes at the next swipe/tap', async () => {
+  // Reels pre-set soundOff after a muted start — later reels come in with an explicit muted flag, which used
+  // to skip both the pill AND the gesture arm, so every later reel stayed silent indefinitely. Every muted
+  // autostart must arm first-gesture unmute.
+  const prevMM = globalThis.matchMedia;
+  globalThis.matchMedia = (q) => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+  const listeners = {};
+  const prevWin = globalThis.window;
+  globalThis.window = {
+    addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); },
+    removeEventListener: (t, fn) => { listeners[t] = (listeners[t] || []).filter((x) => x !== fn); },
+  };
+  const fireGesture = () => Object.values(listeners).flat().slice().forEach((fn) => fn({ type: 'touchstart' }));
+  try {
+    setActivation(false);
+    globalThis.__ytScenario = { startState: 5, delayToPlayMs: 300, playsWithSound: true };
+    let unmutedCb = 0;
+    const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
+      autoplay: true, muted: true, onGestureUnmuted: () => unmutedCb++,
+    });
+    assert.ok((listeners.touchstart || []).length > 0, 'explicit-muted builds arm the gesture unmute too');
+    await wait(800);
+    fireGesture();
+    assert.equal(unmutedCb, 1, 'the swipe that brought the next reel unmutes it');
+    assert.equal(globalThis.__unmuted, true);
+    ctl.destroy();
+  } finally {
+    if (prevWin === undefined) delete globalThis.window; else globalThis.window = prevWin;
+    if (prevMM === undefined) delete globalThis.matchMedia; else globalThis.matchMedia = prevMM;
+  }
+});
+
 test('youtube: no user gesture yet (deep link/reload) → instant muted start, no 5s dead time', async () => {
   const stubbed = setActivation(false);
   globalThis.__ytScenario = { startState: 5, delayToPlayMs: null, playsWithSound: false, mutedPlays: true };
