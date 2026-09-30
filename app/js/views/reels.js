@@ -92,6 +92,8 @@ export default async function reels(ctx) {
             setTimeout(() => b.remove(), 6000);
           }
         },
+        // First gesture auto-unmuted this reel: sync the sound button and drop the tap-for-sound hint.
+        onGestureUnmuted: () => { if (my !== token) return; soundOn = true; sections.forEach(setIcon); sec.querySelector('.unmute-pill')?.remove(); },
         onAutoplayBlocked: () => { if (my === token) sec.classList.add('paused'); },   // shows the big play glyph: one tap starts it
       });
       if (my !== token) { c.destroy(); h.remove(); return; }

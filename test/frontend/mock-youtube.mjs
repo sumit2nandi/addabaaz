@@ -20,7 +20,7 @@ export function createYouTubePlayer(container, videoId, opts) {
     time: () => 0, duration: () => 0,
     seek() {}, pause() {},
     mute() { globalThis.__muted = true; },
-    unmute() { globalThis.__muted = false; },
+    unmute() { globalThis.__muted = false; globalThis.__unmuted = true; },
     play() {
       if (sc.mutedPlays === false) return; // muted playback also refused (Low Power Mode etc.)
       // A muted play always succeeds on phones; an unmuted play only succeeds if the scenario allows it.

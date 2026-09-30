@@ -24,62 +24,74 @@ const coarseTouch = () => {
   return (typeof navigator !== 'undefined' && navigator.maxTouchPoints || 0) > 1;
 };
 
-/* Per-device learned autoplay policy. Browsers allow autoplay WITH sound only after the viewer has engaged
- * with the site enough (Chrome's Media Engagement Index, Safari's similar heuristic) — so "always try sound
- * first" wastes 2–3s on phones where it can never work, while "always start muted" punishes phones where it
- * works fine. First play(s): attempt sound and learn the outcome ('1' = sound worked here, '0' = refused).
- * Once a refusal was seen, later plays skip the doomed attempt and start muted instantly with the unmute pill.
- * '1' is only written the first time; '0' always overwrites (policy can tighten, e.g. after a reload profile). */
-const SOUND_KEY = 'addabaaz.autoplaySound';
-const soundLearned = () => { try { return localStorage.getItem(SOUND_KEY); } catch { return null; } };
-const learnSound = (v, { force = false } = {}) => { try { if (force || soundLearned() == null) localStorage.setItem(SOUND_KEY, v); } catch { /* storage unavailable (private mode) */ } };
-
 /** Options (all optional): start, autoplay, muted, controls (false for reels), onProgress, onEnded, onState,
  *  onAutoplayMuted() - autoplay with sound was blocked, so we restarted it muted (show a "tap to unmute" hint),
+ *  onGestureUnmuted() - the first user gesture unmuted a muted-started player (hide the hint above),
  *  onAutoplayBlocked() - even muted playback did not start (Low Power Mode etc.); the viewer has to tap play. */
 export async function createPlayer(container, video, opts = {}) {
   let playing = false, gone = false, fellBack = false, errored = false;
   const timers = [];
+  const wrapped = { ...opts, onState: (s, code) => { if (s === 'playing' || s === 'buffering') playing = true; else if (s === 'error') errored = true; /* buffering = the browser did start it, just slowly; errored = a mute "recovery" would be pointless */ opts.onState?.(s, code); } };
   const src = video.source || {};
-  /* Phones WITH a known sound refusal (learnSound '0'): build the player MUTED with autoplay from the first
-   * frame instead of re-running the doomed sound-first attempt (API ready → attempt → poll → muted restart
-   * ≈ 2.5–5s of dead screen). Muted autoplay is allowed everywhere, so motion starts the moment the embed is
-   * ready — the instant behaviour of an `autoplay=1&mute=1` plain embed. The page's unmute pill is shown
-   * immediately (one tap gives sound; the tap is the gesture the browser was waiting for).
-   * Phones where sound is unknown or known to work: try SOUND FIRST below (same as desktop), and learn. */
-  const touchMuted = coarseTouch() && opts.autoplay !== false && !opts.muted && soundLearned() === '0';
+  // Sticky page activation: once the viewer has interacted with the page (any tap — e.g. the tap that opened
+  // this video), browsers allow programmatic playback WITH sound for the rest of the page's life.
+  const noActivation = !!(navigator.userActivation && !navigator.userActivation.hasBeenActive);
+  /* Phones, first play before ANY gesture: build the player MUTED with autoplay from the first frame instead
+   * of trying sound first and discovering the refusal seconds later (API ready → sound attempt → poll → muted
+   * restart ≈ 2.5–5s of dead screen). Muted autoplay is allowed everywhere, so motion starts the moment the
+   * embed is ready — the instant behaviour of an `autoplay=1&mute=1` plain embed. The page's unmute pill is
+   * shown immediately, and the FIRST GESTURE anywhere (a tap, the swipe to the next reel…) unmutes
+   * automatically. From then on the page is activated, so every later video builds sound-first — real audio
+   * starts on the second video and beyond without any pill. */
+  const touchMuted = coarseTouch() && opts.autoplay !== false && !opts.muted && noActivation;
   const effectiveMuted = !!opts.muted || touchMuted;
-  /* A sound-first player that reaches buffering/playing proves this device allows autoplay-with-sound — learn it
-   * ('1'). Playback that started muted on purpose, or after a refusal fallback, proves nothing about sound. */
-  const wrapped = { ...opts, onState: (s, code) => {
-    if (s === 'playing' || s === 'buffering') { playing = true; if (!effectiveMuted && !fellBack) learnSound('1'); }
-    else if (s === 'error') errored = true;   // buffering = the browser did start it, just slowly; errored = a mute "recovery" would be pointless
-    opts.onState?.(s, code);
-  } };
   const playerOpts = touchMuted ? { ...wrapped, muted: true } : wrapped;
+
+  /* Unmute at the first genuine gesture (pointerdown/touchstart/keydown, capture phase, at most once per
+   * playback): that interaction satisfies every browser's sound policy, so a muted start need not stay muted
+   * beyond the viewer's first interaction. Views hear onGestureUnmuted() and hide their tap-for-sound pill. */
   let ctl;
+  const armGestureUnmute = () => {
+    const target = typeof window !== 'undefined' ? window : (typeof document !== 'undefined' ? document : null);
+    if (!target || typeof target.addEventListener !== 'function') return;
+    const EVENTS = ['pointerdown', 'touchstart', 'keydown'];
+    const disarm = () => EVENTS.forEach((t) => target.removeEventListener(t, onGesture, true));
+    let heard = false;
+    const onGesture = () => {                    // one physical tap fires SEVERAL of these in a row — react once
+      if (heard || gone) return;
+      heard = true;
+      disarm();
+      if (errored) return;                                  // a dead player gains nothing from unmuting
+      try { if (!ctl.isMuted || ctl.isMuted()) ctl.unmute(); } catch { /* player already gone */ }
+      opts.onGestureUnmuted?.();
+    };
+    EVENTS.forEach((t) => target.addEventListener(t, onGesture, true));
+    timers.push(setTimeout(disarm, 90000));                 // stop listening eventually; destroy() clears this
+  };
+
   if (src.type === 'youtube') ctl = await createYouTubePlayer(container, src.id, playerOpts);
   else if (src.type === 'mp4' || src.type === 'hls') ctl = await createHtml5Player(container, video, playerOpts);
   else throw new Error('Unsupported source type: ' + src.type);
-  if (touchMuted) opts.onAutoplayMuted?.();   // tells the page to show its "tap for sound" affordance now
+  if (touchMuted) { opts.onAutoplayMuted?.();   // tells the page to show its "tap for sound" affordance now
+    armGestureUnmute(); }                       // and its first gesture unmutes without needing the pill
 
   /* Mobile browsers (Chrome Android, iOS Safari) only allow autoplay WITH sound after a gesture, and the player is
    * created asynchronously, so that permission is often gone. Standard remedy: if the browser actually refused sound
    * autoplay, restart it muted (muted autoplay is always allowed) and tell the page so it can offer a "tap to unmute"
    * button. We must NOT do this merely because the video is slow to load — that used to mute perfectly good
    * sound-autoplay on mobile networks. */
-  const startMuted = (learn = false) => {
+  const startMuted = () => {
     if (gone || playing || fellBack || errored) return;   // a broken file is not an autoplay block: the page shows the error instead
     fellBack = true;
-    if (learn) learnSound('0', { force: true });          // genuine refusal → later plays on this device start muted instantly
     try { ctl.mute(); Promise.resolve(ctl.play()).catch(() => {}); } catch { /* player already gone */ }
     opts.onAutoplayMuted?.();
+    armGestureUnmute();                                   // first gesture after a muted restart gives sound too
     timers.push(setTimeout(() => { if (!gone && !playing) opts.onAutoplayBlocked?.(); }, AUTOPLAY_WAIT_MS));
   };
 
   // Chrome/Firefox/Safari all refuse autoplay-with-sound until the user has interacted with the page.
-  // `hasBeenActive` tells us that up front (deep link / reload): skip the wait and go straight to muted.
-  const noActivation = !!(navigator.userActivation && !navigator.userActivation.hasBeenActive);
+  // `noActivation` (computed above from `hasBeenActive`) tells us that up front (deep link / reload):
+  // skip the wait and go straight to muted.
 
   if (ctl.engine === 'iframe') { /* plain-iframe fallback has no state events to watch */ }
   else if (opts.autoplay === false) { /* viewer asked for no autoplay: nothing to recover from */ }
@@ -93,8 +105,8 @@ export async function createPlayer(container, video, opts = {}) {
   } else if (ctl.playPromise) {
     // HTML5: the initial play() promise is the definitive signal — it rejects with NotAllowedError exactly when
     // autoplay-with-sound is blocked. Nothing else (slow network, cold cache) may trigger the mute fallback.
-    ctl.playPromise.then(() => learnSound('1'), (err) => {   // resolved → sound autoplay is allowed on this device
-      if (err && (err.name === 'NotAllowedError' || err.name === 'AbortError')) startMuted(true);
+    ctl.playPromise.then(null, (err) => {
+      if (err && (err.name === 'NotAllowedError' || err.name === 'AbortError')) startMuted();
       // Any other rejection is a real media error: the video element's 'error' event reports it.
     });
     // Safety net for exotic cases where the promise neither resolves nor rejects.
@@ -107,9 +119,9 @@ export async function createPlayer(container, video, opts = {}) {
     const poll = (roundsLeft) => {
       if (gone || playing || fellBack) return;
       const st = ctl.state();
-      if (st === 3 || st === 1) { learnSound('1'); return; }   // loading or playing: sound autoplay works here
+      if (st === 3 || st === 1) return;                       // loading or playing: sound autoplay works
       if (roundsLeft > 0) timers.push(setTimeout(() => poll(roundsLeft - 1), gap));
-      else startMuted(true);                                   // still unstarted/cued → refused; remember it
+      else startMuted();                                       // still unstarted/cued → blocked
     };
     timers.push(setTimeout(() => poll(rounds), firstCheck));   // desktop: ~2.2s + 4×0.7s ≈ 5s; phones: ~1.2s + 3×0.5s ≈ 2.7s
   }

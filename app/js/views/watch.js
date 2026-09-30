@@ -172,6 +172,8 @@ export default async function watch(ctx) {
           b.onclick = () => { Promise.resolve(ctl?.play?.()).catch(() => {}); b.remove(); };
           $('#playerBox', ctx.root).appendChild(b);
         },
+        // The player's first-gesture auto-unmute fired: sound is on, the pill is obsolete.
+        onGestureUnmuted: () => { if (dead) return; $('#unmutePill', ctx.root)?.remove(); },
         onProgress: (t, d) => persist(t, d),
         onEnded: () => { u.saveProgress(v.id, lastD || v.duration, lastD || v.duration, { flush: true }); if (next && u.pref('autoplayNext')) showNextUp(); },
         onState: (s, code) => { if (s === 'playing') { $('#playPill', ctx.root)?.remove(); onPlaying(); } else if (s === 'paused') onIdle(false); else if (s === 'ended') onIdle(true); else if (s === 'error') { onIdle(true); failed(code); } },

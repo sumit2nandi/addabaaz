@@ -19,16 +19,8 @@ function setActivation(active) {
   return typeof navigator.userActivation?.hasBeenActive === 'boolean';
 }
 
-const memStore = {};
-globalThis.localStorage = {
-  getItem: (k) => (k in memStore ? memStore[k] : null),
-  setItem: (k, v) => { memStore[k] = String(v); },
-  removeItem: (k) => { delete memStore[k]; },
-};
-
 beforeEach(() => {
-  globalThis.__ytScenario = null; globalThis.__html5Scenario = null; globalThis.__muted = false; globalThis.__createdMuted = false;
-  Object.keys(memStore).forEach((k) => delete memStore[k]);
+  globalThis.__ytScenario = null; globalThis.__html5Scenario = null; globalThis.__muted = false; globalThis.__createdMuted = false; globalThis.__unmuted = false;
   setActivation(true);   // default: the user HAS interacted with the page
 });
 
@@ -74,11 +66,11 @@ test('youtube: muted playback also blocked (Low Power Mode) → onAutoplayBlocke
   ctl.destroy();
 });
 
-test('youtube on a touch device with a LEARNED sound refusal: player is built muted-autoplay at once — no seconds of dead wait', async () => {
+test('youtube on a touch device before ANY page gesture: muted-autoplay build at once — no seconds of dead wait', async () => {
   const prevMM = globalThis.matchMedia;
   globalThis.matchMedia = (q) => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
   try {
-    localStorage.setItem('addabaaz.autoplaySound', '0');     // a previous refusal was learned on this device
+    setActivation(false);   // fresh page load / deep link: no interaction yet on this page
     // The embed autoplays by itself once it may (muted is always allowed) — modelled by the delayed play.
     globalThis.__ytScenario = { startState: 5, delayToPlayMs: 300, playsWithSound: true };
     let mutedCb = 0, blockedCb = 0; const t0 = Date.now(); let mutedAt = -1;
@@ -100,7 +92,7 @@ test('youtube on a touch device: even muted playback refused (Low Power Mode) �
   const prevMM = globalThis.matchMedia;
   globalThis.matchMedia = (q) => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
   try {
-    localStorage.setItem('addabaaz.autoplaySound', '0');
+    setActivation(false);
     globalThis.__ytScenario = { startState: 5, delayToPlayMs: null, playsWithSound: false, mutedPlays: false };
     let mutedCb = 0, blockedCb = 0;
     const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
@@ -113,53 +105,58 @@ test('youtube on a touch device: even muted playback refused (Low Power Mode) �
   } finally { if (prevMM === undefined) delete globalThis.matchMedia; else globalThis.matchMedia = prevMM; }
 });
 
-test('youtube on a touch device with UNKNOWN policy: sound-first attempt, refusal is remembered (later plays start muted instantly)', async () => {
+test('youtube on a touch device AFTER a page gesture (normal in-app open): sound-first, never muted when allowed', async () => {
   const prevMM = globalThis.matchMedia;
   globalThis.matchMedia = (q) => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
   try {
-    globalThis.__ytScenario = { startState: 5, delayToPlayMs: null, playsWithSound: false, mutedPlays: true };
-    let mutedCb = 0; const t0 = Date.now(); let mutedAt = -1;
-    const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
-      autoplay: true, onAutoplayMuted: () => { mutedCb++; mutedAt = Date.now() - t0; },
-    });
-    assert.equal(globalThis.__createdMuted, false, 'policy unknown → the player is built unmuted (sound-first attempt)');
-    await wait(5000);
-    assert.equal(mutedCb, 1, 'the refusal is discovered by the short touch poll and muted playback starts');
-    assert.ok(mutedAt >= 1800 && mutedAt <= 4200, `touch poll should land ~2.7s (got ${mutedAt}ms)`);
-    assert.equal(localStorage.getItem('addabaaz.autoplaySound'), '0', 'the refusal is learned for next time');
-    ctl.destroy();
-  } finally { if (prevMM === undefined) delete globalThis.matchMedia; else globalThis.matchMedia = prevMM; }
-});
-
-test('youtube on a touch device with LEARNED sound success: sound-first keeps working, never muted', async () => {
-  const prevMM = globalThis.matchMedia;
-  globalThis.matchMedia = (q) => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
-  try {
-    localStorage.setItem('addabaaz.autoplaySound', '1');
+    // default activation (beforeEach) is TRUE: the tap that opened this video already activated the page,
+    // so browsers grant sound playback now — we must build the player UNMUTED and let it play.
     globalThis.__ytScenario = { startState: 5, delayToPlayMs: 400, playsWithSound: true };
     let mutedCb = 0, blockedCb = 0;
     const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
       autoplay: true, onAutoplayMuted: () => mutedCb++, onAutoplayBlocked: () => blockedCb++,
     });
-    assert.equal(globalThis.__createdMuted, false, 'sound is tried first when it is known to work');
+    assert.equal(globalThis.__createdMuted, false, 'post-gesture phone plays build sound-first — audio starts immediately');
     await wait(4000);
     assert.equal(mutedCb, 0, 'sound autoplay succeeded → no mute fallback, no pill');
     assert.equal(blockedCb, 0);
-    assert.equal(localStorage.getItem('addabaaz.autoplaySound'), '1', 'success stays learned');
+    assert.equal(globalThis.__muted, false);
     ctl.destroy();
   } finally { if (prevMM === undefined) delete globalThis.matchMedia; else globalThis.matchMedia = prevMM; }
 });
 
-test('youtube (desktop): a successful sound autoplay is learned too', async () => {
-  globalThis.__ytScenario = { startState: 5, delayToPlayMs: 800, playsWithSound: true };
-  let mutedCb = 0;
-  const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
-    autoplay: true, onAutoplayMuted: () => mutedCb++,
-  });
-  await wait(3500);
-  assert.equal(mutedCb, 0);
-  assert.equal(localStorage.getItem('addabaaz.autoplaySound'), '1', 'observed sound success is recorded');
-  ctl.destroy();
+test('youtube on a touch device: the FIRST gesture anywhere unmutes a muted-started player (sound policy satisfied)', async () => {
+  const prevMM = globalThis.matchMedia;
+  globalThis.matchMedia = (q) => ({ matches: q === '(pointer: coarse)', media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+  // Minimal window stand-in capturing the adapter's gesture listeners.
+  const listeners = {};
+  const prevWin = globalThis.window;
+  globalThis.window = {
+    addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); },
+    removeEventListener: (t, fn) => { listeners[t] = (listeners[t] || []).filter((x) => x !== fn); },
+  };
+  const fireGesture = () => Object.values(listeners).flat().slice().forEach((fn) => fn({ type: 'pointerdown' }));
+  try {
+    setActivation(false);
+    globalThis.__ytScenario = { startState: 5, delayToPlayMs: 300, playsWithSound: true };   // embed autoplays (muted)
+    let mutedCb = 0, unmutedCb = 0;
+    const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
+      autoplay: true,
+      onAutoplayMuted: () => mutedCb++,
+      onGestureUnmuted: () => unmutedCb++,
+    });
+    assert.equal(mutedCb, 1, 'started muted (pre-gesture instant path)');
+    assert.ok((listeners.pointerdown || []).length > 0, 'a first-gesture listener is armed');
+    await wait(800);                                  // muted playback underway
+    fireGesture();                                    // viewer taps/scrolls anywhere
+    assert.equal(unmutedCb, 1, 'the page is told sound switched on so it can hide the pill');
+    assert.equal(globalThis.__unmuted, true, 'player.unMute() ran inside the gesture');
+    assert.ok((listeners.pointerdown || []).length === 0, 'the listener disarms after one gesture');
+    ctl.destroy();
+  } finally {
+    if (prevWin === undefined) delete globalThis.window; else globalThis.window = prevWin;
+    if (prevMM === undefined) delete globalThis.matchMedia; else globalThis.matchMedia = prevMM;
+  }
 });
 
 test('youtube: no user gesture yet (deep link/reload) → instant muted start, no 5s dead time', async () => {
