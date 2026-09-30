@@ -3,7 +3,7 @@
 const env = window.ADDABAAZ_ENV || {};
 export const CONFIG = {
   appName: 'ADDABAAZ',
-  version: '2.0.0',
+  version: '2.0.1',
   // API base URL. '' = auto-detect the API on the same origin; 'off' = never use an API (static / local-only mode).
   apiBase: (env.API_BASE || '').replace(/\/$/, ''),   // '' = auto-detect, 'off' = local mode
   googleForm: env.GOOGLE_FORM || null,
