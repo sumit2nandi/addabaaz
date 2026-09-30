@@ -259,6 +259,7 @@ body.reels-mode { overflow: hidden; } body.reels-mode .footer { display: none; }
 .reels-feed { height: calc(100dvh - var(--topbar-h) - var(--sat) - var(--tabbar-h) - var(--sab)); overflow-y: auto; scroll-snap-type: y mandatory; scrollbar-width: none; outline: none; overscroll-behavior: contain; }
 .reels-feed::-webkit-scrollbar { display: none; }
 .reel { position: relative; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 10px 12px; }
+@supports (content-visibility: auto) { .reel { content-visibility: auto; } }   /* skip off-screen reel subtrees: big GPU/RAM saving on phones */
 .reel-frame { position: relative; height: 100%; max-height: 900px; aspect-ratio: 9/16; max-width: 100%; border-radius: var(--radius-lg); overflow: hidden; background: #000; box-shadow: 0 0 0 1px var(--border-2), 0 30px 80px rgba(0,0,0,.6); }
 .reel-slot { position: absolute; inset: 0; } .reel-slot > img { width: 100%; height: 100%; object-fit: cover; }
 .reel-player, .reel-player iframe, .reel-player > div { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
@@ -266,7 +267,7 @@ body.reels-mode { overflow: hidden; } body.reels-mode .footer { display: none; }
 .reel-caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 60px 16px 16px; background: linear-gradient(0deg, rgba(0,0,0,.85), transparent); display: grid; gap: 4px; pointer-events: none; z-index: 2; } .reel-caption a { pointer-events: auto; color: var(--gold); font-weight: 700; font-size: 13px; } .reel-caption strong { font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .reel.playing .reel-caption { padding-bottom: 54px; }
 .reel-actions { display: grid; gap: 14px; align-content: end; padding-bottom: 20px; }
-@media (max-width: 640px) { .reel { padding: 0; } .reel-frame { border-radius: 0; max-height: none; width: 100%; height: 100%; aspect-ratio: auto; } .reel-actions { position: absolute; right: 10px; bottom: 90px; z-index: 5; } }
+@media (max-width: 640px) { .reel { padding: 0; } .reel-frame { border-radius: 0; max-height: none; width: 100%; height: 100%; aspect-ratio: auto; box-shadow: none; } .reel-actions { position: absolute; right: 10px; bottom: 90px; z-index: 5; } }
 
 /* ---------- lightbox / dialog / toast ---------- */
 .lightbox { position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,.94); display: grid; place-items: center; animation: fadeIn .2s; padding: var(--sat) 0 var(--sab); }

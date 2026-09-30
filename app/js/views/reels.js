@@ -9,6 +9,15 @@ import { shareUrl } from '../platform.js';
 let soundOn = true;   // sticky: once the viewer unmutes, later reels start with sound
 let muteHinted = false; // one-time toast when a browser forces autoplay muted
 
+/* A long feed of full-screen snap sections is far heavier than it looks on a phone: every section carries a
+ * cover image, a gradient caption overlay, a full-viewport box-shadow and an infinitely animating spinner,
+ * plus the playing reel's video player. ~180 of those running at once exceeds what a budget phone's GPU/RAM
+ * rasterises — the renderer gets killed a few seconds after the page opens (Chrome: "Can't open this page";
+ * every browser on the same phone dies, desktop survives). Only sections near the current reel keep their
+ * content; the rest stay empty shells that preserve the scroll layout and snap points. */
+const KEEP_BEFORE = 2;   // mounted sections above the current one (swipe back is instant)
+const KEEP_AFTER = 3;    // mounted sections ahead (their cover images are decoded by the time a swipe lands)
+
 export default async function reels(ctx) {
   const cat = app.catalog;
   let list = cat.reels();
@@ -18,30 +27,42 @@ export default async function reels(ctx) {
   ctx.setTitle('Reels');
   document.body.classList.add('reels-mode'); ctx.onCleanup(() => document.body.classList.remove('reels-mode'));
 
+  // The per-reel content (cover, tap layer, caption, action buttons) — injected only while the section is near
+  // the current one, removed again when it scrolls out of the keep-window.
+  const contentHtml = (v, i) => { const show = cat.show(v.showId) || cat.soon(v.showId); return html`
+    <div class="reel-frame">
+      <div class="reel-slot">${img(cat.thumb(v), '', { lazy: i > 2 })}<div class="reel-loading"><div class="spinner"></div></div></div>
+      <button type="button" class="reel-tap" data-reel-tap aria-label="Play or pause"><span class="reel-pp">${icon('play', { size: 34 })}</span></button>
+      <div class="reel-caption"><strong>${cat.displayTitle(v)}</strong>${show ? html`<a href="#/${cat.show(v.showId) ? 'show' : 'soon'}/${show.id}">${show.titleEn || show.title}</a>` : html`<span>ADDABAAZ</span>`}</div>
+    </div>
+    <div class="reel-actions">
+      <button type="button" class="icon-btn big" data-reel-sound aria-label="Toggle sound">${icon(soundOn ? 'volume' : 'mute', { size: 26 })}</button>
+      <button type="button" class="icon-btn big" data-reel-share="${v.id}" aria-label="Share">${icon('share', { size: 26 })}</button>
+      ${show && cat.show(v.showId) ? html`<a class="icon-btn big" href="#/show/${show.id}" aria-label="Open show">${icon('tv', { size: 26 })}</a>` : ''}
+    </div>`.s; };
+
   ctx.root.innerHTML = html`<div class="reels-feed" id="feed" tabindex="0" aria-label="Reels feed. Use arrow keys to move between reels.">
-    ${list.map((v, i) => { const show = cat.show(v.showId) || cat.soon(v.showId); return html`
-      <section class="reel" data-i="${i}" aria-label="${cat.displayTitle(v)}">
-        <div class="reel-frame">
-          <div class="reel-slot">${img(cat.thumb(v), '', { lazy: i > 2 })}<div class="reel-loading"><div class="spinner"></div></div></div>
-          <button type="button" class="reel-tap" data-reel-tap aria-label="Play or pause"><span class="reel-pp">${icon('play', { size: 34 })}</span></button>
-          <div class="reel-caption"><strong>${cat.displayTitle(v)}</strong>${show ? html`<a href="#/${cat.show(v.showId) ? 'show' : 'soon'}/${show.id}">${show.titleEn || show.title}</a>` : html`<span>ADDABAAZ</span>`}</div>
-        </div>
-        <div class="reel-actions">
-          <button type="button" class="icon-btn big" data-reel-sound aria-label="Toggle sound">${icon(soundOn ? 'volume' : 'mute', { size: 26 })}</button>
-          <button type="button" class="icon-btn big" data-reel-share="${v.id}" aria-label="Share">${icon('share', { size: 26 })}</button>
-          ${show && cat.show(v.showId) ? html`<a class="icon-btn big" href="#/show/${show.id}" aria-label="Open show">${icon('tv', { size: 26 })}</a>` : ''}
-        </div>
-      </section>`; })}
+    ${list.map((v, i) => html`<section class="reel" data-i="${i}" aria-label="${cat.displayTitle(v)}"></section>`)}
   </div>`.s;
 
   const feed = $('#feed', ctx.root), sections = $$('.reel', feed);
+  const mounted = new Set();
+  const mount = (i) => { if (i >= 0 && i < sections.length && !mounted.has(i)) { mounted.add(i); sections[i].innerHTML = contentHtml(list[i], i); } };
+  const keepWindow = (center) => {
+    for (let i = Math.max(0, center - KEEP_BEFORE); i <= Math.min(sections.length - 1, center + KEEP_AFTER); i++) mount(i);
+    for (const i of [...mounted]) if (i < center - KEEP_BEFORE || i > center + KEEP_AFTER) { mounted.delete(i); sections[i].innerHTML = ''; }
+  };
+  keepWindow(startIdx);
+
   let active = -1, ctl = null, host = null, token = 0;
   const setIcon = (sec) => { const b = $('[data-reel-sound]', sec); if (b) b.innerHTML = icon(soundOn ? 'volume' : 'mute', { size: 26 }).s; };
   async function activate(i) {
     if (i === active || i < 0 || i >= sections.length) return;
+    keepWindow(i);
     active = i; const my = ++token;
     if (ctl) { ctl.destroy(); host?.remove(); ctl = null; sections.forEach((s) => s.classList.remove('playing', 'paused')); }
     const sec = sections[i], slot = $('.reel-slot', sec); const v = list[i];
+    if (!slot) return;   // section shell lost its content (window pruned mid-scroll): ignore this activation
     const h = document.createElement('div'); h.className = 'reel-player'; slot.appendChild(h);   // poster stays underneath
     try {
       let media = v;
