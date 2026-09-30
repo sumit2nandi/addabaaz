@@ -93,6 +93,7 @@ With `autoDeploy: true` (the Blueprint default) every push to the branch deploys
 ## Troubleshooting
 | Log / symptom | Meaning and fix |
 |---|---|
+| `Cannot connect to MySQL (HANDSHAKE_SSL_ERROR)` | The TLS certificate check failed. Look at the two log lines just before it: `[db] TLS: on, NO custom CA certificate` means `DB_SSL_CA` is missing or empty (add it, then redeploy); `trusting the provided CA certificate (1)` followed by `self-signed certificate in certificate chain` means the certificate is not this Aiven service's CA: download `ca.pem` again from the Aiven service page. A certificate whose line breaks were turned into spaces is repaired automatically. |
 | `self-signed certificate in certificate chain` or `unable to get local issuer certificate` | The Aiven CA certificate is missing or wrong. Re-paste the whole `ca.pem` into `DB_SSL_CA` (or check the secret file path in `DB_SSL_CA_FILE`). |
 | `DB_SSL_CA_FILE: cannot read ...` | The secret file name or path does not match. Secret files appear under `/etc/secrets/<file name>`. |
 | `ETIMEDOUT` / `ECONNREFUSED` | Wrong host or port (the port is not 3306), the Aiven service is not **Running** (free services power off when idle: power it on in the Aiven console), or the Aiven allowed-IP list blocks Render. |

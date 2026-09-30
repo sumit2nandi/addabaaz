@@ -13,10 +13,17 @@ const port = Number(process.env.PORT) || 3000;
 // so a wrong or leftover DATABASE_URL is easy to spot in the host's runtime log.
 const dbConfig = dbConfigFromEnv();
 console.log(`[db] settings from ${process.env.DATABASE_URL ? 'DATABASE_URL' : 'DB_* variables'}: ${dbConfig.user}@${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`);
+// Say how the connection is secured (no secrets): helps to tell "certificate missing" from "wrong password" in the host's log.
+console.log(`[db] TLS: ${dbConfig.ssl ? (dbConfig.ssl.ca ? `on, trusting the provided CA certificate (${(dbConfig.ssl.ca.match(/BEGIN CERTIFICATE/g) || []).length})` : 'on, NO custom CA certificate (only public CAs are trusted)') : 'off'}`);
 // Connect to MySQL (creating the database first when DB_CREATE=true) and stop early with a clear message if it is unreachable.
 const db = await createDb({ config: dbConfig, ensureDatabase: process.env.DB_CREATE === 'true' });
 try { await db.ping(); }
-catch (e) { console.error(`Cannot connect to MySQL (${e.code || e.message}). Check DATABASE_URL / DB_* settings — see .env.example.`); process.exit(1); }
+catch (e) {
+  console.error(`Cannot connect to MySQL (${e.code || e.message}). Check DATABASE_URL / DB_* settings — see .env.example.`);
+  if (e.code && e.message && e.message !== e.code) console.error(`[db] details: ${e.message}`);
+  if (/SSL|CERT|TLS/i.test(`${e.code} ${e.message}`)) console.error(dbConfig.ssl?.ca ? '[db] TLS failed although a CA certificate was provided: make sure it is the CA certificate of THIS Aiven service (download it again from the service page).' : '[db] TLS failed and no CA certificate was provided: set DB_SSL_CA (the text of ca.pem) or DB_SSL_CA_FILE.');
+  process.exit(1);
+}
 if (process.env.DB_MIGRATE !== 'false') {                       // set DB_MIGRATE=false to run `npm run db:migrate` as a separate deploy step
   const applied = await migrate(db, { log: (m) => console.log('[migrate]', m) });
   if (applied.length) console.log(`[migrate] applied ${applied.length} migration(s)`);

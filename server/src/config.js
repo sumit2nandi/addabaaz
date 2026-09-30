@@ -11,6 +11,20 @@
  */
 import fs from 'node:fs';
 
+/** Rebuilds a certificate pasted into an environment-variable box. Hosting dashboards often turn the line breaks into spaces or a
+ *  literal \n, or wrap the value in quotes; OpenSSL then cannot read it and every connection fails with HANDSHAKE_SSL_ERROR. We pull the
+ *  certificate(s) out and write them back in the standard 64-characters-per-line form. */
+export function normalizePem(text) {
+  const out = [];
+  for (const m of String(text).matchAll(/-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/g)) {
+    const body = m[1].replace(/\\n|\\r|[\s"']/g, '');
+    if (!/^[A-Za-z0-9+/=]+$/.test(body)) continue;
+    out.push(`-----BEGIN CERTIFICATE-----\n${body.match(/.{1,64}/g).join('\n')}\n-----END CERTIFICATE-----\n`);
+  }
+  if (!out.length) throw new Error('DB_SSL_CA does not contain a certificate. Paste the whole ca.pem file, from the -----BEGIN CERTIFICATE----- line to the -----END CERTIFICATE----- line.');
+  return out.join('');
+}
+
 // Turns environment variables into a mysql2 pool config.
 // `env` is injectable so tests can pass a fake environment.
 export function dbConfigFromEnv(env = process.env) {
@@ -39,9 +53,9 @@ export function dbConfigFromEnv(env = process.env) {
     cfg.ssl = { minVersion: 'TLSv1.2', rejectUnauthorized: !/^(0|false)$/i.test(env.DB_SSL_VERIFY || '') };
     // A private CA (Aiven signs every service with its own): from a file (Render "Secret Files") or pasted as an environment variable.
     if (env.DB_SSL_CA_FILE) {
-      try { cfg.ssl.ca = fs.readFileSync(env.DB_SSL_CA_FILE, 'utf8'); }
-      catch (e) { throw new Error(`DB_SSL_CA_FILE: cannot read "${env.DB_SSL_CA_FILE}" (${e.code || e.message}). Upload the CA certificate as a secret file at that path.`); }
-    } else if (env.DB_SSL_CA) cfg.ssl.ca = env.DB_SSL_CA.replace(/\\n/g, '\n');
+      try { cfg.ssl.ca = normalizePem(fs.readFileSync(env.DB_SSL_CA_FILE, 'utf8')); }
+      catch (e) { if (/DB_SSL_CA does not/.test(e.message)) throw new Error(e.message.replace('DB_SSL_CA', 'DB_SSL_CA_FILE')); throw new Error(`DB_SSL_CA_FILE: cannot read "${env.DB_SSL_CA_FILE}" (${e.code || e.message}). Upload the CA certificate as a secret file at that path.`); }
+    } else if (env.DB_SSL_CA) cfg.ssl.ca = normalizePem(env.DB_SSL_CA);
     // With a private CA we check the certificate chain (same as the mysql client's VERIFY_CA); managed providers' certificates are not always
     // issued for the exact host name. Set DB_SSL_VERIFY_IDENTITY=true to also require the host name to match.
     if (cfg.ssl.ca && !/^(1|true|yes)$/i.test(env.DB_SSL_VERIFY_IDENTITY || '')) cfg.ssl.checkServerIdentity = () => undefined;

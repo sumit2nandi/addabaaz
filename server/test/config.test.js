@@ -32,3 +32,13 @@ test('private CA: from a file path or pasted text (\\n allowed); a missing file 
 test('DB_SSL_VERIFY=false skips certificate checks (lab servers only)', () => {
   assert.equal(dbConfigFromEnv({ DB_HOST: 'h', DB_SSL: '1', DB_SSL_VERIFY: 'false' }).ssl.rejectUnauthorized, false);
 });
+
+test('a pasted certificate survives what hosting dashboards do to it (spaces, literal \\n, quotes); garbage is rejected', () => {
+  const body = 'MIIBfakeAAAA'.repeat(20);
+  const good = `-----BEGIN CERTIFICATE-----\n${body.match(/.{1,64}/g).join('\n')}\n-----END CERTIFICATE-----\n`;
+  const oneLine = good.replace(/\n/g, ' ').trim();                     // newlines became spaces
+  const literal = good.replace(/\n/g, '\\n');                         // newlines became backslash-n
+  const quoted = `"${literal}"`;
+  for (const v of [good, oneLine, literal, quoted]) assert.equal(dbConfigFromEnv({ DB_HOST: 'h', DB_SSL_CA: v }).ssl.ca, good);
+  assert.throws(() => dbConfigFromEnv({ DB_HOST: 'h', DB_SSL_CA: 'not a certificate' }), /does not contain a certificate/);
+});
