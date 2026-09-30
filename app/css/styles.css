@@ -105,7 +105,7 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .chip { position: absolute; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: .3px; background: rgba(0,0,0,.75); color: #fff; }
 .chip-label { left: 8px; top: 8px; text-transform: uppercase; background: var(--accent); }
 .chip-dur { right: 8px; bottom: 8px; }
-.chip-soon { left: 8px; bottom: 8px; background: var(--gold); color: #000; }
+.chip-soon { left: 8px; top: 8px; background: var(--gold); color: #000; }
 .chip-btn { border: 1px solid var(--border-2); background: rgba(255,255,255,.05); color: var(--text-2); padding: 7px 15px; border-radius: 999px; font-weight: 600; font-size: 13px; display: inline-flex; gap: 6px; align-items: center; transition: .2s; }
 .chip-btn:hover { background: rgba(255,255,255,.12); }
 .chip-btn.active { background: #fff; color: #000; border-color: #fff; }
@@ -216,10 +216,12 @@ img.img-failed { opacity: 0; }
 @media (max-width: 639px) {
   .rail-track { gap: 10px; }
   .r-reel .rail-item { width: max(92px, 27vw); }                  /* 9:16 portraits: 3 + ~10% peek per row */
-  .r-video .rail-item, .r-top .rail-item { width: max(128px, 38vw); }   /* 16:9 landscapes: 2 + ~25% peek per row */
   .grid-reels { grid-template-columns: repeat(3, 1fr); }          /* reels grids on phones: 3 across */
   .card-reel .card-title { font-size: 12px; }
 }
+/* Home rails stay lean: just the title in small type, no show-name/views/date meta. */
+.rails-lean .card-video .card-meta, .rails-lean .card-reel .card-meta { display: none; }
+.rails-lean .card-video .card-title { font-size: 13px; }
 .rail-arrow { position: absolute; top: 8px; bottom: 14px; width: 54px; z-index: 5; border: 0; color: #fff; display: none; place-items: center; opacity: 0; transition: opacity .2s; }
 .rail-arrow.left { left: 0; background: linear-gradient(90deg, rgba(5,5,5,.9), transparent); } .rail-arrow.right { right: 0; background: linear-gradient(270deg, rgba(5,5,5,.9), transparent); }
 .rail-arrow[disabled] { display: none !important; }
