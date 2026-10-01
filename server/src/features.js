@@ -41,16 +41,35 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
   const devLog = (msg) => { if (mailer.provider === 'none' && process.env.NODE_ENV !== 'production') console.log(`[mail:dev] ${msg}`); };
   // Fire-and-forget: a mail failure is logged but never breaks the request.
   const sendMail = (to, built, note) => { devLog(note); mailer.send({ to, ...built }).catch((e) => console.warn('[mail] send failed:', e.message)); };
+  // Strict variants for endpoints that PROMISE the reader an email. The UI's "check your inbox" must
+  // never be shown for a mail that didn't go out: in production an unconfigured mailer is a 503, and a
+  // failed send is a 503 in every environment — swallowing it is how the site ended up lying to users.
+  const MAIL_DOWN = 'We couldn’t send the email right now — please try again in a few minutes.';
+  const requireMail = () => { if (process.env.NODE_ENV === 'production' && mailer.provider !== 'smtp') throw new HttpError(503, 'email_not_configured', 'Email delivery isn’t set up on this server yet, so this can’t be sent right now.'); };
+  const sendMailStrict = async (to, built, note) => {
+    devLog(note);
+    let sent;
+    try { sent = await mailer.send({ to, ...built }); } catch (e) { console.warn('[mail] send failed:', e.message); throw new HttpError(503, 'email_send_failed', MAIL_DOWN); }
+    if (!sent?.sent && process.env.NODE_ENV === 'production') throw new HttpError(503, 'email_send_failed', MAIL_DOWN);
+  };
   // Builds the `{ token, user }` response used after password changes.
   const sessionFor = (user, sv = user.sessionVersion || 0) => ({ token: signToken(user.id, secret, undefined, sv), user: publicUser(user) });
 
   // Creates a 3-day one-time token and mails the confirmation link. Returns false if already verified.
-  async function sendVerification(user) {
+  // `strict` = the caller promised the user an email: the mail must really go out (else this throws)
+  // BEFORE the token is stored, so a failed send never creates a "we just sent one" throttle state.
+  async function sendVerification(user, { strict = false } = {}) {
     if (user.emailVerifiedAt) return false;
     const token = newToken();
-    await db.authTokens.issue(user.id, 'verify', sha256(token), 3 * 24 * HOUR);
     const url = `${siteUrl}/verify?token=${token}`;
-    sendMail(user.email, mail.verifyEmailEmail({ name: user.name, url, supportEmail: cfg.supportEmail }), `verify link for ${user.email}: ${url}`);
+    const built = mail.verifyEmailEmail({ name: user.name, url, supportEmail: cfg.supportEmail });
+    if (strict) {
+      await sendMailStrict(user.email, built, `verify link for ${user.email}: ${url}`);
+      await db.authTokens.issue(user.id, 'verify', sha256(token), 3 * 24 * HOUR);
+      return true;
+    }
+    await db.authTokens.issue(user.id, 'verify', sha256(token), 3 * 24 * HOUR);
+    sendMail(user.email, built, `verify link for ${user.email}: ${url}`);
     return true;
   }
 
@@ -83,8 +102,14 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
 
     /** Registered by app.js after the sign-in step of signup: sends the confirmation email. */
     public(api) {
-      // Password reset step 1: always answers 202 (so nobody can discover which e-mails have accounts), and sends at most one mail a minute per account.
+      // Password reset step 1: replies 202 only when a real mail went out (the site must never claim an
+      // email was sent when it wasn't) — production without email configuration answers 503, and so does
+      // a failed send, in which case NOTHING is persisted so a retry really resends. Otherwise the answer
+      // is 202 for every address (so nobody can discover which e-mails have accounts) and at most one
+      // mail a minute per account. Trade-off: while the provider is actually down, an existing account
+      // answers 503 and an unknown one 202 — telling the user the truth wins over hiding existence here.
       api.post('/auth/forgot', authLimit, wrap(async (req, res) => {
+        requireMail();
         const email = String(req.body?.email || '').trim().toLowerCase();
         if (!EMAIL.test(email) || email.length > 254) throw bad('Please enter a valid email address.', 'invalid_email');
         const user = await db.users.byEmail(email);
@@ -92,9 +117,9 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
           const last = await db.authTokens.lastIssuedAt(user.id, 'reset');
           if (!last || Date.now() - last.getTime() > 60_000) {        // one email a minute per account
             const token = newToken();
-            await db.authTokens.issue(user.id, 'reset', sha256(token), HOUR);
             const url = `${siteUrl}/reset?token=${token}`;
-            sendMail(user.email, mail.resetPasswordEmail({ name: user.name, url, supportEmail: cfg.supportEmail }), `reset link for ${user.email}: ${url}`);
+            await sendMailStrict(user.email, mail.resetPasswordEmail({ name: user.name, url, supportEmail: cfg.supportEmail }), `reset link for ${user.email}: ${url}`);
+            await db.authTokens.issue(user.id, 'reset', sha256(token), HOUR);
           }
         }
         res.status(202).json({ ok: true });                            // same answer whether or not the account exists
@@ -161,12 +186,14 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
     // Routes that require a signed-in user (`req.user` is set by app.js).
     authed(api) {
       /* --- account --- */
-      // Re-send the verification mail (at most once a minute).
+      // Re-send the verification mail (at most once a minute). Already-verified needs no mail; everything
+      // else answers 202 only when the mail really went out (requireMail / sendMailStrict — see above).
       api.post('/me/verify/resend', authLimit, wrap(async (req, res) => {
         if (req.user.emailVerifiedAt) return res.json({ verified: true });
+        requireMail();
         const last = await db.authTokens.lastIssuedAt(req.user.id, 'verify');
         if (last && Date.now() - last.getTime() < 60_000) throw new HttpError(429, 'too_soon', 'We just sent one — please wait a minute before asking again.');
-        await sendVerification(req.user); res.status(202).json({ ok: true });
+        await sendVerification(req.user, { strict: true }); res.status(202).json({ ok: true });
       }));
       // Change password: needs the current one (unless the account was created via Google/Facebook and has none). All other sessions are signed out.
       api.post('/me/password', authLimit, wrap(async (req, res) => {

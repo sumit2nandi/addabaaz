@@ -90,6 +90,53 @@ test('a newer reset link replaces the older one; expired links fail; requests ar
   assert.equal((await call('POST', '/auth/reset', { token: first, password: 'whatever123' })).status, 400, 'expired');
 });
 
+// The website must never claim an email was sent when it wasn't: a failing provider and a missing
+// SMTP configuration both surface as 503 with a message the UI shows, and a failed reset send leaves
+// no throttle state behind — so retrying once the provider works really delivers.
+test('forgot/resend fail loudly instead of pretending an email was sent', async () => {
+  const extra = [];
+  let broken = true;
+  const flaky = createMailer({ transport: { sendMail: async (m) => { if (broken) throw new Error('provider down'); extra.push(m); } } });
+  const noSmtp = createMailer({ url: '' });
+  const listen = (mailer) => createApp({ db, jwtSecret: 'test-secret', rate: false, mailer }).listen(0);
+  const sFlaky = listen(flaky), sNone = listen(noSmtp);
+  const callOn = async (srv, method, p, body, token) => {
+    const r = await fetch(`http://127.0.0.1:${srv.address().port}/api/v1${p}`, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    const t = await r.text(); return { status: r.status, body: t ? JSON.parse(t) : null };
+  };
+  try {
+    const em = `honest${Date.now()}@example.com`;
+    const su = await callOn(sFlaky, 'POST', '/auth/signup', { name: 'Honest', email: em, password: 'password123' });
+    assert.equal(su.status, 200);
+
+    const f1 = await callOn(sFlaky, 'POST', '/auth/forgot', { email: em });
+    assert.equal(f1.status, 503, 'a failed send is reported, not swallowed');
+    assert.equal(f1.body.error.code, 'email_send_failed');
+    assert.equal(extra.length, 0, 'the failed attempt delivered nothing');
+
+    broken = false;
+    const f2 = await callOn(sFlaky, 'POST', '/auth/forgot', { email: em });
+    assert.equal(f2.status, 202, 'the failed attempt left no throttle behind');
+    assert.ok(extra.some((m) => m.to === em && /Reset your/.test(m.subject)), 'the retry actually delivered');
+
+    broken = true;
+    const rs = await callOn(sFlaky, 'POST', '/me/verify/resend', null, su.body.token);
+    assert.equal(rs.status, 503, 'resend is equally honest');
+    assert.equal(rs.body.error.code, 'email_send_failed');
+    broken = false;
+
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      for (const address of [em, 'nobody@example.com']) {           // identical for every address (no enumeration)
+        const r = await callOn(sNone, 'POST', '/auth/forgot', { email: address });
+        assert.equal(r.status, 503);
+        assert.equal(r.body.error.code, 'email_not_configured');
+      }
+    } finally { if (prev === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = prev; }
+  } finally { sFlaky.close(); sNone.close(); }
+});
+
 test('change password & sign out everywhere', async () => {
   const u = await signup(); const other = (await call('POST', '/auth/login', { email: u.email, password: u.password })).body.token;
   assert.equal((await call('POST', '/me/password', { currentPassword: 'wrong', newPassword: 'newpassword1' }, u.token)).status, 403);
