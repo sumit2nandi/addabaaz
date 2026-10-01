@@ -179,17 +179,25 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 /* ---------- grids ---------- */
 .grid { display: grid; gap: 22px 16px; }
 .grid-shows { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.grid-upcoming-pending, .grid-upcoming-portrait { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.grid-upcoming-landscape { grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); }
+.grid-upcoming-landscape .show-tile { max-width: 640px; }
+.upcoming-poster-group { margin-top: 24px; }
+.upcoming-poster-group > h2 { margin-bottom: 14px; font-size: clamp(17px, 2vw, 21px); }
 .grid-videos { grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); }
 .grid-reels { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 .grid-gallery { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .show-tile { display: grid; gap: 10px; align-content: start; } .show-tile-info { display: grid; gap: 6px; justify-items: start; } .show-tile-info > a { font-size: 17px; font-weight: 600; }
-@media (min-width: 700px) { .grid-shows, .grid-gallery { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); } .grid-reels { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); } }
+@media (min-width: 700px) { .grid-shows, .grid-gallery, .grid-upcoming-portrait { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); } .grid-reels { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); } }
 
 /* ---------- cards ---------- */
 .card { position: relative; display: block; border-radius: var(--radius); transition: transform .3s var(--ease), box-shadow .3s; text-align: left; background: none; border: 0; padding: 0; width: 100%; }
 .poster, .thumb { position: relative; overflow: hidden; border-radius: var(--radius); background: var(--panel-2); }
 .poster { aspect-ratio: 2/3; } .thumb { aspect-ratio: 16/9; }
 .poster img, .thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s var(--ease); }
+.poster-adaptive { aspect-ratio: 2/3; }
+.poster-adaptive img { object-fit: contain; }
+.card-soon:hover .poster-adaptive-image { transform: none; }
 img.img-failed { opacity: 0; }
 .card-gallery .poster { aspect-ratio: 2/3; cursor: zoom-in; }
 @media (hover: hover) {

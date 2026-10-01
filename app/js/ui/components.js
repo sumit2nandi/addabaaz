@@ -89,7 +89,7 @@ export function reelCard(v, { showDuration = true } = {}) {
 // Card for an upcoming title.
 export function soonCard(u) {
   return html`<a class="card card-poster card-soon" href="#/soon/${u.id}" aria-label="${u.titleEn || u.title} — coming soon">
-    <div class="poster">${img(u.poster, u.title)}<span class="chip chip-soon">Coming soon</span></div>
+    <div class="poster poster-adaptive">${img(u.poster, 'Coming soon poster', { cls: 'poster-adaptive-image' })}<span class="chip chip-soon">Coming soon</span></div>
   </a>`;
 }
 // Photo tile that opens the lightbox.
@@ -98,6 +98,22 @@ export function galleryCard(g, i) {
 }
 
 /* ---------- rails ---------- */
+// Resize an upcoming poster frame to the image's real orientation after it loads, avoiding portrait-cropping of landscape art.
+export function fitAdaptivePosters(root, onFit = () => {}) {
+  root.querySelectorAll('.poster-adaptive-image').forEach((image) => {
+    const frame = image.closest('.poster-adaptive'); if (!frame) return;
+    const fit = () => {
+      const { naturalWidth: width, naturalHeight: height } = image;
+      const orientation = width > height ? 'landscape' : 'portrait';
+      if (width > 0 && height > 0) frame.style.aspectRatio = `${width} / ${height}`;
+      frame.dataset.orientation = orientation;
+      onFit(image, orientation);
+    };
+    if (image.complete) fit();
+    else { image.addEventListener('load', fit, { once: true }); image.addEventListener('error', fit, { once: true }); }
+  });
+}
+
 // A horizontal scrolling row with a heading and a "See all" link.
 export function rail({ title, subtitle = '', items = [], href = '', linkLabel = 'See all', cls = '', id = '' }) {
   if (!items.length) return html``;
@@ -113,6 +129,7 @@ export function rail({ title, subtitle = '', items = [], href = '', linkLabel = 
 }
 // Wire up the left/right scroll buttons of every rail under `root` (enable/disable at the ends).
 export function enhanceRails(root) {
+  fitAdaptivePosters(root);
   root.querySelectorAll('.rail-track').forEach((track) => {
     const wrap = track.parentElement; const l = wrap.querySelector('.left'); const r = wrap.querySelector('.right');
     const upd = () => { l.disabled = track.scrollLeft < 4; r.disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 4; wrap.classList.toggle('no-scroll', track.scrollWidth <= track.clientWidth + 4); };
