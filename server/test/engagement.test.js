@@ -107,7 +107,7 @@ test('forgot/resend fail loudly instead of pretending an email was sent', async 
   try {
     const em = `honest${Date.now()}@example.com`;
     const su = await callOn(sFlaky, 'POST', '/auth/signup', { name: 'Honest', email: em, password: 'password123' });
-    assert.equal(su.status, 200);
+    assert.equal(su.status, 201);
 
     const f1 = await callOn(sFlaky, 'POST', '/auth/forgot', { email: em });
     assert.equal(f1.status, 503, 'a failed send is reported, not swallowed');
