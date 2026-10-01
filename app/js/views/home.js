@@ -72,7 +72,7 @@ export default async function home(ctx) {
   // less often (at most 2 of the 10). Accounts that already watch mature content keep the full ranking.
   const demoteMature = !u.account || !Object.keys(u.lib.progress || {}).some((id) => cat.isMature(cat.video(id)));
   const cw = u.continueWatching(cat);
-  const mine = u.listItems().map((x) => (x.type === 'show' ? cat.show(x.id) && showCard(cat.show(x.id)) : x.type === 'video' ? cat.video(x.id) && videoCard(cat.video(x.id)) : cat.soon(x.id) && soonCard(cat.soon(x.id)))).filter(Boolean);
+  const mine = u.listItems().map((x) => (x.type === 'show' ? cat.show(x.id) && showCard(cat.show(x.id)) : x.type === 'video' ? cat.video(x.id) && videoCard(cat.video(x.id), { showDuration: false }) : cat.soon(x.id) && soonCard(cat.soon(x.id)))).filter(Boolean);
   const slides = heroSlides();
   const N = CONFIG.homeRailSize;
   const rec = u.recommendations(cat, N);
@@ -80,14 +80,14 @@ export default async function home(ctx) {
   ctx.root.innerHTML = html`
     ${slides.length ? heroHtml(slides) : ''}
     <div class="rails rails-lean">
-      ${rail({ title: 'Continue Watching', items: cw.map(({ video }) => videoCard(video)), cls: 'r-video' })}
+      ${rail({ title: 'Continue Watching', items: cw.map(({ video }) => videoCard(video, { showDuration: false })), cls: 'r-video' })}
       ${rec ? rail({ title: `Because you watched ${rec.because.titleEn || rec.because.title}`, items: rec.items.map((x) => showCard(x)), cls: 'r-poster' }) : ''}
       ${rail({ title: 'My List', items: mine, href: '#/list', cls: 'r-poster' })}
-      ${rail({ title: 'Latest Reels', subtitle: 'Bite-sized ADDABAAZ', items: cat.reels().slice(0, N + 6).map(reelCard), href: '#/reels', linkLabel: 'Watch reels', cls: 'r-reel' })}
-      ${rail({ title: 'Latest Episodes & Videos', subtitle: 'Recent episodes and landscape uploads from ADDABAAZ', items: cat.latestVideos(N).map((v) => videoCard(v)), cls: 'r-video' })}
-      ${rail({ title: 'Top 10 Episodes', subtitle: 'Most watched on ADDABAAZ', items: cat.trending(10, demoteMature ? { matureCap: 2 } : {}).map((v, i) => videoCard(v, { rank: i + 1 })), cls: 'r-top' })}
+      ${rail({ title: 'Latest Reels', subtitle: 'Bite-sized ADDABAAZ', items: cat.reels().slice(0, N + 6).map((v) => reelCard(v, { showDuration: false })), href: '#/reels', linkLabel: 'Watch reels', cls: 'r-reel' })}
+      ${rail({ title: 'Latest Episodes & Videos', subtitle: 'Recent episodes and landscape uploads from ADDABAAZ', items: cat.latestVideos(N).map((v) => videoCard(v, { showDuration: false })), cls: 'r-video' })}
+      ${rail({ title: 'Top 10 Episodes', subtitle: 'Most watched on ADDABAAZ', items: cat.trending(10, demoteMature ? { matureCap: 2 } : {}).map((v, i) => videoCard(v, { rank: i + 1, showDuration: false })), cls: 'r-top' })}
       ${rail({ title: 'Shows', items: cat.shows.map((s) => showCard(s)), href: '#/shows', linkLabel: 'Browse all', cls: 'r-poster' })}
-      ${cat.shows.map((s) => rail({ title: s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title, items: cat.episodes(s.id).slice().reverse().map((v) => videoCard(v, { showName: false })), href: `#/show/${s.id}`, linkLabel: 'Open show', cls: 'r-video' }))}
+      ${cat.shows.map((s) => rail({ title: s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title, items: cat.episodes(s.id).slice().reverse().map((v) => videoCard(v, { showName: false, showDuration: false })), href: `#/show/${s.id}`, linkLabel: 'Open show', cls: 'r-video' }))}
       ${rail({ title: 'Coming Soon', subtitle: 'New originals from ADDABAAZ', items: cat.upcoming.map(soonCard), href: '#/upcoming', cls: 'r-poster' })}
       ${rail({ title: 'Behind the Scenes', items: cat.gallery.slice(0, N).map(galleryCard), href: '#/gallery', cls: 'r-poster' })}
     </div>

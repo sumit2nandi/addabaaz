@@ -56,8 +56,8 @@ export function showCard(s, { cls = '' } = {}) {
     <div class="card-quick">${listBtn('show', s.id, { cls: 'icon-btn', iconOnly: true })}</div>
   </a>`;
 }
-// Thumbnail card for an episode/clip: shows duration, a resume progress bar, lock badge for premium and an optional rank number.
-export function videoCard(v, { progress = true, rank = 0, showName = true, cls = '' } = {}) {
+// Thumbnail card for an episode/clip: optional duration, a resume progress bar, lock badge for premium and an optional rank number.
+export function videoCard(v, { progress = true, rank = 0, showName = true, showDuration = true, cls = '' } = {}) {
   const cat = app.catalog; const show = cat.show(v.showId);
   const frac = progress ? app.user?.fraction(v.id, v.duration) || 0 : 0;
   const rankEl = rank ? html`<span class="rank" aria-hidden="true">${rank}</span>` : '';
@@ -67,7 +67,7 @@ export function videoCard(v, { progress = true, rank = 0, showName = true, cls =
       ${ytImg(v, cat.displayTitle(v))}
       <span class="chip chip-label">${cat.label(v)}</span>
       ${v.access === 'premium' ? html`<span class="chip chip-premium">${icon('lock', { size: 11 })} Premium</span>` : ''}
-      ${v.duration > 0 ? html`<span class="chip chip-dur">${fmtDuration(v.duration)}</span>` : ''}
+      ${showDuration && v.duration > 0 ? html`<span class="chip chip-dur">${fmtDuration(v.duration)}</span>` : ''}
       <span class="play-overlay">${icon('play', { size: 22 })}</span>
       ${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}
     </div>
@@ -77,12 +77,12 @@ export function videoCard(v, { progress = true, rank = 0, showName = true, cls =
     </div>
   </a>`;
 }
-// Small vertical card for a reel.
-export function reelCard(v) {
+// Small vertical card for a reel; duration can be hidden on dense rails like the home page.
+export function reelCard(v, { showDuration = true } = {}) {
   const cat = app.catalog; const show = cat.show(v.showId);
   return html`<a class="card card-reel" href="#/reels/${v.id}" aria-label="${cat.displayTitle(v)}">
     <div class="thumb">${ytImg(v, cat.displayTitle(v))}<span class="play-overlay">${icon('play', { size: 20 })}</span>
-    <span class="chip chip-dur">${fmtDuration(v.duration)}</span></div>
+    ${showDuration ? html`<span class="chip chip-dur">${fmtDuration(v.duration)}</span>` : ''}</div>
     <div class="card-body"><div class="card-title">${cat.displayTitle(v)}</div>${show ? html`<div class="card-meta"><span>${show.titleEn || show.title}</span></div>` : ''}</div>
   </a>`;
 }
