@@ -21,13 +21,73 @@ const loadScript = (key, src) => loaded[key] || (loaded[key] = new Promise((res,
   document.head.appendChild(s);
 }));
 
-/* ---------- web: Google ---------- */
-async function initGoogle(clientId, onCredential) {
-  await loadScript('gis', 'https://accounts.google.com/gsi/client');
-  window.google.accounts.id.initialize({ client_id: clientId, callback: (r) => r.credential && onCredential(r.credential), auto_select: false, cancel_on_tap_outside: true, use_fedcm_for_prompt: true });
-  // Never silently continue with the Google id that signed in last time — the user always picks.
-  try { window.google.accounts.id.disableAutoSelect(); } catch { /* older GIS builds */ }
-  return window.google.accounts.id;
+/* ---------- web: Google ----------
+ * The web Google button is OUR styled button (same look as Facebook/Apple), never Google's
+ * rendered pill: that pill prefills "Continue as <account>" from the browser's Google session
+ * and there is no option to hide it. Instead the tap opens Google's own account chooser through
+ * the One Tap/FedCM prompt (auto-select off — nothing is ever used silently). Browsers that can't
+ * show the prompt fall back to Google's rendered button so sign-in always works.
+ */
+let gisInit = null;
+async function initGoogle(clientId) {
+  if (!gisInit) gisInit = (async () => {
+    await loadScript('gis', 'https://accounts.google.com/gsi/client');
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: (r) => { if (r.credential) flushGoogleWaiters(r.credential); },
+      auto_select: false, cancel_on_tap_outside: true, use_fedcm_for_prompt: true,
+    });
+    // Never silently continue with the Google id that signed in last time — the user always picks.
+    try { window.google.accounts.id.disableAutoSelect(); } catch { /* older GIS builds */ }
+    return window.google.accounts.id;
+  })().catch((e) => { gisInit = null; throw e; });
+  return gisInit;
+}
+// Credential waiters: resolved by the initialize callback, whether the credential arrives from the
+// FedCM prompt or from a fallback Google-rendered button click.
+const googleWaiters = [];
+const flushGoogleWaiters = (cred) => { const w = googleWaiters.splice(0); w.forEach((fn) => fn(cred)); };
+// Set once the prompt proved unavailable in this browser: subsequent taps go straight to the
+// Google-rendered button instead of retrying a dialog that will never appear.
+let gisButtonFallback = false;
+let activeGoogle = null;
+function googleWeb(clientId, box, signup) {
+  if (activeGoogle) return activeGoogle;                       // one chooser at a time
+  activeGoogle = (async () => {
+    const gid = await initGoogle(clientId);
+    const el = $('#gBtn', box);
+    const renderGisButton = () => {                             // Google's own button (last resort)
+      if (!el || el.dataset.gis === '1') return;
+      gisButtonFallback = true; el.dataset.gis = '1'; el.innerHTML = '';
+      gid.renderButton(el, { type: 'standard', theme: 'filled_black', size: 'large', shape: 'pill', text: signup ? 'signup_with' : 'continue_with', logo_alignment: 'left', width: Math.min(400, Math.max(200, box.clientWidth || 340)) });
+    };
+    if (gisButtonFallback) { renderGisButton(); return new Promise((resolve) => googleWaiters.push(resolve)); }
+    return new Promise((resolve, reject) => {
+      let settled = false, displayed = false;
+      const settle = (fn, arg) => { if (!settled) { settled = true; fn(arg); } };
+      const waiter = (cred) => settle(resolve, cred);
+      googleWaiters.push(waiter);
+      const fail = (cancelled) => {
+        const i = googleWaiters.indexOf(waiter); if (i > -1) googleWaiters.splice(i, 1);
+        const err = cancelled ? Object.assign(new Error('cancelled'), { cancelled: true }) : Object.assign(new Error('Google sign-in didn’t open — please try again or use your email.'), { friendly: true });
+        settle(reject, err);
+      };
+      const noDialog = () => { if (!settled && !displayed) renderGisButton(); };   // prompt unavailable → button fallback, waiter stays
+      const timer = setTimeout(noDialog, 4000);
+      try {
+        gid.prompt((n) => {
+          const reason = () => { try { return n?.getNotDisplayedReason?.() || n?.getSkippedReason?.() || n?.getDismissedReason?.() || ''; } catch { return ''; } };
+          if (n?.isDisplayed?.()) { displayed = true; clearTimeout(timer); return; }
+          const r = reason();
+          if (r === 'credential_returned' || r === 'auto_cancel') return;          // success handled, or a newer prompt took over
+          clearTimeout(timer);
+          if (r === 'user_cancel' || r === 'cancel_called' || r === 'tap_outside') return fail(true);
+          if (!settled && !displayed) noDialog();                                   // browser_not_supported, opt_out_or_no_session, …
+        });
+      } catch { noDialog(); }
+    });
+  })().finally(() => { activeGoogle = null; });
+  return activeGoogle;
 }
 
 /**
@@ -127,13 +187,13 @@ const G_LOGO = html`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden=
  * @param {(msg:string) => void} onError
  * @returns {boolean} whether any button was rendered
  */
-// Google on the web uses Google's own rendered button; the others are ours.
+// All buttons are ours (web included): Google's rendered pill would prefill "Continue as <account>".
 export function mountSocialButtons(box, providers, { signup = false, onCredential, onError }) {
   const wanted = ['google', 'facebook', 'apple'].filter((p) => providers?.[p]);
   if (!wanted.length) return false;
-  box.innerHTML = wanted.map((p) => (p === 'google' && !isNative
-    ? '<div class="social-g" id="gBtn"></div>'
-    : html`<button type="button" class="btn-social btn-${p}" data-p="${p}">${p === 'google' ? G_LOGO : p === 'apple' ? APPLE_LOGO : FB_LOGO}<span>Continue with ${p === 'google' ? 'Google' : p === 'apple' ? 'Apple' : 'Facebook'}</span></button>`.s)).join('');
+  box.innerHTML = wanted.map((p) => (p === 'google'
+    ? html`<div class="social-g" id="gBtn"><button type="button" class="btn-social btn-google" data-p="google">${G_LOGO}<span>Continue with Google</span></button></div>`.s
+    : html`<button type="button" class="btn-social btn-${p}" data-p="${p}">${p === 'apple' ? APPLE_LOGO : FB_LOGO}<span>Continue with ${p === 'apple' ? 'Apple' : 'Facebook'}</span></button>`.s)).join('');
   const run = async (provider, get) => {
     try { const cred = await get(); if (cred) await onCredential(provider, cred); }
     catch (e) {
@@ -147,18 +207,17 @@ export function mountSocialButtons(box, providers, { signup = false, onCredentia
         : 'Couldn’t sign you in with Google. Please try again or use your email.');
     }
   };
-  if (wanted.includes('google') && !isNative) {
-    initGoogle(providers.google.clientId, (cred) => run('google', async () => cred)).then((gid) => {
-      const el = $('#gBtn', box); if (!el) return;
-      gid.renderButton(el, { type: 'standard', theme: 'filled_black', size: 'large', shape: 'pill', text: signup ? 'signup_with' : 'continue_with', logo_alignment: 'left', width: Math.min(400, Math.max(200, box.clientWidth || 340)) });
-    }).catch(() => { const el = $('#gBtn', box); if (el) el.outerHTML = html`<button type="button" class="btn-social btn-google" disabled>${G_LOGO}<span>Google unavailable</span></button>`.s; });
-  }
+  // The GIS library must be ready before the tap (user-gesture + popup rules), so preload it now.
+  if (wanted.includes('google') && !isNative) initGoogle(providers.google.clientId).catch(() => {
+    const el = $('#gBtn', box); if (el) el.outerHTML = html`<button type="button" class="btn-social btn-google" disabled>${G_LOGO}<span>Google unavailable</span></button>`.s;
+  });
   // Facebook's SDK must already be loaded when the user taps (popup blockers), so preload it now.
   if (wanted.includes('facebook') && !isNative) initFacebook(providers.facebook).catch(() => {});
   box.addEventListener('click', (e) => {
     const b = e.target.closest('.btn-social[data-p]'); if (!b) return;
     const p = b.dataset.p;
     if (isNative) return run(p, () => nativeCredential(p, providers));
+    if (p === 'google') return run(p, () => googleWeb(providers.google.clientId, box, signup));
     if (p === 'apple') return run(p, () => appleWeb(providers.apple));
     if (p === 'facebook') { if (!window.FB) return onError('Facebook is still loading — try again in a moment.'); run(p, () => facebookWeb(window.FB)); }
   });
