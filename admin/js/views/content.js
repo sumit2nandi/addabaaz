@@ -6,11 +6,14 @@ import { html, raw, $, $$, icon, badge, empty, pager, pageHead, openModal, formM
 const SHOW_TYPES = [['series', 'Series'], ['standup', 'Stand-up'], ['podcast', 'Podcast'], ['film', 'Film']].map(([v, l]) => ({ v, l }));
 const ACCESS = [{ v: 'free', l: 'Free' }, { v: 'premium', l: 'Premium (login + paid plan)' }];
 const KINDS = [['episode', 'Episode'], ['reel', 'Reel'], ['clip', 'Clip'], ['trailer', 'Trailer']].map(([v, l]) => ({ v, l }));
+const UPCOMING_CATEGORIES = [
+  { v: 'coming-soon', l: 'Coming Soon' },
+  { v: 'releasing-this-month', l: 'Releasing This Month' },
+];
 // Thumbnail URL for a video row (custom image, else YouTube's).
 const thumb = (v) => v.thumbnail ? imgSrc(v.thumbnail) : v.source?.type === 'youtube' ? `https://i.ytimg.com/vi/${v.source.id}/default.jpg` : '';
 // Rows per page in lists.
 const PAGE = 25;
-const HOME_POSTER_DEFAULTS = { releasingThisMonth: 'media/upcoming/durga-lg.webp', releasingThisMonthMobile: 'media/upcoming/durga-sm.webp', releasingThisMonthId: 'mayer-golpo' };
 
 // Draws the chosen section's list plus its add/edit dialogs. Saving calls the admin API and reloads the list.
 export default async function content(root, [section], ctx) {
@@ -28,6 +31,7 @@ export default async function content(root, [section], ctx) {
   const reload = async () => { await load(); if (!ctx.stale()) draw(); };
   const draw = () => VIEWS[section]();
   const mutate = async (fn, ok) => { try { await fn(); toast(ok); await reload(); } catch (e) { toast(errMsg(e), 'err'); } };
+  const upcomingCategory = (u) => u.category || (u.id === data.homePosters?.releasingThisMonthId ? 'releasing-this-month' : 'coming-soon');
   const videosOf = (id) => data.videos.filter((v) => v.showId === id);
   const episodesOf = (id) => data.videos.filter((v) => v.showId === id && v.kind === 'episode');
   const showTitle = (id) => { const s = data.shows.find((x) => x.id === id) || data.upcoming.find((x) => x.id === id); return s ? (s.titleEn || s.title) : ''; };
@@ -65,7 +69,17 @@ export default async function content(root, [section], ctx) {
     mutate(() => api.del(`/catalog/shows/${encodeURIComponent(s.id)}${n ? '?cascade=1' : ''}`), 'Show deleted');
   };
   const orderBtns = (id, i, n) => html`<button class="icon-btn" data-move="${id}:-1" title="Move up" ${i === 0 ? 'disabled' : ''}>${icon('up', 16)}</button><button class="icon-btn" data-move="${id}:1" title="Move down" ${i === n - 1 ? 'disabled' : ''}>${icon('down', 16)}</button>`;
+  const upcomingOrderBtns = (id, i, n, category) => html`<button class="icon-btn" data-move="${id}:-1" data-upcoming-category="${category}" title="Move up within category" ${i === 0 ? 'disabled' : ''}>${icon('up', 16)}</button><button class="icon-btn" data-move="${id}:1" data-upcoming-category="${category}" title="Move down within category" ${i === n - 1 ? 'disabled' : ''}>${icon('down', 16)}</button>`;
   const wireMoves = (list) => $$('[data-move]', root).forEach((b) => b.onclick = () => { const [id, d] = b.dataset.move.split(':'); move(list, id, Number(d)); });
+  const wireUpcomingMoves = (groups) => $$('[data-upcoming-category]', root).forEach((b) => b.onclick = () => {
+    const [id, direction] = b.dataset.move.split(':'), category = b.dataset.upcomingCategory;
+    const groupIds = (groups[category] || []).map((item) => item.id), i = groupIds.indexOf(id), j = i + Number(direction);
+    if (i < 0 || j < 0 || j >= groupIds.length) return;
+    [groupIds[i], groupIds[j]] = [groupIds[j], groupIds[i]];
+    let next = 0;
+    const ids = data.upcoming.map((item) => upcomingCategory(item) === category ? groupIds[next++] : item.id);
+    mutate(() => api.put('/catalog/upcoming/order', { ids }), 'Order saved');
+  });
 
   // Shows list and editor.
   function drawShows() {
@@ -398,60 +412,39 @@ export default async function content(root, [section], ctx) {
   /* ---------- coming soon ---------- */
   const upFields = (create) => [
     { k: 'id', label: 'ID', req: true, readonly: !create, max: 64, help: create ? 'Letters, digits, - and _.' : '' }, { k: 'title', label: 'Title', req: true }, { k: 'titleEn', label: 'Title in English' },
-    { k: 'type', label: 'Type', type: 'select', options: SHOW_TYPES, dflt: 'series' }, { k: 'genres', label: 'Genres', type: 'tags' }, { k: 'note', label: 'Note (e.g. “New comedy web series”)', wide: true, max: 200 },
+    { k: 'type', label: 'Type', type: 'select', options: SHOW_TYPES, dflt: 'series' },
+    { k: 'category', label: 'Homepage category', type: 'select', options: UPCOMING_CATEGORIES, dflt: 'coming-soon', wide: true, help: 'Releasing This Month posters appear in the homepage slideshow. Coming Soon posters stay in the homepage rail.' },
+    { k: 'genres', label: 'Genres', type: 'tags' }, { k: 'note', label: 'Note (e.g. “New comedy web series”)', wide: true, max: 200 },
     { k: 'poster', label: 'Poster (card)', type: 'image', req: true, maxWidth: 700, wide: true }, { k: 'posterLg', label: 'Poster (large)', type: 'image', wide: true }, { k: 'backdrop', label: 'Backdrop (wide, optional)', type: 'image', wide: true },
   ];
   const editUp = (u) => {
     const create = !u;
-    formModal({ title: create ? 'New coming-soon title' : `Edit “${u.titleEn || u.title}”`, wide: true, fields: upFields(create), values: u || { type: 'series' }, note,
+    formModal({ title: create ? 'New coming-soon title' : `Edit “${u.titleEn || u.title}”`, wide: true, fields: upFields(create), values: u ? { ...u, category: upcomingCategory(u) } : { type: 'series', category: 'coming-soon' }, note,
       extra: (form) => { if (create) { let t = false; form.id.addEventListener('input', () => { t = true; }); form.titleEn.addEventListener('input', () => { if (!t) form.id.value = slug(form.titleEn.value); }); } },
       onSubmit: async (v) => { create ? await api.post('/catalog/upcoming', v) : await api.put(`/catalog/upcoming/${encodeURIComponent(u.id)}`, v); toast('Saved'); await reload(); } });
   };
-  const editReleaseBanner = () => {
-    formModal({
-      title: 'Edit “Releasing This Month” poster', wide: true,
-      note: 'This artwork is the homepage banner above the Coming Soon carousel. Choose the matching title so clicking the banner opens its detail page; add the title below first if it is not listed.',
-      fields: [
-        { k: 'releasingThisMonthId', label: 'Coming Soon detail page', type: 'select', wide: true, options: [{ v: '', l: '— Choose a title —' }, ...data.upcoming.map((u) => ({ v: u.id, l: u.titleEn ? `${u.titleEn} · ${u.title}` : u.title }))], help: 'The feature poster opens this title’s detail page. Until a title is selected, it opens the Coming Soon list.' },
-        { k: 'releasingThisMonth', label: 'Desktop poster', type: 'image', maxWidth: 1600, wide: true, help: 'Wide artwork recommended.' },
-        { k: 'releasingThisMonthMobile', label: 'Mobile poster', type: 'image', maxWidth: 1000, wide: true, help: 'Optional separate crop for phones; if cleared, the bundled mobile artwork is restored.' },
-      ],
-      values: { ...HOME_POSTER_DEFAULTS, ...(data.homePosters || {}) },
-      onSubmit: async (v) => {
-        await api.put('/studio', { ...data.studio, homePosters: v });
-        toast('Releasing This Month poster saved'); await reload();
-      },
-    });
-  };
   function drawUpcoming() {
-    const posters = { ...HOME_POSTER_DEFAULTS, ...(data.homePosters || {}) };
-    const releaseTitle = data.upcoming.find((u) => u.id === posters.releasingThisMonthId);
-    const releaseTarget = releaseTitle ? (releaseTitle.titleEn || releaseTitle.title) : 'No Coming Soon detail page selected';
-    root.innerHTML = html`${pageHead('Coming soon', 'Manage the two poster categories shown to viewers: the featured release and the upcoming-title posters.')}
-      <section class="card release-category" aria-labelledby="releaseCategoryTitle">
-        <div class="card-head">
-          <div><h2 id="releaseCategoryTitle">Releasing This Month</h2><p class="muted">Featured on the homepage and linked to its Coming Soon detail page.</p></div>
-          <button class="btn" id="editReleaseBanner">${icon('image', 16)} Edit poster</button>
-        </div>
-        <div class="release-preview">
-          <figure><img src="${imgSrc(posters.releasingThisMonth)}" alt="Releasing This Month desktop poster" loading="lazy"><figcaption>Desktop poster</figcaption></figure>
-          <figure><img src="${imgSrc(posters.releasingThisMonthMobile)}" alt="Releasing This Month mobile poster" loading="lazy"><figcaption>Mobile poster</figcaption></figure>
-        </div>
-        <p class="release-target muted">Opens: <strong>${releaseTarget}</strong></p>
+    const releases = data.upcoming.filter((u) => upcomingCategory(u) === 'releasing-this-month');
+    const comingSoon = data.upcoming.filter((u) => upcomingCategory(u) === 'coming-soon');
+    const table = (items, category) => items.length ? html`<table class="tbl"><thead><tr><th></th><th>Title</th><th>Type</th><th class="end">Order</th><th></th></tr></thead><tbody>${items.map((u, i) => html`<tr>
+      <td class="thumb"><img src="${imgSrc(u.poster)}" alt="" loading="lazy"></td>
+      <td><strong>${u.titleEn || u.title}</strong>${u.titleEn ? html`<br><small class="muted bn">${u.title}</small>` : ''}${u.note ? html`<br><small class="muted">${u.note}</small>` : ''}</td>
+      <td>${u.type}</td><td class="end nowrap">${upcomingOrderBtns(u.id, i, items.length, category)}</td>
+      <td class="end nowrap"><button class="icon-btn" data-edit="${u.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${u.id}" title="Delete">${icon('trash', 16)}</button></td>
+    </tr>`)}</tbody></table>` : empty(category === 'releasing-this-month' ? 'No titles assigned yet. Edit any title and choose “Releasing This Month” to add it to the homepage slideshow.' : 'No Coming Soon titles yet.');
+    root.innerHTML = html`${pageHead('Coming soon', 'Assign each title to a homepage category. Releasing This Month posters rotate in the homepage slideshow; all titles remain together on the Coming Soon page.', html`<button class="btn primary" id="new">${icon('plus', 16)} New title</button>`)}
+      <section class="card flush" aria-labelledby="releaseCategoryTitle">
+        <div class="card-head pad"><div><h2 id="releaseCategoryTitle">Releasing This Month</h2><p class="muted">Shown first in this admin list and rotated on the homepage. Each poster opens its Coming Soon detail page.</p></div><span class="badge gold">${releases.length} ${releases.length === 1 ? 'title' : 'titles'}</span></div>
+        ${table(releases, 'releasing-this-month')}
       </section>
       <section class="card flush" aria-labelledby="upcomingCategoryTitle">
-        <div class="card-head pad">
-          <div><h2 id="upcomingCategoryTitle">Coming Soon</h2><p class="muted">Manage the title posters in the upcoming releases collection.</p></div>
-          <button class="btn primary" id="new">${icon('plus', 16)} New title</button>
-        </div>
-        ${data.upcoming.length ? html`<table class="tbl"><thead><tr><th></th><th>Title</th><th>Type</th><th class="end">Order</th><th></th></tr></thead><tbody>${data.upcoming.map((u, i) => html`<tr><td class="thumb"><img src="${imgSrc(u.poster)}" alt="" loading="lazy"></td><td><strong>${u.titleEn || u.title}</strong>${u.titleEn ? html`<br><small class="muted bn">${u.title}</small>` : ''}${u.note ? html`<br><small class="muted">${u.note}</small>` : ''}</td><td>${u.type}</td><td class="end nowrap">${orderBtns(u.id, i, data.upcoming.length)}</td>
-        <td class="end nowrap"><button class="icon-btn" data-edit="${u.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${u.id}" title="Delete">${icon('trash', 16)}</button></td></tr>`)}</tbody></table>` : html`<div class="empty">${empty('Nothing announced.')}</div>`}
+        <div class="card-head pad"><div><h2 id="upcomingCategoryTitle">Coming Soon</h2><p class="muted">These posters stay in the homepage Coming Soon rail.</p></div><span class="badge">${comingSoon.length} ${comingSoon.length === 1 ? 'title' : 'titles'}</span></div>
+        ${table(comingSoon, 'coming-soon')}
       </section>`.s;
     $('#new').onclick = () => editUp(null);
-    $('#editReleaseBanner').onclick = editReleaseBanner;
     $$('[data-edit]', root).forEach((b) => b.onclick = () => editUp(data.upcoming.find((u) => u.id === b.dataset.edit)));
     $$('[data-del]', root).forEach((b) => b.onclick = async () => { const u = data.upcoming.find((x) => x.id === b.dataset.del); if (await confirmBox({ title: `Delete “${u.titleEn || u.title}”?`, text: 'Viewers’ reminders and list entries for it are removed too.', confirm: 'Delete', danger: true })) mutate(() => api.del(`/catalog/upcoming/${encodeURIComponent(u.id)}`), 'Deleted'); });
-    wireMoves(data.upcoming);
+    wireUpcomingMoves({ 'releasing-this-month': releases, 'coming-soon': comingSoon });
   }
 
   /* ---------- gallery ---------- */

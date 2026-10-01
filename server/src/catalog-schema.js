@@ -1,7 +1,7 @@
 /**
  * The catalog schema in one place: used by the admin API (validates every write), by `npm run validate:catalog` and by the CLI import.
  * validate(type, input, ctx) → { doc, errors }  — `doc` is the normalised document to store (only known fields, trimmed, typed).
- *   studio.homePosters stores the homepage Coming Soon artwork and its optional upcoming-detail target; carousel posters live on upcoming items.
+ *   upcoming.category controls the homepage placement; studio.homePosters remains only for compatibility with older catalogs.
  *   ctx.fileExists(rel)  optional: check that local image paths (media/…, uploads/…) exist
  *   ctx.showIds / ctx.upcomingIds  optional Sets: check catalog references
  */
@@ -143,8 +143,8 @@ function video(input, ctx) {
 
 // "Coming soon" entry.
 function upcoming(input, ctx) {
-  const r = reader(input, ['id', 'title', 'titleEn', 'type', 'genres', 'note', 'showId', 'poster', 'posterLg', 'backdrop'], 'A coming-soon title', ctx);
-  r.id(); r.str('title', { req: true }); r.str('titleEn'); r.oneOf('type', SHOW_TYPES, { dflt: 'series' }); r.list('genres', { max: 30, maxItems: 10 });
+  const r = reader(input, ['id', 'title', 'titleEn', 'type', 'category', 'genres', 'note', 'showId', 'poster', 'posterLg', 'backdrop'], 'A coming-soon title', ctx);
+  r.id(); r.str('title', { req: true }); r.str('titleEn'); r.oneOf('type', SHOW_TYPES, { dflt: 'series' }); r.oneOf('category', ['coming-soon', 'releasing-this-month'], { dflt: 'coming-soon' }); r.list('genres', { max: 30, maxItems: 10 });
   r.str('note', { max: 200 }); r.str('showId', { max: 64, pattern: ID }); r.img('poster', { req: true }); r.img('posterLg'); r.img('backdrop');
   return r;
 }

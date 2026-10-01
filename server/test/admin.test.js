@@ -78,6 +78,10 @@ test('schema: unit checks (ids, images, sources, unknown fields) and the shipped
   assert.ok(validate('studio', { ...studioSeed, homePosters: { ...studioSeed.homePosters, releasingThisMonthId: 'missing-title' } }, { upcomingIds: soonIds }).errors.some((e) => /releasingThisMonthId.*does not exist/.test(e)));
   const bad = (type, doc, re) => { const { errors } = validate(type, doc, {}); assert.ok(errors.some((e) => re.test(e)), `${JSON.stringify(doc)} → ${errors}`); };
   bad('show', { id: 'a b', title: 'x', description: 'd', poster: 'media/x.webp' }, /id may only/);
+  const { category: _seedCategory, ...legacyUpcoming } = seed.upcoming.find((u) => u.id === 'mayer-golpo');
+  assert.equal(validate('upcoming', legacyUpcoming, {}).doc.category, 'coming-soon', 'older and new catalog entries without a category safely default to Coming Soon');
+  assert.equal(validate('upcoming', { ...legacyUpcoming, category: 'releasing-this-month' }, {}).doc.category, 'releasing-this-month');
+  bad('upcoming', { ...legacyUpcoming, category: 'next-month' }, /category must be one of/);
   const parent = seed.shows[0], nonPrivateChild = seed.videos.find((v) => v.showId === parent.id && v.source?.type !== 'r2');
   assert.ok(nonPrivateChild, 'fixture has a public-source child episode');
   assert.ok(validate('show', { ...parent, access: 'premium' }, { videosByShow: new Map([[parent.id, [nonPrivateChild]]]) }).errors.some((e) => /Every video in a Premium show/.test(e)));
@@ -233,6 +237,10 @@ test('catalog: upcoming, gallery, reordering and the studio profile', async () =
   assert.equal((await A('POST', '/catalog/upcoming', up)).status, 201);
   const afterUpcomingCreate = (await call('GET', '/catalog')).body;
   assert.equal(afterUpcomingCreate.upcoming[0].id, 'soon-1', 'the newest admin-added poster leads the coming-soon rows');
+  assert.equal(afterUpcomingCreate.upcoming[0].category, 'coming-soon', 'new upcoming titles default to Coming Soon');
+  const promoted = await A('PUT', '/catalog/upcoming/soon-1', { ...up, category: 'releasing-this-month' });
+  assert.equal(promoted.status, 200);
+  assert.equal((await call('GET', '/catalog')).body.upcoming.find((u) => u.id === 'soon-1').category, 'releasing-this-month', 'multiple upcoming entries can be assigned to the release category');
   assert.deepEqual(afterUpcomingCreate.homePosters, JSON.parse(fs.readFileSync(new URL('data/studio.json', ROOT), 'utf8')).homePosters);
   const g = { id: 'ph-1', group: 'Set', image: seed.gallery[0].image, caption: '' };
   assert.equal((await A('POST', '/catalog/gallery', g)).status, 201);

@@ -38,6 +38,11 @@ export class Catalog {
   show(id) { return this._show.get(id); }
   video(id) { return this._video.get(id); }
   soon(id) { return this._soon.get(id); }
+  /** Old catalog rows without a category keep the former single featured title until an admin edits them. */
+  upcomingCategory(item) {
+    return item?.category || (item?.id === this.homePosters.releasingThisMonthId ? 'releasing-this-month' : 'coming-soon');
+  }
+  upcomingByCategory(category) { return this.upcoming.filter((item) => this.upcomingCategory(item) === category); }
   /** Premium access is inherited from the parent series so every episode is gated consistently. */
   isPremium(video) {
     return video?.access === 'premium' || (video?.showId && this._show.get(video.showId)?.access === 'premium') || false;

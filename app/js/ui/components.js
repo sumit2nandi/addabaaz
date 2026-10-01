@@ -105,11 +105,11 @@ export function galleryCard(g, i) {
 
 /* ---------- rails ---------- */
 // A horizontal scrolling row with a heading and a "See all" link.
-export function rail({ title, subtitle = '', items = [], href = '', linkLabel = 'See all', cls = '', id = '' }) {
+export function rail({ title, subtitle = '', items = [], href = '', linkLabel = 'See all', cls = '', id = '', hideHeading = false }) {
   if (!items.length) return html``;
   return html`<section class="rail ${cls}" ${id ? raw(`id="${esc(id)}"`) : ''} aria-label="${title}">
-    <div class="rail-head"><div><h2>${title}</h2>${subtitle ? html`<p class="rail-sub">${subtitle}</p>` : ''}</div>
-      ${href ? html`<a class="see-all" href="${href}">${linkLabel} ${icon('right', { size: 16 })}</a>` : ''}</div>
+    ${hideHeading ? (href ? html`<div class="rail-head rail-head-minimal"><a class="see-all" href="${href}">${linkLabel} ${icon('right', { size: 16 })}</a></div>` : '') : html`<div class="rail-head"><div><h2>${title}</h2>${subtitle ? html`<p class="rail-sub">${subtitle}</p>` : ''}</div>
+      ${href ? html`<a class="see-all" href="${href}">${linkLabel} ${icon('right', { size: 16 })}</a>` : ''}</div>`}
     <div class="rail-wrap">
       <button type="button" class="rail-arrow left" data-rail-dir="-1" aria-label="Scroll left" disabled>${icon('left', { size: 22 })}</button>
       <div class="rail-track" role="list">${items.map((x) => html`<div class="rail-item" role="listitem">${x}</div>`)}</div>

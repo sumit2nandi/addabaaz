@@ -65,6 +65,45 @@ function mountHero(root, ctx) {
   schedule(); ctx.onCleanup(() => clearInterval(timer));
 }
 
+// Homepage poster slideshow: pauses while hovered/focused and does not auto-advance for reduced-motion users.
+function mountReleaseSlideshow(root, ctx) {
+  const carousel = $('[data-release-carousel]', root); if (!carousel) return;
+  const region = carousel.parentElement;
+  const slides = $$('[data-release-slide]', carousel), dots = $$('[data-release-dot]', region);
+  if (slides.length < 2) return;
+  let i = 0, timer, paused = false, hovering = false, focused = false;
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const updatePause = () => { paused = hovering || focused; };
+  const show = (n) => {
+    i = (n + slides.length) % slides.length;
+    slides.forEach((slide, k) => {
+      const active = k === i;
+      slide.classList.toggle('active', active);
+      slide.setAttribute('aria-hidden', String(!active));
+      slide.tabIndex = active ? 0 : -1;
+    });
+    dots.forEach((dot, k) => {
+      dot.classList.toggle('active', k === i);
+      dot.setAttribute('aria-selected', String(k === i));
+    });
+    $$('img[loading=lazy]', slides[i]).forEach((image) => { image.loading = 'eager'; });
+  };
+  const schedule = () => {
+    clearInterval(timer);
+    if (!reducedMotion) timer = setInterval(() => { if (!paused && !document.hidden) show(i + 1); }, 7000);
+  };
+  $('[data-release-prev]', carousel).addEventListener('click', () => { show(i - 1); schedule(); });
+  $('[data-release-next]', carousel).addEventListener('click', () => { show(i + 1); schedule(); });
+  dots.forEach((dot) => dot.addEventListener('click', () => { show(+dot.dataset.releaseDot); schedule(); }));
+  region.addEventListener('mouseenter', () => { hovering = true; updatePause(); });
+  region.addEventListener('mouseleave', () => { hovering = false; updatePause(); });
+  region.addEventListener('focusin', () => { focused = true; updatePause(); });
+  region.addEventListener('focusout', (event) => { if (!region.contains(event.relatedTarget)) { focused = false; updatePause(); } });
+  show(0);
+  schedule();
+  ctx.onCleanup(() => clearInterval(timer));
+}
+
 // One Recently Added section with reels first, followed by full-length episodes and videos.
 function recentlyAddedSection(cat, N) {
   const reels = cat.reels().slice(0, N + 6).map((v) => reelCard(v, { showDuration: false }));
@@ -72,33 +111,44 @@ function recentlyAddedSection(cat, N) {
   if (!reels.length && !videos.length) return html``;
   return html`<section class="recently-added" aria-labelledby="recentlyAddedTitle">
     <div class="rail-head"><div><h2 id="recentlyAddedTitle">Recently Added</h2><p class="rail-sub">The latest from ADDABAAZ</p></div></div>
-    ${rail({ title: 'Reels', subtitle: 'Bite-sized ADDABAAZ', items: reels, href: '#/reels', linkLabel: 'Watch reels', cls: 'r-reel' })}
-    ${rail({ title: 'Episodes & Videos', subtitle: 'Recent episodes and videos from ADDABAAZ', items: videos, cls: 'r-video' })}
+    ${rail({ title: 'Reels', subtitle: 'Bite-sized ADDABAAZ', items: reels, href: '#/reels', linkLabel: 'Watch reels', cls: 'r-reel', hideHeading: true })}
+    ${rail({ title: 'Episodes & Videos', subtitle: 'Recent episodes and videos from ADDABAAZ', items: videos, cls: 'r-video', hideHeading: true })}
   </section>`;
 }
 
-// Two-row Coming Soon section: the legacy featured Durga banner above the current upcoming-title carousel.
-function comingSoonSection(cat) {
-  if (!cat.upcoming.length) return html``;
-  const posters = cat.homePosters || {};
-  const desktopPoster = posters.releasingThisMonth || 'media/upcoming/durga-lg.webp';
-  const mobilePoster = posters.releasingThisMonthMobile || 'media/upcoming/durga-sm.webp';
-  const featureTitle = cat.soon(posters.releasingThisMonthId);
-  const featureHref = featureTitle ? `#/soon/${featureTitle.id}` : '#/upcoming';
-  const featureLabel = featureTitle ? `Releasing this month — ${featureTitle.titleEn || featureTitle.title}` : 'Releasing this month — browse all upcoming releases';
-  return html`<section class="rail r-poster home-coming-soon" aria-label="Coming Soon">
-    <div class="rail-head"><div><h2>Coming Soon</h2><p class="rail-sub">New originals from ADDABAAZ</p></div><a class="see-all" href="#/upcoming">Show all ${icon('right', { size: 16 })}</a></div>
-    <a class="home-coming-soon-feature" href="${featureHref}" aria-label="${featureLabel}">
-      <picture><source media="(max-width: 699px)" srcset="${mobilePoster}">${img(desktopPoster, 'ADDABAAZ original releasing this month')}</picture>
-      <span class="home-coming-soon-feature-shade" aria-hidden="true"></span>
-      <span class="home-coming-soon-feature-badge">Releasing This Month</span>
-    </a>
-    <div class="rail-wrap">
-      <button type="button" class="rail-arrow left" aria-label="Scroll upcoming releases left" disabled>${icon('left', { size: 22 })}</button>
-      <div class="rail-track" role="list">${cat.upcoming.map((u) => html`<div class="rail-item" role="listitem">${soonCard(u)}</div>`)}</div>
-      <button type="button" class="rail-arrow right" aria-label="Scroll upcoming releases right">${icon('right', { size: 22 })}</button>
+function releaseSlideshow(items) {
+  return html`<div class="home-release-showcase">
+    <div class="home-release-carousel" data-release-carousel role="region" aria-roledescription="carousel" aria-label="Releasing This Month">
+      ${items.map((item, i) => {
+        const title = item.titleEn || item.title;
+        return html`<a class="home-release-slide ${i === 0 ? 'active' : ''}" data-release-slide="${i}" href="#/soon/${item.id}" aria-label="${title} — Releasing This Month" aria-hidden="${i !== 0}">
+          ${img(item.poster, `${title} — Releasing This Month`, { lazy: i > 0 })}
+          <span class="home-release-shade" aria-hidden="true"></span>
+          <span class="home-release-badge">Releasing This Month</span>
+          <span class="home-release-title">${title}</span>
+        </a>`;
+      })}
+      ${items.length > 1 ? html`<div class="home-release-arrows">
+        <button type="button" class="home-release-arrow" data-release-prev aria-label="Previous release">${icon('left', { size: 20 })}</button>
+        <button type="button" class="home-release-arrow" data-release-next aria-label="Next release">${icon('right', { size: 20 })}</button>
+      </div>` : ''}
     </div>
-  </section>`;
+    ${items.length > 1 ? html`<div class="home-release-dots" role="tablist" aria-label="Choose a release">${items.map((item, i) => html`<button type="button" role="tab" data-release-dot="${i}" aria-label="${item.titleEn || item.title}" aria-selected="${i === 0}" class="${i === 0 ? 'active' : ''}"></button>`)}</div>` : ''}
+  </div>`;
+}
+
+// Releasing titles rotate as portrait posters; the remaining titles stay in the Coming Soon rail.
+function comingSoonSection(cat) {
+  const releases = cat.upcomingByCategory('releasing-this-month');
+  const comingSoon = cat.upcomingByCategory('coming-soon');
+  if (!releases.length && !comingSoon.length) return html``;
+  return html`<div class="home-upcoming-sections">
+    ${releases.length ? html`<section class="rail home-release-section" aria-label="Releasing This Month">
+      <div class="rail-head"><div><h2>Releasing This Month</h2><p class="rail-sub">New originals from ADDABAAZ</p></div><a class="see-all" href="#/upcoming">Show all ${icon('right', { size: 16 })}</a></div>
+      ${releaseSlideshow(releases)}
+    </section>` : ''}
+    ${comingSoon.length ? rail({ title: 'Coming Soon', subtitle: 'More new originals from ADDABAAZ', items: comingSoon.map(soonCard), href: '#/upcoming', linkLabel: 'Show all', cls: 'r-poster home-coming-soon' }) : ''}
+  </div>`;
 }
 
 // Builds the page from the database-backed catalog and this profile's library (Kids profiles see only kid-safe titles).
@@ -132,6 +182,7 @@ export default async function home(ctx) {
     </section>`.s;
 
   mountHero(ctx.root, ctx);
+  mountReleaseSlideshow(ctx.root, ctx);
   enhanceRails(ctx.root);
   ctx.root.addEventListener('click', (e) => { const b = e.target.closest('[data-lightbox]'); if (b) openLightbox(cat.gallery, b.dataset.lightbox); });
 }
