@@ -19,7 +19,7 @@ const isGuest = () => !!app.user?.supportsAuth && !app.user?.account;
 let lastPath = '/';
 let tabbarScrollWired = false;
 
-// The floating mobile tabs hide while the viewer scrolls back up and return as soon as they scroll down.
+// The floating mobile tabs tuck away while scrolling down and return on an upward scroll.
 // Listen in capture phase too: the Reels feed scrolls inside its own element rather than the page window.
 function wireTabbarAutoHide() {
   if (tabbarScrollWired || !$('#tabbar')) return;
@@ -45,7 +45,7 @@ function wireTabbarAutoHide() {
       bar.classList.remove('scroll-hidden');
       motion.distance = 0;
     } else if (motion.distance >= 8) {
-      bar.classList.toggle('scroll-hidden', direction < 0);
+      bar.classList.toggle('scroll-hidden', direction > 0);
       motion.distance = 0;
     }
     motions.set(source, motion);

@@ -33,7 +33,7 @@
 
 ## Sign-in and premium content
 
-Free content never needs an account. Titles marked `access: "premium"` require one: the UI shows a sign-in wall, and — the real gate — `POST /api/v1/videos/:id/stream` refuses without a session. Sign-in is email/password, Google or Facebook (credentials verified server-side, see [AUTH.md](AUTH.md)). Premium video files live in a private **Cloudflare R2** bucket and are delivered through signed, expiring URLs (MP4) or a token gateway (HLS) — see [PREMIUM.md](PREMIUM.md).
+Free content never needs an account. Titles marked `access: "premium"` are gated in the app for signed-out viewers and viewers without an active plan; shows and videos may use any supported source. The `/api/v1/videos/:id/stream` endpoint also enforces access before signing URLs for R2-hosted media. YouTube or public MP4/HLS sources may still be reachable outside ADDABAAZ, so use a private **Cloudflare R2** source when the media itself needs server-enforced protection (see [PREMIUM.md](PREMIUM.md)). Sign-in is email/password, Google or Facebook (credentials verified server-side, see [AUTH.md](AUTH.md)).
 
 ## Security notes
 

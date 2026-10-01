@@ -22,11 +22,11 @@ export default async function watch(ctx) {
   const show = cat.show(v.showId), soon = !show && cat.soon(v.showId);
   const next = cat.nextEpisode(v);
   const title = cat.displayTitle(v);
-  // Fetch the YouTube IFrame API while the page renders — script + handshake is the slowest part of playback
-  // starting on mobile networks, so overlap it with everything else rather than starting it inside the player.
-  if (v.source.type === 'youtube') loadYouTube().catch(() => {});
   // Can this viewer play it? 'ok' | 'login' | 'plan' | 'unavailable' (premium in static mode).
   const gate = u.gateFor(v, cat);                   // Video access includes any Premium parent series.
+  // Fetch the YouTube IFrame API while the page renders — script + handshake is the slowest part of playback
+  // starting on mobile networks, so overlap it with everything else rather than starting it inside the player.
+  if (v.source.type === 'youtube' && gate === 'ok') loadYouTube().catch(() => {});
   const here = encodeURIComponent('/watch/' + v.id);
   ctx.setTitle(title);
 

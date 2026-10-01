@@ -29,10 +29,10 @@ Security notes
 
 | Section | |
 |---|---|
-| **Dashboard** | revenue and sign-ups for 30 days, active subscribers, plans expiring within 7 days, open messages, recent payments/users, and a *Finish setting up* list (GSTIN, SMTP, R2, Razorpay keys, weak secrets…). When SMTP is configured, **Send test email** sends a real diagnostic message to the signed-in administrator. |
+| **Dashboard** | revenue and sign-ups for 30 days, active subscribers, plans expiring within 7 days, open messages, recent payments/users, and a *Finish setting up* list (GSTIN, SMTP, R2 if using private media, Razorpay keys, weak secrets…). When SMTP is configured, **Send test email** sends a real diagnostic message to the signed-in administrator. |
 | **Shows** | add / edit / delete / reorder; poster upload; "featured" on the home page. Deleting a show also deletes its videos (you are told how many first) |
 | **Videos & reels** (also) | each video has *Publish at* (scheduled release), *Maturity rating* (U / 7+ / 13+ / 16+ / 18+ — Kids profiles show only U and 7+) and *Subtitles* (upload .srt/.vtt). Shows have a rating too. |
-| **Videos & reels** | Episodes, reels, trailers and clips. Filter by show/kind/access/source/rating/duration/website status; 25 per page. **Preview YouTube channel** scans every public upload, compares it with the catalog, and lets you select missing videos or import all missing. Shorts appear in Reels and landscape uploads join the home page's Latest Episodes & Videos rail. Imports start free, unrated and show-less with unknown duration (shown as —); set show, rating and runtime in Edit when needed. Select videos across pages to hide, restore or delete in bulk. **Undo last import** and **Remove today's imports** delete only tracked YouTube videos (India Standard Time). Public page loads never fetch YouTube. Sources can also be added directly as YouTube URLs or as **premium videos in R2**. |
+| **Videos & reels** | Episodes, reels, trailers and clips. Filter by show/kind/access/source/rating/duration/website status; 25 per page. **Preview YouTube channel** scans every public upload, compares it with the catalog, and lets you select missing videos or import all missing. Shorts appear in Reels and landscape uploads join the home page's Latest Episodes & Videos rail. Imports start free, unrated and show-less with unknown duration (shown as —); set show, rating, access and runtime in Edit when needed. Select videos across pages to hide, restore or delete in bulk. **Undo last import** and **Remove today's imports** delete only tracked YouTube videos (India Standard Time). Public page loads never fetch YouTube. Sources can also be added directly as YouTube URLs, MP4/HLS links or R2 objects; premium access is selected separately. |
 | **Coming soon** | Edit the homepage **Releasing This Month** desktop/mobile banner artwork; add / edit / delete / reorder upcoming titles and their carousel posters. New titles are placed first; use the order controls to adjust the list. |
 | **Gallery** | add / edit / delete / reorder; photo upload |
 | **Studio & team** | the About, Services and Contact pages: address, phones, WhatsApp, social links, mission text, services, team members with photos |
@@ -64,12 +64,12 @@ npm run catalog:import -- --force # JSON → MySQL, REPLACING the database catal
 npm run validate:catalog          # check the files
 ```
 
-Every admin write is validated with the same rules as `validate:catalog` (unique ids, existing shows, premium ⇒ R2 source and thumbnail, safe URLs and keys, image files that exist, …), so the console can't publish a catalog that would break the app.
+Every admin write is validated with the same rules as `validate:catalog` (unique ids, existing shows, valid video sources, safe URLs and keys, image files that exist, …). Premium access can be assigned independently of the media source; use private R2 if the media itself must be protected.
 
 ## 4. Uploads
 
 - **Images** (posters, thumbnails, gallery, team photos): the browser shrinks them and converts to WebP when possible. `POST /api/v1/admin/uploads/image` accepts files up to 10 MB. The server checks the real file type (not the extension), names the file by its content hash and stores it in `UPLOAD_DIR` (default `./uploads`), served at `/uploads/<hash>.webp` with a one-year cache. **Mount a persistent volume there** — the Docker image declares `/app/uploads` a volume and `docker-compose.yml` creates one. Back it up with the database. Native apps rewrite `uploads/…` to the API host automatically.
-- **Premium videos** go **straight from the browser to your private R2 bucket** through a short-lived presigned `PUT` (the server never handles the video). This needs, once:
+- **R2 video files** go **straight from the browser to your private R2 bucket** through a short-lived presigned `PUT` (the server never handles the video). This is available for media that needs file-level protection, whether its app access is Free or Premium. It needs, once:
   1. an R2 API token with **write** access (Object Read & Write) — the read-only token recommended in `docs/PREMIUM.md` can play but not upload, so the server needs the write-capable one for uploads to work.;
   2. a **CORS rule on the bucket** allowing `PUT` from your site's origin, header `Content-Type`:
      ```json

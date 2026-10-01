@@ -84,13 +84,13 @@ test('schema: unit checks (ids, images, sources, unknown fields) and the shipped
   bad('upcoming', { ...legacyUpcoming, category: 'next-month' }, /category must be one of/);
   const parent = seed.shows[0], nonPrivateChild = seed.videos.find((v) => v.showId === parent.id && v.source?.type !== 'r2');
   assert.ok(nonPrivateChild, 'fixture has a public-source child episode');
-  assert.ok(validate('show', { ...parent, access: 'premium' }, { videosByShow: new Map([[parent.id, [nonPrivateChild]]]) }).errors.some((e) => /Every video in a Premium show/.test(e)));
-  assert.ok(validate('video', { ...nonPrivateChild, access: 'free' }, { premiumShowIds: new Set([parent.id]) }).errors.some((e) => /hosted in private R2/.test(e)));
+  assert.deepEqual(validate('show', { ...parent, access: 'premium' }).errors, [], 'a Premium show can use non-R2 sources for its episodes');
+  assert.deepEqual(validate('video', { ...nonPrivateChild, access: 'premium' }).errors, [], 'any video source may be marked Premium');
   bad('show', { id: 'a', title: 'x', description: 'd', poster: '../etc/passwd' }, /poster/);
   bad('show', { id: 'a', title: 'x', description: 'd', poster: 'javascript:alert(1)' }, /poster/);
   bad('show', { id: 'a', title: 'x', description: 'd', poster: 'https://x.test/p.webp', isAdmin: true }, /Unknown field "isAdmin"/);
   bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'youtube', id: 'short' }, duration: 5, publishedAt: '2026-01-01', access: 'free' }, /11-character/);
-  bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'youtube', id: 'abcdefghijk' }, duration: 5, publishedAt: '2026-01-01', access: 'premium' }, /hosted in private R2/);
+  assert.deepEqual(validate('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'youtube', id: 'abcdefghijk' }, duration: 5, publishedAt: '2026-01-01', access: 'premium' }).errors, [], 'Premium access is allowed for YouTube videos');
   bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'r2', key: 'premium/../x.mp4' }, thumbnail: 'https://x.test/t.jpg', duration: 5, publishedAt: '2026-01-01', access: 'premium' }, /safe R2 object key/);
   bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'r2', key: 'premium/x.mp4' }, duration: 5, publishedAt: '2026-01-01', access: 'premium' }, /thumbnail/);
   bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'mp4', url: 'ftp://x' }, duration: 5, publishedAt: 'nope', access: 'free' }, /source.url|publishedAt/);

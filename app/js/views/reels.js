@@ -3,7 +3,7 @@ import { app } from '../app.js';
 import { html, $, $$, shareOrCopy } from '../util.js';
 import { icon } from '../icons.js';
 import { createPlayer, loadYouTube } from '../players/index.js';
-import { img, toast } from '../ui/components.js';
+import { img, toast, premiumMark } from '../ui/components.js';
 import { shareUrl } from '../platform.js';
 
 let soundOn = true;   // sticky: once the viewer unmutes, later reels start with sound
@@ -26,7 +26,7 @@ export default async function reels(ctx) {
   let startIdx = Math.max(0, list.findIndex((v) => v.id === ctx.params.id));
   // Fetch the YouTube IFrame API while the feed renders — on mobile networks the script + handshake is the
   // slowest part of the first reel starting, so begin it before the player ever asks for it.
-  if (list.some((v) => v.source?.type === 'youtube')) loadYouTube().catch(() => {});
+  if (list.some((v) => v.source?.type === 'youtube' && app.user.gateFor(v, cat) === 'ok')) loadYouTube().catch(() => {});
   ctx.setTitle('Reels');
   document.body.classList.add('reels-mode'); ctx.onCleanup(() => document.body.classList.remove('reels-mode'));
 
@@ -35,6 +35,7 @@ export default async function reels(ctx) {
   const contentHtml = (v, i) => { const show = cat.show(v.showId) || cat.soon(v.showId); return html`
     <div class="reel-frame">
       <div class="reel-slot">${img(cat.thumb(v), '', { lazy: i > 2 })}<div class="reel-loading"><div class="spinner"></div></div></div>
+      ${cat.isPremium(v) ? premiumMark() : ''}
       <button type="button" class="reel-tap" data-reel-tap aria-label="Play or pause"><span class="reel-pp">${icon('play', { size: 34 })}</span></button>
       <div class="reel-caption"><strong>${cat.displayTitle(v)}</strong>${show ? html`<a href="#/${cat.show(v.showId) ? 'show' : 'soon'}/${show.id}">${show.titleEn || show.title}</a>` : html`<span>ADDABAAZ</span>`}</div>
     </div>
@@ -43,6 +44,21 @@ export default async function reels(ctx) {
       <button type="button" class="icon-btn big" data-reel-share="${v.id}" aria-label="Share">${icon('share', { size: 26 })}</button>
       ${show && cat.show(v.showId) ? html`<a class="icon-btn big" href="#/show/${show.id}" aria-label="Open show">${icon('tv', { size: 26 })}</a>` : ''}
     </div>`.s; };
+  const gateHtml = (v, state) => {
+    const next = encodeURIComponent(`/reels/${v.id}`);
+    if (state === 'login') return html`<div class="reel-gate" role="status" aria-live="polite"><div>
+      ${icon('lock', { size: 38 })}<h2>Sign in to watch</h2><p>This is ADDABAAZ Premium. Sign in or create a free account to watch this reel.</p>
+      <div class="row"><a class="btn btn-primary" href="#/signin?next=${next}">Sign in</a><a class="btn btn-glass" href="#/signup?next=${next}">Create account</a></div>
+    </div></div>`;
+    if (state === 'plan') return html`<div class="reel-gate" role="status" aria-live="polite"><div>
+      ${icon('lock', { size: 38 })}<h2>ADDABAAZ Plus exclusive</h2><p>This reel needs an active paid plan.</p>
+      <a class="btn btn-primary" href="#/plans?next=${next}">${icon('crown', { size: 18 })} See plans</a>
+    </div></div>`;
+    return html`<div class="reel-gate" role="status" aria-live="polite"><div>
+      ${icon('lock', { size: 38 })}<h2>Premium reel needs an account</h2><p>Sign-in and plan checks need the ADDABAAZ API.</p>
+      <a class="btn btn-glass" href="#/">Back to home</a>
+    </div></div>`;
+  };
 
   ctx.root.innerHTML = html`<div class="reels-feed" id="feed" tabindex="0" aria-label="Reels feed. Use arrow keys to move between reels.">
     ${list.map((v, i) => html`<section class="reel" data-i="${i}" aria-label="${cat.displayTitle(v)}"></section>`)}
@@ -64,12 +80,18 @@ export default async function reels(ctx) {
     keepWindow(i);
     active = i; const my = ++token;
     if (ctl) { ctl.destroy(); host?.remove(); ctl = null; sections.forEach((s) => s.classList.remove('playing', 'paused')); }
-    const sec = sections[i], slot = $('.reel-slot', sec); const v = list[i];
-    if (!slot) return;   // section shell lost its content (window pruned mid-scroll): ignore this activation
+    const sec = sections[i], slot = $('.reel-slot', sec), frame = $('.reel-frame', sec); const v = list[i];
+    if (!slot || !frame) return;   // section shell lost its content (window pruned mid-scroll): ignore this activation
+    const access = app.user.gateFor(v, cat);
+    if (access !== 'ok') {
+      sec.classList.add('locked');
+      frame.insertAdjacentHTML('beforeend', gateHtml(v, access).s);
+      return;
+    }
     const h = document.createElement('div'); h.className = 'reel-player'; slot.appendChild(h);   // poster stays underneath
     try {
       let media = v;
-      if (v.source.type === 'r2') {                    // premium reel: the API checks login + plan and signs a short-lived URL
+      if (v.source.type === 'r2') {                    // R2 reel: the API enforces any Premium gate and signs a short-lived URL
         const st = await app.user.streamUrl(v);
         media = { ...v, source: { type: st.type, url: st.url }, poster: cat.thumb(v) };
       }

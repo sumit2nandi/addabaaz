@@ -85,14 +85,10 @@ function show(input, ctx) {
   r.str('tagline', { max: 300 }); r.str('description', { req: true, max: 3000 }); r.list('cast', { max: 60 }); r.str('language', { max: 40 });
   r.int('year', { min: 1900, max: 2100 }); r.oneOf('status', STATUSES, { dflt: 'ongoing' }); r.bool('featured'); r.img('poster', { req: true }); r.img('posterLg');
   r.oneOf('access', ACCESS, { dflt: 'free' }); r.oneOf('rating', RATINGS);
-  if (r.out.access === 'premium') {
-    const children = ctx.videosByShow?.get(r.out.id) || [];
-    if (children.some((v) => v.source?.type !== 'r2')) r.errors.push('Every video in a Premium show must be hosted in private R2 storage.');
-  }
   return r;
 }
 
-// Video or episode. The `source` decides where it plays from: YouTube id, Cloudflare R2 object (premium/private), or a direct mp4/hls URL.
+// Video or episode. The `source` decides where it plays from: YouTube id, Cloudflare R2 object, or a direct mp4/hls URL; premium access is independent of source.
 function video(input, ctx) {
   const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'description', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access', 'rating', 'subtitles', 'publishAt', 'hidden'], 'A video', ctx);
   r.id(); r.oneOf('kind', KINDS, { req: true }); r.str('showId', { max: 64, pattern: ID, nullable: true }); ref(r, ctx, 'showId', [ctx.showIds, ctx.upcomingIds].filter(Boolean));
@@ -110,16 +106,13 @@ function video(input, ctx) {
       else if (s.format && !['mp4', 'hls'].includes(s.format)) r.errors.push('source.format must be mp4 or hls.');
       else if (/\.m3u8$/i.test(key) && s.format === 'mp4') r.errors.push("A .m3u8 key can't be format mp4.");
       else r.out.source = { type: 'r2', key, ...(s.format ? { format: s.format } : {}) };
-      if (!r.has('thumbnail')) r.errors.push('Premium (R2) videos need a public thumbnail image.');
+      if (!r.has('thumbnail')) r.errors.push('R2 videos need a public thumbnail image.');
     } else if (t === 'mp4' || t === 'hls') {
       extra(['type', 'url']); if (!/^https?:\/\/[^\s"'<>]+$/.test(String(s.url || ''))) r.errors.push(`source.url must be an absolute http(s) URL for ${t} videos.`); else r.out.source = { type: t, url: s.url.trim() };
     } else r.errors.push('source.type must be youtube, r2, mp4 or hls.');
   }
   r.img('thumbnail'); r.int('duration', { req: true, max: 86400 }); r.date('publishedAt', { req: true }); r.int('views', { dflt: 0 });
   r.oneOf('access', ACCESS, { req: true }); r.oneOf('rating', RATINGS); r.date('publishAt'); r.bool('hidden', false);
-  if ((r.out.access === 'premium' || ctx.premiumShowIds?.has(r.out.showId)) && r.out.source?.type !== 'r2') {
-    r.errors.push('Premium videos and videos in Premium shows must be hosted in private R2 storage.');
-  }
   // Optional subtitle tracks: max 12, each with a language code, label and a .vtt file; one track per language.
   if (r.src.subtitles !== undefined && r.src.subtitles !== null) {
     const subs = r.src.subtitles;
@@ -205,10 +198,7 @@ export function checkCatalog(cat, studioDoc, { fileExists } = {}) {
   const problems = [];
   const seen = (arr, label) => { const s = new Set(); for (const x of arr) { if (s.has(x.id)) problems.push(`duplicate ${label} id: ${x.id}`); s.add(x.id); } return s; };
   const showIds = seen(cat.shows || [], 'show'), upcomingIds = seen(cat.upcoming || [], 'upcoming'); seen(cat.videos || [], 'video'); seen(cat.gallery || [], 'gallery');
-  const videosByShow = new Map();
-  for (const v of cat.videos || []) if (v.showId) { const list = videosByShow.get(v.showId) || []; list.push(v); videosByShow.set(v.showId, list); }
-  const premiumShowIds = new Set((cat.shows || []).filter((s) => s.access === 'premium').map((s) => s.id));
-  const ctx = { fileExists, showIds, upcomingIds, videosByShow, premiumShowIds };
+  const ctx = { fileExists, showIds, upcomingIds };
   for (const [key, type] of Object.entries(TYPES)) for (const d of cat[key] || []) for (const e of validate(type, d, ctx).errors) problems.push(`${type} ${d?.id}: ${e}`);
   if (studioDoc) for (const e of validate('studio', studioDoc, ctx).errors) problems.push(`studio: ${e}`);
   return problems;

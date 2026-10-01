@@ -63,7 +63,7 @@ export function createApp({
   rate = true,
   catalogPath = path.join(ROOT, 'data/catalog.json'),
   studioPath = path.join(path.dirname(catalogPath), 'studio.json'),
-  r2 = createR2(),                                            // Cloudflare R2 (private bucket for premium video)
+  r2 = createR2(),                                            // Cloudflare R2 (private storage for video files)
   social = socialFromEnv(),                                   // { config, verifiers: { google?, facebook? } }
   publicApiUrl = process.env.PUBLIC_API_URL || '',            // absolute base for HLS URLs when behind a proxy
   streamTtl = Number(process.env.STREAM_URL_TTL) || 6 * 3600, // seconds a signed video URL stays valid
@@ -252,8 +252,8 @@ export function createApp({
   api.post('/auth/apple', authLimit, wrap(async (req, res) => res.json(await socialSignIn('apple', { identityToken: req.body?.identityToken, name: req.body?.name }))));
   features.public(api);           // password reset, email verification, analytics, public ratings/comments
 
-  /* ---------- premium video (Cloudflare R2) ---------- */
-  // ---- Premium video (Cloudflare R2) ----
+  /* ---------- Cloudflare R2 video streaming ---------- */
+  // ---- Cloudflare R2 video streaming ----
   // Reads the optional `Authorization: Bearer` token without failing when it is missing (free videos need no login).
   const userFromRequest = async (req) => {
     const h = req.headers.authorization || '';

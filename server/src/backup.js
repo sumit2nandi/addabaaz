@@ -10,7 +10,7 @@
  *   {"t":"file","path":"uploads/ab12.webp","b64":"…"}
  *   {"t":"end","rows":N,"files":M}              ← a backup without this line is truncated and is refused
  *
- * What is NOT in it: premium videos in R2 (they live in your bucket — enable bucket versioning there), the JWT secret and other env vars.
+ * What is NOT in it: video objects stored in R2 (enable bucket versioning there), the JWT secret and other env vars.
  */
 import fs from 'node:fs';
 import path from 'node:path';

@@ -48,10 +48,10 @@ export default async function content(root, [section], ctx) {
     { k: 'title', label: 'Title', req: true }, { k: 'titleEn', label: 'Title in English' },
     { k: 'type', label: 'Type', type: 'select', options: SHOW_TYPES, dflt: 'series' },
     { k: 'status', label: 'Status', type: 'select', options: [{ v: 'ongoing', l: 'Ongoing' }, { v: 'completed', l: 'Completed' }, { v: 'paused', l: 'Paused' }], dflt: 'ongoing' },
-    { k: 'access', label: 'Access', type: 'select', options: ACCESS, dflt: 'free', help: 'Every video in a Premium series must be hosted in private R2 storage.' },
+    { k: 'access', label: 'Access', type: 'select', options: ACCESS, dflt: 'free', help: 'Premium access is independent of media source; viewers need an active paid plan to play it in the app.' },
     { k: 'language', label: 'Language' }, { k: 'year', label: 'Year', type: 'number', min: 1900, max: 2100 },
     { k: 'genres', label: 'Genres', type: 'tags', wide: true }, { k: 'cast', label: 'Cast', type: 'tags', wide: true },
-    { k: 'tagline', label: 'Tagline', wide: true, max: 300, help: 'One line. Shown under the title and used in Google results — about 60–120 characters works best.' },
+    { k: 'tagline', label: 'Tagline', wide: true, max: 300, help: 'Shown below the poster and used in Google results — about 60–120 characters works best.' },
     { k: 'description', label: 'Description', type: 'textarea', req: true, wide: true, help: 'Google shows roughly the first 155 characters — put the hook first, and name the show, genre and language.' },
     ratingField,
     { k: 'featured', label: 'Feature on the home page (needs at least one episode)', type: 'bool', wide: true },
@@ -126,7 +126,7 @@ export default async function content(root, [section], ctx) {
     render: (v) => {
       const s = v.source || { type: 'youtube' };
       return html`<div class="field wide src"><label>Video source <em>*</em></label>
-        <select name="srcType"><option value="youtube" ${s.type === 'youtube' ? 'selected' : ''}>YouTube (free videos)</option><option value="r2" ${s.type === 'r2' ? 'selected' : ''}>Premium video in Cloudflare R2</option><option value="mp4" ${s.type === 'mp4' ? 'selected' : ''}>MP4 link</option><option value="hls" ${s.type === 'hls' ? 'selected' : ''}>HLS link (.m3u8)</option></select>
+        <select name="srcType"><option value="youtube" ${s.type === 'youtube' ? 'selected' : ''}>YouTube</option><option value="r2" ${s.type === 'r2' ? 'selected' : ''}>Private Cloudflare R2</option><option value="mp4" ${s.type === 'mp4' ? 'selected' : ''}>MP4 link</option><option value="hls" ${s.type === 'hls' ? 'selected' : ''}>HLS link (.m3u8)</option></select>
         <div data-for="youtube"><input name="ytUrl" placeholder="YouTube link or the 11-character id" value="${s.type === 'youtube' ? s.id : ''}"></div>
         <div data-for="r2"><div class="row wrap"><input name="r2Key" class="grow" placeholder="premium/show-name/episode-6.mp4" value="${s.type === 'r2' ? s.key : ''}"><label class="btn sm">${icon('upload', 16)} Upload video<input type="file" name="r2File" accept="video/mp4,video/webm,.mp4,.m4v,.webm" hidden></label></div>
           <progress max="1" value="0" hidden></progress><small class="muted r2-st">Pick a file to upload it straight to your private bucket, or type the key of a file (or an HLS <code>.m3u8</code>) you uploaded another way.</small>
@@ -146,7 +146,7 @@ export default async function content(root, [section], ctx) {
     { k: 'title', label: 'Title', req: true, wide: true, max: 300 }, { k: 'shortTitle', label: 'Short title (optional, shown on cards)', wide: true, max: 120 },
     { k: 'description', label: 'Description for Google (optional)', type: 'textarea', wide: true, max: 500, help: 'One or two sentences about this video (120–155 characters is ideal). Episodes get an automatic description from their show if this is empty; reels are kept out of Google unless you write one.' },
     { k: 'episode', label: 'Episode number', type: 'number', min: 1, help: 'Episodes only.' },
-    { k: 'access', label: 'Access', type: 'select', options: ACCESS, dflt: 'free', help: 'Premium videos and every video in a Premium series must be hosted in private R2 storage.' },
+    { k: 'access', label: 'Access', type: 'select', options: ACCESS, dflt: 'free', help: 'Premium access is independent of media source; viewers need an active paid plan to play it in the app.' },
     sourceField(),
     { k: 'thumbnail', label: 'Thumbnail', type: 'image', maxWidth: 1000, wide: true, help: 'Required for R2 videos; YouTube videos use their own thumbnail.' },
     { k: 'duration', label: 'Duration (mm:ss)', req: true, placeholder: '12:34', help: 'The public YouTube feed has no duration. Imported videos show — until you enter the real runtime here.' }, { k: 'publishedAt', label: 'Published', type: 'datetime', req: true },

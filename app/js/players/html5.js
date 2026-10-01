@@ -24,7 +24,7 @@ async function attachSubtitles(v, tracks = []) {
   v.textTracks.addEventListener?.('change', () => { const on = [...v.textTracks].find((tt) => tt.mode === 'showing'); try { localStorage.setItem('ab.subLang', on ? on.language : 'off'); } catch { /* ignore */ } });
 }
 
-// Plays MP4 or HLS (premium videos from R2) in a <video> element and returns the same controller interface as the YouTube player (play, pause, seek, destroy…).
+// Plays MP4 or HLS (including protected R2 video) in a <video> element and returns the same controller interface as the YouTube player (play, pause, seek, destroy…).
 export async function createHtml5Player(container, video, { start = 0, autoplay = true, muted = false, controls = true, onProgress, onEnded, onState } = {}) {
   container.innerHTML = '';
   const v = document.createElement('video');

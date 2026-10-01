@@ -1,9 +1,9 @@
 # Premium video on Cloudflare R2
 
-Free titles stay on YouTube. **Premium titles live as files in a private Cloudflare R2 bucket** and are only playable by signed-in viewers: the bucket is never public, the catalog contains only object *keys*, and the API hands a signed, expiring URL to whoever it lets in.
+Premium access is an app-level catalog setting and is **not limited to R2 sources**: any show or video can be marked Premium. This guide covers private Cloudflare R2 media for cases where the video itself must also stay protected. Public sources such as YouTube or public MP4/HLS links may be reachable outside ADDABAAZ even when the app requires a paid account.
 
 ```
-Viewer opens a premium title
+Viewer opens a Premium title hosted in R2
   └─ not signed in? → "Sign in to watch"           (UI)
   └─ signed in, no active plan? → Plans → pay        (UI, see "Payments")
   └─ POST /api/v1/videos/:id/stream  (Bearer)
@@ -81,12 +81,12 @@ Add (or change) a video in `data/catalog.json`; `access: "premium"` is what requ
 
 | Situation | Result |
 |---|---|
-| Free title (YouTube or R2) | Plays for everyone |
+| Free title (any source) | Plays for everyone |
 | Premium, signed out | `401 login_required` → "Sign in to watch" |
 | Premium, signed in (email, Google or Facebook), no plan or plan expired | `402 subscription_required` → "ADDABAAZ Plus exclusive" → Plans page (`#/plans?next=/watch/<id>`) |
 | Premium, signed in **and** an active paid plan | Plays |
-| `R2_*` not configured | `503 storage_not_configured` |
-| Static-only hosting (no API) | "Premium video needs an account" message |
+| R2 source, but `R2_*` not configured | `503 storage_not_configured` |
+| Static-only hosting (no auth API) | Premium playback is unavailable because sign-in and plan checks need the server |
 
 ## Payments (Razorpay)
 

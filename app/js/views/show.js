@@ -43,7 +43,6 @@ export default async function showView(ctx) {
           <h1 class="hero-title bn">${s.title}</h1>
           ${s.titleEn && s.titleEn !== s.title ? html`<div class="hero-title-en">${s.titleEn}</div>` : ''}
           ${showMeta(s)}
-          ${s.tagline ? html`<p class="tagline bn">${s.tagline}</p>` : ''}
           <div class="hero-actions">
             ${t ? html`<a class="btn btn-primary btn-lg" href="#/watch/${t.video.id}">${icon('play', { size: 20 })} ${label}</a>` : ''}
             ${trailer ? html`<a class="btn btn-glass btn-lg" href="#/watch/${trailer.id}">${icon('film', { size: 20 })} Trailer</a>` : ''}
@@ -60,6 +59,7 @@ export default async function showView(ctx) {
       </div>
     </section>
     <div class="page page-tight">
+      ${s.tagline ? html`<p class="show-tagline-below bn">${s.tagline}</p>` : ''}
       ${s.description ? html`<section class="show-description" aria-labelledby="showDescriptionTitle"><h2 id="showDescriptionTitle">Description</h2><p>${s.description}</p></section>` : ''}
       ${eps.length ? html`<section class="ep-section" aria-label="Episodes">
         <div class="section-bar"><h2>Episodes <span class="count">${eps.length}</span></h2>

@@ -100,7 +100,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
       item('payments', 'Payments', payments.provider === 'razorpay', payments.provider === 'razorpay' ? 'Razorpay is connected.' : payments.provider === 'mock' ? 'Demo checkout — nobody is really charged.' : 'No payment provider: paid plans cannot be bought.'),
       item('gst', 'GST invoicing', billing.config.gstEnabled, billing.config.gstEnabled ? `Invoices are issued under GSTIN ${billing.config.gstin}.` : 'GSTIN is not set — purchases get plain receipts without GST.'),
       item('mail', 'Email', mailer.provider === 'smtp', mailer.provider === 'smtp' ? 'SMTP is configured. Use Send test email below to check actual delivery.' : 'SMTP_URL is not set — verification, password-reset and billing emails are not sent.'),
-      item('r2', 'Premium video storage (R2)', !!r2.configured, r2.configured ? `Bucket “${r2.bucket}” is configured.` : 'R2 is not configured — premium videos cannot play.'),
+      item('r2', 'Private video storage (R2)', !!r2.configured, r2.configured ? `Bucket “${r2.bucket}” is configured.` : 'R2 is not configured — R2-hosted videos cannot play (optional for other sources).'),
       item('push', 'Web push', !!push?.configured, push?.configured ? 'VAPID keys are set; notifications can be sent.' : 'VAPID keys are not set — push notifications are off (optional).', 'info'),
       item('apple', 'Apple sign-in', !!social.verifiers?.apple, social.verifiers?.apple ? 'Enabled.' : 'Not configured (optional; required only for iOS apps that offer other social logins).', 'info'),
       item('google', 'Google sign-in', !!social.verifiers?.google, social.verifiers?.google ? 'Enabled.' : 'Not configured (optional).', 'info'),
@@ -252,15 +252,8 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     if (!base) return false;
     const file = path.resolve(base, ...rest); return file.startsWith(path.resolve(base) + path.sep) && fs.existsSync(file);
   };
-  // Extra context the catalog validator needs (existing IDs and each show's private-playback requirements).
-  const ctxOf = (snap) => {
-    const videosByShow = new Map();
-    for (const v of snap.catalog.videos || []) if (v.showId) { const list = videosByShow.get(v.showId) || []; list.push(v); videosByShow.set(v.showId, list); }
-    return {
-      fileExists, showIds: snap.showIds, upcomingIds: snap.upcomingIds, videosByShow,
-      premiumShowIds: new Set((snap.catalog.shows || []).filter((s) => s.access === 'premium').map((s) => s.id)),
-    };
-  };
+  // Extra context the catalog validator needs to check existing references and media files.
+  const ctxOf = (snap) => ({ fileExists, showIds: snap.showIds, upcomingIds: snap.upcomingIds });
   // Maps the `:type` URL segment (show, video, upcoming, gallery) to the collection; unknown types -> 404.
   const kindOf = (req) => { if (!TYPES[req.params.type]) throw new HttpError(404, 'not_found', 'Unknown catalog section.'); return { key: req.params.type, type: TYPES[req.params.type] }; };
   const invalid = (errors) => new HttpError(400, 'invalid_item', errors.join(' '));

@@ -67,7 +67,7 @@ paths:
   /videos/{id}/stream:
     post:
       security: [ {}, { bearer: [] } ]
-      summary: 'Playable URL for a video stored in Cloudflare R2. Premium videos need a signed-in user (Bearer); free ones are public.'
+      summary: 'Playable URL for an R2-stored video. Premium titles require a signed-in user with an active plan; Free titles are public.'
       parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
       responses:
         '200': { description: '{ type: mp4|hls, url, expiresAt }', content: { application/json: { schema: { type: object, properties: { type: { type: string, enum: [mp4, hls] }, url: { type: string }, expiresAt: { type: string, format: date-time } } } } } }
@@ -226,7 +226,7 @@ paths:
   /admin/uploads/image:
     post: { summary: 'Admin: upload an image (raw body, png/jpeg/webp/gif, ≤ 10 MB) → { path: uploads/<hash>.<ext> }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '413': { description: too large }, '400': { description: unsupported_image } } }
   /admin/uploads/video:
-    post: { summary: 'Admin: presigned PUT URL for a premium video in R2 { filename, slug } → { key, uploadUrl, expiresInSeconds }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '503': { description: storage_not_configured } } }
+    post: { summary: 'Admin: presigned PUT URL for a video file in private R2 storage { filename, slug } → { key, uploadUrl, expiresInSeconds }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '503': { description: storage_not_configured } } }
 
   # ---- v2.6: accounts, viewing, engagement (all additive) ----
   /auth/apple: { post: { security: [], tags: [auth], summary: 'Sign in with Apple. Body { identityToken, name? } (name is only sent by Apple the first time). Same response as /auth/google.', requestBody: { required: true, content: { application/json: { schema: { type: object, required: [identityToken], properties: { identityToken: { type: string }, name: { type: string } } } } } }, responses: { '200': { description: 'Auth' }, '400': { description: 'Invalid token' }, '501': { description: 'Apple sign-in is not configured' } } } }
