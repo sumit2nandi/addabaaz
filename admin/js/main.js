@@ -43,7 +43,7 @@ function showLogin(message = '', { emailValue = '' } = {}) {
     <div class="field"><label for="em">Email</label><input id="em" name="email" type="email" autocomplete="username" value="${emailValue}" required></div>
     <div class="field"><label for="pw">Password</label><input id="pw" name="password" type="password" autocomplete="current-password" required></div>
     <button class="btn primary block" type="submit">Sign in</button>
-    <p class="small muted">Signed up with Google or Facebook? Sign in on the <a href="/">main site</a> first, then reload this page.<br>Need admin access? Ask an existing administrator, or run <code>npm run admin -- grant you@example.com</code> on the server.</p>
+    <p class="small muted">Signed up with Google or Facebook? Sign in on the <a href="/">main site</a> first, then reload this page.<br>Need admin access? Ask an existing administrator to grant it.</p>
   </form></main>`.s;
   const form = $('form', app);
   form.email.focus();
@@ -116,7 +116,7 @@ async function start() {
   if (!getToken()) return showLogin();
   try { admin = (await api.get('/session')).admin; }
   catch (e) {
-    if (e.status === 403) { return showLogin(e.code === 'account_disabled' ? e.message : 'That account isn’t an administrator. Ask an existing admin to grant access, or run: npm run admin -- grant <email>', {}); }
+    if (e.status === 403) { return showLogin(e.code === 'account_disabled' ? e.message : 'This account doesn’t have administrator access. Ask an existing administrator to grant it.', {}); }
     if (e.status === 401) return showLogin(e.code === 'admin_session_expired' ? e.message : '');
     app.innerHTML = html`<main class="login"><div class="card login-card"><h1>Can’t load the console</h1><p class="muted">${errMsg(e)}</p><button class="btn primary" data-reload>Retry</button></div></main>`.s;
     app.querySelector('[data-reload]').onclick = () => location.reload(); return;

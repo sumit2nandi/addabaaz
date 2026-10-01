@@ -30,6 +30,7 @@ export default async function auth(ctx) {
       ${signup ? '' : html`<a class="forgot-link" href="#/forgot">Forgot password?</a>`}
       <div class="form-status" id="as" role="alert"></div>
       <button class="btn btn-primary btn-lg block" type="submit" id="asub">${signup ? 'Create account' : 'Sign in'}</button>
+      <div class="auth-busy" id="asBusy" hidden><div class="spinner"></div><p>Signing you in…</p></div>
       ${signup ? html`<p class="fine">By creating an account you agree to our <a href="#/terms">Terms</a> and <a href="#/privacy">Privacy Policy</a>.</p>` : ''}
       <p class="switch-auth">${signup ? html`Already have an account? <a href="#/signin?next=${encodeURIComponent(next)}">Sign in</a>` : html`New to ADDABAAZ? <a href="#/signup?next=${encodeURIComponent(next)}">Create an account</a>`}</p>
       <a class="skip" href="#/">Continue without an account</a>
@@ -37,6 +38,8 @@ export default async function auth(ctx) {
 
   const st0 = () => $('#as', ctx.root);
   const finish = (msg) => { toast(msg); if (u.needsProfileChoice()) go('/profiles?next=' + encodeURIComponent(next), { replace: true }); else go(next, { replace: true }); };
+  // Full-card loading state while a provider sign-in finishes (the form must not sit idle after the popup).
+  const busy = (on) => { const el = $('#asBusy', ctx.root); if (el) el.hidden = !on; };
   u.providers().then((prov) => {                                    // Google / Facebook buttons appear only if the server has them configured
     if (!$('#social', ctx.root)) return;                             // navigated away meanwhile
     const shown = mountSocialButtons($('#social', ctx.root), prov, {
@@ -44,8 +47,9 @@ export default async function auth(ctx) {
       onError: (m) => { st0().textContent = m; toast(m); },
       onCredential: async (provider, cred) => {
         st0().textContent = '';
-        try { const r = await u.signInSocial(provider, cred); finish(r.isNew ? 'Welcome to ADDABAAZ!' : 'Signed in'); }
-        catch (err) { const m = friendly(err); st0().textContent = m; toast(m); }
+        busy(true);
+        try { const r = await u.signInSocial(provider, cred); busy(false); finish(r.isNew ? 'Welcome to ADDABAAZ!' : 'Signed in'); }
+        catch (err) { busy(false); const m = friendly(err); st0().textContent = m; toast(m); }
       },
     });
     if (shown) { $('#social', ctx.root).hidden = false; $('#or', ctx.root).hidden = false; }
