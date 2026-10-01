@@ -25,7 +25,24 @@ const loadScript = (key, src) => loaded[key] || (loaded[key] = new Promise((res,
 async function initGoogle(clientId, onCredential) {
   await loadScript('gis', 'https://accounts.google.com/gsi/client');
   window.google.accounts.id.initialize({ client_id: clientId, callback: (r) => r.credential && onCredential(r.credential), auto_select: false, cancel_on_tap_outside: true, use_fedcm_for_prompt: true });
+  // Never silently continue with the Google id that signed in last time — the user always picks.
+  try { window.google.accounts.id.disableAutoSelect(); } catch { /* older GIS builds */ }
   return window.google.accounts.id;
+}
+
+/**
+ * Forgets the native SDK's remembered account (call on sign-out): the Capgo plugin's logout runs
+ * CredentialManager.clearCredentialState — so the next "Continue with Google" opens with a clean
+ * chooser instead of the previously-used id — and wipes its cached token. Bounded and best-effort:
+ * sign-out must never hang or fail because of it.
+ */
+export async function forgetNativeSession() {
+  if (!isNative) return;
+  try {
+    const SL = window.Capacitor?.Plugins?.SocialLogin;
+    if (!SL?.logout) return;
+    await Promise.race([SL.logout(), new Promise((res) => setTimeout(res, 5000))]);
+  } catch { /* offline mode / older plugin — nothing to clear */ }
 }
 
 /* ---------- web: Facebook ---------- */

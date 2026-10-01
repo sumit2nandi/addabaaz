@@ -92,9 +92,10 @@ export class User extends Emitter {
     if (this.profiles.length === 1) await this.selectProfile(this.profiles[0].id, { silent: true });
     this.emit('account'); this.emit('profile');
   }
-  // Sign out: detach push notifications, clear all in-memory state and fall back to the guest profile.
+  // Sign out: detach push notifications, forget the native Google/Facebook session, clear all in-memory state and fall back to the guest profile.
   async signOut() {
     try { if (this.account) await (await import('../push.js')).detachPush(); } catch { /* best effort */ }
+    try { await (await import('../social.js')).forgetNativeSession?.(); } catch { /* best effort */ }
     try { await this.remote?.signOut(); } catch { /* the local sign-out below must happen regardless */ }
     this.pin = null; this.ratings = {};
     this.account = null; this.activeId = null; this.lib = { list: [], progress: {}, reminders: [] };
