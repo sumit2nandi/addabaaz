@@ -88,7 +88,7 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .menu hr { border: 0; border-top: 1px solid var(--border); margin: 6px 0; }
 .menu a, .menu-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border-radius: 8px; background: none; border: 0; text-align: left; font-size: 14px; font-weight: 600; color: var(--text-2) !important; transition: background .15s, color .15s; }
 .menu a:hover, .menu-item:hover, .menu a:focus-visible, .menu-item:focus-visible { background: var(--accent); color: #fff !important; }
-.menu-item span { flex: 1; }
+.menu-item span:not(.avatar) { flex: 1; }   /* not .avatar: the initial chip must keep its square width (inline width is ignored once flex-grow applies) */
 .menu-item.current { color: #fff !important; }
 .nav-drop .menu a::after { display: none; }
 
