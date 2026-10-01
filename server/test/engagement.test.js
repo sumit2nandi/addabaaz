@@ -123,7 +123,7 @@ test('forgot/resend fail loudly instead of pretending an email was sent', async 
     assert.ok(extra.some((m) => m.to === em && /Reset your/.test(m.subject)), 'the retry actually delivered');
 
     // The failed signup send left no verification token/throttle state behind, so resend can be retried.
-    await db.pool.query("DELETE FROM auth_tokens WHERE user_id = ? AND purpose = 'verify'", [su.user.id]);
+    await db.pool.query("DELETE FROM auth_tokens WHERE user_id = ? AND purpose = 'verify'", [su.body.user.id]);
     broken = true;
     const rs = await callOn(sFlaky, 'POST', '/me/verify/resend', null, su.body.token);
     assert.equal(rs.status, 503, 'resend is equally honest');
