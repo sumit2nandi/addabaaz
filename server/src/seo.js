@@ -35,15 +35,15 @@ export function siteOrigin(req, configured) {
 export function bodyHtml(m, { view, params }, cat, studio, plans) {
   const h1 = (t) => `<h1>${esc(t)}</h1>`;
   const intro = (t, d = m.description) => `${h1(t)}<p>${esc(d)}</p>`;
-  const nav = `<nav aria-label="Site">${[['/', 'Home'], ['/shows', 'All shows'], ['/reels', 'Reels'], ['/youtube', 'Latest YouTube uploads'], ['/upcoming', 'Coming soon'], ['/gallery', 'Behind the scenes'], ['/plans', 'Plans'], ['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact'], ['/privacy', 'Privacy Policy'], ['/terms', 'Terms of Use'], ['/refunds', 'Refund Policy']].map(([h, t]) => A(h, t)).join(' · ')}</nav>`;
+  const nav = `<nav aria-label="Site">${[['/', 'Home'], ['/shows', 'All shows'], ['/reels', 'Reels'], ['/upcoming', 'Coming soon'], ['/gallery', 'Behind the scenes'], ['/plans', 'Plans'], ['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact'], ['/privacy', 'Privacy Policy'], ['/terms', 'Terms of Use'], ['/refunds', 'Refund Policy']].map(([h, t]) => A(h, t)).join(' · ')}</nav>`;
   const showList = (list) => `<ul>${list.map((s) => li(`/show/${s.id}`, showFullName(s), s.tagline)).join('')}</ul>`;
   const epList = (list) => `<ul>${list.map((v) => li(`/watch/${v.id}`, `${v.kind === 'episode' && v.episode ? `EP ${v.episode}: ` : ''}${cat.displayTitle(v)}`, fmtDuration(v.duration))).join('')}</ul>`;
   let b = '';
   // Choose the content by which page (view) was requested.
   switch (view) {
     case 'home': {
-      const latest = [...cat.allEpisodes()].sort((a, c) => c.publishedAt.localeCompare(a.publishedAt)).slice(0, 12);
-      b = `${intro('ADDABAAZ — Bengali web series, comedy and originals')}<h2>Shows</h2>${showList(cat.shows)}<h2>Latest episodes</h2>${epList(latest)}` +
+      const latest = cat.latestVideos(12);
+      b = `${intro('ADDABAAZ — Bengali web series, comedy and originals')}<h2>Shows</h2>${showList(cat.shows)}<h2>Latest episodes and videos</h2>${epList(latest)}` +
         (cat.upcoming.length ? `<h2>Coming soon</h2><ul>${cat.upcoming.map((u) => li(`/soon/${u.id}`, showFullName(u), u.note)).join('')}</ul>` : ''); break;
     }
     case 'browse': b = `${intro('All shows')}${showList(cat.shows)}`; break;
@@ -61,13 +61,6 @@ export function bodyHtml(m, { view, params }, cat, studio, plans) {
       const v = cat.video(params.id), s = cat.show(v.showId), eps = s ? cat.episodes(s.id) : [], i = eps.findIndex((e) => e.id === v.id);
       b = `${h1(cat.displayTitle(v))}<p>${esc(videoDescription(v, s, cat))}</p>` + (s ? `<p>From ${A(`/show/${s.id}`, showFullName(s))}</p>` : '') +
         (i > 0 ? `<p>Previous: ${A(`/watch/${eps[i - 1].id}`, cat.displayTitle(eps[i - 1]))}</p>` : '') + (i >= 0 && i < eps.length - 1 ? `<p>Next: ${A(`/watch/${eps[i + 1].id}`, cat.displayTitle(eps[i + 1]))}</p>` : ''); break;
-    }
-    case 'youtube': {
-      const uploads = cat.videos.filter((v) => v.source?.type === 'youtube').sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)).slice(0, 15);
-      b = `${intro('Latest from YouTube', 'The latest ADDABAAZ channel videos already synced into the catalog. New uploads appear here after an administrator refreshes the catalog.')}` +
-        (uploads.length ? `<ul>${uploads.map((v) => li(`/watch/${v.id}`, cat.displayTitle(v), v.duration ? fmtDuration(v.duration) : '')).join('')}</ul>` : '<p>No channel videos have been synced yet.</p>') +
-        `<p>${A('https://www.youtube.com/@ADDABAAZ01', 'Open the ADDABAAZ YouTube channel')}</p>`;
-      break;
     }
     case 'upcoming': b = `${intro('Coming soon')}<ul>${cat.upcoming.map((u) => li(`/soon/${u.id}`, showFullName(u), u.note)).join('')}</ul>`; break;
     case 'soon': { const u = cat.soon(params.id); b = `${intro(`${showFullName(u)} — coming soon`)}<p>${esc(u.note || '')}</p>${cat.show(u.showId) ? `<p>${A(`/show/${u.showId}`, 'Watch the show')}</p>` : ''}`; break; }
@@ -195,7 +188,7 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
     const url = (p, { lastmod, extra = '' } = {}) => `<url><loc>${esc(origin + p)}</loc>${lastmod ? `<lastmod>${day(lastmod)}</lastmod>` : ''}${extra}</url>`;
     const newest = (list) => list.map((v) => v.publishedAt).filter(Boolean).sort().at(-1);
     const out = [url('/', { lastmod: newest(cat.videos) })];
-    for (const p of ['/shows', '/youtube', '/upcoming', '/gallery', '/plans', '/about', '/services', '/contact', '/privacy', '/terms', '/refunds']) out.push(url(p));
+    for (const p of ['/shows', '/upcoming', '/gallery', '/plans', '/about', '/services', '/contact', '/privacy', '/terms', '/refunds']) out.push(url(p));
     for (const s of cat.shows) out.push(url(`/show/${s.id}`, { lastmod: newest(cat.videos.filter((v) => v.showId === s.id)) }));
     for (const u of cat.upcoming) out.push(url(`/soon/${u.id}`));
     for (const v of cat.videos) {

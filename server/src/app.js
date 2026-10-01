@@ -59,7 +59,7 @@ export function createApp({
   sessionHours = Number(process.env.ADMIN_SESSION_HOURS) || 12, // admin sessions are shorter than viewer sessions
   uploadDir = process.env.UPLOAD_DIR || path.join(ROOT, 'uploads'),   // admin image uploads (mount a persistent volume in production)
   contactWebhook = process.env.CONTACT_WEBHOOK_URL || '',
-  youtubeFeed = createYouTubeFeed(),                         // fetched only when an administrator manually refreshes the catalog
+  youtubeFeed = createYouTubeFeed(),                         // fetched only after an administrator explicitly previews uploads
   rate = true,
   catalogPath = path.join(ROOT, 'data/catalog.json'),
   studioPath = path.join(path.dirname(catalogPath), 'studio.json'),

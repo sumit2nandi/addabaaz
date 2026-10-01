@@ -23,6 +23,11 @@ function tagText(xml, tag) {
   return decodeXml(match?.[1] || '').trim();
 }
 
+/** A title-only hint for the admin preview; YouTube's public feed does not expose aspect ratio or Shorts metadata. */
+export function suggestYouTubeKind(title) {
+  return /(?:#shorts?\b|\bshorts\b|\breels?\b)/i.test(String(title || '')) ? 'reel' : 'clip';
+}
+
 /** Parse and validate the fields needed to create catalog records from a YouTube Atom feed. */
 export function parseYouTubeFeed(xml, { limit = MAX_UPLOADS } = {}) {
   const safeLimit = Math.max(0, Math.min(MAX_UPLOADS, Math.floor(Number(limit) || 0)));
@@ -40,6 +45,7 @@ export function parseYouTubeFeed(xml, { limit = MAX_UPLOADS } = {}) {
       publishedAt: new Date(publishedTime).toISOString(),
       thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
       url: `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`,
+      suggestedKind: suggestYouTubeKind(title),
     });
   }
   return [...unique.values()]

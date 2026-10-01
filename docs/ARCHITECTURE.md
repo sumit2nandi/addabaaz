@@ -29,7 +29,7 @@
 - **Two URL styles, one router.** On the website served by the Node server, pages have real URLs (`/show/shahid`, History API) and the server answers each with the app shell plus that page's metadata and content, so Google can index it ([SEO.md](SEO.md)). Static hosting and the Capacitor apps have no such server and keep hash URLs (`#/show/shahid`); the server tells the app which mode to use with `<meta name="ab:routing">`. Old `/#/…` links are converted automatically.
 - **No framework/build step.** Small (~200 KB of unminified JS, views loaded on demand), trivially deployable, easy for the studio team to edit. `html` tagged templates escape all interpolations by default.
 - **MySQL for user data and the live catalogue.** Accounts, profiles, My List, progress, reminders, subscriptions, contact messages and the current curated catalogue live in MySQL (`server/migrations/*.sql`, accessed only through `server/src/db.js`). `data/catalog.json` is the one-time seed and static-mode fallback; tables reference catalogue ids by value.
-- **Content as data.** Curated shows and catalogue videos are database-backed. An authenticated admin can explicitly refresh the channel's public Atom feed with `POST /api/v1/admin/catalog/youtube/refresh` (no API key, latest 15 uploads); missing YouTube IDs are imported once as free, unrated standalone clips with unknown duration, then the admin can assign their metadata. Public pages only read the catalog and never fetch the YouTube feed. Static-only builds continue to use their bundled catalog snapshot.
+- **Content as data.** Curated shows and catalogue videos are database-backed. An authenticated admin previews the channel's latest 15 Atom-feed uploads with `POST /api/v1/admin/catalog/youtube/preview`, chooses individual videos and their Reel/Short or landscape type (or imports all new uploads), then imports the signed preview snapshot. Shorts appear in Reels; landscape uploads join the home page's latest episodes/videos. A tracked import history supports undoing the last batch or removing imports from today. Public pages only read the catalog and never fetch the YouTube feed. Static-only builds continue to use their bundled catalog snapshot.
 
 ## Sign-in and premium content
 
@@ -57,7 +57,7 @@ Free content never needs an account. Titles marked `access: "premium"` require o
 2. **Own video pipeline:** upload → transcode to HLS (Mux, Cloudflare Stream, AWS MediaConvert) → signed URLs → DRM (Widevine/FairPlay) for premium; enables downloads and Chromecast/AirPlay.
 3. **Social login** (Google/Apple; Apple is mandatory in iOS apps that offer other social logins) and email verification / password reset (needs an email provider).
 4. **Push notifications** for reminders and new episodes (FCM/APNs).
-5. **Admin CMS** (or headless CMS: Sanity/Strapi/Directus) generating `catalog.json`. The admin console includes a manual, idempotent RSS sync that adds new YouTube uploads to the database-backed catalog; public pages never contact YouTube for its feed.
+5. **External CMS integration** (or headless CMS: Sanity/Strapi/Directus) generating catalog data. The current admin console includes a manual YouTube preview/selection/import flow with batch undo; public pages never contact YouTube for its feed.
 6. ~~**SEO**~~ done — see [SEO.md](SEO.md).
 7. **Analytics & recommendations** (watch-time events → "Because you watched…"), A/B tests on the hero.
 8. **i18n:** Bengali/English UI toggle (strings are already isolated in views).

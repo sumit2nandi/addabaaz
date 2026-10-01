@@ -54,6 +54,11 @@ export class Catalog {
   latestEpisodes(n = 12) {
     return [...this.allEpisodes()].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)).slice(0, n);
   }
+  /** Latest episodes plus standalone landscape videos imported from YouTube (Shorts/Reels are listed separately). */
+  latestVideos(n = 12) {
+    return this.videos.filter((v) => v.kind === 'episode' || (v.kind === 'clip' && v.source?.type === 'youtube'))
+      .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)).slice(0, n);
+  }
   latestEpisode(showId) {
     return [...this.episodes(showId)].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))[0];
   }

@@ -194,3 +194,29 @@ details.card > summary { cursor: pointer; } details.card { padding: 12px 16px; }
 .sub-rows { display: grid; gap: 8px; margin-bottom: 8px; } .sub-row { display: grid !important; grid-template-columns: 70px 130px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; } .sub-row input { min-width: 0; width: 100%; }
 @media (max-width: 600px) { .sub-row { grid-template-columns: 70px 1fr auto auto; } .sub-row [name=subUrl] { grid-column: 1 / -1; grid-row: 2; } }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* YouTube import preview and recent-import actions. */
+.yt-history { gap: 8px; margin: -4px 0 14px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); }
+.yt-history > strong { font-size: 12.5px; margin-right: 4px; }
+.yt-history > small { margin-left: auto; }
+.yt-preview-tools { justify-content: space-between; margin: 12px 0 10px; }
+.yt-preview-list { max-height: min(58vh, 620px); overflow: auto; border: 1px solid var(--border); border-radius: var(--r-sm); }
+.yt-preview-row { display: grid; grid-template-columns: 18px 104px minmax(150px, 1fr) minmax(150px, 190px); align-items: center; gap: 11px; padding: 10px; border-bottom: 1px solid var(--border); }
+.yt-preview-row:last-child { border-bottom: 0; }
+.yt-preview-row.is-imported { opacity: .65; }
+.yt-preview-row > img { width: 104px; aspect-ratio: 16 / 9; border-radius: 5px; object-fit: cover; background: var(--panel-3); }
+.yt-preview-info { min-width: 0; }
+.yt-preview-info > a { display: block; color: var(--text); font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; }
+.yt-preview-info > small { display: block; margin-top: 4px; }
+.yt-preview-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.yt-kind-field { display: grid; gap: 4px; min-width: 0; }
+.yt-kind-field select { width: 100%; min-width: 0; }
+.yt-preview-submit { margin-top: 14px !important; }
+@media (max-width: 640px) {
+  .yt-history { align-items: flex-start; }
+  .yt-history > small { flex-basis: 100%; margin-left: 0; }
+  .yt-preview-row { grid-template-columns: 16px 84px minmax(0, 1fr); gap: 8px; padding: 9px; }
+  .yt-preview-row > img { width: 84px; }
+  .yt-kind-field { grid-column: 2 / -1; }
+  .yt-preview-submit .btn { flex: 1 1 auto; white-space: normal; }
+}

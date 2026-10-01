@@ -76,9 +76,6 @@ export default async function home(ctx) {
   const slides = heroSlides();
   const N = CONFIG.homeRailSize;
   const rec = u.recommendations(cat, N);
-  const latestYouTube = cat.videos.filter((v) => v.source?.type === 'youtube')
-    .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)).slice(0, 15);
-
   ctx.setTitle('');
   ctx.root.innerHTML = html`
     ${slides.length ? heroHtml(slides) : ''}
@@ -86,8 +83,7 @@ export default async function home(ctx) {
       ${rail({ title: 'Continue Watching', items: cw.map(({ video }) => videoCard(video)), cls: 'r-video' })}
       ${rec ? rail({ title: `Because you watched ${rec.because.titleEn || rec.because.title}`, items: rec.items.map((x) => showCard(x)), cls: 'r-poster' }) : ''}
       ${rail({ title: 'My List', items: mine, href: '#/list', cls: 'r-poster' })}
-      ${rail({ title: 'New Episodes', subtitle: 'Fresh from the ADDABAAZ studio', items: cat.latestEpisodes(N).map((v) => videoCard(v)), href: '#/shows?view=episodes', linkLabel: 'All episodes', cls: 'r-video' })}
-      ${rail({ title: 'Latest from YouTube', subtitle: 'Videos manually synced to the ADDABAAZ catalog', items: latestYouTube.map((v) => videoCard(v)), href: '#/youtube', linkLabel: 'All uploads', cls: 'r-video' })}
+      ${rail({ title: 'Latest Episodes & Videos', subtitle: 'Recent episodes and landscape uploads from ADDABAAZ', items: cat.latestVideos(N).map((v) => videoCard(v)), cls: 'r-video' })}
       ${rail({ title: 'Top 10 Episodes', subtitle: 'Most watched on ADDABAAZ', items: cat.trending(10, demoteMature ? { matureCap: 2 } : {}).map((v, i) => videoCard(v, { rank: i + 1 })), cls: 'r-top' })}
       ${rail({ title: 'Shows', items: cat.shows.map((s) => showCard(s)), href: '#/shows', linkLabel: 'Browse all', cls: 'r-poster' })}
       ${cat.shows.map((s) => rail({ title: s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title, items: cat.episodes(s.id).slice().reverse().map((v) => videoCard(v, { showName: false })), href: `#/show/${s.id}`, linkLabel: 'Open show', cls: 'r-video' }))}

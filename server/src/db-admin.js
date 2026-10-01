@@ -65,7 +65,18 @@ export function adminDb({ q, tx, self, iso }) {
         return create ? 'created' : 'updated';
       });
     },
+    /** Atomically adds an imported YouTube video and its batch history row; duplicate catalog ids roll back both writes. */
+    async putYouTubeImport(doc, { batchId, actor }) {
+      return tx(async (t) => {
+        const [{ next }] = await t.query("SELECT COALESCE(MAX(position), -1) + 1 AS next FROM catalog_items WHERE type = 'video'");
+        await t.query("INSERT INTO catalog_items (type, id, position, doc) VALUES ('video', ?, ?, ?)", [doc.id, next, JSON.stringify(doc)]);
+        await t.query('INSERT INTO youtube_import_items (batch_id, video_id, actor, imported_at) VALUES (?,?,?,UTC_TIMESTAMP(3))', [batchId, doc.id, String(actor).slice(0, 254)]);
+        await bump(t);
+        return 'created';
+      });
+    },
     // The studio/about page content is a single document stored as type 'studio'.
+
     async putStudio(doc) {
       return tx(async (t) => {
         await t.query("INSERT INTO catalog_items (type, id, position, doc) VALUES ('studio', 'main', 0, ?) ON DUPLICATE KEY UPDATE doc = VALUES(doc), updated_at = UTC_TIMESTAMP(3)", [JSON.stringify(doc)]);
@@ -119,6 +130,24 @@ export function adminDb({ q, tx, self, iso }) {
       if (action) { where.push('action LIKE ?'); args.push(like(action)); }
       const rows = await q(`SELECT * FROM admin_audit ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT ?`, [...args, limit]);
       return rows.map((r) => ({ id: r.id, at: iso(r.at), actor: r.actor, action: r.action, target: r.target, meta: json(r.meta), ip: r.ip }));
+    },
+  };
+
+  // ---- YouTube import history: records stay after catalog deletion so "today" and "last batch" remain auditable ----
+  const youtubeImports = {
+    /** Most recent import batch plus every video imported within the supplied UTC day bounds. */
+    async summary({ start, end }) {
+      const latest = (await q(`SELECT batch_id, MAX(imported_at) AS imported_at
+        FROM youtube_import_items GROUP BY batch_id ORDER BY MAX(imported_at) DESC LIMIT 1`))[0] || null;
+      const lastItems = latest
+        ? await q('SELECT video_id FROM youtube_import_items WHERE batch_id = ? ORDER BY imported_at, video_id', [latest.batch_id])
+        : [];
+      const todayItems = await q(`SELECT DISTINCT video_id FROM youtube_import_items
+        WHERE imported_at >= ? AND imported_at < ? ORDER BY video_id`, [start, end]);
+      return {
+        last: latest ? { batchId: latest.batch_id, importedAt: iso(latest.imported_at), videoIds: lastItems.map((r) => r.video_id) } : null,
+        todayVideoIds: todayItems.map((r) => r.video_id),
+      };
     },
   };
 
@@ -212,5 +241,5 @@ export function adminDb({ q, tx, self, iso }) {
   };
 
   // Merged into the main `db` object by db.js.
-  return { catalog, audit, adminUsers, messages, stats };
+  return { catalog, audit, youtubeImports, adminUsers, messages, stats };
 }

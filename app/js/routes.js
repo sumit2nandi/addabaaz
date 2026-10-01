@@ -4,7 +4,7 @@
 // Each entry is compiled into a regular expression below.
 export const ROUTES = [
   ['/', 'home'], ['/shows', 'browse'], ['/show/:id', 'show'], ['/watch/:id', 'watch'],
-  ['/reels', 'reels'], ['/reels/:id', 'reels'], ['/youtube', 'youtube'], ['/upcoming', 'upcoming'], ['/soon/:id', 'soon'],
+  ['/reels', 'reels'], ['/reels/:id', 'reels'], ['/upcoming', 'upcoming'], ['/soon/:id', 'soon'],
   ['/gallery', 'gallery'], ['/search', 'search'], ['/list', 'mylist'], ['/account', 'account'],
   ['/profiles', 'profiles'], ['/signin', 'auth'], ['/signup', 'auth'], ['/plans', 'plans'], ['/billing', 'billing'],
   ['/forgot', 'recover'], ['/reset', 'recover'], ['/verify', 'recover'], ['/privacy', 'legal'], ['/terms', 'legal'], ['/refunds', 'legal'],
