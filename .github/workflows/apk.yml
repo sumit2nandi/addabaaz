@@ -36,8 +36,10 @@ jobs:
           distribution: temurin
           java-version: '21'              # required by AGP 8.9.1 (see mobile/scripts/patch-android.mjs)
 
-      # Bakes API_BASE into www/app/env.js and stamps sw.js. Uses only Node built-ins + git,
-      # so no `npm ci` is needed at the repo root for this step.
+      # Bakes API_BASE into www/app/env.js, stamps sw.js and minifies the bundle (esbuild).
+      - name: Install root dependencies
+        run: npm ci
+
       - name: Build the web bundle (www/)
         run: npm run build:www
 

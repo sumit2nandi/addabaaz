@@ -47,6 +47,9 @@ jobs:
           key: pods-${{ runner.os }}-${{ hashFiles('mobile/package.json') }}
           restore-keys: pods-${{ runner.os }}-
 
+      - name: Install root dependencies
+        run: npm ci
+
       - name: Build the web bundle (www/)
         run: npm run build:www
 
