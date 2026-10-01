@@ -75,9 +75,16 @@ function shell() {
     </div>
   </div>`.s;
   $('#logout').onclick = () => { setToken(null); showLogin('You’re signed out.'); };
-  const side = $('#side'), toggle = (open) => document.body.classList.toggle('nav-open', open);
-  $('#menu').onclick = () => toggle(!document.body.classList.contains('nav-open')); $('#scrim').onclick = () => toggle(false);
+  const layout = $('.layout'), side = $('#side'), menu = $('#menu');
+  const toggle = (open) => {
+    layout.classList.toggle('nav-open', open);
+    menu.setAttribute('aria-expanded', String(open));
+  };
+  menu.setAttribute('aria-controls', 'side'); menu.setAttribute('aria-expanded', 'false');
+  menu.onclick = () => toggle(!layout.classList.contains('nav-open'));
+  $('#scrim').onclick = () => toggle(false);
   side.addEventListener('click', (e) => { if (e.target.closest('a[data-nav]')) toggle(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') toggle(false); });
 }
 export async function refreshCounts() {
   try {
