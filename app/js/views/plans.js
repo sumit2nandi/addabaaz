@@ -8,6 +8,7 @@ import { go } from '../router.js';
 import { isNative } from '../platform.js';
 import { openDialog } from '../ui/dialog.js';
 import { storage, store, $ } from '../util.js';
+import { friendly } from '../errors.js';
 
 // Formats paise as ₹.
 const inr = (paise) => `₹${(paise / 100).toFixed(paise % 100 ? 2 : 0)}`;
@@ -39,7 +40,7 @@ function askCheckout({ plan, u, billing, memo, error = '' }) {
       const msg = $('#coMsg', el); const code = val('coupon'); quote = null; msg.className = 'form-status'; msg.textContent = '';
       if (!code) { paint(); return; }
       try { quote = await u.quote(plan.id, code); msg.className = 'form-status success'; msg.textContent = `${quote.coupon.code} applied — you save ${inr(quote.discountPaise)}.`; }
-      catch (e) { msg.textContent = e.message; }
+      catch (e) { msg.textContent = friendly(e); }
       paint();
     });
     f.addEventListener('submit', (e) => {
@@ -119,7 +120,7 @@ export default async function plans(ctx) {
         if (next) { go(next, { replace: true }); return; }
       } else if (await confirmDialog({ title: 'End demo plan?', text: 'Premium videos will lock again.', confirm: 'End plan' })) { await u.cancelSubscription(); toast('Demo plan ended'); }
     } catch (err) {
-      if (!err.cancelled) toast(err.message + (b && err.status >= 500 ? ' If money was deducted, your plan will activate automatically within a few minutes.' : ''));
+      if (!err.cancelled) toast(friendly(err) + (b && err.status >= 500 ? ' If money was deducted, your plan will activate automatically within a few minutes.' : ''));
     } finally { busy = false; draw(); }
   });
 }

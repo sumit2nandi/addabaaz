@@ -42,17 +42,17 @@ export class LocalAdapter {
   // The whole library object is saved with saveLibrary(), so the per-item operations do nothing here.
   async addToList() {} async removeFromList() {} async saveProgress() {} async clearProgress() {} async setReminder() {}
   async plans() { return { plans: PLANS_FALLBACK, payments: { provider: 'none' }, billing: NO_BILLING }; }
-  async quote() { throw new ApiError(400, 'Coupons need the ADDABAAZ API.'); }
+  async quote() { throw Object.assign(new ApiError(400, 'Coupons aren’t available right now.'), {}); }
   async billingHistory() { return []; }
-  async invoiceBlob() { throw new ApiError(400, 'Invoices need the ADDABAAZ API.'); }
-  async emailInvoice() { throw new ApiError(400, 'Invoices need the ADDABAAZ API.'); }
-  async checkout() { throw new ApiError(400, 'Subscriptions need the ADDABAAZ API (see docs/PREMIUM.md).'); }
+  async invoiceBlob() { throw new ApiError(400, 'Invoices aren’t available right now.'); }
+  async emailInvoice() { throw new ApiError(400, 'Invoices aren’t available right now.'); }
+  async checkout() { throw new ApiError(400, 'Subscriptions aren’t available right now — check your connection and try again.'); }
   async cancelSubscription() { return { planId: 'free', status: 'active' }; }
-  async signUp() { throw new ApiError(400, 'Accounts need the ADDABAAZ API (see docs/ARCHITECTURE.md).'); }
+  async signUp() { throw new ApiError(400, 'Creating an account needs a connection to ADDABAAZ — check your internet and try again.'); }
   signIn() { return this.signUp(); }
   async signOut() {}
   async deleteAccount() { Object.keys(localStorage).filter((k) => k.startsWith('ab.')).forEach((k) => localStorage.removeItem(k)); }
-  async submitContact() { throw new ApiError(400, 'no-api'); }
+  async submitContact() { throw new ApiError(400, 'This form needs a connection to ADDABAAZ — check your internet and try again.'); }
   // Features that need the server are simply absent in local mode (the UI checks `user.supportsAuth`).
   async myRatings() { return {}; } async ratingCounts() { return { up: 0, down: 0 }; }
 }

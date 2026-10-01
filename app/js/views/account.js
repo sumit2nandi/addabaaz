@@ -8,6 +8,7 @@ import { confirmDialog } from '../ui/dialog.js';
 import { go } from '../router.js';
 import { platform } from '../platform.js';
 import { accountExtras } from './account-extra.js';
+import { friendly } from '../errors.js';
 
 // Draws the page; sections from account-extra.js are added and wired here.
 export default async function account(ctx) {
@@ -62,7 +63,7 @@ export default async function account(ctx) {
   });
   $('#delAcc', ctx.root)?.addEventListener('click', async () => {
     if (await confirmDialog({ title: 'Delete your account?', text: 'This cannot be undone. All profiles, lists and history will be erased.', confirm: 'Delete account', danger: true })) {
-      try { await u.deleteAccount(); toast('Account deleted'); go('/', { replace: true }); } catch (e) { toast(e.message); }
+      try { await u.deleteAccount(); toast('Account deleted'); go('/', { replace: true }); } catch (e) { toast(friendly(e)); }
     }
   });
 }

@@ -5,6 +5,7 @@ import { icon } from '../icons.js';
 import { toast } from '../ui/components.js';
 import { confirmDialog } from '../ui/dialog.js';
 import { go } from '../router.js';
+import { friendly } from '../errors.js';
 
 // 1234 -> "1.2K".
 const compact = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, '')}K` : String(n));
@@ -27,7 +28,7 @@ export async function mountRating(box, { type, id, label = '' }) {
     if (!u.account) { toast('Sign in to rate.', { action: 'Sign in', onAction: () => go('/signin?next=' + encodeURIComponent(location.pathname)) }); return; }
     if (!u.profile) { toast('Choose a profile first.'); return; }
     const v = Number(b.dataset.v), next = u.ratingOf(type, id) === v ? 0 : v;
-    try { counts = await u.rate(type, id, next); draw(); } catch (err) { toast(err.message); }
+    try { counts = await u.rate(type, id, next); draw(); } catch (err) { toast(friendly(err)); }
   });
 }
 
@@ -49,7 +50,7 @@ export async function mountComments(box, { video }) {
       $('#cmCount', box).textContent = total ? `(${total})` : '';
       more.innerHTML = r.comments.length >= 30 && list.children.length < total ? '<button type="button" class="btn btn-ghost" id="cmLoad">Show more comments</button>' : '';
       if (!list.children.length) list.innerHTML = '<li class="muted cm-empty">No comments yet — be the first.</li>';
-    } catch (e) { list.innerHTML = `<li class="muted">${e.message}</li>`; }
+    } catch (e) { list.innerHTML = `<li class="muted">${friendly(e)}</li>`; }
   };
   const form = $('#cmForm', box);
   if (u.isKids) form.innerHTML = '<p class="muted">Comments are turned off on Kids profiles.</p>';
@@ -63,7 +64,7 @@ export async function mountComments(box, { video }) {
         const r = await u.remote.addComment(video.id, body, u.activeId);
         ta.value = ''; total += 1; $('#cmCount', box).textContent = `(${total})`; $('.cm-empty', list)?.remove();
         list.insertAdjacentHTML('afterbegin', item(r.comment).s);
-      } catch (err) { st.textContent = err.code === 'email_unverified' ? 'Please confirm your email first — check your inbox (or resend from Account).' : err.message; }
+      } catch (err) { st.textContent = err.code === 'email_unverified' ? 'Please confirm your email first — check your inbox (or resend from Account).' : friendly(err); }
       btn.disabled = false;
     });
   }
@@ -73,7 +74,7 @@ export async function mountComments(box, { video }) {
     try {
       if (d && await confirmDialog({ title: 'Delete your comment?', confirm: 'Delete', danger: true })) { await u.remote.deleteComment(d.dataset.del); d.closest('.cm').remove(); total = Math.max(0, total - 1); $('#cmCount', box).textContent = total ? `(${total})` : ''; }
       if (r && await confirmDialog({ title: 'Report this comment?', text: 'Comments reported by several people are hidden until a moderator reviews them.', confirm: 'Report' })) { const res = await u.remote.reportComment(r.dataset.report); r.closest('.cm-actions').innerHTML = '<span class="muted">Thanks — reported.</span>'; if (res.hidden) r.closest('.cm')?.remove(); }
-    } catch (err) { toast(err.message); }
+    } catch (err) { toast(friendly(err)); }
   });
   load(false);
 }

@@ -81,7 +81,7 @@ export class User extends Emitter {
     return this.isPremium ? 'ok' : 'plan';
   }
   /** Signed playback URL for a video stored in R2 → { type: 'mp4'|'hls', url, expiresAt } */
-  streamUrl(video) { if (!this.remote) throw new Error('Streaming needs the ADDABAAZ API.'); return this.remote.streamUrl(video.id); }
+  streamUrl(video) { if (!this.remote) throw Object.assign(new Error('Streaming isn’t available right now — check your connection.'), { friendly: true }); return this.remote.streamUrl(video.id); }
   // After any sign-in: reload the account state from the server and reset the active profile.
   async #afterAuth(r) {
     const s = await this.remote.init();

@@ -49,7 +49,7 @@ export async function createPlayer(container, video, opts = {}) {
   let ctl;
   if (src.type === 'youtube') ctl = await createYouTubePlayer(container, src.id, playerOpts);
   else if (src.type === 'mp4' || src.type === 'hls') ctl = await createHtml5Player(container, video, playerOpts);
-  else throw new Error('Unsupported source type: ' + src.type);
+  else throw Object.assign(new Error('This video can’t be played right now.'), { friendly: true });
 
   /* Unmute at the first genuine gesture (pointerdown/touchstart/keydown, capture phase, at most once per
    * playback): that interaction satisfies every browser's sound policy, so a muted start need not stay muted

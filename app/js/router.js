@@ -5,6 +5,7 @@ import { HISTORY } from './mode.js';
 import { matchRoute } from './routes.js';
 import { applyHead } from './seo/head.js';
 import { pageMeta } from './seo/meta.js';
+import { friendly } from './errors.js';
 
 /** Current in-app location as { path, query } — from the URL path on the website, from the #fragment in static/native builds. */
 // `query` is the parsed ?a=b part as a plain object.
@@ -139,6 +140,6 @@ const notFound = () => html`<div class="empty">${icon('film', { size: 44 })}<h2>
 // cured by a reload — say so instead of showing the browser's cryptic "Failed to fetch dynamically imported module".
 const errorView = (err) => {
   const moduleLoad = /dynamically imported|module script failed|error loading dynamically/i.test(String(err?.message || ''));
-  const msg = moduleLoad ? 'This page did not load completely — a reload usually fixes it (the app may have just been updated).' : err?.message || 'Please check your connection and try again.';
-  return html`<div class="empty">${icon('wifioff', { size: 44 })}<h2>Something went wrong</h2><p>${msg}</p><button class="btn btn-primary" onclick="location.reload()">Reload</button></div>`.s;
+  const msg = moduleLoad ? 'This page did not load completely — a reload usually fixes it (the app may have just been updated).' : friendly(err, 'Please check your connection and try again.');
+  return html`<div class="empty">${icon('wifioff', { size: 44 })}<h2>Something went wrong</h2><p>${msg}</p><button class="btn btn-primary" data-reload>Reload</button></div>`.s;
 };

@@ -4,19 +4,17 @@ import { html, raw, esc, fmtDuration, fmtViews, timeAgo, fmtRuntime } from '../u
 import { icon } from '../icons.js';
 import { avatarColor } from '../data/user.js';
 
-// If an image fails to load, mark it so CSS can show a placeholder.
-const IMG_FALLBACK = "this.onerror=null;this.classList.add('img-failed')";
+// If an image fails to load, main.js's delegated handler reads data-fb to pick a fallback (inline
+// onerror= scripts would be blocked by the site's Content-Security-Policy).
 
 // <img> markup with lazy loading and the failure fallback above.
 export function img(src, alt = '', { cls = '', lazy = true, fallback } = {}) {
-  const fb = fallback ? `this.onerror=null;this.src='${esc(fallback)}'` : IMG_FALLBACK;
-  return html`<img class="${cls}" src="${src}" alt="${alt}" ${lazy ? raw('loading="lazy" decoding="async"') : ''} onerror="${raw(esc(fb))}">`;
+  return html`<img class="${cls}" src="${src}" alt="${alt}" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''}>`;
 }
 /** Hero background. Wide screens get the landscape episode thumbnail; phones (portrait, < 760px) get the portrait show poster instead,
  *  because a 16:9 picture cropped into a tall phone screen shows only a thin slice of the middle (faces cut in half). */
 export function heroBg(thumb, poster, { lazy = false, fallback } = {}) {
-  const fb = fallback ? `this.onerror=null;this.src='${esc(fallback)}'` : IMG_FALLBACK;
-  const img = html`<img src="${thumb || poster}" alt="" ${lazy ? raw('loading="lazy" decoding="async"') : ''} onerror="${raw(esc(fb))}">`;
+  const img = html`<img src="${thumb || poster}" alt="" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''}>`;
   return poster ? html`<picture><source media="(max-width: 759px)" srcset="${poster}">${img}</picture>` : img;
 }
 /** Card thumbnail. hqdefault (480x360, letterboxed) + object-fit:cover gives a clean 16:9 *and* 9:16 crop. */

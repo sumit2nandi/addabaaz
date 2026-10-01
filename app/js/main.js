@@ -16,7 +16,7 @@ import { renderShell, renderProfileMenu, markActive } from './ui/shell.js';
 import { syncButtons, scrollRail, toast } from './ui/components.js';
 import { initPlatform } from './platform.js';
 import { initConsent, trackPage } from './consent.js';
-import { initErrorReporting } from './errors.js';
+import { initErrorReporting, friendly } from './errors.js';
 import { initPush } from './push.js';
 import { initPullToRefresh } from './ui/ptr.js';
 
@@ -61,6 +61,8 @@ async function boot() {
   initConsent(); initErrorReporting(); initPush();
   window.addEventListener('ab:ready', trackPage);
   installPrompt();
+  wireImageFallbacks();
+  lockMedia();
   registerServiceWorker();
 }
 
@@ -76,6 +78,8 @@ function applyKids() {
 // One delegated click handler for buttons that exist on many pages: carousel arrows, "+ My List" and "Remind me".
 function wireGlobalActions() {
   document.addEventListener('click', async (e) => {
+    if (e.target.closest('[data-reload]')) { location.reload(); return; }
+
     const rb = e.target.closest('[data-rail-dir]');
     if (rb) { scrollRail(rb); return; }
 
@@ -104,6 +108,25 @@ function networkStatus() {
   window.addEventListener('online', upd); window.addEventListener('offline', upd); upd();
 }
 
+// Image failure fallbacks (data-fb): used to be inline onerror= handlers, which a strict CSP blocks.
+function wireImageFallbacks() {
+  window.addEventListener('error', (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLImageElement) || t.dataset.fbTried) return;
+    t.dataset.fbTried = '1';
+    const fb = t.dataset.fb;
+    if (fb) t.src = fb; else t.classList.add('img-failed');
+  }, true);
+}
+
+// Keep images from being saved: right-click/long-press menus and drag-and-drop are blocked everywhere
+// except form fields (where people need paste/cut). The CSS also disables text-drag and iOS callouts on <img>.
+function lockMedia() {
+  const editable = (t) => t?.closest?.('input, textarea, [contenteditable="true"]');
+  document.addEventListener('contextmenu', (e) => { if (editable(e.target)) return; e.preventDefault(); });
+  document.addEventListener('dragstart', (e) => { if (editable(e.target)) return; e.preventDefault(); });
+}
+
 // "Install app" button: capture the browser's install prompt and show it on demand.
 function installPrompt() {
   let deferred;
@@ -123,8 +146,8 @@ function registerServiceWorker() {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch((e) => console.warn('[sw]', e));
 }
 
-// Last resort: show a message instead of a blank page.
+// Last resort: show a message instead of a blank page (details stay in the console; the panel gets plain text).
 boot().catch((err) => {
   console.error(err);
-  $('#boot').innerHTML = `<div class="empty"><h2>ADDABAAZ couldn’t start</h2><p>${String(err.message || err)}</p><button class="btn btn-primary" onclick="location.reload()">Try again</button></div>`;
+  $('#boot').innerHTML = `<div class="empty"><h2>ADDABAAZ couldn’t start</h2><p>${friendly(err, 'Check your connection and try again.')}</p><button class="btn btn-primary" data-reload>Try again</button></div>`;
 });

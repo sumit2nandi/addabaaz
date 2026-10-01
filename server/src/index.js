@@ -6,6 +6,7 @@ import { createDb } from './db.js';
 import { dbConfigFromEnv } from './config.js';
 import { migrate } from './migrate.js';
 import { runScheduledJobs } from './jobs.js';
+import { prepareWebAssets } from './web-assets.js';
 
 // Listen port (PORT, default 3000).
 const port = Number(process.env.PORT) || 3000;
@@ -32,6 +33,12 @@ if (process.env.DB_MIGRATE !== 'false') {                       // set DB_MIGRAT
 const noRate = /^(1|true)$/i.test(process.env.DISABLE_RATE_LIMIT || '') && process.env.NODE_ENV !== 'production';
 if (noRate) console.warn('⚠ Rate limiting is OFF (DISABLE_RATE_LIMIT) — never expose this instance publicly.');
 // Build the HTTP app.
+// Minify the front-end first: production serves .build/ (same URLs, no readable source comments).
+// Only for the public site; tests and API-only runs keep serving the original files.
+if (process.env.MINIFY !== 'false') {
+  try { const m = await prepareWebAssets(); console.log(`[web] front-end minified (${m.files} files, −${(m.saved / 1024).toFixed(0)} KB)`); }
+  catch (e) { console.warn('[web] front-end minification skipped — serving sources as-is:', e.message); }
+}
 const app = createApp({ db, rate: !noRate });
 // Optional Sentry: `npm i @sentry/node` and set SENTRY_DSN. Not installed by default; the built-in Errors page in /admin works without it.
 if (process.env.SENTRY_DSN) {

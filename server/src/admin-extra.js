@@ -90,7 +90,7 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, l
   }));
   // Send a push message. Title/body/link are length-limited; the link must be a site path or https URL; the audience is validated against the catalog.
   router.post('/notifications/send', wrap(async (req, res) => {
-    if (!push?.configured) throw new HttpError(503, 'push_not_configured', 'Push notifications are not configured — set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY (see docs/ENGAGEMENT.md).');
+    if (!push?.configured) throw new HttpError(503, 'push_not_configured', 'Push notifications are not configured on this server.');
     const b = req.body || {}, str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
     const title = str(b.title, 80), body = str(b.body, 180), url = str(b.url, 300) || '/';
     if (!title || !body) throw bad('A title and a message are required.');

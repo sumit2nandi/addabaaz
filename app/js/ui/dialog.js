@@ -1,6 +1,7 @@
 // Modal dialogs built on the native <dialog> element (focus trap and Esc key come for free).
 import { html, $ } from '../util.js';
 import { icon } from '../icons.js';
+import { friendly } from '../errors.js';
 
 /** Accessible modal built on <dialog>. Returns { el, close }. */
 export function openDialog(content, { title = '', cls = '', onClose } = {}) {
@@ -35,7 +36,7 @@ export function pinPrompt({ title = 'Enter your PIN', text = '', confirm = 'Cont
     $('#pinf', el).addEventListener('submit', async (e) => {
       e.preventDefault(); const pin = input.value.trim();
       if (!/^\d{4,6}$/.test(pin)) { $('#pins', el).textContent = 'The PIN is 4 to 6 digits.'; return; }
-      try { if (check) await check(pin); result = pin; close(); } catch (err) { $('#pins', el).textContent = err.message; input.select(); }
+      try { if (check) await check(pin); result = pin; close(); } catch (err) { $('#pins', el).textContent = friendly(err); input.select(); }
     });
   });
 }

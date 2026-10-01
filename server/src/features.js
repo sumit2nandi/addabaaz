@@ -250,7 +250,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       /* --- push subscriptions --- */
       // Store this browser's push subscription (only https endpoints are accepted) with the user's notification preferences.
       api.post('/push/subscribe', wrap(async (req, res) => {
-        if (!push.configured) throw new HttpError(501, 'push_not_configured', 'Notifications aren’t enabled on this server.');
+        if (!push.configured) throw new HttpError(501, 'push_not_configured', 'Notifications aren’t available right now.');
         const s = req.body?.subscription, prefs = req.body?.prefs || {};
         if (!s || typeof s.endpoint !== 'string' || !/^https:\/\//.test(s.endpoint) || s.endpoint.length > 1000 || typeof s.keys?.p256dh !== 'string' || typeof s.keys?.auth !== 'string') throw bad('Invalid push subscription.');
         await db.push.upsert(req.user.id, { endpoint: s.endpoint, hash: endpointHash(s.endpoint), p256dh: s.keys.p256dh.slice(0, 200), auth: s.keys.auth.slice(0, 100) }, prefs);

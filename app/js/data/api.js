@@ -14,6 +14,18 @@ export class ApiError extends Error {
   constructor(status, message, code) { super(message); this.status = status; this.code = code; }
 }
 
+// Plain-language text for an HTTP status when the server sent no message of its own (proxy error
+// pages, stripped responses…): users never see a bare status code.
+export const httpMessage = (status) => (status === 401 ? 'Please sign in to continue.'
+  : status === 403 ? 'You don’t have permission to do that.'
+  : status === 404 ? 'We couldn’t find that.'
+  : status === 409 ? 'Something changed — please refresh and try again.'
+  : status === 413 ? 'That’s too large — please try something smaller.'
+  : status === 415 ? 'That file type isn’t supported.'
+  : status === 429 ? 'Too many attempts — please wait a moment and try again.'
+  : status >= 500 ? 'Something went wrong on our side — please try again.'
+  : 'That request couldn’t be completed.');
+
 /** Thin fetch wrapper for the ADDABAAZ REST API (docs/openapi.yaml). */
 // Every API call goes through `req()`: it adds the sign-in token and device headers, parses JSON, and turns errors into ApiError.
 // A 401 clears the token and fires an `ab:unauthorized` event so the app signs the user out.
@@ -33,7 +45,7 @@ export class ApiClient {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       if (res.status === 401 && this.token && !quiet401) { this.setToken(null); window.dispatchEvent(new CustomEvent('ab:unauthorized')); }
-      throw new ApiError(res.status, data.error?.message || data.message || `Request failed (${res.status})`, data.error?.code);
+      throw new ApiError(res.status, data.error?.message || data.message || httpMessage(res.status), data.error?.code);
     }
     return data;
   }
@@ -43,7 +55,7 @@ export class ApiClient {
     let res;
     try { res = await fetch(`${this.base}/api/v1${path}`, { headers: this.token ? { Authorization: `Bearer ${this.token}` } : {} }); }
     catch { throw new ApiError(0, 'You appear to be offline.', 'network'); }
-    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new ApiError(res.status, d.error?.message || `Download failed (${res.status})`, d.error?.code); }
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new ApiError(res.status, d.error?.message || httpMessage(res.status), d.error?.code); }
     return res.blob();
   }
   // Shorthand methods for each HTTP verb.

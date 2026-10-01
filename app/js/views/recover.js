@@ -4,6 +4,7 @@ import { html, $ } from '../util.js';
 import { icon } from '../icons.js';
 import { go } from '../router.js';
 import { toast } from '../ui/components.js';
+import { friendly } from '../errors.js';
 
 // Shared page frame and card for the three screens.
 const shell = (ctx, inner) => { ctx.root.innerHTML = html`<div class="auth-page"><a href="#/" class="auth-brand"><img src="media/icons/icon-96.png" width="56" height="56" alt=""><span class="brand-text"><b>ADDA</b><i>BAAZ</i></span></a>${inner}</div>`.s; };
@@ -24,8 +25,8 @@ export default async function recover(ctx) {
       await u.remote.verifyEmail(token); if (u.account) u.refreshAccount().catch(() => {});
       shell(ctx, card('Email confirmed', html`<p class="muted">${icon('check', { size: 18 })} Thanks — your email address is confirmed. You can now buy a plan and join the conversation.</p><a class="btn btn-primary btn-lg block" href="${u.account ? '#/account' : '#/signin'}">${u.account ? 'Go to your account' : 'Sign in'}</a>`));
     } catch (e) {
-      shell(ctx, card('This link doesn’t work', html`<p class="muted">${e.message || 'It may have expired or been used already.'}</p>${u.account ? html`<button class="btn btn-primary btn-lg block" id="resend">Send me a new link</button><div class="form-status" id="rs" role="alert"></div>` : html`<a class="btn btn-primary btn-lg block" href="#/signin">Sign in to request a new link</a>`}`));
-      $('#resend', ctx.root)?.addEventListener('click', async () => { try { await u.remote.resendVerification(); $('#rs', ctx.root).classList.add('success'); $('#rs', ctx.root).textContent = 'Sent — check your inbox.'; } catch (err) { $('#rs', ctx.root).textContent = err.message; } });
+      shell(ctx, card('This link doesn’t work', html`<p class="muted">${friendly(e, 'It may have expired or been used already.')}</p>${u.account ? html`<button class="btn btn-primary btn-lg block" id="resend">Send me a new link</button><div class="form-status" id="rs" role="alert"></div>` : html`<a class="btn btn-primary btn-lg block" href="#/signin">Sign in to request a new link</a>`}`));
+      $('#resend', ctx.root)?.addEventListener('click', async () => { try { await u.remote.resendVerification(); $('#rs', ctx.root).classList.add('success'); $('#rs', ctx.root).textContent = 'Sent — check your inbox.'; } catch (err) { $('#rs', ctx.root).textContent = friendly(err); } });
     }
     return;
   }
@@ -44,7 +45,7 @@ export default async function recover(ctx) {
       if (p1 !== p2) { st.textContent = 'The two passwords don’t match.'; return; }
       btn.disabled = true; st.textContent = '';
       try { await u.resetPassword(token, p1); toast('Password changed — you’re signed in'); go(u.needsProfileChoice() ? '/profiles' : '/', { replace: true }); }
-      catch (err) { st.textContent = err.message; btn.disabled = false; }
+      catch (err) { st.textContent = friendly(err); btn.disabled = false; }
     });
     return;
   }
@@ -62,6 +63,6 @@ export default async function recover(ctx) {
     try {
       await u.remote.forgotPassword(email);
       shell(ctx, card('Check your email', html`<p class="muted">If there’s an account for <b>${email}</b>, a reset link is on its way. It’s valid for one hour. Not there? Look in spam, or try again in a minute.</p><a class="btn btn-ghost btn-lg block" href="#/signin">Back to sign in</a>`));
-    } catch (err) { st.textContent = err.message; btn.disabled = false; }
+    } catch (err) { st.textContent = friendly(err); btn.disabled = false; }
   });
 }

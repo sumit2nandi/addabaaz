@@ -145,13 +145,13 @@ export function rebaseUploads(data, base) {
 export async function loadCatalog(url, fallbackUrl = 'data/catalog.json', { mediaBase = '' } = {}) {
   try {
     const r = await fetch(url, { cache: 'no-cache' });
-    if (!r.ok) throw new Error('catalog ' + r.status);
+    if (!r.ok) throw Object.assign(new Error('Couldn’t load the catalogue — please try again.'), { friendly: true });
     return new Catalog(rebaseUploads(await r.json(), mediaBase));
   } catch (e) {
     if (url === fallbackUrl) throw e;
     console.warn('[catalog] falling back to bundled catalog', e);
     const r = await fetch(fallbackUrl);
-    if (!r.ok) throw new Error('catalog ' + r.status);
+    if (!r.ok) throw Object.assign(new Error('Couldn’t load the catalogue — please try again.'), { friendly: true });
     return new Catalog(await r.json());
   }
 }

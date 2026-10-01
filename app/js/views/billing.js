@@ -6,6 +6,7 @@ import { sectionHeader, toast } from '../ui/components.js';
 import { go } from '../router.js';
 import { openDialog } from '../ui/dialog.js';
 import { $ } from '../util.js';
+import { friendly } from '../errors.js';
 
 // Formats paise (integer hundredths of a rupee) as ₹ with Indian digit grouping.
 const inr = (paise) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: paise % 100 ? 2 : 0 })}`;
@@ -16,7 +17,7 @@ export default async function billing(ctx) {
   ctx.setTitle('Billing & invoices');
   if (!u.supportsAuth || !u.account) { go('/signin?next=' + encodeURIComponent('/billing'), { replace: true }); return; }
   let items, rr = { requests: [], windowDays: 0 };
-  try { items = await u.billingHistory(); } catch (e) { ctx.root.innerHTML = html`<div class="page"><div class="empty"><h2>Couldn’t load your billing history</h2><p>${e.message}</p></div></div>`.s; return; }
+  try { items = await u.billingHistory(); } catch (e) { ctx.root.innerHTML = html`<div class="page"><div class="empty"><h2>Couldn’t load your billing history</h2><p>${friendly(e)}</p></div></div>`.s; return; }
 
   try { rr = await u.remote.refundRequests(); } catch { /* older server: no self-service refunds */ }
   const pending = new Set(rr.requests.filter((r) => r.status === 'pending').map((r) => r.paymentId));
@@ -47,7 +48,7 @@ export default async function billing(ctx) {
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${dl.dataset.name.replace(/\//g, '-')}.pdf`; document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
       } else { await u.emailInvoice(ml.dataset.mail); toast('Sent to ' + u.account.email); }
-    } catch (err) { toast(err.message); } finally { btn.disabled = false; }
+    } catch (err) { toast(friendly(err)); } finally { btn.disabled = false; }
   });
 
   function refundDialog(paymentId) {
@@ -57,7 +58,7 @@ export default async function billing(ctx) {
     $('#rfForm', el).addEventListener('submit', async (e) => {
       e.preventDefault(); const st = $('.form-status', el); e.submitter && (e.submitter.disabled = true);
       try { await u.remote.requestRefund(paymentId, new FormData(e.target).get('reason')); close(); toast('Request sent — we’ll email you the outcome.'); go('/billing', { replace: true }); location.reload(); }
-      catch (err) { st.textContent = err.message; e.submitter && (e.submitter.disabled = false); }
+      catch (err) { st.textContent = friendly(err); e.submitter && (e.submitter.disabled = false); }
     });
   }
 }

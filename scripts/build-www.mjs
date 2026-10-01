@@ -34,8 +34,14 @@ fs.writeFileSync(envFile, patched);
 // Stamp the service worker with the git commit so each build gets a fresh offline cache (old caches are deleted on activate).
 let stamp = String(Date.now());
 try { stamp = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: root }).toString().trim(); } catch { /* not a git checkout */ }
+// Minify the service worker first, then stamp it (minification may re-quote the VERSION literal).
+const { minifyTree, minifyFile } = await import('./lib/minify.mjs');
+await minifyFile(path.join(out, 'sw.js'), path.join(out, 'sw.js'));
 const swFile = path.join(out, 'sw.js');
-fs.writeFileSync(swFile, fs.readFileSync(swFile, 'utf8').replace(/const VERSION = '[^']*'/, `const VERSION = 'v2.0.0-${stamp}'`));
+fs.writeFileSync(swFile, fs.readFileSync(swFile, 'utf8').replace(/const VERSION\s*=\s*["'][^"']*["']/, `const VERSION="v2.0.0-${stamp}"`));
+
+// Minify the copied web sources: shipped files keep their paths but carry no comments or formatting.
+await minifyTree(path.join(out, 'app'), path.join(out, 'app'));
 
 // Print the size of the finished bundle.
 const size = (dir) => fs.readdirSync(dir, { withFileTypes: true }).reduce((n, e) => n + (e.isDirectory() ? size(path.join(dir, e.name)) : fs.statSync(path.join(dir, e.name)).size), 0);

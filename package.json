@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "compression": "^1.8.2",
+    "esbuild": "^0.28.2",
     "express": "^4.21.2",
     "mysql2": "^3.24.4",
     "nodemailer": "^10.0.12",

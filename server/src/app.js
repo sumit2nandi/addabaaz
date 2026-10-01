@@ -101,8 +101,27 @@ export function createApp({
   // Keep API, admin and raw data files out of Google.
   app.use(['/api', '/admin', '/data'], (_req, res, next) => { res.set('X-Robots-Tag', 'noindex, nofollow'); next(); });   // machine endpoints and the admin console never belong in search results
   // Security headers on every response, then CORS: only origins listed in CORS_ORIGINS (or * ) may call the API from a browser.
+  // Content-Security-Policy for the website: only the origins the app actually uses (Google sign-in, YouTube,
+  // Razorpay, fonts, consent-gated analytics…). The admin console overwrites this with its own, stricter policy.
+  // Permissions-Policy disables every powerful browser feature the app never needs.
+  const CSP = [
+    "default-src 'self'", "base-uri 'self'", "object-src 'none'", "frame-ancestors 'self'", "form-action 'self'",
+    "img-src 'self' data: blob: https:",
+    "media-src 'self' data: blob: https:",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+    "script-src 'self' https://accounts.google.com https://www.youtube.com https://checkout.razorpay.com https://connect.facebook.net https://appleid.cdn-apple.com https://cdn.jsdelivr.net https://www.googletagmanager.com",
+    "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+    "connect-src 'self' https:",
+    "frame-src 'self' https://accounts.google.com https://www.youtube.com https://www.youtube-nocookie.com https://checkout.razorpay.com https://www.facebook.com",
+    "worker-src 'self' blob:", "manifest-src 'self'",
+  ].join('; ');
   app.use((req, res, next) => {
-    res.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'SAMEORIGIN' });
+    res.set({
+      'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'SAMEORIGIN',
+      'Content-Security-Policy': CSP,
+      'Permissions-Policy': 'accelerometer=(), autoplay=*, camera=(), display-capture=(), encrypted-media=*, fullscreen=*, geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), picture-in-picture=*, usb=()',
+    });
+    if (process.env.NODE_ENV === 'production') res.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     const origin = req.headers.origin;
     if (origin && (corsOrigins === '*' || corsOrigins.split(',').map((s) => s.trim()).includes(origin))) {
       // X-Device-* / X-Parental-Pin are sent by the site AND the Android app WebView (origin app.addabaaz.in):
@@ -240,7 +259,7 @@ export function createApp({
   api.post('/videos/:id/stream', wrap(async (req, res) => {
     const v = await findVideo(req.params.id);
     if (!v) throw new HttpError(404, 'not_found', 'Unknown video.');
-    if (v.source?.type !== 'r2') throw new HttpError(400, 'not_hosted', 'This video is not hosted in R2.');
+    if (v.source?.type !== 'r2') throw new HttpError(400, 'not_hosted', 'This video isn’t available right now.');
     // Premium gate: must be signed in (401), have a paid plan (402) and be within the simultaneous-screens limit (429). Free videos skip all of this.
     if (v.access === 'premium') {
       const user = await userFromRequest(req);
@@ -252,7 +271,7 @@ export function createApp({
       req.user = user;
     }
     // Only after the access checks: is storage set up at all?
-    if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video storage is not configured on this server.');
+    if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video playback isn’t available right now — please try again later.');
     const format = r2Format(v.source), expiresAt = new Date(Date.now() + streamTtl * 1000).toISOString();
     res.set('Cache-Control', 'no-store');
     // HLS: return a short-lived token URL that points at our own gateway (below).
@@ -269,7 +288,7 @@ export function createApp({
     if (!claims || claims.aud !== 'media') throw new HttpError(401, 'invalid_token', 'This playback link has expired.');
     const v = await findVideo(claims.vid);
     if (!v || v.source?.type !== 'r2' || r2Format(v.source) !== 'hls') throw new HttpError(404, 'not_found', 'Unknown video.');
-    if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video storage is not configured on this server.');
+    if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video playback isn’t available right now — please try again later.');
     // Only files in the same folder (or below) as the video's master playlist may be requested; anything else is rejected as a path-traversal attempt.
     const dir = path.posix.dirname(v.source.key);
     const rest = req.params[0];                                  // Express has already URL-decoded it once
@@ -409,7 +428,7 @@ export function createApp({
 
   /** Price preview: applies a coupon (and tells the viewer why it doesn't work). */
   api.post('/payments/quote', payLimit, wrap(async (req, res) => {
-    if (payments.provider !== 'razorpay') throw new HttpError(501, 'payments_not_configured', 'Coupons need live payments.');
+    if (payments.provider !== 'razorpay') throw new HttpError(501, 'payments_not_configured', 'Coupons aren’t available right now.');
     res.json({ quote: billing.quoteView(await billing.quote(req.user.id, req.body?.planId, req.body?.couponCode)) });
   }));
 
@@ -418,7 +437,7 @@ export function createApp({
     features.requireVerified(req.user);
     const plan = paidPlan(req.body?.planId);
     if (!plan) throw bad('Choose a paid plan.', 'unknown_plan');
-    if (payments.provider === 'none') throw new HttpError(501, 'payments_not_configured', 'Payments are not configured on this server.');
+    if (payments.provider === 'none') throw new HttpError(501, 'payments_not_configured', 'Payments aren’t available right now — please try again later.');
     // Development only: no real payment, activate the plan immediately ("demo" subscription).
     if (payments.provider === 'mock') {
       await db.subscriptions.activateDemo(req.user.id, plan.id, plan.days);
@@ -429,7 +448,7 @@ export function createApp({
 
   /** Step 3: the browser reports a finished payment. Nothing is granted unless the signature is valid for OUR order. */
   api.post('/payments/verify', payLimit, wrap(async (req, res) => {
-    if (payments.provider !== 'razorpay') throw new HttpError(501, 'payments_not_configured', 'Payments are not configured on this server.');
+    if (payments.provider !== 'razorpay') throw new HttpError(501, 'payments_not_configured', 'Payments aren’t available right now — please try again later.');
     // The signature proves Razorpay (not the browser) says this payment happened.
     const { orderId, paymentId, signature } = req.body || {};
     const pay = typeof orderId === 'string' ? await db.payments.byOrder('razorpay', orderId) : null;
@@ -464,6 +483,15 @@ export function createApp({
   // ---- Website ----
   // Static files, plus server-rendered HTML for every page so search engines see real titles and content.
   if (serveStatic) {
+    // Defence in depth: even though only the folders below are mounted, explicitly refuse anything that
+    // looks like repository internals (git, docs, tests, sources, keys, backups) so a future mount or
+    // route can never accidentally expose it.
+    const DENY = /(^\/\.(?:git|env|npm|ssh)|\/(?:server|scripts|docs|test|tests|mobile|resources|node_modules|\.github)(?:\/|$)|\/package(?:-lock)?\.json$|\.(?:map|md|mdx|ts|tsx|mjs|cjs|yml|yaml|toml|ini|cfg|log|sql|sqlite|pem|key|p12|keystore|bak|old)$)/i;
+    app.use((req, res, next) => {
+      let p; try { p = decodeURIComponent(req.path); } catch { return res.status(404).type('text/plain').send('Not found'); }
+      if (DENY.test(p)) return res.status(404).type('text/plain').send('Not found');
+      next();
+    });
     // Common options for express.static: no directory index, ignore dotfiles.
     const opts = (maxAge) => ({ maxAge, index: false, dotfiles: 'ignore' });
     const seoSvc = createSeo({ catalog, root: ROOT, plans: PLANS, origin: seoCfg.siteUrl, indexable: seoCfg.indexable, verification: { google: seoCfg.google, bing: seoCfg.bing, ga4: seoCfg.ga4 } });
@@ -476,12 +504,28 @@ export function createApp({
       catch { res.sendFile(path.join(ROOT, 'manifest.webmanifest')); }
     });
     // The service worker must never be cached hard, or updates would not reach users.
-    app.get('/sw.js', (_q, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(path.join(ROOT, 'sw.js')); });
+    // Production serves the minified mirror prepared at boot (index.js) — same URLs, no readable source.
+    const built = fs.existsSync(path.join(ROOT, '.build', 'app', 'js', 'main.js')) && fs.existsSync(path.join(ROOT, '.build', 'sw.js'));
+    const appRoot = built ? path.join(ROOT, '.build', 'app') : path.join(ROOT, 'app');
+    const swRoot = built ? path.join(ROOT, '.build', 'sw.js') : path.join(ROOT, 'sw.js');
+    app.get('/sw.js', (_q, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(swRoot); });
+    // Images belong to this site: other pages may not hot-link them (crawlers for social previews and
+    // direct visits without a referrer keep working).
+    const HOTLINK_BOTS = /bot|crawler|spider|slurp|preview|embed|facebookexternalhit|twitterbot|whatsapp|telegrambot|slackbot|discordbot|linkedinbot|pinterest|snapchat|skypeuripreview|vkshare|w3c_validator|applebot|metadata/i;
+    const guardImages = (req, res, next) => {
+      const ref = req.get('referer');
+      if (ref) {
+        let same = false;
+        try { const u = new URL(ref); same = u.host === req.headers.host || u.host === (req.get('x-forwarded-host') || ''); } catch { same = false; }
+        if (!same && !HOTLINK_BOTS.test(req.get('user-agent') || '')) return res.status(403).type('text/plain').send('Forbidden');
+      }
+      next();
+    };
     // Static asset folders. Longer cache times for rarely-changing ones.
-    app.use('/app', express.static(path.join(ROOT, 'app'), { ...opts(0), etag: true }));
+    app.use('/app', express.static(appRoot, { ...opts(0), etag: true }));
     app.use('/data', express.static(path.join(ROOT, 'data'), opts(60_000)));
-    app.use('/media', express.static(path.join(ROOT, 'media'), opts(7 * 86_400_000)));
-    app.use('/uploads', express.static(uploadDir, { maxAge: '365d', immutable: true, index: false, dotfiles: 'ignore' }));   // admin-uploaded images (content-hash names)
+    app.use('/media', guardImages, express.static(path.join(ROOT, 'media'), opts(7 * 86_400_000)));
+    app.use('/uploads', guardImages, express.static(uploadDir, { maxAge: '365d', immutable: true, index: false, dotfiles: 'ignore' }));   // admin-uploaded images (content-hash names)
     // The admin console: its own page + scripts, never cached, locked down with a strict CSP (no inline script, no framing).
     const adminHeaders = (_q, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'self'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" }); next(); };
     // Admin console page + its scripts.
@@ -505,12 +549,15 @@ export function createApp({
   }
 
   // FINAL ERROR HANDLER: turns any thrown error into `{ error: { code, message } }`. Unexpected (500) errors are logged and hidden from the client.
+  // Only messages the server itself authored (HttpError) are ever shown; everything else — library errors,
+  // driver messages, anything technical — is replaced with a plain, user-appropriate sentence.
   app.use((err, req, res, _next) => {
     if (err.type === 'entity.parse.failed') err = bad('Invalid JSON body.', 'invalid_json');
     if (err.type === 'entity.too.large') err = new HttpError(413, 'too_large', 'Request too large.');
     const status = err.status || 500;
     if (status >= 500 && !(err instanceof HttpError)) { console.error(err); try { app.locals.captureError?.(err, req); } catch { /* monitoring must never break error handling */ } db.errors.add({ source: 'server', message: `${req.method} ${req.path}: ${err.message}`, stack: err.stack, url: req.originalUrl, userAgent: req.get('user-agent') }).catch(() => {}); }   // expected 5xx (provider down, storage off) are not logged as crashes
-    res.status(status).json({ error: { code: err.code || 'server_error', message: status === 500 ? 'Something went wrong.' : err.message } });
+    const message = err instanceof HttpError && err.message ? err.message : (status >= 500 ? 'Something went wrong.' : 'That request couldn’t be completed.');
+    res.status(status).json({ error: { code: err.code || (status >= 500 ? 'server_error' : 'bad_request'), message } });
   });
   // Expose internals for tests and for index.js (background jobs).
   app.db = db;

@@ -39,7 +39,7 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
   if (type === 'hls' && !v.canPlayType('application/vnd.apple.mpegurl')) {
     const Hls = await loadHls();
     if (Hls.isSupported()) { hls = new Hls({ startPosition: start || -1 }); hls.loadSource(url); hls.attachMedia(v); }
-    else throw new Error('HLS is not supported on this device');
+    else throw Object.assign(new Error('This video format isn’t supported on your device.'), { friendly: true });
   } else v.src = url;
 
   v.addEventListener('loadedmetadata', () => { if (start > 0 && !hls) v.currentTime = start; }, { once: true });

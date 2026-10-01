@@ -8,6 +8,7 @@ import { avatarColor, AVATAR_COUNT } from '../data/user.js';
 import { openDialog, confirmDialog } from '../ui/dialog.js';
 import { go } from '../router.js';
 import { withPin, mayLeaveKids } from '../ui/parental.js';
+import { friendly } from '../errors.js';
 
 export default async function profiles(ctx) {
   const u = app.user; const manage = ctx.query.manage === '1';
@@ -49,12 +50,12 @@ export default async function profiles(ctx) {
       if (!name) { $('#pfs', el).textContent = 'Please enter a name.'; return; }
       const kids = $('[name=kids]', el).checked;
       try { await withPin(u, () => (p ? u.updateProfile(p.id, { name, color, kids }) : u.createProfile({ name, color, kids }))); close(); toast(p ? 'Profile updated' : 'Profile added'); }
-      catch (err) { if (!err.cancelled) $('#pfs', el).textContent = err.message; }
+      catch (err) { if (!err.cancelled) $('#pfs', el).textContent = friendly(err); }
     });
     $('#del', el)?.addEventListener('click', async () => {
       close();
       if (await confirmDialog({ title: `Delete “${p.name}”?`, text: 'Their My List and watch history will be removed.', confirm: 'Delete', danger: true })) {
-        try { await withPin(u, () => u.deleteProfile(p.id)); toast('Profile deleted'); } catch (err) { if (!err.cancelled) toast(err.message); }
+        try { await withPin(u, () => u.deleteProfile(p.id)); toast('Profile deleted'); } catch (err) { if (!err.cancelled) toast(friendly(err)); }
       }
     });
   };

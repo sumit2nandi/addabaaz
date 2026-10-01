@@ -6,6 +6,7 @@ import { icon } from '../icons.js';
 import { go } from '../router.js';
 import { toast } from '../ui/components.js';
 import { mountSocialButtons } from '../social.js';
+import { friendly } from '../errors.js';
 
 export default async function auth(ctx) {
   const u = app.user; const signup = ctx.path === '/signup';
@@ -44,7 +45,7 @@ export default async function auth(ctx) {
       onCredential: async (provider, cred) => {
         st0().textContent = '';
         try { const r = await u.signInSocial(provider, cred); finish(r.isNew ? 'Welcome to ADDABAAZ!' : 'Signed in'); }
-        catch (err) { st0().textContent = err.message; toast(err.message); }
+        catch (err) { const m = friendly(err); st0().textContent = m; toast(m); }
       },
     });
     if (shown) { $('#social', ctx.root).hidden = false; $('#or', ctx.root).hidden = false; }
@@ -64,6 +65,6 @@ export default async function auth(ctx) {
     try {
       await (signup ? u.signUp(body) : u.signIn(body));
       finish(signup ? 'Welcome to ADDABAAZ!' : 'Signed in');
-    } catch (err) { st.textContent = err.message; btn.disabled = false; }
+    } catch (err) { st.textContent = friendly(err); btn.disabled = false; }
   });
 }

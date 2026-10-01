@@ -6,6 +6,7 @@ import { toast } from '../ui/components.js';
 import { openDialog, confirmDialog, pinPrompt } from '../ui/dialog.js';
 import { pushState, enablePush, disablePush, setPushPrefs } from '../push.js';
 import { openConsentDialog } from '../consent.js';
+import { friendly } from '../errors.js';
 
 // Settings row markup (icon, label, sub-label) that opens a dialog when clicked.
 const row = (id, ic, label, sub) => html`<button class="row-link" id="${id}">${icon(ic, { size: 22 })}<span><b>${label}</b>${sub ? html`<small>${sub}</small>` : ''}</span>${icon('right', { size: 18, cls: 'chev' })}</button>`;
@@ -33,13 +34,13 @@ export function accountExtras() {
     <div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}<a class="row-link" href="#/privacy">${icon('info', { size: 22 })}<span><b>Privacy Policy</b></span>${icon('right', { size: 18, cls: 'chev' })}</a><a class="row-link" href="#/terms">${icon('info', { size: 22 })}<span><b>Terms of Use</b></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>`;
 
   const wire = (root) => {
-    $('#resendVerify', root)?.addEventListener('click', async (e) => { e.target.disabled = true; try { await u.remote.resendVerification(); toast('Sent — check your inbox.'); } catch (err) { toast(err.message); e.target.disabled = false; } });
+    $('#resendVerify', root)?.addEventListener('click', async (e) => { e.target.disabled = true; try { await u.remote.resendVerification(); toast('Sent — check your inbox.'); } catch (err) { toast(friendly(err)); e.target.disabled = false; } });
     $('#consentBtn', root)?.addEventListener('click', openConsentDialog);
 
     $('#chgPw', root)?.addEventListener('click', () => {
       if (acc.hasPassword === false) {
         openDialog(html`<h2>Set a password</h2><p class="muted">We’ll email <b>${acc.email}</b> a link to choose a password. You can keep using your social sign-in too.</p><div class="row end"><button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" id="sendLink">Email me the link</button></div>`, { cls: 'dialog-sm' })
-          .el.querySelector('#sendLink').onclick = async (e) => { e.target.disabled = true; try { await u.remote.forgotPassword(acc.email); toast('Link sent — check your inbox.'); e.target.closest('dialog').close(); } catch (err) { toast(err.message); e.target.disabled = false; } };
+          .el.querySelector('#sendLink').onclick = async (e) => { e.target.disabled = true; try { await u.remote.forgotPassword(acc.email); toast('Link sent — check your inbox.'); e.target.closest('dialog').close(); } catch (err) { toast(friendly(err)); e.target.disabled = false; } };
         return;
       }
       const { el, close } = openDialog(html`<h2>Change password</h2><form class="form" id="pwf" novalidate>
@@ -51,12 +52,12 @@ export function accountExtras() {
         e.preventDefault(); const f = new FormData(e.target), st = $('#pws', el);
         if (String(f.get('p1')).length < 8) { st.textContent = 'The new password must be at least 8 characters.'; return; }
         if (f.get('p1') !== f.get('p2')) { st.textContent = 'The two new passwords don’t match.'; return; }
-        try { await u.changePassword(String(f.get('cur')), String(f.get('p1'))); close(); toast('Password changed. Other devices were signed out.'); } catch (err) { st.textContent = err.message; }
+        try { await u.changePassword(String(f.get('cur')), String(f.get('p1'))); close(); toast('Password changed. Other devices were signed out.'); } catch (err) { st.textContent = friendly(err); }
       });
     });
     $('#signOutAll', root)?.addEventListener('click', async () => {
       if (await confirmDialog({ title: 'Sign out everywhere?', text: 'Every device signed in to this account — including this one, after you confirm — will need to sign in again.', confirm: 'Sign out everywhere' })) {
-        try { await u.signOutEverywhere(); toast('Signed out on your other devices'); } catch (err) { toast(err.message); }
+        try { await u.signOutEverywhere(); toast('Signed out on your other devices'); } catch (err) { toast(friendly(err)); }
       }
     });
     $('#devices', root)?.addEventListener('click', async () => {
@@ -66,9 +67,9 @@ export function accountExtras() {
           const d = await u.remote.devices();
           $('#devBody', el).innerHTML = html`<p class="muted">Your plan allows ${d.streamLimit} screen${d.streamLimit === 1 ? '' : 's'} watching premium titles at once.</p>
             <ul class="dev-list">${d.devices.length ? d.devices.map((x) => html`<li><span>${icon('tv', { size: 22 })}</span><div><b>${x.label || 'Device'}${x.current ? html` <em class="pill">This device</em>` : ''}</b><small>${x.watching ? 'Watching now' : `Last active ${timeAgo(x.lastSeen)}`}</small></div>${x.current ? '' : html`<button class="btn btn-ghost btn-sm" data-forget="${x.deviceId}">Remove</button>`}</li>`) : html`<li class="muted">No devices yet — they appear after you watch a premium title.</li>`}</ul>`.s;
-        } catch (err) { $('#devBody', el).textContent = err.message; }
+        } catch (err) { $('#devBody', el).textContent = friendly(err); }
       };
-      el.addEventListener('click', async (e) => { const b = e.target.closest('[data-forget]'); if (!b) return; b.disabled = true; try { await u.remote.forgetDevice(b.dataset.forget); await draw(); } catch (err) { toast(err.message); } });
+      el.addEventListener('click', async (e) => { const b = e.target.closest('[data-forget]'); if (!b) return; b.disabled = true; try { await u.remote.forgetDevice(b.dataset.forget); await draw(); } catch (err) { toast(friendly(err)); } });
       draw();
     });
 
@@ -104,7 +105,7 @@ export function accountExtras() {
           if (e.target.id === 'pushOn') { if (e.target.checked) await enablePush(); else await disablePush(); }
           else if (e.target.dataset.pp) await setPushPrefs({ [e.target.dataset.pp]: e.target.checked });
           draw(await pushState());
-        } catch (err) { toast(err.message); draw(await pushState().catch(() => st)); }
+        } catch (err) { toast(friendly(err)); draw(await pushState().catch(() => st)); }
       });
     }).catch(() => {});
   };

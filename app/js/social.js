@@ -11,11 +11,13 @@ import { html, $ } from './util.js';
 import { icon } from './icons.js';
 import { isNative } from './platform.js';
 
-// Loads a third-party SDK script once; rejects with 'blocked' if it cannot load (ad blockers, offline).
+// Loads a third-party SDK script once; rejects if it cannot load (ad blockers, offline).
 const loaded = {};
+// Locally-written messages that are safe to show (flagged so run()/friendly() pass them through).
+const soft = (m) => Object.assign(new Error(m), { friendly: true });
 const loadScript = (key, src) => loaded[key] || (loaded[key] = new Promise((res, rej) => {
   const s = document.createElement('script'); s.src = src; s.async = true;
-  s.onload = res; s.onerror = () => { delete loaded[key]; rej(new Error('blocked')); };
+  s.onload = res; s.onerror = () => { delete loaded[key]; rej(soft('Couldn’t load the sign-in service — check your connection or ad-blocker.')); };
   document.head.appendChild(s);
 }));
 
@@ -53,7 +55,7 @@ async function appleWeb({ clientId }) {
 let nativeInit = false;
 function nativePlugin(providers) {
   const SL = window.Capacitor?.Plugins?.SocialLogin;
-  if (!SL) throw new Error('Social sign-in isn’t set up in this build of the app yet.');
+  if (!SL) throw soft('Social sign-in isn’t available right now.');
   const ios = window.Capacitor?.getPlatform?.() === 'ios';
   const ready = nativeInit ? Promise.resolve() : Promise.race([
     SL.initialize({
@@ -63,7 +65,7 @@ function nativePlugin(providers) {
       ...(providers.apple && ios ? { apple: {} } : {}),
       ...(providers.facebook ? { facebook: { appId: providers.facebook.appId, clientToken: providers.facebook.clientToken } } : {}),
     }).then(() => { nativeInit = true; }),
-    new Promise((_, rej) => setTimeout(() => rej(new Error('Sign-in couldn’t start — please try again.')), 12000)),
+    new Promise((_, rej) => setTimeout(() => rej(soft('Sign-in couldn’t start — please try again.')), 12000)),
   ]);
   return { SL, ready };
 }
@@ -77,7 +79,7 @@ async function nativeCredential(provider, providers) {
   const { SL, ready } = nativePlugin(providers); await ready;
   const call = (opts, msg) => Promise.race([
     SL.login(opts),
-    new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), 30000)),
+    new Promise((_, rej) => setTimeout(() => rej(soft(msg)), 30000)),
   ]);
   try {
     if (provider === 'apple') { const r = await call({ provider: 'apple', options: { scopes: ['email', 'name'] } }, 'Apple sign-in didn’t respond — please try again.'); const n = r.result?.profile; return { identityToken: r.result?.idToken, name: n ? [n.givenName, n.familyName].filter(Boolean).join(' ') : '' }; }
@@ -87,12 +89,12 @@ async function nativeCredential(provider, providers) {
     if (provider === 'google') {
       const r = await call({ provider: 'google' }, 'Google sign-in didn’t respond — please try again.');
       const idToken = r?.result?.idToken;
-      if (!idToken) throw new Error('Google sign-in returned nothing — please try again.');
+      if (!idToken) throw soft('Google sign-in returned nothing — please try again.');
       return idToken;
     }
     const r = await call({ provider: 'facebook', options: { permissions: ['email', 'public_profile'] } }, 'Facebook sign-in didn’t respond — please try again.');
     const token = r?.result?.accessToken?.token;
-    if (!token) throw new Error('Facebook sign-in returned nothing — please try again.');
+    if (!token) throw soft('Facebook sign-in returned nothing — please try again.');
     return token;
   } catch (e) { if (benignCancel(e)) e.cancelled = true; throw e; }
 }
@@ -117,7 +119,16 @@ export function mountSocialButtons(box, providers, { signup = false, onCredentia
     : html`<button type="button" class="btn-social btn-${p}" data-p="${p}">${p === 'google' ? G_LOGO : p === 'apple' ? APPLE_LOGO : FB_LOGO}<span>Continue with ${p === 'google' ? 'Google' : p === 'apple' ? 'Apple' : 'Facebook'}</span></button>`.s)).join('');
   const run = async (provider, get) => {
     try { const cred = await get(); if (cred) await onCredential(provider, cred); }
-    catch (e) { if (!e?.cancelled) onError(e?.message === 'blocked' ? 'Couldn’t load the sign-in service — check your connection or ad-blocker.' : e?.message || 'Sign-in failed. Please try again.'); }
+    catch (e) {
+      if (e?.cancelled) return;
+      // Only the server's or our own flagged messages are shown; SDK/provider internals (for example
+      // Google's "activity is cancelled by the user") go to the console, never into the UI.
+      if (e?.friendly || e?.status !== undefined) { onError(String(e.message || 'Sign-in failed. Please try again.')); return; }
+      console.error('[social]', provider, e);
+      onError(provider === 'facebook' ? 'Couldn’t sign you in with Facebook. Please try again or use your email.'
+        : provider === 'apple' ? 'Couldn’t sign you in with Apple. Please try again or use your email.'
+        : 'Couldn’t sign you in with Google. Please try again or use your email.');
+    }
   };
   if (wanted.includes('google') && !isNative) {
     initGoogle(providers.google.clientId, (cred) => run('google', async () => cred)).then((gid) => {

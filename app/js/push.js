@@ -29,7 +29,7 @@ export async function pushState() {
 // Ask permission, subscribe this browser to push, and send the subscription to the server.
 export async function enablePush(prefs = {}) {
   const u = app.user, cfg = await u.remote.pushConfig();
-  if (!cfg.enabled || !cfg.publicKey) throw new Error('Notifications aren’t enabled on this server.');
+  if (!cfg.enabled || !cfg.publicKey) throw Object.assign(new Error('Notifications aren’t available right now.'), { friendly: true });
   const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
   if (perm !== 'granted') throw new Error(perm === 'denied' ? 'Notifications are blocked for this site — allow them in your browser’s site settings.' : 'Notifications weren’t allowed.');
   const reg = await registration();
