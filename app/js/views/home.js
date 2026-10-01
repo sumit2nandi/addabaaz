@@ -68,6 +68,9 @@ function mountHero(root, ctx) {
 // Builds the page from the catalog and this profile's library (Kids profiles see only kid-safe titles).
 export default async function home(ctx) {
   const cat = app.catalog, u = app.user;
+  // Top 10: guests and accounts with no mature-content viewing history get mature titles recommended
+  // less often (at most 2 of the 10). Accounts that already watch mature content keep the full ranking.
+  const demoteMature = !u.account || !Object.keys(u.lib.progress || {}).some((id) => cat.isMature(cat.video(id)));
   const cw = u.continueWatching(cat);
   const mine = u.listItems().map((x) => (x.type === 'show' ? cat.show(x.id) && showCard(cat.show(x.id)) : x.type === 'video' ? cat.video(x.id) && videoCard(cat.video(x.id)) : cat.soon(x.id) && soonCard(cat.soon(x.id)))).filter(Boolean);
   const slides = heroSlides();
@@ -82,7 +85,7 @@ export default async function home(ctx) {
       ${rec ? rail({ title: `Because you watched ${rec.because.titleEn || rec.because.title}`, items: rec.items.map((x) => showCard(x)), cls: 'r-poster' }) : ''}
       ${rail({ title: 'My List', items: mine, href: '#/list', cls: 'r-poster' })}
       ${rail({ title: 'New Episodes', subtitle: 'Fresh from the ADDABAAZ studio', items: cat.latestEpisodes(N).map((v) => videoCard(v)), href: '#/shows?view=episodes', linkLabel: 'All episodes', cls: 'r-video' })}
-      ${rail({ title: 'Top 10 Episodes', subtitle: 'Most watched on ADDABAAZ', items: cat.trending(10).map((v, i) => videoCard(v, { rank: i + 1 })), cls: 'r-top' })}
+      ${rail({ title: 'Top 10 Episodes', subtitle: 'Most watched on ADDABAAZ', items: cat.trending(10, demoteMature ? { matureCap: 2 } : {}).map((v, i) => videoCard(v, { rank: i + 1 })), cls: 'r-top' })}
       ${rail({ title: 'Shows', items: cat.shows.map((s) => showCard(s)), href: '#/shows', linkLabel: 'Browse all', cls: 'r-poster' })}
       ${cat.shows.map((s) => rail({ title: s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title, items: cat.episodes(s.id).slice().reverse().map((v) => videoCard(v, { showName: false })), href: `#/show/${s.id}`, linkLabel: 'Open show', cls: 'r-video' }))}
       ${rail({ title: 'Reels & Shorts', subtitle: 'Bite-sized ADDABAAZ', items: cat.reels().slice(0, N + 6).map(reelCard), href: '#/reels', linkLabel: 'Watch reels', cls: 'r-reel' })}

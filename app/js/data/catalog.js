@@ -3,6 +3,9 @@ import { norm } from '../util.js';
 // Words that make a poor display title (channel/brand names); they are skipped when deriving a title from a long YouTube title.
 const GENERIC = /^(laugh\s*bite|lught\s*bite|addabaaz|addabazz|আড্ডাবাজ.*|fake podcast|ফালতু কথা|faltu kotha|ep[-\s]?\d+|reels?[-\s]?\d*|part[-\s]?\d+|stand\s?up\s?comedy|standupcomedy|shahid|শহীদ|promo|trailer|ytshorts|new web series|comedy series|ckb|.*addabaaz reels.*|পর্ব\s*-?\s*[\d০-৯]+)$/i;
 
+// Ratings that count as mature for recommendation demotion (the Kids profile already hides these entirely).
+const MATURE = new Set(['16+', '18+']);
+
 /** Read-only, indexed view of data/catalog.json. */
 // All lookups the UI needs (by id, by show, search, ranking). Built once from the catalog JSON with Maps for speed.
 export class Catalog {
@@ -54,8 +57,32 @@ export class Catalog {
   latestEpisode(showId) {
     return [...this.episodes(showId)].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))[0];
   }
-  trending(n = 10) {
-    return [...this.allEpisodes()].sort((a, b) => b.views - a.views).slice(0, n);
+  /** Mature = rated 16+ or 18+, falling back from the video to its show (same inheritance as kidsView()). */
+  isMature(v) {
+    if (!v) return false;
+    const show = v.showId ? this._show.get(v.showId) : null;
+    return MATURE.has(v.rating || (show ? show.rating : null));
+  }
+  /**
+   * Episodes by most-watched (the "Top 10 Episodes" rail). With `matureCap`, at most that many mature
+   * episodes stay in the list — used for guests and accounts that never watch mature content so it is
+   * recommended less often. The cap only relaxes when there aren't enough other episodes to fill the list.
+   */
+  trending(n = 10, { matureCap = Infinity } = {}) {
+    const eps = [...this.allEpisodes()].sort((a, b) => b.views - a.views);
+    if (!Number.isFinite(matureCap)) return eps.slice(0, n);
+    const out = [];
+    let cap = Math.max(0, matureCap);
+    for (const v of eps) {
+      const mature = this.isMature(v);
+      if (mature && cap <= 0) continue;
+      if (mature) cap--;
+      out.push(v);
+      if (out.length === n) return out;
+    }
+    // Not enough non-mature episodes to fill the rail: top up with the highest-viewed skipped ones.
+    for (const v of eps) { if (out.includes(v)) continue; out.push(v); if (out.length === n) break; }
+    return out;
   }
   reels() {
     return this.videos.filter((v) => v.kind === 'reel').sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
