@@ -86,10 +86,10 @@ export function reelCard(v, { showDuration = true } = {}) {
     <div class="card-body"><div class="card-title">${cat.displayTitle(v)}</div>${show ? html`<div class="card-meta"><span>${show.titleEn || show.title}</span></div>` : ''}</div>
   </a>`;
 }
-// Card for an upcoming title.
+// Fixed portrait card for upcoming rails. The dedicated upcoming page handles landscape grouping separately.
 export function soonCard(u) {
   return html`<a class="card card-poster card-soon" href="#/soon/${u.id}" aria-label="${u.titleEn || u.title} — coming soon">
-    <div class="poster poster-adaptive">${img(u.poster, 'Coming soon poster', { cls: 'poster-adaptive-image' })}<span class="chip chip-soon">Coming soon</span></div>
+    <div class="poster poster-soon">${img(u.poster, 'Coming soon poster', { cls: 'poster-soon-image' })}<span class="chip chip-soon">Coming soon</span></div>
   </a>`;
 }
 // Photo tile that opens the lightbox.

@@ -20,7 +20,6 @@ function heroHtml(slides) {
   return html`<section class="hero" aria-roledescription="carousel" aria-label="Featured shows">
     ${slides.map(({ show, latest }, i) => {
       const t = u.resumeTarget(cat, show.id);
-      const label = !t ? 'Play' : t.resume ? `Resume ${cat.label(t.video)}` : t.continued ? `Continue ${cat.label(t.video)}` : `Play ${cat.label(t.video)}`;
       return html`<article class="hero-slide ${i === 0 ? 'active' : ''}" data-i="${i}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
         <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault') })}</div>
         <div class="hero-shade"></div>
@@ -31,7 +30,7 @@ function heroHtml(slides) {
             ${show.titleEn && show.titleEn !== show.title ? html`<div class="hero-title-en">${show.titleEn}</div>` : ''}
             ${showMeta(show)}
             <div class="hero-actions">
-              <a class="btn btn-primary btn-lg" href="#/watch/${(t?.video || latest).id}">${icon('play', { size: 20 })} ${label}</a>
+              <a class="btn btn-primary btn-lg" href="#/watch/${(t?.video || latest).id}">${icon('play', { size: 20 })} Watch Now</a>
               ${listBtn('show', show.id, { cls: 'btn btn-glass btn-lg' })}
               <a class="btn btn-glass btn-lg" href="#/show/${show.id}">${icon('info', { size: 20 })} More info</a>
             </div>
@@ -72,7 +71,7 @@ function comingSoonSection(cat) {
   const desktopPoster = posters.releasingThisMonth || 'media/upcoming/durga-lg.webp';
   const mobilePoster = posters.releasingThisMonthMobile || 'media/upcoming/durga-sm.webp';
   return html`<section class="rail r-poster home-coming-soon" aria-label="Coming Soon">
-    <div class="rail-head"><div><h2>Coming Soon</h2><p class="rail-sub">New originals from ADDABAAZ</p></div></div>
+    <div class="rail-head"><div><h2>Coming Soon</h2><p class="rail-sub">New originals from ADDABAAZ</p></div><a class="see-all" href="#/upcoming">Show all ${icon('right', { size: 16 })}</a></div>
     <a class="home-coming-soon-feature" href="#/upcoming" aria-label="Releasing this month — browse all upcoming releases">
       <picture><source media="(max-width: 699px)" srcset="${mobilePoster}">${img(desktopPoster, 'ADDABAAZ original releasing this month')}</picture>
       <span class="home-coming-soon-feature-shade" aria-hidden="true"></span>
@@ -83,7 +82,6 @@ function comingSoonSection(cat) {
       <div class="rail-track" role="list">${cat.upcoming.map((u) => html`<div class="rail-item" role="listitem">${soonCard(u)}</div>`)}</div>
       <button type="button" class="rail-arrow right" aria-label="Scroll upcoming releases right">${icon('right', { size: 22 })}</button>
     </div>
-    <div class="home-coming-soon-all"><a class="btn btn-primary" href="#/upcoming">Show All Upcoming Releases ${icon('right', { size: 16 })}</a></div>
   </section>`;
 }
 

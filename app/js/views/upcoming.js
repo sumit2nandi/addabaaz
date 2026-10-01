@@ -26,8 +26,10 @@ export default async function upcoming(ctx) {
   </div>`.s;
 
   const pending = ctx.root.querySelector('#upcomingPosterPending');
+  let active = true;
+  ctx.onCleanup(() => { active = false; });
   fitAdaptivePosters(ctx.root, (image, orientation) => {
-    if (ctx.stale()) return;
+    if (!active) return;
     const tile = image.closest('[data-upcoming-tile]'); if (!tile) return;
     const section = ctx.root.querySelector(orientation === 'landscape' ? '#upcomingLandscapeGroup' : '#upcomingPortraitGroup');
     const grid = section.querySelector('.grid');
