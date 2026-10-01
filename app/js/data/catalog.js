@@ -12,7 +12,7 @@ export class Catalog {
   constructor(data) {
     this.data = data;
     this.shows = data.shows || [];
-    this.videos = data.videos || [];
+    this.videos = (data.videos || []).filter((v) => !v.hidden);
     this.upcoming = data.upcoming || [];
     this.gallery = data.gallery || [];
     this._show = new Map(this.shows.map((s) => [s.id, s]));

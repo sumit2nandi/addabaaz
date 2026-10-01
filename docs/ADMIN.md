@@ -32,7 +32,7 @@ Security notes
 | **Dashboard** | revenue and sign-ups for 30 days, active subscribers, plans expiring within 7 days, open messages, recent payments/users, and a *Finish setting up* list (GSTIN, SMTP, R2, Razorpay keys, weak secrets…). When SMTP is configured, **Send test email** sends a real diagnostic message to the signed-in administrator. |
 | **Shows** | add / edit / delete / reorder; poster upload; "featured" on the home page. Deleting a show also deletes its videos (you are told how many first) |
 | **Videos & reels** (also) | each video has *Publish at* (scheduled release), *Maturity rating* (U / 7+ / 13+ / 16+ / 18+ — Kids profiles show only U and 7+) and *Subtitles* (upload .srt/.vtt). Shows have a rating too. |
-| **Videos & reels** | Episodes, reels, trailers and clips. Filter by show/kind/access, 25 per page. **Preview YouTube uploads** manually checks the latest 15 RSS entries; choose individual videos, set each to Reel / Short or landscape video, or import all new uploads. Shorts appear in Reels and landscape uploads join the home page's Latest Episodes & Videos rail. Imports start free, unrated and show-less with unknown duration (shown as —); set show, rating and runtime in Edit when needed. **Undo last import** and **Remove today's imports** delete only tracked YouTube videos (India Standard Time). Public page loads never fetch YouTube. Sources can also be added directly as YouTube URLs or as **premium videos in R2**. |
+| **Videos & reels** | Episodes, reels, trailers and clips. Filter by show/kind/access/source/rating/duration/website status; 25 per page. **Preview YouTube channel** scans every public upload, compares it with the catalog, and lets you select missing videos or import all missing. Shorts appear in Reels and landscape uploads join the home page's Latest Episodes & Videos rail. Imports start free, unrated and show-less with unknown duration (shown as —); set show, rating and runtime in Edit when needed. Select videos across pages to hide, restore or delete in bulk. **Undo last import** and **Remove today's imports** delete only tracked YouTube videos (India Standard Time). Public page loads never fetch YouTube. Sources can also be added directly as YouTube URLs or as **premium videos in R2**. |
 | **Coming soon** and **Gallery** | add / edit / delete / reorder; photo upload |
 | **Studio & team** | the About, Services and Contact pages: address, phones, WhatsApp, social links, mission text, services, team members with photos |
 | **Users** | search, filter (paid, expiring, expired, free, admins, disabled); rename, make/remove admin, disable/enable, delete; **give free access** (N days, no payment or invoice); end a plan |
@@ -82,19 +82,21 @@ Every admin write is validated with the same rules as `validate:catalog` (unique
 |---|---|---|
 | `ADMIN_SESSION_HOURS` | `12` | how long after sign-in the console keeps working |
 | `UPLOAD_DIR` | `./uploads` | where admin image uploads are stored |
-| `YOUTUBE_CHANNEL_ID` | `UCdG8idFz3zA7xOaca8H6qtw` | channel feed read only after an administrator clicks **Preview YouTube uploads** |
+| `YOUTUBE_CHANNEL_ID` | `UCdG8idFz3zA7xOaca8H6qtw` | channel whose uploads are scanned only after an administrator clicks **Preview YouTube channel** |
+| `YOUTUBE_API_KEY` | *(empty)* | required for the complete uploads-playlist scan; keep the key on the server and restrict it to YouTube Data API v3 |
 | `ADMIN_TOKEN` | *(empty)* | optional script token, 24+ characters |
 
 ## 6. Admin API
 
 Everything the console does is under `/api/v1/admin/*` (see `docs/openapi.yaml`), authenticated with the admin's normal bearer token, so you can script it. Errors use the usual `{ error: { code, message } }` shape; `401 admin_session_expired` means sign in again.
 
-`POST /api/v1/admin/catalog/youtube/preview` is the only operation that fetches the YouTube Atom feed. It returns the channel's newest 15 entries plus a short-lived signed snapshot; `POST /api/v1/admin/catalog/youtube/import` imports the selected IDs as free, unrated videos with unknown duration and a chosen `reel` or `clip` kind without fetching again. `GET /api/v1/admin/catalog/youtube/imports` reports the last batch and today's active imports; `POST /api/v1/admin/catalog/youtube/remove-imports` with `{ "scope": "last" | "today" }` removes those tracked videos from the catalog. The public website only reads the database-backed catalog; visiting a page never triggers a YouTube feed request. Set `YOUTUBE_CHANNEL_ID` to a valid channel ID if you need to override the built-in `@ADDABAAZ01` channel.
+`POST /api/v1/admin/catalog/youtube/preview` is the only operation that contacts YouTube. With `YOUTUBE_API_KEY` configured, it paginates the channel's complete public uploads playlist, compares every video ID with the database, and returns a paginated admin preview of missing and already-present videos. The signed, 15-minute preview snapshot is stored in MySQL so imports do not fetch YouTube again and work across app instances. Select individual missing uploads or import all missing; imports are chunked and grouped as one undoable batch, and each new item starts free, unrated, and with unknown duration. Set `YOUTUBE_CHANNEL_ID` to override the built-in `@ADDABAAZ01` channel. Create a key in Google Cloud Console, enable YouTube Data API v3, restrict the key to that API, and set it only in the server environment; without it, preview returns a clear configuration error rather than silently showing only the newest 15 feed entries.
+
+The Videos & reels list has filters for show, kind, access, source, maturity rating, duration status, and website visibility/scheduled status. Select rows across pages (up to 500 at a time) to hide, restore, or delete them in bulk. Hidden videos remain in the admin catalog but are omitted from public catalog reads, the website, and search indexing; restoring makes them public again. Bulk delete also removes viewer list/progress references, but R2 objects must be deleted from storage separately. `GET /api/v1/admin/catalog/youtube/imports` reports the last batch and today's active imports; `POST /api/v1/admin/catalog/youtube/remove-imports` with `{ "scope": "last" | "today" }` removes those tracked imports. Public page loads never trigger a YouTube request.
 
 ## Not included (yet)
 
 - Plan **prices/durations** are code (`server/src/plans.js`), not editable in the console — they appear on invoices, so change them deliberately.
 - No role granularity: every admin can do everything (the audit log tells you who did what).
 - No two-factor sign-in; use a strong password and HTTPS.
-- Bulk import of many videos: use `catalog:import`.
 - Refund buttons only work for real Razorpay payments (demo checkouts have nothing to refund).

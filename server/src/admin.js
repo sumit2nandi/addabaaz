@@ -59,7 +59,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   }));
   // Writes an entry to the audit log (who, what, which target, extra details, from which IP).
   const log = (req, action, target = null, meta = null) => db.audit.add({ actorId: req.admin.id, actor: req.admin.email, action, target, meta, ip: req.ip }).catch((e) => console.error('[audit]', e.message));
-  // Signed preview tokens bind an import to the exact feed snapshot the admin reviewed (no second feed fetch on Import).
+  // The signed preview token contains only an opaque DB snapshot ID, so even a very large channel fits the API body limit.
   const signYoutubePreview = (payload) => {
     const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
     const signature = crypto.createHmac('sha256', secret).update(encoded).digest('base64url');
@@ -67,7 +67,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   };
   const readYoutubePreview = (token) => {
     const invalidPreview = () => new HttpError(400, 'invalid_youtube_preview', 'The YouTube preview is invalid. Preview the uploads again.');
-    if (typeof token !== 'string' || token.length > 50_000) throw invalidPreview();
+    if (typeof token !== 'string' || token.length > 2_000) throw invalidPreview();
     const dot = token.lastIndexOf('.');
     if (dot <= 0 || !/^[A-Za-z0-9_-]{43}$/.test(token.slice(dot + 1))) throw invalidPreview();
     const encoded = token.slice(0, dot), supplied = Buffer.from(token.slice(dot + 1), 'base64url');
@@ -75,7 +75,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     if (supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) throw invalidPreview();
     let payload;
     try { payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')); } catch { throw invalidPreview(); }
-    if (!payload || !Number.isFinite(payload.expiresAt) || !Array.isArray(payload.videos) || !Number.isFinite(payload.checkedAtMs)) throw invalidPreview();
+    if (!payload || !/^[0-9a-f-]{36}$/i.test(payload.snapshotId || '') || !Number.isFinite(payload.expiresAt)) throw invalidPreview();
     if (payload.expiresAt <= Date.now()) throw new HttpError(409, 'youtube_preview_expired', 'This preview has expired. Check YouTube again before importing.');
     return payload;
   };
@@ -258,47 +258,72 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   const kindOf = (req) => { if (!TYPES[req.params.type]) throw new HttpError(404, 'not_found', 'Unknown catalog section.'); return { key: req.params.type, type: TYPES[req.params.type] }; };
   const invalid = (errors) => new HttpError(400, 'invalid_item', errors.join(' '));
 
-  // This is the only code path that reads YouTube's feed: previews are fetched only after an admin explicitly clicks the button.
+  // This is the only code path that reads YouTube: a complete paginated channel scan runs only after an admin clicks Preview.
   const freshYoutubeFeed = async () => {
-    if (!youtubeFeed?.refresh) throw new HttpError(503, 'youtube_not_configured', 'YouTube importing is not configured on this server.');
+    if (!youtubeFeed?.refresh) throw new HttpError(503, 'youtube_not_configured', 'Full-channel YouTube preview is not configured on this server.');
     let feed;
     try { feed = await youtubeFeed.refresh(); }
-    catch (e) { console.warn(`[youtube] manual preview failed: ${e?.message || 'upstream request failed'}`); throw new HttpError(503, 'youtube_unavailable', 'YouTube could not be reached. No catalog changes were made. Please try again.'); }
-    if (!feed?.configured) throw new HttpError(503, 'youtube_not_configured', 'Set a valid YOUTUBE_CHANNEL_ID before previewing channel uploads.');
-    if (!Array.isArray(feed.videos)) throw new HttpError(502, 'invalid_youtube_feed', 'YouTube returned an invalid upload list.');
-    const videos = feed.videos.slice(0, 15).map((upload) => {
+    catch (e) { console.warn(`[youtube] manual full-channel preview failed: ${e?.message || 'upstream request failed'}`); throw new HttpError(503, 'youtube_unavailable', 'YouTube could not be reached or its upload list could not be fully scanned. No catalog changes were made. Please try again.'); }
+    if (!feed?.configured) {
+      const detail = feed?.reason === 'missing_api_key'
+        ? 'Set YOUTUBE_API_KEY to a server-side YouTube Data API v3 key before previewing the full channel.'
+        : 'Set a valid YOUTUBE_CHANNEL_ID before previewing channel uploads.';
+      throw new HttpError(503, 'youtube_not_configured', detail);
+    }
+    if (feed.complete !== true || !Array.isArray(feed.videos)) throw new HttpError(502, 'invalid_youtube_feed', 'YouTube did not return a complete channel upload list. No catalog changes were made.');
+    if (feed.videos.length > 100_000) throw new HttpError(502, 'invalid_youtube_feed', 'The channel upload list exceeds the supported scan size. No catalog changes were made.');
+    const videos = [], seen = new Set();
+    for (const upload of feed.videos) {
       const id = String(upload?.id || '').trim(), title = String(upload?.title || '').trim(), publishedMs = Date.parse(upload?.publishedAt || '');
-      if (!YOUTUBE_VIDEO_ID_RE.test(id) || !title || title.length > 300 || !Number.isFinite(publishedMs)) {
+      if (!YOUTUBE_VIDEO_ID_RE.test(id) || !title || title.length > 300 || !Number.isFinite(publishedMs) || seen.has(id)) {
         throw new HttpError(502, 'invalid_youtube_feed', 'YouTube returned an invalid upload entry. No catalog changes were made.');
       }
-      return {
+      seen.add(id);
+      videos.push({
         id, title, publishedAt: new Date(publishedMs).toISOString(),
         thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
         url: `https://www.youtube.com/watch?v=${id}`,
         suggestedKind: suggestYouTubeKind(title),
-      };
-    });
+      });
+    }
     const checkedAtMs = Number.isFinite(Date.parse(feed.updatedAt || '')) ? Date.parse(feed.updatedAt) : Date.now();
     return { videos, checkedAt: new Date(checkedAtMs).toISOString(), checkedAtMs };
   };
 
-  router.post('/catalog/youtube/preview', wrap(async (_req, res) => {
+  router.post('/catalog/youtube/preview', wrap(async (req, res) => {
     const feed = await freshYoutubeFeed();
     const snap = await catalog.get({ all: true });
     const knownIds = new Set(snap.catalog.videos.map((v) => v.id));
     const knownYoutubeIds = new Set(snap.catalog.videos.filter((v) => v.source?.type === 'youtube').map((v) => v.source.id));
     const items = feed.videos.map((v) => ({ ...v, alreadyImported: knownIds.has(v.id) || knownYoutubeIds.has(v.id) }));
-    const expiresAt = Date.now() + 15 * 60_000;
-    const previewToken = signYoutubePreview({ videos: feed.videos, checkedAtMs: feed.checkedAtMs, expiresAt });
+    const snapshotId = crypto.randomUUID(), expiresAtMs = Date.now() + 15 * 60_000;
+    if (!db.catalog.createYouTubePreview) throw new HttpError(503, 'youtube_preview_unavailable', 'The database cannot store the YouTube preview snapshot.');
+    await db.catalog.createYouTubePreview({
+      snapshotId, actor: req.admin.email,
+      checkedAt: new Date(feed.checkedAtMs), expiresAt: new Date(expiresAtMs), videos: feed.videos,
+    });
+    const previewToken = signYoutubePreview({ snapshotId, expiresAt: expiresAtMs });
     res.set('Cache-Control', 'no-store');
-    res.json({ items, previewToken, checkedAt: feed.checkedAt, expiresAt: new Date(expiresAt).toISOString() });
+    res.json({ items, previewToken, checkedAt: feed.checkedAt, expiresAt: new Date(expiresAtMs).toISOString(), total: items.length, missing: items.filter((v) => !v.alreadyImported).length });
   }));
 
-  // Import the selected videos from the signed preview snapshot. Import never makes another upstream request.
+  // Import one small chunk from the signed, server-stored preview. Import never makes another YouTube request.
   router.post('/catalog/youtube/import', wrap(async (req, res) => {
-    const preview = readYoutubePreview(req.body?.previewToken), byId = new Map(preview.videos.map((v) => [v.id, v]));
+    const claims = readYoutubePreview(req.body?.previewToken);
+    if (!db.catalog.getYouTubePreview) throw new HttpError(503, 'youtube_preview_unavailable', 'The YouTube preview snapshot is unavailable. Preview the channel again.');
+    const preview = await db.catalog.getYouTubePreview(claims.snapshotId, req.admin.email);
+    if (!preview || !Array.isArray(preview.videos) || Date.parse(preview.expiresAt) <= Date.now()) {
+      throw new HttpError(409, 'youtube_preview_expired', 'This preview has expired. Check YouTube again before importing.');
+    }
+    if (Date.parse(preview.expiresAt) !== claims.expiresAt) throw new HttpError(400, 'invalid_youtube_preview', 'The YouTube preview is invalid. Preview the uploads again.');
+    const checkedAtMs = Date.parse(preview.checkedAt);
+    if (!Number.isFinite(checkedAtMs)) throw new HttpError(409, 'youtube_preview_expired', 'This preview is invalid. Check YouTube again before importing.');
+    const byId = new Map(preview.videos.map((v) => [v.id, v]));
     const selections = req.body?.selections;
-    if (!Array.isArray(selections) || selections.length < 1 || selections.length > 15) throw bad('Choose between 1 and 15 videos to import.');
+    if (!Array.isArray(selections) || selections.length < 1 || selections.length > 200) throw bad('Choose between 1 and 200 videos to import at a time.');
+    const requestedBatchId = req.body?.batchId;
+    const batchId = requestedBatchId === undefined ? crypto.randomUUID() : requestedBatchId;
+    if (typeof batchId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(batchId)) throw bad('batchId must be a UUID.');
     const chosen = [], seen = new Set();
     for (const selection of selections) {
       const id = typeof selection?.id === 'string' ? selection.id : '';
@@ -312,29 +337,25 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     const snap = await catalog.get({ all: true });
     const knownIds = new Set(snap.catalog.videos.map((v) => v.id));
     const knownYoutubeIds = new Set(snap.catalog.videos.filter((v) => v.source?.type === 'youtube').map((v) => v.source.id));
-    const batchId = crypto.randomUUID(), addedIds = [], kindCounts = { reel: 0, clip: 0 };
-    let skipped = 0, cacheChanged = false;
+    const candidates = [];
     for (const { upload, kind } of chosen) {
-      if (knownIds.has(upload.id) || knownYoutubeIds.has(upload.id)) { skipped++; continue; }
-      // YouTube's RSS feed has no runtime or maturity rating. The admin chooses Reel vs landscape video in the preview.
+      if (knownIds.has(upload.id) || knownYoutubeIds.has(upload.id)) continue;
+      // YouTube's API does not expose runtime or reliably identify Shorts. Admin-selected imports start free, unrated and hidden=false.
       const candidate = {
         id: upload.id, showId: null, kind, title: upload.title,
         source: { type: 'youtube', id: upload.id }, thumbnail: upload.thumbnail,
-        duration: 0, publishedAt: upload.publishedAt, views: 0, access: 'free',
+        duration: 0, publishedAt: upload.publishedAt, views: 0, access: 'free', hidden: false,
       };
       const { doc, errors } = validate('video', candidate, ctxOf(snap));
       if (errors.length) throw new HttpError(502, 'invalid_youtube_item', 'A selected upload could not be added to the video catalog.');
-      try {
-        await db.catalog.putYouTubeImport(doc, { batchId, actor: req.admin.email });
-        knownIds.add(doc.id); knownYoutubeIds.add(doc.source.id); addedIds.push(doc.id); kindCounts[kind]++; cacheChanged = true;
-      } catch (e) {
-        // The transactional insert keeps catalog and import history consistent when two admins choose the same upload.
-        if (!isDuplicate(e)) throw e;
-        knownIds.add(doc.id); knownYoutubeIds.add(doc.source.id); skipped++; cacheChanged = true;
-      }
+      candidates.push(doc);
     }
-    if (cacheChanged) catalog.invalidate();
-    const checkedAt = new Date(preview.checkedAtMs).toISOString();
+    const addedIds = candidates.length ? await db.catalog.putYouTubeImports(candidates, { batchId, actor: req.admin.email }) : [];
+    const added = new Set(addedIds), skipped = selections.length - addedIds.length;
+    const kindCounts = { reel: 0, clip: 0 };
+    for (const { upload, kind } of chosen) if (added.has(upload.id)) kindCounts[kind]++;
+    if (addedIds.length) catalog.invalidate();
+    const checkedAt = new Date(checkedAtMs).toISOString();
     await log(req, 'catalog.youtube.import', 'youtube', { batchId: addedIds.length ? batchId : null, added: addedIds.length, skipped, kinds: kindCounts, checkedAt });
     res.set('Cache-Control', 'no-store');
     res.json({ batchId: addedIds.length ? batchId : null, added: addedIds.length, skipped, ids: addedIds, checkedAt });
@@ -374,6 +395,21 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     await log(req, 'catalog.youtube.remove_imports', 'youtube', { scope, removed });
     res.set('Cache-Control', 'no-store');
     res.json({ scope, removed, skipped: ids.length - removed });
+  }));
+
+  // Multi-select actions on the admin's Videos & reels list. A bounded ID list keeps the request body small.
+  router.post('/catalog/videos/bulk', wrap(async (req, res) => {
+    const { ids, action } = req.body || {};
+    if (!Array.isArray(ids) || ids.length < 1 || ids.length > 500 || ids.some((id) => typeof id !== 'string' || !/^[\w-]{1,64}$/.test(id)) || new Set(ids).size !== ids.length) {
+      throw bad('ids must be a list of 1–500 unique video IDs.');
+    }
+    if (!['hide', 'show', 'delete'].includes(action)) throw bad('action must be "hide", "show" or "delete".');
+    const affectedIds = action === 'delete'
+      ? await db.catalog.removeVideos(ids)
+      : await db.catalog.setVideosHidden(ids, action === 'hide');
+    if (affectedIds.length) catalog.invalidate();
+    await log(req, `catalog.video.bulk_${action}`, 'videos', { requested: ids.length, affected: affectedIds.length, ids: affectedIds });
+    res.json({ action, affected: affectedIds.length, skipped: ids.length - affectedIds.length, ids: affectedIds });
   }));
 
   // Full catalog including drafts and scheduled items (the public API hides those).

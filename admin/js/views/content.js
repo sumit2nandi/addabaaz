@@ -80,7 +80,10 @@ export default async function content(root, [section], ctx) {
   }
 
   /* ---------- videos ---------- */
-  const F = { q: '', show: '', kind: '', access: '', offset: 0 };
+  const F = { q: '', show: '', kind: '', access: '', source: '', rating: '', duration: '', visibility: '', offset: 0 };
+  const selectedVideoIds = new Set();
+  const MAX_VIDEO_SELECTION = 500;
+  const videoVisibility = (v) => v.hidden ? 'hidden' : v.publishAt && Date.parse(v.publishAt) > Date.now() ? 'scheduled' : 'visible';
   const showOptions = () => [{ v: '', l: '— none (studio-wide) —' }, ...data.shows.map((s) => ({ v: s.id, l: s.titleEn || s.title })), ...data.upcoming.map((u) => ({ v: u.id, l: `(coming soon) ${u.titleEn || u.title}` }))];
   const RATING_OPTS = [{ v: '', l: 'Not rated (hidden from Kids profiles)' }, { v: 'U', l: 'U — everyone' }, { v: '7+', l: '7+' }, { v: '13+', l: '13+' }, { v: '16+', l: '16+' }, { v: '18+', l: '18+' }];
   const ratingField = { k: 'rating', label: 'Maturity rating', type: 'select', options: RATING_OPTS, help: 'Kids profiles show only titles rated U or 7+.' };
@@ -129,6 +132,7 @@ export default async function content(root, [section], ctx) {
     { k: 'thumbnail', label: 'Thumbnail', type: 'image', maxWidth: 1000, wide: true, help: 'Required for R2 videos; YouTube videos use their own thumbnail.' },
     { k: 'duration', label: 'Duration (mm:ss)', req: true, placeholder: '12:34', help: 'The public YouTube feed has no duration. Imported videos show — until you enter the real runtime here.' }, { k: 'publishedAt', label: 'Published', type: 'datetime', req: true },
     { k: 'publishAt', label: 'Publish at (optional)', type: 'datetime', help: 'Leave empty to publish now. A future time hides the video from viewers, Google and the API until then — admins still see it, and followers get a notification when it goes live.' },
+    { k: 'hidden', label: 'Hide from the public website', type: 'bool', wide: true, help: 'Hidden videos stay in the admin catalog and can be restored later.' },
     ratingField, subtitlesField(),
     { k: 'views', label: 'Views', type: 'number', min: 0 },
     { k: 'id', label: 'ID', req: true, readonly: !create, max: 64, help: create ? 'Filled in automatically; letters, digits, - and _.' : '', wide: true },
@@ -166,45 +170,93 @@ export default async function content(root, [section], ctx) {
 
   function openYoutubePreview(preview) {
     const items = Array.isArray(preview.items) ? preview.items : [];
-    const newItems = items.filter((v) => !v.alreadyImported), selected = new Set(newItems.map((v) => v.id));
+    const newItems = items.filter((v) => !v.alreadyImported);
+    const selected = new Set(newItems.map((v) => v.id));
+    const kinds = new Map(items.map((v) => [v.id, v.suggestedKind === 'reel' ? 'reel' : 'clip']));
+    const PAGE_SIZE = 25, IMPORT_CHUNK = 100;
+    let query = '', filter = 'all', page = 0, submitting = false, batchId = null;
     const m = openModal(html`
-      <p class="muted">Choose the uploads to add. YouTube’s feed does not include video shape, so set each new item to <strong>Reel / Short</strong> or <strong>Landscape video</strong>. The title-based hint is only a suggestion.</p>
-      <div class="yt-preview-tools row wrap"><span class="muted small">${plural(newItems.length, 'new upload')} · checked ${fmtDT(preview.checkedAt)}</span><button class="btn sm" id="ytSelectAll">Select all new</button><button class="btn sm" id="ytSelectNone">Clear selection</button></div>
-      <div class="yt-preview-list">${items.length ? items.map((v) => html`<div class="yt-preview-row ${v.alreadyImported ? 'is-imported' : ''}">
+      <p class="muted">All public uploads from the channel are checked against the catalog. Choose missing videos to add; set each one to <strong>Reel / Short</strong> or <strong>Landscape video</strong>. The title-based kind is only a suggestion.</p>
+      <div class="yt-preview-summary muted small" id="ytPreviewSummary"></div>
+      <div class="yt-preview-tools row wrap">
+        <div class="search">${icon('search', 16)}<input id="ytPreviewSearch" type="search" placeholder="Search all channel videos…"></div>
+        <select id="ytPreviewFilter" aria-label="Filter YouTube uploads"><option value="all">All channel videos</option><option value="missing">Missing from catalog</option><option value="present">Already in catalog</option></select>
+        <button class="btn sm" id="ytSelectAll">Select all missing</button><button class="btn sm" id="ytSelectNone">Clear selection</button>
+      </div>
+      <div class="yt-preview-list" id="ytPreviewList"></div>
+      <div class="yt-preview-pager row wrap"><button class="btn sm" id="ytPreviewPrev">Previous</button><span class="muted small" id="ytPreviewPageInfo"></span><button class="btn sm" id="ytPreviewNext">Next</button></div>
+      <div id="ytImportProgress" class="muted small" aria-live="polite"></div>
+      <div id="ytPreviewError" class="form-err" hidden></div>
+      <div class="row wrap end yt-preview-submit"><button class="btn" data-close>Cancel</button><button class="btn" id="ytImportSelected" disabled>Import selected (0)</button><button class="btn primary" id="ytImportAll" ${newItems.length ? '' : 'disabled'}>Import all missing (${newItems.length})</button></div>`,
+    { title: 'Preview full YouTube channel', wide: true });
+
+    const selectedButton = $('#ytImportSelected', m.el), allButton = $('#ytImportAll', m.el);
+    const error = $('#ytPreviewError', m.el), progress = $('#ytImportProgress', m.el);
+    const updateCount = () => {
+      selectedButton.textContent = `Import selected (${selected.size.toLocaleString('en-IN')})`;
+      selectedButton.disabled = submitting || selected.size === 0;
+      allButton.disabled = submitting || newItems.length === 0;
+    };
+    const filteredItems = () => {
+      const q = query.trim().toLowerCase();
+      return items.filter((v) => {
+        if ((filter === 'missing' && v.alreadyImported) || (filter === 'present' && !v.alreadyImported)) return false;
+        return !q || `${v.title} ${v.id} ${v.publishedAt}`.toLowerCase().includes(q);
+      });
+    };
+    const drawPreviewList = () => {
+      const rows = filteredItems(), pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+      page = Math.min(page, pages - 1);
+      const visible = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+      $('#ytPreviewSummary', m.el).textContent = `${items.length.toLocaleString('en-IN')} channel videos checked · ${newItems.length.toLocaleString('en-IN')} missing from catalog · ${(items.length - newItems.length).toLocaleString('en-IN')} already present · checked ${fmtDT(preview.checkedAt)}`;
+      $('#ytPreviewPageInfo', m.el).textContent = rows.length ? `${(page * PAGE_SIZE + 1).toLocaleString('en-IN')}–${Math.min(rows.length, (page + 1) * PAGE_SIZE).toLocaleString('en-IN')} of ${rows.length.toLocaleString('en-IN')}` : '0 videos';
+      $('#ytPreviewPrev', m.el).disabled = page === 0;
+      $('#ytPreviewNext', m.el).disabled = page >= pages - 1;
+      $('#ytPreviewList', m.el).innerHTML = visible.length ? html`${visible.map((v) => html`<div class="yt-preview-row ${v.alreadyImported ? 'is-imported' : ''}">
         <input type="checkbox" data-yt-select="${v.id}" aria-label="Select ${v.title}" ${v.alreadyImported ? 'disabled' : ''} ${selected.has(v.id) ? 'checked' : ''}>
         <img src="${v.thumbnail}" alt="" loading="lazy">
-        <div class="yt-preview-info"><a href="${v.url}" target="_blank" rel="noopener noreferrer">${v.title}</a><small>${fmtDT(v.publishedAt)}</small><div class="yt-preview-badges">${v.alreadyImported ? badge('Already in catalog', 'ok') : badge(v.suggestedKind === 'reel' ? 'Suggested: Reel / Short' : 'Suggested: Landscape video', 'warn')}</div></div>
-        <label class="yt-kind-field"><small>Import as</small><select data-yt-kind="${v.id}" aria-label="Import ${v.title} as" ${v.alreadyImported ? 'disabled' : ''}><option value="reel" ${v.suggestedKind === 'reel' ? 'selected' : ''}>Reel / Short</option><option value="clip" ${v.suggestedKind !== 'reel' ? 'selected' : ''}>Landscape video</option></select></label>
-      </div>`) : empty('No uploads were found in the channel feed.')}</div>
-      <div id="ytPreviewError" class="form-err" hidden></div>
-      <div class="row wrap end yt-preview-submit"><button class="btn" data-close>Cancel</button><button class="btn" id="ytImportSelected" disabled>Import selected (0)</button><button class="btn primary" id="ytImportAll" ${newItems.length ? '' : 'disabled'}>Import all new (${newItems.length})</button></div>`,
-    { title: 'Preview YouTube uploads', wide: true });
-
-    const selectedButton = $('#ytImportSelected', m.el), allButton = $('#ytImportAll', m.el), error = $('#ytPreviewError', m.el);
-    const updateCount = () => {
-      const count = [...m.el.querySelectorAll('[data-yt-select]:checked')].length;
-      selectedButton.textContent = `Import selected (${count})`; selectedButton.disabled = count === 0;
+        <div class="yt-preview-info"><a href="${v.url}" target="_blank" rel="noopener noreferrer">${v.title}</a><small>${fmtDT(v.publishedAt)}</small><div class="yt-preview-badges">${v.alreadyImported ? badge('Already in catalog', 'ok') : badge(kinds.get(v.id) === 'reel' ? 'Suggested: Reel / Short' : 'Suggested: Landscape video', 'warn')}</div></div>
+        <label class="yt-kind-field"><small>Import as</small><select data-yt-kind="${v.id}" aria-label="Import ${v.title} as" ${v.alreadyImported ? 'disabled' : ''}><option value="reel" ${kinds.get(v.id) === 'reel' ? 'selected' : ''}>Reel / Short</option><option value="clip" ${kinds.get(v.id) !== 'reel' ? 'selected' : ''}>Landscape video</option></select></label>
+      </div>`)}`.s : empty(items.length ? 'No videos match this search or filter.' : 'No uploads were found on this channel.').s;
+      $$('[data-yt-select]', m.el).forEach((box) => box.addEventListener('change', () => {
+        if (box.checked) selected.add(box.dataset.ytSelect); else selected.delete(box.dataset.ytSelect);
+        updateCount();
+      }));
+      $$('[data-yt-kind]', m.el).forEach((select) => select.addEventListener('change', () => kinds.set(select.dataset.ytKind, select.value)));
+      updateCount();
     };
-    $('#ytSelectAll', m.el).onclick = () => { m.el.querySelectorAll('[data-yt-select]:not(:disabled)').forEach((box) => { box.checked = true; }); updateCount(); };
-    $('#ytSelectNone', m.el).onclick = () => { m.el.querySelectorAll('[data-yt-select]:not(:disabled)').forEach((box) => { box.checked = false; }); updateCount(); };
-    m.el.querySelectorAll('[data-yt-select]').forEach((box) => box.addEventListener('change', updateCount));
-    updateCount();
+    $('#ytPreviewSearch', m.el).addEventListener('input', (e) => { query = e.target.value; page = 0; drawPreviewList(); });
+    $('#ytPreviewFilter', m.el).addEventListener('change', (e) => { filter = e.target.value; page = 0; drawPreviewList(); });
+    $('#ytPreviewPrev', m.el).onclick = () => { page--; drawPreviewList(); };
+    $('#ytPreviewNext', m.el).onclick = () => { page++; drawPreviewList(); };
+    $('#ytSelectAll', m.el).onclick = () => { newItems.forEach((v) => selected.add(v.id)); drawPreviewList(); };
+    $('#ytSelectNone', m.el).onclick = () => { selected.clear(); drawPreviewList(); };
+    drawPreviewList();
 
     const submit = async (all) => {
-      const ids = all ? newItems.map((v) => v.id) : [...m.el.querySelectorAll('[data-yt-select]:checked')].map((box) => box.dataset.ytSelect);
-      if (!ids.length) return;
+      const chosen = all ? newItems : items.filter((v) => selected.has(v.id) && !v.alreadyImported);
+      if (!chosen.length || submitting) return;
       const button = all ? allButton : selectedButton, label = button.innerHTML;
-      button.disabled = true; button.classList.add('busy'); error.hidden = true;
+      const selections = chosen.map((v) => ({ id: v.id, kind: kinds.get(v.id) || 'clip' }));
+      const chunks = Array.from({ length: Math.ceil(selections.length / IMPORT_CHUNK) }, (_, i) => selections.slice(i * IMPORT_CHUNK, (i + 1) * IMPORT_CHUNK));
+      batchId ||= crypto.randomUUID();
+      let added = 0, skipped = 0, completed = 0;
+      submitting = true; button.classList.add('busy'); error.hidden = true; updateCount();
       try {
-        const selections = ids.map((id) => ({ id, kind: $(`[data-yt-kind="${id}"]`, m.el).value }));
-        const result = await api.post('/catalog/youtube/import', { previewToken: preview.previewToken, selections });
+        for (let i = 0; i < chunks.length; i++) {
+          progress.textContent = `Importing batch ${i + 1} of ${chunks.length}…`;
+          const result = await api.post('/catalog/youtube/import', { previewToken: preview.previewToken, batchId, selections: chunks[i] });
+          added += result.added; skipped += result.skipped; completed++;
+        }
         m.close();
-        toast(result.added ? `Imported ${plural(result.added, 'video')}${result.skipped ? ` · ${plural(result.skipped, 'upload')} already in the catalog` : ''}` : `No new videos · ${plural(result.skipped, 'upload')} already in the catalog`);
+        toast(added ? `Imported ${plural(added, 'video')}${skipped ? ` · ${plural(skipped, 'upload')} already in the catalog` : ''}` : `No new videos · ${plural(skipped, 'upload')} already in the catalog`);
         try { await reload(); } catch (e) { toast(errMsg(e), 'err'); }
       } catch (e) {
-        error.textContent = errMsg(e); error.hidden = false;
+        error.textContent = `${errMsg(e)}${completed ? ` ${plural(added, 'video')} were added before the import stopped; retrying safely skips duplicates.` : ''}`;
+        error.hidden = false; progress.textContent = '';
       } finally {
-        if (m.el.isConnected) { button.disabled = false; button.classList.remove('busy'); button.innerHTML = label; updateCount(); }
+        submitting = false;
+        if (m.el.isConnected) { button.classList.remove('busy'); button.innerHTML = label; updateCount(); }
       }
     };
     selectedButton.onclick = () => submit(false);
@@ -228,15 +280,20 @@ export default async function content(root, [section], ctx) {
 
   function drawVideos() {
     const lastCount = youtubeImports.last?.videoIds?.length || 0, todayCount = youtubeImports.todayVideoIds?.length || 0;
-    const videoNote = `${note} Preview channel uploads before importing, choose Reel / Short or landscape video, or import all new uploads. Imports start free, unrated and with unknown duration; review details in Edit. Public page loads never fetch YouTube.`;
-    root.innerHTML = html`${pageHead('Videos & reels', videoNote, html`<button class="btn" id="previewYoutube">${icon('refresh', 16)} Preview YouTube uploads</button><button class="btn primary" id="new">${icon('plus', 16)} New video</button>`)}
+    const videoNote = `${note} Preview the complete YouTube channel, add videos not already in the catalog, or manage selected videos in bulk. Public page loads never fetch YouTube.`;
+    root.innerHTML = html`${pageHead('Videos & reels', videoNote, html`<button class="btn" id="previewYoutube">${icon('refresh', 16)} Preview YouTube channel</button><button class="btn primary" id="new">${icon('plus', 16)} New video</button>`)}
       ${youtubeHistoryError ? html`<p class="form-err">YouTube import-removal controls unavailable: ${youtubeHistoryError}</p>` : ''}
       <div class="yt-history row wrap"><strong>Recent YouTube imports</strong><button class="btn danger" id="removeYoutubeLast" ${lastCount ? '' : 'disabled'}>Undo last import (${lastCount})</button><button class="btn danger" id="removeYoutubeToday" ${todayCount ? '' : 'disabled'}>Remove today’s imports (${todayCount})</button><small>Today is based on India Standard Time.</small></div>
-      <div class="toolbar"><div class="search">${icon('search', 16)}<input id="q" type="search" placeholder="Search titles…" value="${F.q}"></div>
-        <select id="fshow"><option value="">All shows</option>${data.shows.map((s) => html`<option value="${s.id}" ${F.show === s.id ? 'selected' : ''}>${s.titleEn || s.title}</option>`)}<option value="_none" ${F.show === '_none' ? 'selected' : ''}>No show</option></select>
+      <div class="toolbar"><div class="search">${icon('search', 16)}<input id="q" type="search" placeholder="Search titles, IDs…" value="${F.q}"></div>
+        <select id="fshow"><option value="">All shows</option>${data.shows.map((s) => html`<option value="${s.id}" ${F.show === s.id ? 'selected' : ''}>${s.titleEn || s.title}</option>`)}${data.upcoming.map((u) => html`<option value="${u.id}" ${F.show === u.id ? 'selected' : ''}>(coming soon) ${u.titleEn || u.title}</option>`)}<option value="_none" ${F.show === '_none' ? 'selected' : ''}>No show</option></select>
         <select id="fkind"><option value="">All kinds</option>${KINDS.map((k) => html`<option value="${k.v}" ${F.kind === k.v ? 'selected' : ''}>${k.l}s</option>`)}</select>
-        <select id="facc"><option value="">Free & premium</option><option value="premium" ${F.access === 'premium' ? 'selected' : ''}>Premium only</option><option value="free" ${F.access === 'free' ? 'selected' : ''}>Free only</option></select></div>
-      <div id="list"></div>`.s;
+        <select id="facc"><option value="">Free & premium</option><option value="premium" ${F.access === 'premium' ? 'selected' : ''}>Premium only</option><option value="free" ${F.access === 'free' ? 'selected' : ''}>Free only</option></select>
+        <select id="fsource"><option value="">All sources</option><option value="youtube" ${F.source === 'youtube' ? 'selected' : ''}>YouTube</option><option value="r2" ${F.source === 'r2' ? 'selected' : ''}>Cloudflare R2</option><option value="mp4" ${F.source === 'mp4' ? 'selected' : ''}>MP4 link</option><option value="hls" ${F.source === 'hls' ? 'selected' : ''}>HLS link</option></select>
+        <select id="frating"><option value="">All ratings</option><option value="unrated" ${F.rating === 'unrated' ? 'selected' : ''}>Unrated</option>${['U', '7+', '13+', '16+', '18+'].map((r) => html`<option value="${r}" ${F.rating === r ? 'selected' : ''}>${r}</option>`)}</select>
+        <select id="fduration"><option value="">Any duration</option><option value="known" ${F.duration === 'known' ? 'selected' : ''}>Duration set</option><option value="unknown" ${F.duration === 'unknown' ? 'selected' : ''}>Duration missing</option></select>
+        <select id="fvisibility"><option value="">All website statuses</option><option value="visible" ${F.visibility === 'visible' ? 'selected' : ''}>Visible now</option><option value="hidden" ${F.visibility === 'hidden' ? 'selected' : ''}>Hidden</option><option value="scheduled" ${F.visibility === 'scheduled' ? 'selected' : ''}>Scheduled</option></select></div>
+      <div class="video-bulk-bar" id="videoBulkActions" hidden><strong id="videoSelectedCount"></strong><div class="row wrap"><button class="btn sm" id="bulkHide">Hide from website</button><button class="btn sm" id="bulkShow">Restore to website</button><button class="btn sm danger" id="bulkDelete">Delete selected</button><button class="btn sm" id="bulkClear">Clear selection</button></div></div>
+      <div class="video-list-summary muted small" id="videoListSummary"></div><div id="list"></div>`.s;
     $('#new').onclick = () => editVideo(null);
     $('#previewYoutube').onclick = () => guard($('#previewYoutube'), async () => {
       const preview = await api.post('/catalog/youtube/preview');
@@ -244,25 +301,91 @@ export default async function content(root, [section], ctx) {
     });
     $('#removeYoutubeLast').onclick = () => removeYoutubeImports('last');
     $('#removeYoutubeToday').onclick = () => removeYoutubeImports('today');
+    $('#bulkHide').onclick = () => bulkVideos('hide');
+    $('#bulkShow').onclick = () => bulkVideos('show');
+    $('#bulkDelete').onclick = () => bulkVideos('delete');
+    $('#bulkClear').onclick = () => { selectedVideoIds.clear(); drawList(); };
     const set = (k, el, ev) => el.addEventListener(ev, () => { F[k] = el.value; F.offset = 0; drawList(); });
     set('q', $('#q'), 'input'); set('show', $('#fshow'), 'change'); set('kind', $('#fkind'), 'change'); set('access', $('#facc'), 'change');
+    set('source', $('#fsource'), 'change'); set('rating', $('#frating'), 'change'); set('duration', $('#fduration'), 'change'); set('visibility', $('#fvisibility'), 'change');
     drawList();
+  }
+  async function bulkVideos(action) {
+    const ids = [...selectedVideoIds]; if (!ids.length) return;
+    if (action === 'delete') {
+      const r2Count = ids.filter((id) => data.videos.find((v) => v.id === id)?.source?.type === 'r2').length;
+      const text = `This permanently removes ${plural(ids.length, 'video')} from the website and viewers’ lists${r2Count ? `; the ${plural(r2Count, 'R2 file')} remain in storage and must be removed there separately` : ''}. This cannot be undone.`;
+      if (!(await confirmBox({ title: `Delete ${ids.length} selected videos?`, text, confirm: `Delete ${ids.length} videos`, danger: true }))) return;
+    }
+    const button = action === 'hide' ? $('#bulkHide') : action === 'show' ? $('#bulkShow') : $('#bulkDelete');
+    await guard(button, async () => {
+      const result = await api.post('/catalog/videos/bulk', { action, ids });
+      selectedVideoIds.clear();
+      const label = action === 'hide' ? 'Hidden' : action === 'show' ? 'Restored' : 'Deleted';
+      toast(`${label} ${plural(result.affected, 'video')}${result.skipped ? ` · ${plural(result.skipped, 'video')} no longer available` : ''}`);
+      await reload();
+    });
   }
   function drawList() {
     const q = F.q.trim().toLowerCase();
-    const rows = data.videos.filter((v) => (!q || `${v.title} ${v.shortTitle || ''} ${v.id}`.toLowerCase().includes(q)) && (!F.show || (F.show === '_none' ? !v.showId : v.showId === F.show)) && (!F.kind || v.kind === F.kind) && (!F.access || v.access === F.access))
-      .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+    const rows = data.videos.filter((v) => {
+      const text = `${v.title || ''} ${v.shortTitle || ''} ${v.id} ${v.source?.type || ''}`.toLowerCase();
+      return (!q || text.includes(q))
+        && (!F.show || (F.show === '_none' ? !v.showId : v.showId === F.show))
+        && (!F.kind || v.kind === F.kind)
+        && (!F.access || v.access === F.access)
+        && (!F.source || v.source?.type === F.source)
+        && (!F.rating || (F.rating === 'unrated' ? !v.rating : v.rating === F.rating))
+        && (!F.duration || (F.duration === 'unknown' ? !(v.duration > 0) : v.duration > 0))
+        && (!F.visibility || videoVisibility(v) === F.visibility);
+    }).sort((a, b) => (b.publishedAt || '').localeCompare(a.publishedAt || ''));
+    const maxOffset = rows.length ? Math.floor((rows.length - 1) / PAGE) * PAGE : 0;
+    F.offset = Math.min(F.offset, maxOffset);
     const pageRows = rows.slice(F.offset, F.offset + PAGE);
-    $('#list').innerHTML = html`<div class="card flush">${rows.length ? html`<table class="tbl"><thead><tr><th></th><th>Title</th><th>Show</th><th>Duration</th><th>Published</th><th class="end">Views</th><th></th></tr></thead><tbody>
-      ${pageRows.map((v) => html`<tr><td class="thumb wide">${thumb(v) ? html`<img src="${thumb(v)}" alt="" loading="lazy">` : ''}</td>
-        <td class="title-cell"><strong class="clip">${v.shortTitle || v.title}</strong><br>${badge(youtubeKindLabel(v))} ${v.source.type === 'youtube' ? badge('YouTube') : ''} ${v.access === 'premium' ? badge('premium', 'gold') : ''} ${v.publishAt && new Date(v.publishAt) > new Date() ? badge(`goes live ${fmtD(v.publishAt)}`, 'warn') : ''} ${v.source.type === 'r2' ? badge('R2') : ''}</td>
-        <td>${showTitle(v.showId) || html`<span class="muted">—</span>`}</td><td>${v.duration > 0 ? fmtDur(v.duration) : '—'}</td><td class="small">${fmtDT(v.publishedAt)}</td><td class="end">${v.views.toLocaleString('en-IN')}</td>
+    $('#videoListSummary').textContent = `${rows.length.toLocaleString('en-IN')} matching videos · ${data.videos.length.toLocaleString('en-IN')} total · ${selectedVideoIds.size.toLocaleString('en-IN')} selected (up to ${MAX_VIDEO_SELECTION})`;
+    const bulkBar = $('#videoBulkActions'); bulkBar.hidden = selectedVideoIds.size === 0;
+    $('#videoSelectedCount').textContent = `${plural(selectedVideoIds.size, 'video')} selected`;
+    $('#list').innerHTML = html`<div class="card flush">${rows.length ? html`<table class="tbl"><thead><tr><th class="select-col"><input type="checkbox" id="selectPage" aria-label="Select this page"></th><th></th><th>Title</th><th>Show</th><th>Website</th><th>Duration</th><th>Published</th><th class="end">Views</th><th></th></tr></thead><tbody>
+      ${pageRows.map((v) => html`<tr><td class="select-col"><input type="checkbox" data-video-select="${v.id}" aria-label="Select ${v.title}" ${selectedVideoIds.has(v.id) ? 'checked' : ''}></td><td class="thumb wide">${thumb(v) ? html`<img src="${thumb(v)}" alt="" loading="lazy">` : ''}</td>
+        <td class="title-cell"><strong class="clip">${v.shortTitle || v.title}</strong><br>${badge(youtubeKindLabel(v))} ${badge(v.source?.type === 'youtube' ? 'YouTube' : v.source?.type === 'r2' ? 'R2' : v.source?.type?.toUpperCase() || 'Video')} ${v.access === 'premium' ? badge('premium', 'gold') : ''}</td>
+        <td>${showTitle(v.showId) || html`<span class="muted">—</span>`}</td><td>${videoVisibility(v) === 'hidden' ? badge('Hidden', 'bad') : videoVisibility(v) === 'scheduled' ? badge('Scheduled', 'warn') : badge('Visible', 'ok')}</td>
+        <td>${v.duration > 0 ? fmtDur(v.duration) : '—'}</td><td class="small">${fmtDT(v.publishedAt)}</td><td class="end">${Number(v.views || 0).toLocaleString('en-IN')}</td>
         <td class="end nowrap"><a class="icon-btn" href="/watch/${v.id}" target="_blank" rel="noopener" title="Open on site">${icon('external', 16)}</a><button class="icon-btn" data-edit="${v.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${v.id}" title="Delete">${icon('trash', 16)}</button></td></tr>`)}</tbody></table>` : empty('No videos match.')}</div>
       ${pager({ total: rows.length, offset: F.offset, limit: PAGE })}`.s;
+    const pageChecks = $$('[data-video-select]', $('#list'));
+    const selectPage = $('#selectPage', $('#list'));
+    if (selectPage) {
+      const count = pageChecks.filter((box) => selectedVideoIds.has(box.dataset.videoSelect)).length;
+      selectPage.checked = pageChecks.length > 0 && count === pageChecks.length;
+      selectPage.indeterminate = count > 0 && count < pageChecks.length;
+      selectPage.addEventListener('change', () => {
+        if (selectPage.checked) {
+          for (const box of pageChecks) {
+            if (!selectedVideoIds.has(box.dataset.videoSelect) && selectedVideoIds.size >= MAX_VIDEO_SELECTION) break;
+            selectedVideoIds.add(box.dataset.videoSelect);
+          }
+          if (selectedVideoIds.size >= MAX_VIDEO_SELECTION) toast(`Select up to ${MAX_VIDEO_SELECTION} videos at a time.`, 'err');
+        } else pageChecks.forEach((box) => selectedVideoIds.delete(box.dataset.videoSelect));
+        drawList();
+      });
+    }
+    pageChecks.forEach((box) => box.addEventListener('change', () => {
+      if (box.checked && selectedVideoIds.size >= MAX_VIDEO_SELECTION && !selectedVideoIds.has(box.dataset.videoSelect)) {
+        box.checked = false; toast(`Select up to ${MAX_VIDEO_SELECTION} videos at a time.`, 'err'); return;
+      }
+      if (box.checked) selectedVideoIds.add(box.dataset.videoSelect); else selectedVideoIds.delete(box.dataset.videoSelect);
+      const count = pageChecks.filter((x) => selectedVideoIds.has(x.dataset.videoSelect)).length;
+      if (selectPage) { selectPage.checked = pageChecks.length > 0 && count === pageChecks.length; selectPage.indeterminate = count > 0 && count < pageChecks.length; }
+      bulkBar.hidden = selectedVideoIds.size === 0;
+      $('#videoSelectedCount').textContent = `${plural(selectedVideoIds.size, 'video')} selected`;
+      $('#videoListSummary').textContent = `${rows.length.toLocaleString('en-IN')} matching videos · ${data.videos.length.toLocaleString('en-IN')} total · ${selectedVideoIds.size.toLocaleString('en-IN')} selected (up to ${MAX_VIDEO_SELECTION})`;
+    }));
     $$('[data-edit]', root).forEach((b) => b.onclick = () => editVideo(data.videos.find((v) => v.id === b.dataset.edit)));
     $$('[data-del]', root).forEach((b) => b.onclick = async () => {
       const v = data.videos.find((x) => x.id === b.dataset.del);
-      if (await confirmBox({ title: 'Delete this video?', text: `“${v.shortTitle || v.title}” will disappear from the site and from viewers’ lists${v.source.type === 'r2' ? '. The file stays in your R2 bucket (delete it there to save storage)' : ''}.`, confirm: 'Delete', danger: true })) mutate(() => api.del(`/catalog/videos/${encodeURIComponent(v.id)}`), 'Video deleted');
+      if (await confirmBox({ title: 'Delete this video?', text: `“${v.shortTitle || v.title}” will disappear from the site and from viewers’ lists${v.source.type === 'r2' ? '. The file stays in your R2 bucket (delete it there to save storage)' : ''}.`, confirm: 'Delete', danger: true })) {
+        selectedVideoIds.delete(v.id); mutate(() => api.del(`/catalog/videos/${encodeURIComponent(v.id)}`), 'Video deleted');
+      }
     });
     $$('[data-page]', root).forEach((b) => b.onclick = () => { F.offset = Number(b.dataset.page); drawList(); window.scrollTo(0, 0); });
   }

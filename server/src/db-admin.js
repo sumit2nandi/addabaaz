@@ -65,16 +65,61 @@ export function adminDb({ q, tx, self, iso }) {
         return create ? 'created' : 'updated';
       });
     },
-    /** Atomically adds an imported YouTube video and its batch history row; duplicate catalog ids roll back both writes. */
-    async putYouTubeImport(doc, { batchId, actor }) {
+    /** Atomically adds a chunk of imported YouTube videos and their batch history rows; existing catalog ids are skipped. */
+    async putYouTubeImports(docs, { batchId, actor }) {
       return tx(async (t) => {
         const [{ next }] = await t.query("SELECT COALESCE(MAX(position), -1) + 1 AS next FROM catalog_items WHERE type = 'video'");
-        await t.query("INSERT INTO catalog_items (type, id, position, doc) VALUES ('video', ?, ?, ?)", [doc.id, next, JSON.stringify(doc)]);
-        await t.query('INSERT INTO youtube_import_items (batch_id, video_id, actor, imported_at) VALUES (?,?,?,UTC_TIMESTAMP(3))', [batchId, doc.id, String(actor).slice(0, 254)]);
-        await bump(t);
-        return 'created';
+        const actorName = String(actor).slice(0, 254), added = [];
+        let position = Number(next);
+        for (const doc of docs) {
+          const inserted = await t.query("INSERT IGNORE INTO catalog_items (type, id, position, doc) VALUES ('video', ?, ?, ?)", [doc.id, position, JSON.stringify(doc)]);
+          if (!inserted.affectedRows) continue;
+          await t.query('INSERT IGNORE INTO youtube_import_items (batch_id, video_id, actor, imported_at) VALUES (?,?,?,UTC_TIMESTAMP(3))', [batchId, doc.id, actorName]);
+          added.push(doc.id); position++;
+        }
+        if (added.length) await bump(t);
+        return added;
       });
     },
+    /** Stores a short-lived full-channel preview; expired snapshots are reaped on each new preview. */
+    async createYouTubePreview({ snapshotId, actor, checkedAt, expiresAt, videos }) {
+      await q('DELETE FROM youtube_preview_snapshots WHERE expires_at <= UTC_TIMESTAMP(3)');
+      await q('INSERT INTO youtube_preview_snapshots (snapshot_id, actor, checked_at, expires_at, videos) VALUES (?,?,?,?,?)', [snapshotId, String(actor).slice(0, 254), checkedAt, expiresAt, JSON.stringify(videos)]);
+    },
+    /** Fetch a preview only for its creator and only while the signed snapshot is still live. */
+    async getYouTubePreview(snapshotId, actor) {
+      const row = (await q('SELECT checked_at, expires_at, videos FROM youtube_preview_snapshots WHERE snapshot_id = ? AND actor = ? AND expires_at > UTC_TIMESTAMP(3)', [snapshotId, String(actor).slice(0, 254)]))[0];
+      return row ? { snapshotId, checkedAt: iso(row.checked_at), expiresAt: iso(row.expires_at), videos: json(row.videos) } : null;
+    },
+    /** Hides/restores matching videos without changing their other catalog attributes. */
+    async setVideosHidden(ids, hidden) {
+      const unique = [...new Set(ids)]; if (!unique.length) return [];
+      return tx(async (t) => {
+        const marks = unique.map(() => '?').join(',');
+        const rows = await t.query(`SELECT id FROM catalog_items WHERE type = 'video' AND id IN (${marks}) FOR UPDATE`, unique);
+        const found = rows.map((r) => r.id); if (!found.length) return [];
+        const foundMarks = found.map(() => '?').join(',');
+        await t.query(`UPDATE catalog_items SET doc = JSON_SET(doc, '$.hidden', JSON_EXTRACT(?, '$')), updated_at = UTC_TIMESTAMP(3) WHERE type = 'video' AND id IN (${foundMarks})`, [hidden ? 'true' : 'false', ...found]);
+        await bump(t);
+        return found;
+      });
+    },
+    /** Deletes many videos in one transaction and also removes viewer list/progress references. */
+    async removeVideos(ids) {
+      const unique = [...new Set(ids)]; if (!unique.length) return [];
+      return tx(async (t) => {
+        const marks = unique.map(() => '?').join(',');
+        const rows = await t.query(`SELECT id FROM catalog_items WHERE type = 'video' AND id IN (${marks}) FOR UPDATE`, unique);
+        const found = rows.map((r) => r.id); if (!found.length) return [];
+        const foundMarks = found.map(() => '?').join(',');
+        await t.query(`DELETE FROM catalog_items WHERE type = 'video' AND id IN (${foundMarks})`, found);
+        await t.query(`DELETE FROM list_items WHERE item_type = 'video' AND item_id IN (${foundMarks})`, found);
+        await t.query(`DELETE FROM watch_progress WHERE video_id IN (${foundMarks})`, found);
+        await bump(t);
+        return found;
+      });
+    },
+
     // The studio/about page content is a single document stored as type 'studio'.
 
     async putStudio(doc) {

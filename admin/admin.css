@@ -199,8 +199,16 @@ details.card > summary { cursor: pointer; } details.card { padding: 12px 16px; }
 .yt-history { gap: 8px; margin: -4px 0 14px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); }
 .yt-history > strong { font-size: 12.5px; margin-right: 4px; }
 .yt-history > small { margin-left: auto; }
+.yt-preview-summary { margin-top: 10px; }
 .yt-preview-tools { justify-content: space-between; margin: 12px 0 10px; }
+.yt-preview-tools .search { flex: 1 1 240px; }
 .yt-preview-list { max-height: min(58vh, 620px); overflow: auto; border: 1px solid var(--border); border-radius: var(--r-sm); }
+.yt-preview-pager { justify-content: center; margin: 10px 0; }
+.yt-preview-pager > span { min-width: 130px; text-align: center; }
+.video-bulk-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin: 2px 0 12px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); }
+.video-bulk-bar > strong { font-size: 13px; }
+.video-list-summary { margin: 0 0 8px; }
+.tbl .select-col { width: 42px; text-align: center; padding-left: 10px; padding-right: 8px; }
 .yt-preview-row { display: grid; grid-template-columns: 18px 104px minmax(150px, 1fr) minmax(150px, 190px); align-items: center; gap: 11px; padding: 10px; border-bottom: 1px solid var(--border); }
 .yt-preview-row:last-child { border-bottom: 0; }
 .yt-preview-row.is-imported { opacity: .65; }
@@ -215,8 +223,10 @@ details.card > summary { cursor: pointer; } details.card { padding: 12px 16px; }
 @media (max-width: 640px) {
   .yt-history { align-items: flex-start; }
   .yt-history > small { flex-basis: 100%; margin-left: 0; }
+  .yt-preview-tools .search { flex-basis: 100%; max-width: none; }
   .yt-preview-row { grid-template-columns: 16px 84px minmax(0, 1fr); gap: 8px; padding: 9px; }
   .yt-preview-row > img { width: 84px; }
   .yt-kind-field { grid-column: 2 / -1; }
   .yt-preview-submit .btn { flex: 1 1 auto; white-space: normal; }
+  .video-bulk-bar { align-items: flex-start; flex-direction: column; }
 }

@@ -81,8 +81,9 @@ test('schema: unit checks (ids, images, sources, unknown fields) and the shipped
   bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'r2', key: 'premium/../x.mp4' }, thumbnail: 'https://x.test/t.jpg', duration: 5, publishedAt: '2026-01-01', access: 'premium' }, /safe R2 object key/);
   bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'r2', key: 'premium/x.mp4' }, duration: 5, publishedAt: '2026-01-01', access: 'premium' }, /thumbnail/);
   bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'mp4', url: 'ftp://x' }, duration: 5, publishedAt: 'nope', access: 'free' }, /source.url|publishedAt/);
-  const ok = validate('video', { id: 'v', kind: 'trailer', episode: 3, showId: null, title: ' t ', source: { type: 'youtube', id: 'abcdefghijk' }, duration: '65', publishedAt: '2026-01-01', access: 'free' }, {});
-  assert.deepEqual(ok.errors, []); assert.equal(ok.doc.episode, null, 'only episodes carry an episode number'); assert.equal(ok.doc.duration, 65); assert.equal(ok.doc.title, 't'); assert.equal(ok.doc.views, 0); assert.equal(ok.doc.publishedAt, '2026-01-01T00:00:00Z');
+  const ok = validate('video', { id: 'v', kind: 'trailer', episode: 3, showId: null, title: ' t ', source: { type: 'youtube', id: 'abcdefghijk' }, duration: '65', publishedAt: '2026-01-01', access: 'free', hidden: true }, {});
+  assert.deepEqual(ok.errors, []); assert.equal(ok.doc.episode, null, 'only episodes carry an episode number'); assert.equal(ok.doc.duration, 65); assert.equal(ok.doc.title, 't'); assert.equal(ok.doc.views, 0); assert.equal(ok.doc.publishedAt, '2026-01-01T00:00:00Z'); assert.equal(ok.doc.hidden, true);
+  assert.equal(validate('video', { id: 'v', kind: 'trailer', title: 't', source: { type: 'youtube', id: 'abcdefghijk' }, duration: 0, publishedAt: '2026-01-01', access: 'free' }, {}).doc.hidden, false);
 });
 
 test('uploads helpers: magic-byte sniffing and R2 keys', () => {

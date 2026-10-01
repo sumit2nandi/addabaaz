@@ -40,7 +40,7 @@ function reader(input, allowed, label, ctx) {
       if (!Number.isInteger(n) || n < min || n > max) return void errors.push(`${k} must be a whole number between ${min} and ${max}.`);
       out[k] = n;
     },
-    bool(k, dflt = false) { out[k] = src[k] === undefined ? dflt : src[k] === true || src[k] === 'true'; },
+    bool(k, dflt = false) { out[k] = src[k] === undefined ? dflt : src[k] === true || src[k] === 1 || src[k] === '1' || src[k] === 'true'; },
     oneOf(k, values, { req = false, dflt } = {}) {
       if (!has(k)) { if (req) errors.push(`${k} is required.`); else if (dflt !== undefined) out[k] = dflt; return; }
       if (!values.includes(src[k])) return void errors.push(`${k} must be one of: ${values.join(', ')}.`);
@@ -89,7 +89,7 @@ function show(input, ctx) {
 
 // Video or episode. The `source` decides where it plays from: YouTube id, Cloudflare R2 object (premium/private), or a direct mp4/hls URL.
 function video(input, ctx) {
-  const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'description', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access', 'rating', 'subtitles', 'publishAt'], 'A video', ctx);
+  const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'description', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access', 'rating', 'subtitles', 'publishAt', 'hidden'], 'A video', ctx);
   r.id(); r.oneOf('kind', KINDS, { req: true }); r.str('showId', { max: 64, pattern: ID, nullable: true }); ref(r, ctx, 'showId', [ctx.showIds, ctx.upcomingIds].filter(Boolean));
   r.int('episode', { min: 1, max: 100000, nullable: true }); if (r.out.kind && r.out.kind !== 'episode') r.out.episode = null;
   r.str('title', { req: true, max: 300 }); r.str('shortTitle', { max: 120 }); r.str('description', { max: 500 });
@@ -111,7 +111,7 @@ function video(input, ctx) {
     } else r.errors.push('source.type must be youtube, r2, mp4 or hls.');
   }
   r.img('thumbnail'); r.int('duration', { req: true, max: 86400 }); r.date('publishedAt', { req: true }); r.int('views', { dflt: 0 });
-  r.oneOf('access', ACCESS, { req: true }); r.oneOf('rating', RATINGS); r.date('publishAt');
+  r.oneOf('access', ACCESS, { req: true }); r.oneOf('rating', RATINGS); r.date('publishAt'); r.bool('hidden', false);
   // Optional subtitle tracks: max 12, each with a language code, label and a .vtt file; one track per language.
   if (r.src.subtitles !== undefined && r.src.subtitles !== null) {
     const subs = r.src.subtitles;

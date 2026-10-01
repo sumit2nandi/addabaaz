@@ -29,12 +29,13 @@ export function createCatalogStore({ db, catalogPath, studioPath = null, ttl = 3
     let dueAt = Infinity;
     const videos = [];
     for (const v of full.catalog.videos) {
+      if (v.hidden) continue;
       if (!v.publishAt) { videos.push(v); continue; }
       const t = Date.parse(v.publishAt);
       if (t > now) { dueAt = Math.min(dueAt, t); continue; }
       const { publishAt, ...rest } = v; videos.push({ ...rest, publishedAt: publishAt });
     }
-    if (videos.length === full.catalog.videos.length && !full.catalog.videos.some((v) => v.publishAt)) return { ...full, dueAt };
+    if (videos.length === full.catalog.videos.length && !full.catalog.videos.some((v) => v.publishAt || v.hidden)) return { ...full, dueAt };
     return { ...index({ ...full.catalog, videos }, full.studio, full.version), dueAt };
   };
 
