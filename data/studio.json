@@ -1,4 +1,9 @@
 {
+ "homePosters": {
+  "releasingThisMonth": "media/upcoming/durga-lg.webp",
+  "releasingThisMonthMobile": "media/upcoming/durga-sm.webp",
+  "releasingThisMonthId": "mayer-golpo"
+ },
  "studio": {
   "name": "ADDABAAZ",
   "tagline": "A Premier Film Production House & Commercial Ad Film Company in Kolkata",

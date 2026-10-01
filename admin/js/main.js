@@ -2,6 +2,7 @@
 // Pages live in ./views/*.js and are loaded on demand. Only accounts with the admin role get past `start()`.
 import { api, getToken, setToken } from './api.js';
 import { html, $, $$, icon, toast, errMsg, guard } from './ui.js';
+import { mountSocialButtons } from '/app/js/social.js';
 
 // Sidebar menu.
 const NAV = [
@@ -40,15 +41,32 @@ function showLogin(message = '', { emailValue = '' } = {}) {
     <h1>ADDABAAZ <span>Admin</span></h1>
     <p class="muted">Sign in with an administrator account.</p>
     ${message ? html`<div class="form-err">${message}</div>` : ''}
+    <div class="login-social" id="adminSocial" hidden></div>
+    <div class="login-or" id="adminSocialOr" hidden><span>or use your email</span></div>
+    <div class="form-err" id="adminSocialError" role="alert" hidden></div>
     <div class="field"><label for="em">Email</label><input id="em" name="email" type="email" autocomplete="username" value="${emailValue}" required></div>
     <div class="field"><label for="pw">Password</label><input id="pw" name="password" type="password" autocomplete="current-password" required></div>
     <button class="btn primary block" type="submit">Sign in</button>
-    <p class="small muted">Signed up with Google or Facebook? Sign in on the <a href="/">main site</a> first, then reload this page.<br>Need admin access? Ask an existing administrator to grant it.</p>
+    <p class="small muted">Use a configured social provider or your email and password. This account must already have admin access; ask an existing administrator to grant it if needed.</p>
   </form></main>`.s;
   const form = $('form', app);
   form.email.focus();
+  api.authProviders().then((providers) => {
+    const box = $('#adminSocial', app);
+    if (!box) return;
+    const shown = mountSocialButtons(box, providers, {
+      onError: (text) => { const status = $('#adminSocialError', app); if (status) { status.textContent = text; status.hidden = false; } },
+      onCredential: async (provider, credential) => {
+        const status = $('#adminSocialError', app);
+        if (status) { status.textContent = ''; status.hidden = true; }
+        try { await api.loginSocial(provider, credential); await start(); }
+        catch (error) { if (status) { status.textContent = errMsg(error); status.hidden = false; } }
+      },
+    });
+    if (shown) { box.hidden = false; $('#adminSocialOr', app).hidden = false; }
+  }).catch((error) => console.warn('[admin] Could not load social providers:', error));
   form.addEventListener('submit', async (e) => {
-    e.preventDefault(); const btn = $('button', form);
+    e.preventDefault(); const btn = $('button[type="submit"]', form);
     await guard(btn, async () => {
       try { await api.login(form.email.value.trim(), form.password.value); } catch (x) { return showLogin(x.message, { emailValue: form.email.value }); }
       await start();
@@ -75,9 +93,16 @@ function shell() {
     </div>
   </div>`.s;
   $('#logout').onclick = () => { setToken(null); showLogin('You’re signed out.'); };
-  const side = $('#side'), toggle = (open) => document.body.classList.toggle('nav-open', open);
-  $('#menu').onclick = () => toggle(!document.body.classList.contains('nav-open')); $('#scrim').onclick = () => toggle(false);
+  const layout = $('.layout'), side = $('#side'), menu = $('#menu');
+  const toggle = (open) => {
+    layout.classList.toggle('nav-open', open);
+    menu.setAttribute('aria-expanded', String(open));
+  };
+  menu.setAttribute('aria-controls', 'side'); menu.setAttribute('aria-expanded', 'false');
+  menu.onclick = () => toggle(!layout.classList.contains('nav-open'));
+  $('#scrim').onclick = () => toggle(false);
   side.addEventListener('click', (e) => { if (e.target.closest('a[data-nav]')) toggle(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') toggle(false); });
 }
 export async function refreshCounts() {
   try {
@@ -116,8 +141,8 @@ async function start() {
   if (!getToken()) return showLogin();
   try { admin = (await api.get('/session')).admin; }
   catch (e) {
-    if (e.status === 403) { return showLogin(e.code === 'account_disabled' ? e.message : 'This account doesn’t have administrator access. Ask an existing administrator to grant it.', {}); }
-    if (e.status === 401) return showLogin(e.code === 'admin_session_expired' ? e.message : '');
+    if (e.status === 403) { setToken(null); return showLogin(e.code === 'account_disabled' ? e.message : 'This account doesn’t have administrator access. Ask an existing administrator to grant it.', {}); }
+    if (e.status === 401) { setToken(null); return showLogin(e.code === 'admin_session_expired' ? e.message : ''); }
     app.innerHTML = html`<main class="login"><div class="card login-card"><h1>Can’t load the console</h1><p class="muted">${errMsg(e)}</p><button class="btn primary" data-reload>Retry</button></div></main>`.s;
     app.querySelector('[data-reload]').onclick = () => location.reload(); return;
   }

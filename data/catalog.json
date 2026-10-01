@@ -1,6 +1,11 @@
 {
  "schema": 1,
  "updatedAt": "2026-09-29",
+ "homePosters": {
+  "releasingThisMonth": "media/upcoming/durga-lg.webp",
+  "releasingThisMonthMobile": "media/upcoming/durga-sm.webp",
+  "releasingThisMonthId": "mayer-golpo"
+ },
  "shows": [
   {
    "id": "shahid",
@@ -2975,7 +2980,18 @@
  ],
  "upcoming": [
   {
+   "id": "mayer-golpo",
+   "category": "releasing-this-month",
+   "title": "মায়ের গল্প",
+   "type": "film",
+   "note": "পুরাণ · ইতিহাস · অধিকার",
+   "poster": "media/upcoming/durga-sm.webp",
+   "posterLg": "media/upcoming/durga-lg.webp",
+   "backdrop": "media/upcoming/durga-lg.webp"
+  },
+  {
    "id": "central-calcutta-boarding",
+   "category": "coming-soon",
    "title": "সেন্ট্রাল ক্যালকাটা বোর্ডিং",
    "titleEn": "Central Calcutta Boarding",
    "type": "series",
@@ -2989,6 +3005,7 @@
   },
   {
    "id": "trap",
+   "category": "coming-soon",
    "title": "Trap",
    "type": "series",
    "genres": [],
@@ -2997,6 +3014,7 @@
   },
   {
    "id": "viral-live",
+   "category": "coming-soon",
    "title": "Viral Live",
    "type": "series",
    "genres": [],
@@ -3005,6 +3023,7 @@
   },
   {
    "id": "xpress-health",
+   "category": "coming-soon",
    "title": "Xpress Health",
    "type": "series",
    "genres": [],
@@ -3014,6 +3033,7 @@
   },
   {
    "id": "chiching-phank",
+   "category": "coming-soon",
    "title": "চিচিং ফাঁক",
    "titleEn": "Chiching Phank",
    "type": "series",
@@ -3023,6 +3043,7 @@
   },
   {
    "id": "probesh-nishedh",
+   "category": "coming-soon",
    "title": "প্রবেশ নিষেধ",
    "titleEn": "Probesh Nishedh",
    "type": "series",
@@ -3033,6 +3054,7 @@
   },
   {
    "id": "mr-mrs-holmes",
+   "category": "coming-soon",
    "title": "Mr. & Mrs. Holmes",
    "type": "series",
    "genres": [],
@@ -3042,6 +3064,7 @@
   },
   {
    "id": "uttaran",
+   "category": "coming-soon",
    "title": "উত্তরণ",
    "titleEn": "Uttaran",
    "type": "series",
@@ -3052,6 +3075,7 @@
   },
   {
    "id": "hothat-dekha",
+   "category": "coming-soon",
    "title": "হঠাৎ দেখা",
    "titleEn": "Hothat Dekha",
    "type": "series",

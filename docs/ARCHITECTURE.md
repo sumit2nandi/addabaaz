@@ -28,12 +28,12 @@
 - **Player abstraction.** `players/index.js` exposes `createPlayer(container, video, opts)`; the engine is chosen from `video.source.type` (`youtube | mp4 | hls`). Moving titles to your own CDN is a data change, not a code change.
 - **Two URL styles, one router.** On the website served by the Node server, pages have real URLs (`/show/shahid`, History API) and the server answers each with the app shell plus that page's metadata and content, so Google can index it ([SEO.md](SEO.md)). Static hosting and the Capacitor apps have no such server and keep hash URLs (`#/show/shahid`); the server tells the app which mode to use with `<meta name="ab:routing">`. Old `/#/…` links are converted automatically.
 - **No framework/build step.** Small (~200 KB of unminified JS, views loaded on demand), trivially deployable, easy for the studio team to edit. `html` tagged templates escape all interpolations by default.
-- **MySQL for user data, JSON for content.** Accounts, profiles, My List, progress, reminders, subscriptions and contact messages live in MySQL (`server/migrations/*.sql`, accessed only through `server/src/db.js`). The catalog stays in `data/catalog.json` so editors need no database access and static hosting keeps working; tables reference catalog ids by value.
-- **Content as data.** `data/catalog.json` is the single source of truth, served both as a static file and by the API; a validator guards it.
+- **MySQL for user data and the live catalogue.** Accounts, profiles, My List, progress, reminders, subscriptions, contact messages and the current curated catalogue live in MySQL (`server/migrations/*.sql`, accessed only through `server/src/db.js`). `data/catalog.json` is the one-time seed and static-mode fallback; tables reference catalogue ids by value.
+- **Content as data.** Curated shows and catalogue videos are database-backed. After an authenticated admin explicitly previews, the YouTube Data API paginates the channel's complete public uploads playlist and checks every ID against the catalog. A short-lived signed preview snapshot is stored in MySQL so selected/all-missing imports do not fetch YouTube again and work across instances. Shorts appear in Reels; landscape uploads join the home page's latest episodes/videos. A tracked import history supports undoing the last batch or removing imports from today. Admins can filter videos by attributes and bulk hide, restore, or delete selected rows; hidden videos remain admin-visible but are excluded from public catalog reads. Public pages never fetch the YouTube API. Static-only builds continue to use their bundled catalog snapshot.
 
 ## Sign-in and premium content
 
-Free content never needs an account. Titles marked `access: "premium"` require one: the UI shows a sign-in wall, and — the real gate — `POST /api/v1/videos/:id/stream` refuses without a session. Sign-in is email/password, Google or Facebook (credentials verified server-side, see [AUTH.md](AUTH.md)). Premium video files live in a private **Cloudflare R2** bucket and are delivered through signed, expiring URLs (MP4) or a token gateway (HLS) — see [PREMIUM.md](PREMIUM.md).
+Free content never needs an account. Titles marked `access: "premium"` are gated in the app for signed-out viewers and viewers without an active plan; shows and videos may use any supported source. The `/api/v1/videos/:id/stream` endpoint also enforces access before signing URLs for R2-hosted media. YouTube or public MP4/HLS sources may still be reachable outside ADDABAAZ, so use a private **Cloudflare R2** source when the media itself needs server-enforced protection (see [PREMIUM.md](PREMIUM.md)). Sign-in is email/password, Google or Facebook (credentials verified server-side, see [AUTH.md](AUTH.md)).
 
 ## Security notes
 
@@ -57,7 +57,7 @@ Free content never needs an account. Titles marked `access: "premium"` require o
 2. **Own video pipeline:** upload → transcode to HLS (Mux, Cloudflare Stream, AWS MediaConvert) → signed URLs → DRM (Widevine/FairPlay) for premium; enables downloads and Chromecast/AirPlay.
 3. **Social login** (Google/Apple; Apple is mandatory in iOS apps that offer other social logins) and email verification / password reset (needs an email provider).
 4. **Push notifications** for reminders and new episodes (FCM/APNs).
-5. **Admin CMS** (or headless CMS: Sanity/Strapi/Directus) generating `catalog.json`, plus a YouTube Data API sync job to import new uploads automatically.
+5. **External CMS integration** (or headless CMS: Sanity/Strapi/Directus) generating catalog data. The current admin console includes a manual YouTube preview/selection/import flow with batch undo; public pages never contact YouTube for its feed.
 6. ~~**SEO**~~ done — see [SEO.md](SEO.md).
 7. **Analytics & recommendations** (watch-time events → "Because you watched…"), A/B tests on the hero.
 8. **i18n:** Bengali/English UI toggle (strings are already isolated in views).

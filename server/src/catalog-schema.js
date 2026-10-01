@@ -1,8 +1,9 @@
 /**
  * The catalog schema in one place: used by the admin API (validates every write), by `npm run validate:catalog` and by the CLI import.
  * validate(type, input, ctx) → { doc, errors }  — `doc` is the normalised document to store (only known fields, trimmed, typed).
+ *   upcoming.category controls the homepage placement; studio.homePosters remains only for compatibility with older catalogs.
  *   ctx.fileExists(rel)  optional: check that local image paths (media/…, uploads/…) exist
- *   ctx.showIds / ctx.upcomingIds  optional Sets: check `showId` references
+ *   ctx.showIds / ctx.upcomingIds  optional Sets: check catalog references
  */
 export const TYPES = { shows: 'show', videos: 'video', upcoming: 'upcoming', gallery: 'gallery' };
 // Reusable patterns and allowed values. IDs are short slugs; image paths must be local uploads/media files or https URLs; subtitle files must be .vtt.
@@ -40,7 +41,7 @@ function reader(input, allowed, label, ctx) {
       if (!Number.isInteger(n) || n < min || n > max) return void errors.push(`${k} must be a whole number between ${min} and ${max}.`);
       out[k] = n;
     },
-    bool(k, dflt = false) { out[k] = src[k] === undefined ? dflt : src[k] === true || src[k] === 'true'; },
+    bool(k, dflt = false) { out[k] = src[k] === undefined ? dflt : src[k] === true || src[k] === 1 || src[k] === '1' || src[k] === 'true'; },
     oneOf(k, values, { req = false, dflt } = {}) {
       if (!has(k)) { if (req) errors.push(`${k} is required.`); else if (dflt !== undefined) out[k] = dflt; return; }
       if (!values.includes(src[k])) return void errors.push(`${k} must be one of: ${values.join(', ')}.`);
@@ -87,9 +88,9 @@ function show(input, ctx) {
   return r;
 }
 
-// Video or episode. The `source` decides where it plays from: YouTube id, Cloudflare R2 object (premium/private), or a direct mp4/hls URL.
+// Video or episode. The `source` decides where it plays from: YouTube id, Cloudflare R2 object, or a direct mp4/hls URL; premium access is independent of source.
 function video(input, ctx) {
-  const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'description', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access', 'rating', 'subtitles', 'publishAt'], 'A video', ctx);
+  const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'description', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access', 'rating', 'subtitles', 'publishAt', 'hidden'], 'A video', ctx);
   r.id(); r.oneOf('kind', KINDS, { req: true }); r.str('showId', { max: 64, pattern: ID, nullable: true }); ref(r, ctx, 'showId', [ctx.showIds, ctx.upcomingIds].filter(Boolean));
   r.int('episode', { min: 1, max: 100000, nullable: true }); if (r.out.kind && r.out.kind !== 'episode') r.out.episode = null;
   r.str('title', { req: true, max: 300 }); r.str('shortTitle', { max: 120 }); r.str('description', { max: 500 });
@@ -105,13 +106,13 @@ function video(input, ctx) {
       else if (s.format && !['mp4', 'hls'].includes(s.format)) r.errors.push('source.format must be mp4 or hls.');
       else if (/\.m3u8$/i.test(key) && s.format === 'mp4') r.errors.push("A .m3u8 key can't be format mp4.");
       else r.out.source = { type: 'r2', key, ...(s.format ? { format: s.format } : {}) };
-      if (!r.has('thumbnail')) r.errors.push('Premium (R2) videos need a public thumbnail image.');
+      if (!r.has('thumbnail')) r.errors.push('R2 videos need a public thumbnail image.');
     } else if (t === 'mp4' || t === 'hls') {
       extra(['type', 'url']); if (!/^https?:\/\/[^\s"'<>]+$/.test(String(s.url || ''))) r.errors.push(`source.url must be an absolute http(s) URL for ${t} videos.`); else r.out.source = { type: t, url: s.url.trim() };
     } else r.errors.push('source.type must be youtube, r2, mp4 or hls.');
   }
   r.img('thumbnail'); r.int('duration', { req: true, max: 86400 }); r.date('publishedAt', { req: true }); r.int('views', { dflt: 0 });
-  r.oneOf('access', ACCESS, { req: true }); r.oneOf('rating', RATINGS); r.date('publishAt');
+  r.oneOf('access', ACCESS, { req: true }); r.oneOf('rating', RATINGS); r.date('publishAt'); r.bool('hidden', false);
   // Optional subtitle tracks: max 12, each with a language code, label and a .vtt file; one track per language.
   if (r.src.subtitles !== undefined && r.src.subtitles !== null) {
     const subs = r.src.subtitles;
@@ -135,8 +136,8 @@ function video(input, ctx) {
 
 // "Coming soon" entry.
 function upcoming(input, ctx) {
-  const r = reader(input, ['id', 'title', 'titleEn', 'type', 'genres', 'note', 'showId', 'poster', 'posterLg', 'backdrop'], 'A coming-soon title', ctx);
-  r.id(); r.str('title', { req: true }); r.str('titleEn'); r.oneOf('type', SHOW_TYPES, { dflt: 'series' }); r.list('genres', { max: 30, maxItems: 10 });
+  const r = reader(input, ['id', 'title', 'titleEn', 'type', 'category', 'genres', 'note', 'showId', 'poster', 'posterLg', 'backdrop'], 'A coming-soon title', ctx);
+  r.id(); r.str('title', { req: true }); r.str('titleEn'); r.oneOf('type', SHOW_TYPES, { dflt: 'series' }); r.oneOf('category', ['coming-soon', 'releasing-this-month'], { dflt: 'coming-soon' }); r.list('genres', { max: 30, maxItems: 10 });
   r.str('note', { max: 200 }); r.str('showId', { max: 64, pattern: ID }); r.img('poster', { req: true }); r.img('posterLg'); r.img('backdrop');
   return r;
 }
@@ -153,7 +154,7 @@ const URL_OK = /^https?:\/\/[^\s"'<>]+$/;
 function studio(input, ctx) {
   const errors = [];
   const o = input && typeof input === 'object' && !Array.isArray(input) ? input : (errors.push('Studio info must be an object.'), {});
-  for (const k of Object.keys(o)) if (!['studio', 'missionEn', 'missionBn', 'services', 'team'].includes(k)) errors.push(`Unknown field "${k}".`);
+  for (const k of Object.keys(o)) if (!['studio', 'missionEn', 'missionBn', 'services', 'team', 'homePosters'].includes(k)) errors.push(`Unknown field "${k}".`);
   const st = reader(o.studio, ['name', 'tagline', 'address', 'mapsUrl', 'email', 'phones', 'whatsapp', 'social'], 'studio', ctx);
   st.str('name', { req: true, max: 80 }); st.str('tagline', { max: 300 }); st.list('address', { max: 120, maxItems: 8 });
   st.str('mapsUrl', { pattern: URL_OK, msg: 'mapsUrl must be a URL.', max: 500 }); st.str('email', { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, msg: 'email is not valid.', max: 254 });
@@ -161,7 +162,10 @@ function studio(input, ctx) {
   const soc = reader(o.studio?.social || {}, ['facebook', 'instagram', 'youtube', 'x', 'twitter', 'linkedin'], 'social', ctx);
   for (const k of ['facebook', 'instagram', 'youtube', 'x', 'twitter', 'linkedin']) soc.str(k, { pattern: URL_OK, msg: `${k} must be a URL.`, max: 500 });
   st.out.social = soc.out; errors.push(...st.errors, ...soc.errors);
-  const out = { studio: st.out };
+  const home = reader(o.homePosters || {}, ['releasingThisMonth', 'releasingThisMonthMobile', 'releasingThisMonthId'], 'homePosters', ctx);
+  home.img('releasingThisMonth'); home.img('releasingThisMonthMobile'); home.str('releasingThisMonthId', { max: 64, pattern: ID, msg: 'releasingThisMonthId must be a valid upcoming-title ID.' });
+  ref(home, ctx, 'releasingThisMonthId', [ctx.upcomingIds].filter(Boolean)); errors.push(...home.errors);
+  const out = { studio: st.out, homePosters: home.out };
   for (const k of ['missionEn', 'missionBn']) {
     const l = reader({ [k]: o[k] }, [k], k, ctx); l.list(k, { max: 400, maxItems: 12 }); errors.push(...l.errors); out[k] = l.out[k];
   }

@@ -21,6 +21,12 @@ export function heroBg(thumb, poster, { lazy = false, fallback } = {}) {
 export function ytImg(v, alt = '', { cls = '' } = {}) {
   return img(app.catalog.thumb(v, 'hqdefault'), alt, { cls });
 }
+// Subtle crown medallion used as the Premium mark on artwork, instead of a text pill over the image.
+export function premiumMark({ cls = '' } = {}) {
+  return html`<span class="premium-mark ${cls}" role="img" aria-label="Premium content" title="Premium content">
+    <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M5 10.5 10.4 15 16 6l5.6 9 5.4-4.5L24 25H8L5 10.5Z" fill="currentColor"/><path d="M8.5 27h15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="m16 2.1.9 1.8 2 .3-1.5 1.4.4 2-1.8-1-1.8 1 .4-2-1.5-1.4 2-.3L16 2.1Z" fill="currentColor"/></svg>
+  </span>`;
+}
 
 /* ---------- state-aware buttons (kept in sync globally by main.js) ---------- */
 // "My List" and "Remind me" buttons render their current state; syncButtons() refreshes every one on the page when the state changes.
@@ -52,12 +58,13 @@ export function syncButtons(root = document) {
 // Poster card for a show.
 export function showCard(s, { cls = '' } = {}) {
   return html`<a class="card card-poster ${cls}" href="#/show/${s.id}" aria-label="${s.titleEn || s.title}">
-    <div class="poster">${img(s.poster, s.title)}</div>
+    <div class="poster">${img(s.poster, s.title)}${s.access === 'premium' ? premiumMark() : ''}</div>
+    ${s.tagline ? html`<p class="show-card-tagline bn">${s.tagline}</p>` : ''}
     <div class="card-quick">${listBtn('show', s.id, { cls: 'icon-btn', iconOnly: true })}</div>
   </a>`;
 }
-// Thumbnail card for an episode/clip: shows duration, a resume progress bar, lock badge for premium and an optional rank number.
-export function videoCard(v, { progress = true, rank = 0, showName = true, cls = '' } = {}) {
+// Thumbnail card for an episode/clip: optional duration, a resume progress bar, Premium mark and optional rank number.
+export function videoCard(v, { progress = true, rank = 0, showName = true, showDuration = true, cls = '' } = {}) {
   const cat = app.catalog; const show = cat.show(v.showId);
   const frac = progress ? app.user?.fraction(v.id, v.duration) || 0 : 0;
   const rankEl = rank ? html`<span class="rank" aria-hidden="true">${rank}</span>` : '';
@@ -66,8 +73,8 @@ export function videoCard(v, { progress = true, rank = 0, showName = true, cls =
     <div class="thumb">
       ${ytImg(v, cat.displayTitle(v))}
       <span class="chip chip-label">${cat.label(v)}</span>
-      ${v.access === 'premium' ? html`<span class="chip chip-premium">${icon('lock', { size: 11 })} Premium</span>` : ''}
-      <span class="chip chip-dur">${fmtDuration(v.duration)}</span>
+      ${cat.isPremium(v) ? premiumMark() : ''}
+      ${showDuration && v.duration > 0 ? html`<span class="chip chip-dur">${fmtDuration(v.duration)}</span>` : ''}
       <span class="play-overlay">${icon('play', { size: 22 })}</span>
       ${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}
     </div>
@@ -77,19 +84,19 @@ export function videoCard(v, { progress = true, rank = 0, showName = true, cls =
     </div>
   </a>`;
 }
-// Small vertical card for a reel.
-export function reelCard(v) {
+// Small vertical card for a reel; duration can be hidden on dense rails like the home page.
+export function reelCard(v, { showDuration = true } = {}) {
   const cat = app.catalog; const show = cat.show(v.showId);
   return html`<a class="card card-reel" href="#/reels/${v.id}" aria-label="${cat.displayTitle(v)}">
-    <div class="thumb">${ytImg(v, cat.displayTitle(v))}<span class="play-overlay">${icon('play', { size: 20 })}</span>
-    <span class="chip chip-dur">${fmtDuration(v.duration)}</span></div>
+    <div class="thumb">${ytImg(v, cat.displayTitle(v))}${cat.isPremium(v) ? premiumMark() : ''}<span class="play-overlay">${icon('play', { size: 20 })}</span>
+    ${showDuration ? html`<span class="chip chip-dur">${fmtDuration(v.duration)}</span>` : ''}</div>
     <div class="card-body"><div class="card-title">${cat.displayTitle(v)}</div>${show ? html`<div class="card-meta"><span>${show.titleEn || show.title}</span></div>` : ''}</div>
   </a>`;
 }
-// Card for an upcoming title.
+// Fixed portrait card for upcoming rails. The dedicated upcoming page uses adaptive portrait frames and preserves full artwork.
 export function soonCard(u) {
   return html`<a class="card card-poster card-soon" href="#/soon/${u.id}" aria-label="${u.titleEn || u.title} — coming soon">
-    <div class="poster">${img(u.poster, u.title)}<span class="chip chip-soon">Coming soon</span></div>
+    <div class="poster poster-soon">${img(u.poster, 'Coming soon poster', { cls: 'poster-soon-image' })}<span class="chip chip-soon">Coming soon</span></div>
   </a>`;
 }
 // Photo tile that opens the lightbox.
@@ -99,11 +106,11 @@ export function galleryCard(g, i) {
 
 /* ---------- rails ---------- */
 // A horizontal scrolling row with a heading and a "See all" link.
-export function rail({ title, subtitle = '', items = [], href = '', linkLabel = 'See all', cls = '', id = '' }) {
+export function rail({ title, subtitle = '', items = [], href = '', linkLabel = 'See all', cls = '', id = '', hideHeading = false }) {
   if (!items.length) return html``;
   return html`<section class="rail ${cls}" ${id ? raw(`id="${esc(id)}"`) : ''} aria-label="${title}">
-    <div class="rail-head"><div><h2>${title}</h2>${subtitle ? html`<p class="rail-sub">${subtitle}</p>` : ''}</div>
-      ${href ? html`<a class="see-all" href="${href}">${linkLabel} ${icon('right', { size: 16 })}</a>` : ''}</div>
+    ${hideHeading ? (href ? html`<div class="rail-head rail-head-minimal"><a class="see-all" href="${href}">${linkLabel} ${icon('right', { size: 16 })}</a></div>` : '') : html`<div class="rail-head"><div><h2>${title}</h2>${subtitle ? html`<p class="rail-sub">${subtitle}</p>` : ''}</div>
+      ${href ? html`<a class="see-all" href="${href}">${linkLabel} ${icon('right', { size: 16 })}</a>` : ''}</div>`}
     <div class="rail-wrap">
       <button type="button" class="rail-arrow left" data-rail-dir="-1" aria-label="Scroll left" disabled>${icon('left', { size: 22 })}</button>
       <div class="rail-track" role="list">${items.map((x) => html`<div class="rail-item" role="listitem">${x}</div>`)}</div>

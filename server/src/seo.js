@@ -42,8 +42,8 @@ export function bodyHtml(m, { view, params }, cat, studio, plans) {
   // Choose the content by which page (view) was requested.
   switch (view) {
     case 'home': {
-      const latest = [...cat.allEpisodes()].sort((a, c) => c.publishedAt.localeCompare(a.publishedAt)).slice(0, 12);
-      b = `${intro('ADDABAAZ — Bengali web series, comedy and originals')}<h2>Shows</h2>${showList(cat.shows)}<h2>Latest episodes</h2>${epList(latest)}` +
+      const latest = cat.latestVideos(12);
+      b = `${intro('ADDABAAZ — Bengali web series, comedy and originals')}<h2>Shows</h2>${showList(cat.shows)}<h2>Latest episodes and videos</h2>${epList(latest)}` +
         (cat.upcoming.length ? `<h2>Coming soon</h2><ul>${cat.upcoming.map((u) => li(`/soon/${u.id}`, showFullName(u), u.note)).join('')}</ul>` : ''); break;
     }
     case 'browse': b = `${intro('All shows')}${showList(cat.shows)}`; break;
@@ -195,7 +195,7 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
       if (!videoIndexable(v)) continue;
       const show = cat.show(v.showId), meta = pageMeta({ path: `/watch/${v.id}`, cat, origin });
       const thumb = absUrl(origin, cat.thumb(v));
-      const vid = thumb ? `<video:video><video:thumbnail_loc>${esc(thumb)}</video:thumbnail_loc><video:title>${esc(clip(cat.displayTitle(v) + (show ? ` — ${showName(show)}` : ''), 100))}</video:title><video:description>${esc(clip(meta.description, 2000))}</video:description>${v.source?.type === 'youtube' ? `<video:player_loc>${esc(`https://www.youtube.com/embed/${v.source.id}`)}</video:player_loc>` : ''}<video:duration>${Math.max(1, Math.round(v.duration || 0))}</video:duration><video:publication_date>${esc(v.publishedAt)}</video:publication_date>${v.access === 'premium' ? '<video:requires_subscription>yes</video:requires_subscription>' : ''}</video:video>` : '';
+      const vid = thumb ? `<video:video><video:thumbnail_loc>${esc(thumb)}</video:thumbnail_loc><video:title>${esc(clip(cat.displayTitle(v) + (show ? ` — ${showName(show)}` : ''), 100))}</video:title><video:description>${esc(clip(meta.description, 2000))}</video:description>${v.source?.type === 'youtube' ? `<video:player_loc>${esc(`https://www.youtube.com/embed/${v.source.id}`)}</video:player_loc>` : ''}${v.duration > 0 ? `<video:duration>${Math.round(v.duration)}</video:duration>` : ''}<video:publication_date>${esc(v.publishedAt)}</video:publication_date>${(v.access === 'premium' || show?.access === 'premium') ? '<video:requires_subscription>yes</video:requires_subscription>' : ''}</video:video>` : '';
       out.push(url(`/watch/${v.id}`, { lastmod: v.publishedAt, extra: vid }));
     }
     return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">\n${out.join('\n')}\n</urlset>\n`;

@@ -5,7 +5,7 @@
  *
  * Needs ffmpeg + ffprobe on the machine that runs it (not on the web server). --upload sends every file to
  * premium/<name>/ using the R2_* credentials (a write-capable token) and prints the key to paste into the admin form:
- *   source = Premium video in Cloudflare R2, key = premium/<name>/master.m3u8
+ *   source = Private Cloudflare R2, key = premium/<name>/master.m3u8
  *
  * NOTE: this script has been unit-tested for its command building, but it has NOT been run against real ffmpeg or R2 in the
  * environment where it was written. Try it on a short clip first. See docs/PREMIUM.md. */
@@ -49,5 +49,5 @@ if (argv.includes('--upload')) {
     if (!res.ok) { console.error(`✖ upload of ${key} failed (${res.status}). Does the token have write access?`); process.exit(1); }
     if (++n % 20 === 0) console.log(`  ${n}/${files.length} files…`);
   }
-  console.log(`✔ uploaded ${files.length} files.\n  In the admin: Video source → Premium video in Cloudflare R2 → key  premium/${name}/master.m3u8`);
+  console.log(`✔ uploaded ${files.length} files.\n  In the admin: Video source → Private Cloudflare R2 → key  premium/${name}/master.m3u8`);
 } else console.log(`Next: upload the folder to R2 under premium/${name}/ (or re-run with --upload) and use  premium/${name}/master.m3u8  as the key.`);

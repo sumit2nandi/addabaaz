@@ -16,6 +16,28 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, l
     res.json({ comments, refunds, errors });
   }));
 
+  /* ---------- email delivery diagnostic ---------- */
+  // Send a real message to the signed-in administrator. This catches SMTP credentials, network/port
+  // restrictions and sender configuration that the setup checklist cannot detect from the presence of SMTP_URL alone.
+  router.post('/email/test', wrap(async (req, res) => {
+    if (req.admin.via !== 'session') throw new HttpError(400, 'email_test_requires_session', 'Sign in with an administrator account to test email delivery.');
+    if (mailer?.provider !== 'smtp') throw new HttpError(503, 'email_not_configured', 'Email delivery is not configured. Set SMTP_URL and MAIL_FROM, then restart the service.');
+    try {
+      const result = await mailer.send({
+        to: req.admin.email,
+        subject: 'ADDABAAZ email delivery test',
+        text: 'This test message confirms that ADDABAAZ can send email through its configured SMTP provider.',
+      });
+      if (!result?.sent) throw new Error('The mailer did not send the test message.');
+    } catch (e) {
+      const code = typeof e.code === 'string' ? e.code.replace(/[^\w.-]/g, '').slice(0, 40) : '';
+      console.error(`[mail] admin test failed${code ? ` (${code})` : ''}:`, e.message);
+      throw new HttpError(503, 'email_send_failed', `The SMTP test email could not be sent${code ? ` (${code})` : ''}. Check the server runtime logs and SMTP settings.`);
+    }
+    await log(req, 'email.test', req.admin.email);
+    res.json({ sent: true, to: req.admin.email });
+  }));
+
   /* ---------- analytics ---------- */
   // Analytics page: watch statistics (counted by us) joined with catalog titles, plus business numbers from the dashboard queries.
   router.get('/analytics', wrap(async (req, res) => {

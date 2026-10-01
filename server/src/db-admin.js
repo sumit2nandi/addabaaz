@@ -53,9 +53,14 @@ export function adminDb({ q, tx, self, iso }) {
     async put(key, id, doc, { create = false } = {}) {
       const type = DB_TYPE[key];
       return tx(async (t) => {
-        // New items go to the end of their list; existing ones are replaced in place.
+        // New coming-soon posters lead their row; other new items go to the end. Existing items stay in place.
         if (create) {
-          const [{ next }] = await t.query('SELECT COALESCE(MAX(position), -1) + 1 AS next FROM catalog_items WHERE type = ?', [type]);
+          let next = 0;
+          if (key === 'upcoming') await t.query('UPDATE catalog_items SET position = position + 1 WHERE type = ?', [type]);
+          else {
+            const [{ next: position }] = await t.query('SELECT COALESCE(MAX(position), -1) + 1 AS next FROM catalog_items WHERE type = ?', [type]);
+            next = position;
+          }
           await t.query('INSERT INTO catalog_items (type, id, position, doc) VALUES (?,?,?,?)', [type, id, next, JSON.stringify(doc)]);
         } else {
           const res = await t.query('UPDATE catalog_items SET doc = ?, updated_at = UTC_TIMESTAMP(3) WHERE type = ? AND id = ?', [JSON.stringify(doc), type, id]);
@@ -65,7 +70,63 @@ export function adminDb({ q, tx, self, iso }) {
         return create ? 'created' : 'updated';
       });
     },
+    /** Atomically adds a chunk of imported YouTube videos and their batch history rows; existing catalog ids are skipped. */
+    async putYouTubeImports(docs, { batchId, actor }) {
+      return tx(async (t) => {
+        const [{ next }] = await t.query("SELECT COALESCE(MAX(position), -1) + 1 AS next FROM catalog_items WHERE type = 'video'");
+        const actorName = String(actor).slice(0, 254), added = [];
+        let position = Number(next);
+        for (const doc of docs) {
+          const inserted = await t.query("INSERT IGNORE INTO catalog_items (type, id, position, doc) VALUES ('video', ?, ?, ?)", [doc.id, position, JSON.stringify(doc)]);
+          if (!inserted.affectedRows) continue;
+          await t.query('INSERT IGNORE INTO youtube_import_items (batch_id, video_id, actor, imported_at) VALUES (?,?,?,UTC_TIMESTAMP(3))', [batchId, doc.id, actorName]);
+          added.push(doc.id); position++;
+        }
+        if (added.length) await bump(t);
+        return added;
+      });
+    },
+    /** Stores a short-lived full-channel preview; expired snapshots are reaped on each new preview. */
+    async createYouTubePreview({ snapshotId, actor, checkedAt, expiresAt, videos }) {
+      await q('DELETE FROM youtube_preview_snapshots WHERE expires_at <= UTC_TIMESTAMP(3)');
+      await q('INSERT INTO youtube_preview_snapshots (snapshot_id, actor, checked_at, expires_at, videos) VALUES (?,?,?,?,?)', [snapshotId, String(actor).slice(0, 254), checkedAt, expiresAt, JSON.stringify(videos)]);
+    },
+    /** Fetch a preview only for its creator and only while the signed snapshot is still live. */
+    async getYouTubePreview(snapshotId, actor) {
+      const row = (await q('SELECT checked_at, expires_at, videos FROM youtube_preview_snapshots WHERE snapshot_id = ? AND actor = ? AND expires_at > UTC_TIMESTAMP(3)', [snapshotId, String(actor).slice(0, 254)]))[0];
+      return row ? { snapshotId, checkedAt: iso(row.checked_at), expiresAt: iso(row.expires_at), videos: json(row.videos) } : null;
+    },
+    /** Hides/restores matching videos without changing their other catalog attributes. */
+    async setVideosHidden(ids, hidden) {
+      const unique = [...new Set(ids)]; if (!unique.length) return [];
+      return tx(async (t) => {
+        const marks = unique.map(() => '?').join(',');
+        const rows = await t.query(`SELECT id FROM catalog_items WHERE type = 'video' AND id IN (${marks}) FOR UPDATE`, unique);
+        const found = rows.map((r) => r.id); if (!found.length) return [];
+        const foundMarks = found.map(() => '?').join(',');
+        await t.query(`UPDATE catalog_items SET doc = JSON_SET(doc, '$.hidden', JSON_EXTRACT(?, '$')), updated_at = UTC_TIMESTAMP(3) WHERE type = 'video' AND id IN (${foundMarks})`, [hidden ? 'true' : 'false', ...found]);
+        await bump(t);
+        return found;
+      });
+    },
+    /** Deletes many videos in one transaction and also removes viewer list/progress references. */
+    async removeVideos(ids) {
+      const unique = [...new Set(ids)]; if (!unique.length) return [];
+      return tx(async (t) => {
+        const marks = unique.map(() => '?').join(',');
+        const rows = await t.query(`SELECT id FROM catalog_items WHERE type = 'video' AND id IN (${marks}) FOR UPDATE`, unique);
+        const found = rows.map((r) => r.id); if (!found.length) return [];
+        const foundMarks = found.map(() => '?').join(',');
+        await t.query(`DELETE FROM catalog_items WHERE type = 'video' AND id IN (${foundMarks})`, found);
+        await t.query(`DELETE FROM list_items WHERE item_type = 'video' AND item_id IN (${foundMarks})`, found);
+        await t.query(`DELETE FROM watch_progress WHERE video_id IN (${foundMarks})`, found);
+        await bump(t);
+        return found;
+      });
+    },
+
     // The studio/about page content is a single document stored as type 'studio'.
+
     async putStudio(doc) {
       return tx(async (t) => {
         await t.query("INSERT INTO catalog_items (type, id, position, doc) VALUES ('studio', 'main', 0, ?) ON DUPLICATE KEY UPDATE doc = VALUES(doc), updated_at = UTC_TIMESTAMP(3)", [JSON.stringify(doc)]);
@@ -119,6 +180,24 @@ export function adminDb({ q, tx, self, iso }) {
       if (action) { where.push('action LIKE ?'); args.push(like(action)); }
       const rows = await q(`SELECT * FROM admin_audit ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT ?`, [...args, limit]);
       return rows.map((r) => ({ id: r.id, at: iso(r.at), actor: r.actor, action: r.action, target: r.target, meta: json(r.meta), ip: r.ip }));
+    },
+  };
+
+  // ---- YouTube import history: records stay after catalog deletion so "today" and "last batch" remain auditable ----
+  const youtubeImports = {
+    /** Most recent import batch plus every video imported within the supplied UTC day bounds. */
+    async summary({ start, end }) {
+      const latest = (await q(`SELECT batch_id, MAX(imported_at) AS imported_at
+        FROM youtube_import_items GROUP BY batch_id ORDER BY MAX(imported_at) DESC LIMIT 1`))[0] || null;
+      const lastItems = latest
+        ? await q('SELECT video_id FROM youtube_import_items WHERE batch_id = ? ORDER BY imported_at, video_id', [latest.batch_id])
+        : [];
+      const todayItems = await q(`SELECT DISTINCT video_id FROM youtube_import_items
+        WHERE imported_at >= ? AND imported_at < ? ORDER BY video_id`, [start, end]);
+      return {
+        last: latest ? { batchId: latest.batch_id, importedAt: iso(latest.imported_at), videoIds: lastItems.map((r) => r.video_id) } : null,
+        todayVideoIds: todayItems.map((r) => r.video_id),
+      };
     },
   };
 
@@ -212,5 +291,5 @@ export function adminDb({ q, tx, self, iso }) {
   };
 
   // Merged into the main `db` object by db.js.
-  return { catalog, audit, adminUsers, messages, stats };
+  return { catalog, audit, youtubeImports, adminUsers, messages, stats };
 }

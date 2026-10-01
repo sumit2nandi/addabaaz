@@ -281,7 +281,7 @@ All settings are environment variables (see `.env.example`, which has the same l
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | — | Private Cloudflare R2 bucket holding premium video. |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | — | Optional private Cloudflare R2 video storage (use it when the media itself needs protection). |
 | `R2_ENDPOINT` | derived | Override for S3-compatible storage other than R2. |
 | `STREAM_URL_TTL` | `21600` | Seconds a signed video link stays valid (6 h). |
 | `STREAM_LIMIT` | `2` | Premium screens one account may play at the same time. |
@@ -374,9 +374,9 @@ Required by the App Store if the iOS app offers Google or Facebook. Needs a paid
 2. For the website create a **Services ID** (e.g. `com.addabaaz.web`), tick Sign In with Apple → *Configure*: domain `addabaaz.in`, return URL `https://addabaaz.in` → `APPLE_SERVICE_ID=<services id>`.
 3. Restart. Check with `curl https://addabaaz.in/api/v1/auth/providers` — it lists every provider that is configured.
 
-### 8.4 Premium video in a private Cloudflare R2 bucket
+### 8.4 Optional private video storage in Cloudflare R2
 
-Free titles stay on YouTube. Premium titles are files in a private bucket, playable only by signed-in viewers **with an active paid plan**.
+Premium is an app-level access setting and is independent of source. This walkthrough configures optional private R2 storage for titles whose media files also need protection; ADDABAAZ gates Premium playback to signed-in viewers **with an active paid plan**.
 
 1. Cloudflare → **R2 → Create bucket** (e.g. `addabaaz-premium`). Keep **public access OFF**.
 2. *R2 → Manage API tokens → Create token* with **Object Read only** for that bucket. Copy the Access Key ID and Secret, and note your Account ID.
@@ -388,12 +388,12 @@ Free titles stay on YouTube. Premium titles are files in a private bucket, playa
       "ExposeHeaders": ["Content-Length", "Content-Range"], "MaxAgeSeconds": 3600 }]
    ```
 5. **Getting a video in** — either
-   * *MP4 (simplest):* `ffmpeg -i episode.mov -c:v libx264 -crf 21 -preset slow -c:a aac -b:a 128k -movflags +faststart ep6.mp4`, then upload it in the admin (Videos → New video → *Premium video in Cloudflare R2* → Upload — this needs a **write-capable** token, so either use a read/write token in `R2_*` or upload with another tool such as `rclone` and type the key), or
+   * *MP4 (simplest):* `ffmpeg -i episode.mov -c:v libx264 -crf 21 -preset slow -c:a aac -b:a 128k -movflags +faststart ep6.mp4`, then upload it in the admin (Videos → New video → *Private Cloudflare R2* → Upload — this needs a **write-capable** token, so either use a read/write token in `R2_*` or upload with another tool such as `rclone` and type the key), or
    * *Adaptive HLS (better on mobile networks):* on your own computer, `npm run encode:hls -- episode.mov --name shahid-ep6 --upload`. It needs `ffmpeg` and a write-capable token, and prints the key to use (`premium/shahid-ep6/master.m3u8`). Try a short clip first.
-6. In the admin, create the video with *Source = Premium video in Cloudflare R2* and that key; set *Access = Premium*.
+6. In the admin, create the video with *Source = Private Cloudflare R2* and that key; set *Access = Premium*.
 7. Verify: `npm run r2:check -- premium/shahid-ep6/master.m3u8`.
 
-Premium video is protected by login, plan and short-lived signed links. It is **not DRM**; a determined person can still record their screen.
+For Premium titles stored in R2, playback is protected by login, plan and short-lived signed links. It is **not DRM**; a determined person can still record their screen.
 
 ### 8.5 Payments (Razorpay, prepaid plans)
 
@@ -415,7 +415,7 @@ Not included: GST e-invoice/IRN and return filing (they need a GST Suvidha Provi
 
 ### 8.7 Email (receipts, password reset, verification, refunds)
 
-Set `SMTP_URL`, `MAIL_FROM`, `SUPPORT_EMAIL` and `PUBLIC_SITE_URL` (links in emails use it). Any SMTP provider works (Amazon SES, Brevo, Mailgun, Zoho, Gmail app password…). Once SMTP is set, viewers must confirm their email before buying or commenting. Set up SPF/DKIM for your sending domain so mail doesn't land in spam.
+Set `SMTP_URL`, `MAIL_FROM`, `SUPPORT_EMAIL` and `PUBLIC_SITE_URL` (links in emails use it). Any SMTP provider works (Amazon SES, Brevo, Mailgun, Zoho, Gmail app password…). Once SMTP is set, viewers must confirm their email before buying or commenting. Set up SPF/DKIM for your sending domain so mail doesn't land in spam. After deploy, use `/admin` → Dashboard → System status → **Send test email** to verify the actual SMTP connection and delivery. On Render Free, ports 25/465/587 are blocked: use a provider with port 2525 (`SMTP_URL=smtp://username:password@smtp-host:2525`, STARTTLS) or a paid Render instance; URL-encode special characters in the username/password.
 
 ### 8.8 Push notifications
 
@@ -441,7 +441,7 @@ The site serves `/privacy`, `/terms` and `/refunds`. **They are templates, not l
 The live catalog is stored in MySQL and edited in `/admin`:
 
 * **Shows** — poster, description, genres, rating (U / 7+ / 13+ / 16+ / 18+; Kids profiles show only U and 7+), Free/Premium.
-* **Videos & reels** — YouTube link (free) or R2 key (premium), thumbnail, duration, *Publish at* (schedule), *Subtitles* (upload `.srt`/`.vtt`), rating.
+* **Videos & reels** — YouTube link, MP4/HLS URL or R2 key, thumbnail, duration, *Publish at* (schedule), *Subtitles* (upload `.srt`/`.vtt`), rating and independent Free/Premium access.
 * **Coming soon**, **Gallery**, **Studio & team** (About / Services / Contact pages).
 
 The first start seeds MySQL from `data/catalog.json` and `data/studio.json`. Those files are still used by the static site and the mobile bundle, so after editing in the admin run `npm run catalog:export` to write them back, then commit. `npm run catalog:import -- --force` goes the other way and **replaces** the database catalog. `npm run validate:catalog` checks the files.
@@ -538,7 +538,7 @@ Hostinger **replaces everything inside the deployed app on every deployment** (`
 2. Add the environment variable `UPLOAD_DIR=/home/u123456789/addabaaz-data/uploads` (use your real account id; the File Manager shows the full path).
 3. Redeploy, then in `/admin` upload a test image, redeploy **again**, and confirm the image is still there. If it is missing, the app can't write outside its folder on your plan — ask Hostinger support, or skip the Upload button: the image boxes in `/admin` also accept a path like `media/shows/my-poster.webp` (put the file in the repository's `media/` folder and push — it deploys with the code) or any `https://…` image address.
 
-Premium **videos** are not affected: they go straight from the browser to Cloudflare R2, never to Hostinger's disk.
+Videos stored in **R2** are not affected: they go straight from the browser to Cloudflare R2, never to Hostinger's disk.
 
 **D. Create your first administrator (no command line needed)**
 
@@ -579,7 +579,7 @@ If you created a mailbox in hPanel (*Emails*), you can send through it:
 
 * Go through **section 8** for each feature you want (each one is just more environment variables, then a redeploy). Callback and webhook addresses always use your real domain, e.g. `https://addabaaz.in/api/v1/payments/webhook`.
 * Then **section 11** (Google search), and finally the **go-live checklist** (section 14).
-* Cloudflare's orange-cloud proxy in front of Hostinger is **not needed**. (Your premium videos use Cloudflare R2, which is separate and unaffected.)
+* Cloudflare's orange-cloud proxy in front of Hostinger is **not needed**. (Video files stored in Cloudflare R2 are separate and unaffected.)
 * Your plan includes up to five Web Apps, so you can create a second app from the same repository as a **staging** copy on a subdomain (own database, test Razorpay keys, a different `JWT_SECRET`, and `ALLOW_INDEXING=false` so Google ignores it). Keep `NODE_ENV=production` there too — without it the app falls back to an insecure development secret.
 
 ### 10.4 If something doesn't fit
@@ -652,8 +652,8 @@ BACKUP_PASSPHRASE='a long secret' npm run backup     # → ./backups/addabaaz-<U
 ```
 
 * One file with **every table** and all admin-uploaded files, taken from a consistent snapshot. Set `BACKUP_PASSPHRASE` — it contains emails and password hashes.
-* Keeps the newest `BACKUP_KEEP` files (default 14). With `BACKUP_R2_BUCKET` set it also copies each backup to a **separate** R2 bucket (never the premium-video bucket).
-* **Copy backups off the server.** Premium videos are not included — enable versioning on the video bucket. Your `.env` (especially `JWT_SECRET`) is not included either; store it in a password manager.
+* Keeps the newest `BACKUP_KEEP` files (default 14). With `BACKUP_R2_BUCKET` set it also copies each backup to a **separate** R2 bucket (never the bucket used for video media).
+* **Copy backups off the server.** R2 video objects are not included — enable versioning on the video bucket. Your `.env` (especially `JWT_SECRET`) is not included either; store it in a password manager.
 * Schedule daily: `0 3 * * * cd /path/to/addabaaz && npm run -s backup >> /var/log/ab-backup.log 2>&1` (Docker: `docker compose exec -T app npm run -s backup`).
 
 Restore:
@@ -706,7 +706,7 @@ Prints requests per second and p50/p95/p99 latency per endpoint. The numbers dep
 - [ ] SMTP working (send yourself a password reset); SPF/DKIM set.
 - [ ] Privacy / Terms / Refund text reviewed by a lawyer (`app/js/legal-text.js`).
 - [ ] Google/Facebook/Apple sign-in tried on the real domain (Facebook app switched to **Live**).
-- [ ] R2 bucket is private; a premium video plays for a paid account and is refused for a free one (`npm run r2:check`).
+- [ ] If using R2 media, the bucket is private and an R2-hosted Premium title plays for a paid account and is refused for a free one (`npm run r2:check`).
 - [ ] Ratings set on shows/videos so the **Kids** profile has something to show.
 - [ ] Sitemap submitted in Search Console.
 - [ ] `ADMIN_TOKEN` empty unless a script needs it; `ALLOW_MOCK_PAYMENTS` **unset**.
@@ -737,10 +737,10 @@ Prints requests per second and p50/p95/p99 latency per endpoint. The numbers dep
 | Reset/verify links point at the wrong site | Set `PUBLIC_SITE_URL`. |
 | "Subscribe" does nothing in production | No Razorpay keys → no checkout in production. Set the keys (or `ALLOW_MOCK_PAYMENTS=true` on staging only). |
 | Paid but no access | Webhook not set or wrong secret. Check *Razorpay → Webhooks → recent deliveries* and `RAZORPAY_WEBHOOK_SECRET`. |
-| Premium video 503 `storage_not_configured` | `R2_*` variables missing. |
+| R2-hosted video 503 `storage_not_configured` | `R2_*` variables missing. |
 | HLS video won't start | Bucket CORS missing; or behind a proxy without `PUBLIC_API_URL`; check `npm run r2:check`. |
 | Premium video 429 "Too many screens" | The account is playing on more devices than `STREAM_LIMIT`; stop one, or *Account → Your devices → Remove*. |
-| Uploads from the admin fail | Behind nginx: raise `client_max_body_size`. Video upload from the browser needs a write-capable R2 token and bucket CORS allowing `PUT`. |
+| Uploads from the admin fail | Image uploads are limited to 10 MB by the app; behind nginx, set `client_max_body_size 10m` or higher. Video upload from the browser needs a write-capable R2 token and bucket CORS allowing `PUT`. |
 | Admin says "That account isn't an administrator" | `npm run admin -- grant <email>`. |
 | Everyone got signed out | `JWT_SECRET` changed (or was unset and the server restarted in dev). |
 | Site shows old content after an update | The service worker caches the shell; hard-refresh once. Its version is in `sw.js`. |

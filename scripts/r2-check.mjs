@@ -1,4 +1,4 @@
-// Verifies your R2 credentials and that a premium object is reachable:  npm run r2:check -- premium/shahid-ep6/master.m3u8
+// Verifies your R2 credentials and that an R2 object is reachable:  npm run r2:check -- premium/shahid-ep6/master.m3u8
 // Reads the same R2_* environment variables as the server (export them or use `node --env-file=.env`).
 import { createR2 } from '../server/src/r2.js';
 

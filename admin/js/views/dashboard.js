@@ -1,6 +1,6 @@
 // Dashboard: headline stats, recent payments and users, catalog counts and system status (from /stats, /catalog, /health).
 import { api } from '../api.js';
-import { html, icon, inr, ago, fmtD, badge, barChart, pageHead, plural } from '../ui.js';
+import { html, $, icon, inr, ago, fmtD, badge, barChart, pageHead, plural, toast, errMsg } from '../ui.js';
 
 const PLAN = { 'plus-monthly': 'Plus · monthly', 'plus-yearly': 'Plus · yearly' };
 const statusBadge = (p) => p.refundedPaise >= p.amountPaise && p.status === 'paid' ? badge('refunded', 'warn') : badge(p.status, p.status === 'paid' ? 'ok' : p.status === 'failed' ? 'bad' : '');
@@ -10,6 +10,7 @@ export default async function dashboard(root, _p, ctx) {
   if (ctx.stale()) return;
   const eps = cat.videos.filter((v) => v.kind === 'episode').length, reels = cat.videos.filter((v) => v.kind === 'reel').length, prem = cat.videos.filter((v) => v.access === 'premium').length + cat.shows.filter((x) => x.access === 'premium').length;
   const todo = health.checks.filter((c) => !c.ok && c.level !== 'info');
+  const mailConfigured = health.checks.find((c) => c.id === 'mail')?.ok;
   const rev = s.days.map((d) => d.paise / 100), sign = s.days.map((d) => d.signups);
   const stat = (label, value, sub, ic, href) => html`<a class="stat" href="${href}"><span class="stat-ic">${icon(ic, 20)}</span><div><small>${label}</small><strong>${value}</strong><em>${sub}</em></div></a>`;
   root.innerHTML = html`
@@ -32,5 +33,14 @@ export default async function dashboard(root, _p, ctx) {
       <section class="card"><div class="card-head"><h2>New users</h2><a href="#/users" class="small">All users</a></div>
         <table class="tbl compact"><tbody>${s.recentUsers.map((u) => html`<tr><td><a href="#/users/${u.id}"><strong>${u.name}</strong></a><br><small class="muted">${u.email}</small></td><td class="muted small num">${ago(u.createdAt)}</td></tr>`)}</tbody></table></section>
     </div>
-    ${health.checks.some((c) => c.level === 'info' || c.ok) ? html`<details class="card sys"><summary>System status</summary><ul class="checks">${health.checks.map((c) => html`<li class="${c.level}">${icon(c.ok ? 'check' : c.level === 'info' ? 'info' : 'alert', 16)}<div><strong>${c.label}</strong><small>${c.detail}</small></div></li>`)}</ul></details>` : ''}`.s;
+    ${health.checks.some((c) => c.level === 'info' || c.ok) ? html`<details class="card sys"><summary>System status</summary><ul class="checks">${health.checks.map((c) => html`<li class="${c.level}">${icon(c.ok ? 'check' : c.level === 'info' ? 'info' : 'alert', 16)}<div><strong>${c.label}</strong><small>${c.detail}</small></div></li>`)}</ul>
+      ${mailConfigured ? html`<div class="row wrap mt"><button class="btn sm" id="mailTest">Send test email to ${ctx.admin.email}</button><small>This sends a real message to your administrator inbox.</small></div>` : ''}
+    </details>` : ''}`.s;
+  const mailTest = $('#mailTest', root);
+  if (mailTest) mailTest.addEventListener('click', async () => {
+    mailTest.disabled = true; mailTest.textContent = 'Sending test email…';
+    try { await api.post('/email/test'); toast(`Test email sent to ${ctx.admin.email}`); }
+    catch (e) { toast(errMsg(e), 'err'); }
+    finally { mailTest.disabled = false; mailTest.textContent = `Send test email to ${ctx.admin.email}`; }
+  });
 }

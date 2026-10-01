@@ -32,7 +32,7 @@ Append to `videos`:
 
 ## Premium / private videos (Cloudflare R2)
 
-Set `"access": "premium"` and `"source": { "type": "r2", "key": "premium/…/ep6.mp4" }` plus a public `"thumbnail"`. Premium titles require login; the file itself stays in a private R2 bucket. Full walkthrough: [PREMIUM.md](PREMIUM.md).
+Set `"access": "premium"` on any show or video; the access flag is independent of its source (YouTube, MP4, HLS or R2). Premium titles are gated in the app for signed-out and unpaid viewers. Public sources such as YouTube or a public URL can still be accessed outside ADDABAAZ; use a private R2 source when the media itself must be protected. R2 sources require a public `"thumbnail"`. Full private-R2 walkthrough: [PREMIUM.md](PREMIUM.md).
 
 ## Host video yourself (no YouTube)
 

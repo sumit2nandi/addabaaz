@@ -59,19 +59,44 @@ const audit = async (action) => (await A('GET', `/audit?action=${encodeURICompon
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), crypto.randomBytes(64)]);
 const fakeJwt = (claims, secret = SECRET) => { const b = (o) => Buffer.from(JSON.stringify(o)).toString('base64url'); const body = `${b({ alg: 'HS256', typ: 'JWT' })}.${b(claims)}`; return `${body}.${crypto.createHmac('sha256', secret).update(body).digest('base64url')}`; };
 
+test('admin email diagnostic sends a real test message only to the signed-in administrator', async () => {
+  const before = sent.length;
+  const r = await A('POST', '/email/test');
+  assert.equal(r.status, 200); assert.deepEqual(r.body, { sent: true, to: 'boss@example.com' });
+  assert.equal(sent.length, before + 1); assert.equal(sent.at(-1).to, 'boss@example.com');
+  assert.match(sent.at(-1).subject, /email delivery test/);
+  assert.ok((await audit('email.test')).some((x) => x.actor === 'boss@example.com'));
+  assert.equal((await call('POST', '/admin/email/test', {}, viewer.token)).status, 403);
+  assert.equal((await call('POST', '/admin/email/test', {}, TOKEN)).body.error.code, 'email_test_requires_session');
+});
+
 test('schema: unit checks (ids, images, sources, unknown fields) and the shipped catalog is valid', () => {
-  assert.deepEqual(checkCatalog(seed, JSON.parse(fs.readFileSync(new URL('data/studio.json', ROOT), 'utf8')), { fileExists: (rel) => fs.existsSync(new URL(rel, ROOT)) }), []);
+  const studioSeed = JSON.parse(fs.readFileSync(new URL('data/studio.json', ROOT), 'utf8'));
+  assert.deepEqual(checkCatalog(seed, studioSeed, { fileExists: (rel) => fs.existsSync(new URL(rel, ROOT)) }), []);
+  const soonIds = new Set(seed.upcoming.map((u) => u.id));
+  assert.deepEqual(validate('studio', { ...studioSeed, homePosters: { ...studioSeed.homePosters, releasingThisMonthId: seed.upcoming[0].id } }, { upcomingIds: soonIds }).errors, []);
+  assert.ok(validate('studio', { ...studioSeed, homePosters: { ...studioSeed.homePosters, releasingThisMonthId: 'missing-title' } }, { upcomingIds: soonIds }).errors.some((e) => /releasingThisMonthId.*does not exist/.test(e)));
   const bad = (type, doc, re) => { const { errors } = validate(type, doc, {}); assert.ok(errors.some((e) => re.test(e)), `${JSON.stringify(doc)} → ${errors}`); };
   bad('show', { id: 'a b', title: 'x', description: 'd', poster: 'media/x.webp' }, /id may only/);
+  const { category: _seedCategory, ...legacyUpcoming } = seed.upcoming.find((u) => u.id === 'mayer-golpo');
+  assert.equal(validate('upcoming', legacyUpcoming, {}).doc.category, 'coming-soon', 'older and new catalog entries without a category safely default to Coming Soon');
+  assert.equal(validate('upcoming', { ...legacyUpcoming, category: 'releasing-this-month' }, {}).doc.category, 'releasing-this-month');
+  bad('upcoming', { ...legacyUpcoming, category: 'next-month' }, /category must be one of/);
+  const parent = seed.shows[0], nonPrivateChild = seed.videos.find((v) => v.showId === parent.id && v.source?.type !== 'r2');
+  assert.ok(nonPrivateChild, 'fixture has a public-source child episode');
+  assert.deepEqual(validate('show', { ...parent, access: 'premium' }).errors, [], 'a Premium show can use non-R2 sources for its episodes');
+  assert.deepEqual(validate('video', { ...nonPrivateChild, access: 'premium' }).errors, [], 'any video source may be marked Premium');
   bad('show', { id: 'a', title: 'x', description: 'd', poster: '../etc/passwd' }, /poster/);
   bad('show', { id: 'a', title: 'x', description: 'd', poster: 'javascript:alert(1)' }, /poster/);
   bad('show', { id: 'a', title: 'x', description: 'd', poster: 'https://x.test/p.webp', isAdmin: true }, /Unknown field "isAdmin"/);
   bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'youtube', id: 'short' }, duration: 5, publishedAt: '2026-01-01', access: 'free' }, /11-character/);
+  assert.deepEqual(validate('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'youtube', id: 'abcdefghijk' }, duration: 5, publishedAt: '2026-01-01', access: 'premium' }).errors, [], 'Premium access is allowed for YouTube videos');
   bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'r2', key: 'premium/../x.mp4' }, thumbnail: 'https://x.test/t.jpg', duration: 5, publishedAt: '2026-01-01', access: 'premium' }, /safe R2 object key/);
   bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'r2', key: 'premium/x.mp4' }, duration: 5, publishedAt: '2026-01-01', access: 'premium' }, /thumbnail/);
   bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'mp4', url: 'ftp://x' }, duration: 5, publishedAt: 'nope', access: 'free' }, /source.url|publishedAt/);
-  const ok = validate('video', { id: 'v', kind: 'trailer', episode: 3, showId: null, title: ' t ', source: { type: 'youtube', id: 'abcdefghijk' }, duration: '65', publishedAt: '2026-01-01', access: 'free' }, {});
-  assert.deepEqual(ok.errors, []); assert.equal(ok.doc.episode, null, 'only episodes carry an episode number'); assert.equal(ok.doc.duration, 65); assert.equal(ok.doc.title, 't'); assert.equal(ok.doc.views, 0); assert.equal(ok.doc.publishedAt, '2026-01-01T00:00:00Z');
+  const ok = validate('video', { id: 'v', kind: 'trailer', episode: 3, showId: null, title: ' t ', source: { type: 'youtube', id: 'abcdefghijk' }, duration: '65', publishedAt: '2026-01-01', access: 'free', hidden: true }, {});
+  assert.deepEqual(ok.errors, []); assert.equal(ok.doc.episode, null, 'only episodes carry an episode number'); assert.equal(ok.doc.duration, 65); assert.equal(ok.doc.title, 't'); assert.equal(ok.doc.views, 0); assert.equal(ok.doc.publishedAt, '2026-01-01T00:00:00Z'); assert.equal(ok.doc.hidden, true);
+  assert.equal(validate('video', { id: 'v', kind: 'trailer', title: 't', source: { type: 'youtube', id: 'abcdefghijk' }, duration: 0, publishedAt: '2026-01-01', access: 'free' }, {}).doc.hidden, false);
 });
 
 test('uploads helpers: magic-byte sniffing and R2 keys', () => {
@@ -210,6 +235,13 @@ test('catalog CRUD: validated writes show up in the public API immediately; ids 
 test('catalog: upcoming, gallery, reordering and the studio profile', async () => {
   const up = { id: 'soon-1', title: 'Soon', poster: seed.upcoming[0].poster, genres: ['Comedy'] };
   assert.equal((await A('POST', '/catalog/upcoming', up)).status, 201);
+  const afterUpcomingCreate = (await call('GET', '/catalog')).body;
+  assert.equal(afterUpcomingCreate.upcoming[0].id, 'soon-1', 'the newest admin-added poster leads the coming-soon rows');
+  assert.equal(afterUpcomingCreate.upcoming[0].category, 'coming-soon', 'new upcoming titles default to Coming Soon');
+  const promoted = await A('PUT', '/catalog/upcoming/soon-1', { ...up, category: 'releasing-this-month' });
+  assert.equal(promoted.status, 200);
+  assert.equal((await call('GET', '/catalog')).body.upcoming.find((u) => u.id === 'soon-1').category, 'releasing-this-month', 'multiple upcoming entries can be assigned to the release category');
+  assert.deepEqual(afterUpcomingCreate.homePosters, JSON.parse(fs.readFileSync(new URL('data/studio.json', ROOT), 'utf8')).homePosters);
   const g = { id: 'ph-1', group: 'Set', image: seed.gallery[0].image, caption: '' };
   assert.equal((await A('POST', '/catalog/gallery', g)).status, 201);
   assert.equal((await A('POST', '/catalog/gallery', { ...g, id: 'ph-2', image: 'https://cdn.example.com/x.jpg' })).status, 201);
@@ -221,8 +253,11 @@ test('catalog: upcoming, gallery, reordering and the studio profile', async () =
   // reminders for a removed upcoming title go too
   const st = (await A('GET', '/catalog')).body.studio;
   assert.equal((await A('PUT', '/studio', { ...st, studio: { ...st.studio, email: 'not-an-email' } })).status, 400);
-  const ok = await A('PUT', '/studio', { ...st, studio: { ...st.studio, tagline: 'A new tagline', phones: ['+91 1', '+91 2'] }, team: st.team.slice(0, 2) }); assert.equal(ok.status, 200);
-  const pub = (await call('GET', '/studio')).body; assert.equal(pub.studio.tagline, 'A new tagline'); assert.equal(pub.team.length, 2);
+  const bannerPosters = { releasingThisMonth: 'media/upcoming/poster-4-lg.webp', releasingThisMonthMobile: 'media/upcoming/poster-4-sm.webp', releasingThisMonthId: seed.upcoming[0].id };
+  const bannerSave = await A('PUT', '/studio', { ...st, homePosters: bannerPosters }); assert.equal(bannerSave.status, 200);
+  assert.deepEqual((await call('GET', '/catalog')).body.homePosters, bannerPosters, 'homepage banner artwork is exposed from the editable studio settings');
+  const ok = await A('PUT', '/studio', { ...st, homePosters: bannerPosters, studio: { ...st.studio, tagline: 'A new tagline', phones: ['+91 1', '+91 2'] }, team: st.team.slice(0, 2) }); assert.equal(ok.status, 200);
+  const pub = (await call('GET', '/studio')).body; assert.equal(pub.studio.tagline, 'A new tagline'); assert.equal(pub.team.length, 2); assert.deepEqual(pub.homePosters, bannerPosters);
   await A('PUT', '/studio', st);
   assert.equal(((await audit('catalog.')).length) >= 8, true);
 });
@@ -235,7 +270,11 @@ test('uploads: images are sniffed, stored by content hash and served; videos get
   for (const [name, body, type] of [['svg', '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>', 'image/svg+xml'], ['html', '<script>alert(1)</script>', 'image/png'], ['empty', '', 'image/png']]) {
     const r = await A('POST', '/uploads/image', null, { raw: body, headers: { 'Content-Type': type } }); assert.equal(r.status, 400, name);
   }
-  assert.equal((await A('POST', '/uploads/image', null, { raw: Buffer.concat([PNG, Buffer.alloc(5 * 1024 * 1024)]), headers: { 'Content-Type': 'image/png' } })).status, 413);
+  const fiveMbImage = Buffer.concat([PNG, Buffer.alloc(5 * 1024 * 1024)]);
+  const fiveMbUpload = await A('POST', '/uploads/image', null, { raw: fiveMbImage, headers: { 'Content-Type': 'image/png' } });
+  assert.equal(fiveMbUpload.status, 201, '5 MB poster uploads fit under the 10 MB image request limit');
+  assert.equal(fiveMbUpload.body.bytes, fiveMbImage.length);
+  assert.equal((await A('POST', '/uploads/image', null, { raw: Buffer.concat([PNG, Buffer.alloc(11 * 1024 * 1024)]), headers: { 'Content-Type': 'image/png' } })).status, 413);
   assert.equal((await call('POST', '/admin/uploads/image', null, viewer.token, { raw: PNG })).status, 403);
   // an uploaded image can be used in the catalog (and a made-up uploads/ path cannot)
   assert.equal((await A('POST', '/catalog/gallery', { id: 'up-1', group: 'U', image: up.body.path })).status, 201);
@@ -281,7 +320,13 @@ test('payments list + coupons: filters, delete only when never used; everything 
 test('the admin page is served with a strict CSP and is never cached', async () => {
   for (const p of ['/admin', '/admin/']) {
     const r = await fetch(root + p); assert.equal(r.status, 200); assert.match(r.headers.get('content-type'), /html/); assert.equal(r.headers.get('cache-control'), 'no-store');
-    assert.match(r.headers.get('content-security-policy'), /script-src 'self'/); assert.equal(r.headers.get('x-frame-options'), 'DENY');
+    const csp = r.headers.get('content-security-policy');
+    assert.match(csp, /script-src 'self'/);
+    assert.match(csp, /script-src[^;]*https:\/\/accounts\.google\.com/);
+    assert.match(csp, /script-src[^;]*https:\/\/connect\.facebook\.net/);
+    assert.match(csp, /script-src[^;]*https:\/\/appleid\.cdn-apple\.com/);
+    assert.match(csp, /frame-src[^;]*https:\/\/accounts\.google\.com/);
+    assert.equal(r.headers.get('x-frame-options'), 'DENY');
   }
   assert.equal((await fetch(root + '/admin/admin.css')).status, 200); assert.equal((await fetch(root + '/admin/js/main.js')).status, 200);
   assert.equal((await fetch(root + '/admin/../server/src/app.js')).status, 404);

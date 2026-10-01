@@ -1,6 +1,6 @@
 # Database (MySQL)
 
-User data is stored in **MySQL 5.7+ or 8.x** (InnoDB, `utf8mb4`, UTC timestamps). Content (shows, episodes, upcoming, gallery) is *not* in the database — it stays in `data/catalog.json`, and tables reference catalog ids by value (validated by the API on write).
+User data and the live catalog (shows, videos, upcoming, gallery) are stored in **MySQL 5.7+ or 8.x** (InnoDB, `utf8mb4`, UTC timestamps). `data/catalog.json` is the one-time seed and static-mode fallback; catalog references in other tables use ids validated by the API on write.
 
 ## Schema
 
@@ -15,6 +15,8 @@ users ──< profiles ──< list_items        (My List:   PK profile_id, item
 
 contact_messages                         (standalone inbox for the Contact form; handled_at/by set from the admin console)
 catalog_items, catalog_meta              (the catalog: one JSON document per show/video/upcoming/gallery/studio; edited in /admin)
+youtube_import_items                     (YouTube import batches; retained to support safe undo/removal)
+youtube_preview_snapshots                (15-minute full-channel preview snapshots for multi-instance-safe imports)
 admin_audit                              (append-only log of admin actions)
 schema_migrations                        (applied migration files)
 ```
@@ -33,13 +35,15 @@ schema_migrations                        (applied migration files)
 | `refunds` | `id` PK · `payment_id` FK · `provider_refund_id` **UNIQUE** (a refund event is applied once) · `amount_paise` · `status` ENUM(pending, processed, failed) · `source` ENUM(admin, provider) · `revoked_access` |
 | `invoices` | `id` PK · `number` **UNIQUE** (e.g. `AB/2627/000001`) · `kind` ENUM(invoice, credit_note) · `doc_key` **UNIQUE** (one invoice per payment, one credit note per refund) · `payment_id` / `refund_id` / `parent_id` · `user_id` FK **ON DELETE SET NULL** · `fy` · `issued_at` · `taxable_paise` / `cgst_paise` / `sgst_paise` / `igst_paise` / `total_paise` · `gst_rate` · `doc` JSON (seller & buyer snapshot) |
 | `invoice_counters` | `(series, fy)` PK · `last_no` — row-locked while numbering, so numbers are gapless |
-| `catalog_items` | `(type, id)` PK · `position` (display order) · `doc` JSON — the item exactly as in `data/catalog.json`. Seeded once from the file; see `docs/ADMIN.md` for export/import |
+| `catalog_items` | `(type, id)` PK · `position` (display order) · `doc` JSON — the item exactly as in `data/catalog.json`; video docs may include `hidden: true` to keep them admin-visible but exclude them from public catalogs. Seeded once from the file |
+| `youtube_preview_snapshots` | `snapshot_id` PK · `actor` · `checked_at` · `expires_at` · `videos` JSON — temporary complete-channel preview used by imports; expired rows are reaped on the next preview |
 | `catalog_meta` | `k` PK · `n` — `version` (bumped on every catalog write; servers compare it to refresh their cache) and `seeded` |
+| `youtube_import_items` | `(batch_id, video_id)` PK · `actor` · `imported_at` UTC; retained after catalog deletion so admin can undo the last batch or remove today's imports |
 | `admin_audit` | `id` PK · `at` · `actor_id` / `actor` (email, or `token`) · `action` · `target` · `meta` JSON · `ip` |
 | `users` (additions) | `is_admin` · `disabled_at` (a disabled user is refused everywhere) |
 | `contact_messages` | `id` PK · `name` · `email` · `phone` · `message` TEXT · `created_at` |
 
-All foreign keys are `ON DELETE CASCADE` (except `payments.user_id` and `invoices.user_id`, which become NULL so payment and tax records survive account deletion), so `DELETE /me` (account deletion, required by the app stores) removes everything belonging to the user in one statement. Ids are UUID v4 strings. Video/list ids use `utf8mb4_bin` because YouTube ids are case-sensitive. Full DDL: [`001_init.sql`](../server/migrations/001_init.sql), social login in [`002_social_login.sql`](../server/migrations/002_social_login.sql), payments in [`003_payments.sql`](../server/migrations/003_payments.sql), coupons/invoices/refunds in [`004_billing.sql`](../server/migrations/004_billing.sql). `payments` also gained `list_price_paise`, `discount_paise`, `coupon_code`, `billing` (buyer name/state/GSTIN snapshot), `refunded_paise`.
+All foreign keys are `ON DELETE CASCADE` (except `payments.user_id` and `invoices.user_id`, which become NULL so payment and tax records survive account deletion), so `DELETE /me` (account deletion, required by the app stores) removes everything belonging to the user in one statement. Ids are UUID v4 strings. Video/list ids use `utf8mb4_bin` because YouTube ids are case-sensitive. Full DDL: [`001_init.sql`](../server/migrations/001_init.sql), social login in [`002_social_login.sql`](../server/migrations/002_social_login.sql), payments in [`003_payments.sql`](../server/migrations/003_payments.sql), coupons/invoices/refunds in [`004_billing.sql`](../server/migrations/004_billing.sql), YouTube import tracking in [`007_youtube_imports.sql`](../server/migrations/007_youtube_imports.sql), full-channel preview snapshots in [`008_youtube_preview_snapshots.sql`](../server/migrations/008_youtube_preview_snapshots.sql), and video-deletion lookup indexes in [`009_bulk_video_delete_indexes.sql`](../server/migrations/009_bulk_video_delete_indexes.sql). `payments` also gained `list_price_paise`, `discount_paise`, `coupon_code`, `billing` (buyer name/state/GSTIN snapshot), `refunded_paise`.
 
 Concurrency: the unique email index makes simultaneous sign-ups safe; the 5-profile limit and "can't delete your last profile" rules run in transactions that lock the user row; progress uses `INSERT … ON DUPLICATE KEY UPDATE`.
 

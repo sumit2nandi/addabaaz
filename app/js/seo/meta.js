@@ -72,10 +72,10 @@ const itemList = (origin, items) => ({ '@type': 'ItemList', numberOfItems: items
 const video = (origin, v, cat, show, { url, full = true } = {}) => ({
   '@type': 'VideoObject', name: full ? clip(`${cat.displayTitle(v)}${show && !cat.displayTitle(v).includes(showName(show)) ? ` — ${showName(show)}` : ''}`, 110) : cat.displayTitle(v),
   description: videoDescription(v, show, cat), thumbnailUrl: [absUrl(origin, cat.thumb(v, 'hqdefault'))].filter(Boolean),
-  uploadDate: v.publishedAt, duration: isoDuration(v.duration), inLanguage: 'bn', isFamilyFriendly: true,
+  uploadDate: v.publishedAt, ...(v.duration > 0 ? { duration: isoDuration(v.duration) } : {}), inLanguage: 'bn', isFamilyFriendly: true,
   ...(url ? { url } : {}),
   ...(v.source?.type === 'youtube' ? { embedUrl: `https://www.youtube.com/embed/${v.source.id}` } : {}),
-  ...(v.access === 'premium' ? { isAccessibleForFree: false } : { isAccessibleForFree: true }),
+  ...(cat.isPremium(v) ? { isAccessibleForFree: false } : { isAccessibleForFree: true }),
   ...(v.views ? { interactionStatistic: { '@type': 'InteractionCounter', interactionType: { '@type': 'WatchAction' }, userInteractionCount: v.views } } : {}),
 });
 

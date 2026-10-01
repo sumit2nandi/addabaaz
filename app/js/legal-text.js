@@ -33,7 +33,7 @@ export function legalDoc(slug, { studio = {}, refundDays = 7 } = {}) {
           'To moderate comments, prevent abuse and fraud, fix errors and understand which titles people watch.',
         ]],
         ['Who receives it', [
-          'Service providers acting for us: Razorpay (payments), Cloudflare (hosting premium video in R2), our email delivery provider, and our hosting and database providers.',
+          'Service providers acting for us: Razorpay (payments), Cloudflare (hosting private video files in R2), our email delivery provider, and our hosting and database providers.',
           'Google, Facebook and Apple, if you choose to sign in with them. YouTube, whose player shows most of our free videos, may set its own cookies and collect data under Google’s policy when you press play.',
           'Google Analytics, only if you accept optional analytics in the cookie notice.',
           'Authorities, when the law requires it. We do not sell your personal data.',

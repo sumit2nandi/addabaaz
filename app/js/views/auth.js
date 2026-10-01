@@ -37,7 +37,7 @@ export default async function auth(ctx) {
     </form></div>`.s;
 
   const st0 = () => $('#as', ctx.root);
-  const finish = (msg) => { toast(msg); if (u.needsProfileChoice()) go('/profiles?next=' + encodeURIComponent(next), { replace: true }); else go(next, { replace: true }); };
+  const finish = (msg, type = 'ok') => { toast(msg, type); if (u.needsProfileChoice()) go('/profiles?next=' + encodeURIComponent(next), { replace: true }); else go(next, { replace: true }); };
   // Full-card loading state while a provider sign-in finishes (the form must not sit idle after the popup).
   const busy = (on) => { const el = $('#asBusy', ctx.root); if (el) el.hidden = !on; };
   u.providers().then((prov) => {                                    // Google / Facebook buttons appear only if the server has them configured
@@ -67,8 +67,10 @@ export default async function auth(ctx) {
     if (signup && !body.name) { st.textContent = 'Please enter your name.'; return; }
     btn.disabled = true; st.textContent = '';
     try {
-      await (signup ? u.signUp(body) : u.signIn(body));
-      finish(signup ? 'Welcome to ADDABAAZ!' : 'Signed in');
+      const result = await (signup ? u.signUp(body) : u.signIn(body));
+      if (signup && result.verificationEmailSent === false) {
+        finish('Account created, but the confirmation email could not be sent. Try Resend link from Account.', 'err');
+      } else finish(signup ? 'Welcome to ADDABAAZ!' : 'Signed in');
     } catch (err) { st.textContent = friendly(err); btn.disabled = false; }
   });
 }

@@ -39,6 +39,8 @@ const ld = (html) => JSON.parse(attr(html, /<script type="application\/ld\+json"
 test('routes: shared matcher', () => {
   assert.deepEqual(matchRoute('/show/shahid').params, { id: 'shahid' });
   assert.equal(matchRoute('/show/shahid/').view, 'show');
+  assert.equal(matchRoute('/youtube'), null);
+  assert.equal(meta('/youtube').status, 404);
   assert.equal(matchRoute('/nope'), null);
   assert.equal(matchRoute('/show/%E0%A4%A'), null);          // malformed escape → no match, no throw
 });
@@ -127,7 +129,7 @@ test('server: watch page has VideoObject and a crawlable episode list on the sho
 });
 
 test('server: status codes — 404 for unknown pages, 301 for duplicates, noindex for private pages', async () => {
-  for (const p of ['/nothing-here', '/show/nope', '/watch/nope', '/soon/nope']) { const r = await get(p); assert.equal(r.status, 404, p); assert.match(await r.text(), /noindex/); assert.equal(r.headers.get('x-robots-tag'), 'noindex'); }
+  for (const p of ['/nothing-here', '/youtube', '/show/nope', '/watch/nope', '/soon/nope']) { const r = await get(p); assert.equal(r.status, 404, p); assert.match(await r.text(), /noindex/); assert.equal(r.headers.get('x-robots-tag'), 'noindex'); }
   assert.equal((await get('/app/js/missing.js')).status, 404); assert.equal((await get('/whatever.php')).status, 404);
   assert.equal((await get('/api/nothing')).status, 404);
   const t = await get('/shows/'); assert.equal(t.status, 301); assert.equal(t.headers.get('location'), '/shows');
@@ -158,7 +160,7 @@ test('robots.txt and sitemap.xml', async () => {
   const xml = await sm.text(); const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
   assert.equal(new Set(locs).size, locs.length, 'no duplicate URLs'); assert.ok(locs.every((l) => l.startsWith(SITE + '/') && !l.includes('#')));
   for (const p of ['/', '/shows', '/show/shahid', '/soon/trap', '/about', '/contact', '/plans', '/gallery', '/upcoming']) assert.ok(locs.includes(SITE + p), p);
-  for (const p of ['/search', '/signin', '/account', '/billing', '/admin']) assert.ok(!locs.includes(SITE + p), `${p} must not be in the sitemap`);
+  for (const p of ['/search', '/signin', '/account', '/billing', '/admin', '/youtube']) assert.ok(!locs.includes(SITE + p), `${p} must not be in the sitemap`);
   const reel = cat.videos.find((v) => v.kind === 'reel'), ep = cat.episodes('shahid')[0];
   assert.ok(!locs.includes(`${SITE}/watch/${reel.id}`), 'undescribed reels stay out of the sitemap'); assert.ok(locs.includes(`${SITE}/watch/${ep.id}`));
   assert.match(xml, /<video:video><video:thumbnail_loc>https:\/\/i\.ytimg\.com/); assert.match(xml, /<video:duration>\d+<\/video:duration>/);

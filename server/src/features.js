@@ -40,7 +40,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
   // With no SMTP configured (development) print the mail's link to the console so flows can still be tested.
   const devLog = (msg) => { if (mailer.provider === 'none' && process.env.NODE_ENV !== 'production') console.log(`[mail:dev] ${msg}`); };
   // Fire-and-forget: a mail failure is logged but never breaks the request.
-  const sendMail = (to, built, note) => { devLog(note); mailer.send({ to, ...built }).catch((e) => console.warn('[mail] send failed:', e.message)); };
+  const sendMail = (to, built, note) => { devLog(note); mailer.send({ to, ...built }).catch((e) => console.warn(`[mail] send failed${e.code ? ` (${e.code})` : ''}:`, e.message)); };
   // Strict variants for endpoints that PROMISE the reader an email. The UI's "check your inbox" must
   // never be shown for a mail that didn't go out: in production an unconfigured mailer is a 503, and a
   // failed send is a 503 in every environment — swallowing it is how the site ended up lying to users.
@@ -49,7 +49,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
   const sendMailStrict = async (to, built, note) => {
     devLog(note);
     let sent;
-    try { sent = await mailer.send({ to, ...built }); } catch (e) { console.warn('[mail] send failed:', e.message); throw new HttpError(503, 'email_send_failed', MAIL_DOWN); }
+    try { sent = await mailer.send({ to, ...built }); } catch (e) { console.warn(`[mail] send failed${e.code ? ` (${e.code})` : ''}:`, e.message); throw new HttpError(503, 'email_send_failed', MAIL_DOWN); }
     if (!sent?.sent && process.env.NODE_ENV === 'production') throw new HttpError(503, 'email_send_failed', MAIL_DOWN);
   };
   // Builds the `{ token, user }` response used after password changes.
@@ -64,6 +64,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
     const url = `${siteUrl}/verify?token=${token}`;
     const built = mail.verifyEmailEmail({ name: user.name, url, supportEmail: cfg.supportEmail });
     if (strict) {
+      requireMail();
       await sendMailStrict(user.email, built, `verify link for ${user.email}: ${url}`);
       await db.authTokens.issue(user.id, 'verify', sha256(token), 3 * 24 * HOUR);
       return true;

@@ -8,7 +8,7 @@ import nodemailer from 'nodemailer';
  */
 // `transport` is anything with `sendMail()`: a real nodemailer SMTP transport, or a fake in tests.
 export function createMailer({ url = '', from = 'ADDABAAZ <no-reply@localhost>', transport = null, log = console } = {}) {
-  const t = transport || (url ? nodemailer.createTransport(url) : null);
+  const t = transport || (url ? nodemailer.createTransport({ url, connectionTimeout: 15_000, greetingTimeout: 10_000, socketTimeout: 30_000 }) : null);
   return {
     provider: t ? 'smtp' : 'none', from,
     /** @returns {Promise<{sent:boolean}>} — rejects if the SMTP server refuses; callers treat email as best-effort. */

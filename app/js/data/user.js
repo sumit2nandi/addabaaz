@@ -73,9 +73,9 @@ export class User extends Emitter {
   async signOutEverywhere() { await this.remote.signOutEverywhere(); }
   async refreshAccount() { const s = await this.remote.init(); if (s.account) { this.account = s.account; this.emit('account'); } }
   providers() { return this.remote ? this.remote.providers() : Promise.resolve({ password: false }); }
-  /** Can this viewer play `video` right now?  'ok' | 'login' (sign in first) | 'plan' (signed in but no active Plus plan) | 'unavailable' (no accounts in local mode) */
-  gateFor(video) {
-    if (video?.access !== 'premium') return 'ok';
+  /** Can this viewer play `video` right now? Premium access may come from its parent series. */
+  gateFor(video, catalog) {
+    if (video?.access !== 'premium' && catalog?.show?.(video?.showId)?.access !== 'premium') return 'ok';
     if (!this.supportsAuth) return 'unavailable';
     if (!this.account) return 'login';
     return this.isPremium ? 'ok' : 'plan';

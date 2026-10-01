@@ -20,7 +20,7 @@ components:
     Profile: { type: object, properties: { id: { type: string }, name: { type: string }, color: { type: integer } } }
     Auth:
       type: object
-      properties: { token: { type: string }, user: { $ref: '#/components/schemas/User' }, profiles: { type: array, items: { $ref: '#/components/schemas/Profile' } } }
+      properties: { token: { type: string }, user: { $ref: '#/components/schemas/User' }, profiles: { type: array, items: { $ref: '#/components/schemas/Profile' } }, verificationEmailSent: { type: boolean, description: 'Signup only; false means the account exists but the confirmation email was not delivered.' } }
     Library:
       type: object
       properties:
@@ -36,13 +36,13 @@ security: [ { bearer: [] } ]
 paths:
   /health: { get: { security: [], summary: 'Liveness + service discovery (used by the app to detect API mode). Body includes db: up|down.', responses: { '200': { description: OK } } } }
   /health/ready: { get: { security: [], summary: 'Readiness probe — 503 when MySQL is unreachable.', responses: { '200': { description: Ready }, '503': { description: Database down } } } }
-  /studio: { get: { security: [], summary: 'About / team / services / contact details (edited in the admin console)', responses: { '200': { description: studio.json } } } }
-  /catalog: { get: { security: [], summary: Full catalog (shows, videos, upcoming, gallery), responses: { '200': { description: catalog.json } } } }
+  /studio: { get: { security: [], summary: 'About / team / services / contact details plus homepage poster settings (edited in the admin console)', responses: { '200': { description: studio.json } } } }
+  /catalog: { get: { security: [], summary: Full catalog (shows, videos, upcoming, gallery, homePosters), responses: { '200': { description: catalog.json with homepage banner artwork settings } } } }
   /plans: { get: { security: [], summary: 'Plans plus the active payment provider', responses: { '200': { description: '{ plans: [...], payments: { provider: razorpay|mock|none, keyId? }, billing: { gst: bool, coupons: bool, states: [{code,name}] } }' } } } }
   /auth/signup:
     post:
       security: []
-      summary: Create account (+ first profile). Password 8–128 chars.
+      summary: Create account (+ first profile). Password 8–128 chars. Returns verificationEmailSent=false if the account was created but email delivery failed.
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name, email, password], properties: { name: { type: string }, email: { type: string }, password: { type: string } } } } } }
       responses: { '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Auth' } } } }, '409': { description: email_taken }, '429': { description: Rate limited } }
   /auth/login:
@@ -67,7 +67,7 @@ paths:
   /videos/{id}/stream:
     post:
       security: [ {}, { bearer: [] } ]
-      summary: 'Playable URL for a video stored in Cloudflare R2. Premium videos need a signed-in user (Bearer); free ones are public.'
+      summary: 'Playable URL for an R2-stored video. Premium titles require a signed-in user with an active plan; Free titles are public.'
       parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
       responses:
         '200': { description: '{ type: mp4|hls, url, expiresAt }', content: { application/json: { schema: { type: object, properties: { type: { type: string, enum: [mp4, hls] }, url: { type: string }, expiresAt: { type: string, format: date-time } } } } } }
@@ -183,6 +183,8 @@ paths:
     get: { summary: 'Admin: dashboard numbers (revenue, subscribers, sign-ups, recent activity)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
   /admin/health:
     get: { summary: 'Admin: setup checklist (GSTIN, SMTP, R2, Razorpay, secrets…)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/email/test:
+    post: { summary: 'Admin: send a real SMTP diagnostic message to the signed-in administrator', security: [ { admin: [] } ], responses: { '200': { description: '{ sent: true, to }' }, '400': { description: administrator session required (ADMIN_TOKEN cannot receive mail) }, '503': { description: email_not_configured | email_send_failed } } }
   /admin/users:
     get: { summary: 'Admin: users, ?q=&filter=all|paid|free|expiring|expired|admin|disabled&limit=&offset=', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
   /admin/users/{id}:
@@ -202,6 +204,16 @@ paths:
     get: { summary: 'Admin: audit log, newest first, ?action=&before=<id>&limit=', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
   /admin/catalog:
     get: { summary: 'Admin: the whole catalog including the studio profile', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/catalog/youtube/preview:
+    post: { summary: 'Admin: use YouTube Data API v3 to scan every page of the channel uploads playlist, then compare all upload IDs with the catalog. Requires YOUTUBE_API_KEY; saves a short-lived server-side snapshot. Public page loads never fetch YouTube.', security: [ { admin: [] } ], responses: { '200': { description: '{ items: [{ id, title, publishedAt, thumbnail, url, suggestedKind, alreadyImported }], total, missing, previewToken, checkedAt, expiresAt }' }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '503': { description: youtube_not_configured | youtube_unavailable } } }
+  /admin/catalog/youtube/import:
+    post: { summary: 'Admin: import 1–200 selected preview items { previewToken, batchId?, selections: [{ id, kind: reel|clip }] }. Does not fetch YouTube again; imports are free, unrated and have unknown duration. Multiple chunk requests can share batchId.', security: [ { admin: [] } ], responses: { '200': { description: '{ batchId, added, skipped, ids, checkedAt }' }, '400': { description: invalid_youtube_preview | invalid selections }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '409': { description: youtube_preview_expired | youtube_preview_changed } } }
+  /admin/catalog/youtube/imports:
+    get: { summary: 'Admin: last import batch and active imports made today (Asia/Kolkata); database only, does not fetch YouTube.', security: [ { admin: [] } ], responses: { '200': { description: '{ last: { batchId, importedAt, videoIds } | null, todayVideoIds }' }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/catalog/youtube/remove-imports:
+    post: { summary: 'Admin: remove tracked YouTube videos from { scope: last|today }; does not fetch YouTube.', security: [ { admin: [] } ], responses: { '200': { description: '{ scope, removed, skipped }' }, '400': { description: invalid scope }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/catalog/videos/bulk:
+    post: { summary: 'Admin: bulk hide, restore or delete 1–500 selected videos { action: hide|show|delete, ids: [...] }. Hiding removes videos from public catalogs and deletes viewer-list/progress references only when action=delete.', security: [ { admin: [] } ], responses: { '200': { description: '{ action, affected, skipped, ids }' }, '400': { description: invalid IDs or action }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
   /admin/catalog/{type}:
     post: { summary: 'Admin: add an item; type = shows|videos|upcoming|gallery. Validated like `npm run validate:catalog`', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '400': { description: validation }, '409': { description: exists } } }
   /admin/catalog/{type}/order:
@@ -212,9 +224,9 @@ paths:
   /admin/studio:
     put: { summary: 'Admin: replace the studio profile (About / Services / Contact)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '400': { description: validation } } }
   /admin/uploads/image:
-    post: { summary: 'Admin: upload an image (raw body, png/jpeg/webp/gif, ≤ 4 MB) → { path: uploads/<hash>.<ext> }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '413': { description: too large }, '400': { description: unsupported_image } } }
+    post: { summary: 'Admin: upload an image (raw body, png/jpeg/webp/gif, ≤ 10 MB) → { path: uploads/<hash>.<ext> }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '413': { description: too large }, '400': { description: unsupported_image } } }
   /admin/uploads/video:
-    post: { summary: 'Admin: presigned PUT URL for a premium video in R2 { filename, slug } → { key, uploadUrl, expiresInSeconds }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '503': { description: storage_not_configured } } }
+    post: { summary: 'Admin: presigned PUT URL for a video file in private R2 storage { filename, slug } → { key, uploadUrl, expiresInSeconds }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '503': { description: storage_not_configured } } }
 
   # ---- v2.6: accounts, viewing, engagement (all additive) ----
   /auth/apple: { post: { security: [], tags: [auth], summary: 'Sign in with Apple. Body { identityToken, name? } (name is only sent by Apple the first time). Same response as /auth/google.', requestBody: { required: true, content: { application/json: { schema: { type: object, required: [identityToken], properties: { identityToken: { type: string }, name: { type: string } } } } } }, responses: { '200': { description: 'Auth' }, '400': { description: 'Invalid token' }, '501': { description: 'Apple sign-in is not configured' } } } }

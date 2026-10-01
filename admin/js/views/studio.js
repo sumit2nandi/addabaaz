@@ -50,6 +50,7 @@ export default async function studio(root, _p, ctx) {
     const social = Object.fromEntries(['facebook', 'instagram', 'youtube'].map((k) => [k, v(k)]).filter(([, x]) => x));
     const body = {
       studio: { name: v('studioName'), tagline: v('tagline'), address: lines(form.address.value), mapsUrl: v('mapsUrl'), email: v('email'), phones: lines(form.phones.value), whatsapp: v('whatsapp'), social },
+      homePosters: d.homePosters || {},
       missionEn: lines(form.missionEn.value), missionBn: lines(form.missionBn.value),
       services: services.filter((s) => s.title || s.text).map((s) => ({ ...s })), team: team.filter((t) => t.name).map((t) => ({ ...t })),
     };

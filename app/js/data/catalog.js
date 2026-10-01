@@ -12,9 +12,10 @@ export class Catalog {
   constructor(data) {
     this.data = data;
     this.shows = data.shows || [];
-    this.videos = data.videos || [];
+    this.videos = (data.videos || []).filter((v) => !v.hidden);
     this.upcoming = data.upcoming || [];
     this.gallery = data.gallery || [];
+    this.homePosters = data.homePosters || {};
     this._show = new Map(this.shows.map((s) => [s.id, s]));
     this._video = new Map(this.videos.map((v) => [v.id, v]));
     this._soon = new Map(this.upcoming.map((u) => [u.id, u]));
@@ -37,6 +38,15 @@ export class Catalog {
   show(id) { return this._show.get(id); }
   video(id) { return this._video.get(id); }
   soon(id) { return this._soon.get(id); }
+  /** Old catalog rows without a category keep the former single featured title until an admin edits them. */
+  upcomingCategory(item) {
+    return item?.category || (item?.id === this.homePosters.releasingThisMonthId ? 'releasing-this-month' : 'coming-soon');
+  }
+  upcomingByCategory(category) { return this.upcoming.filter((item) => this.upcomingCategory(item) === category); }
+  /** Premium access is inherited from the parent series so every episode is gated consistently. */
+  isPremium(video) {
+    return video?.access === 'premium' || (video?.showId && this._show.get(video.showId)?.access === 'premium') || false;
+  }
   get genres() { return this._genres; }
 
   /** Episodes of a show in watch order (EP 1 → n). */
@@ -53,6 +63,11 @@ export class Catalog {
   allEpisodes() { return this.videos.filter((v) => v.kind === 'episode'); }
   latestEpisodes(n = 12) {
     return [...this.allEpisodes()].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)).slice(0, n);
+  }
+  /** Latest episodes plus standalone landscape videos imported from YouTube (Shorts/Reels are listed separately). */
+  latestVideos(n = 12) {
+    return this.videos.filter((v) => v.kind === 'episode' || (v.kind === 'clip' && v.source?.type === 'youtube'))
+      .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)).slice(0, n);
   }
   latestEpisode(showId) {
     return [...this.episodes(showId)].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))[0];

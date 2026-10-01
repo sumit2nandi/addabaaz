@@ -6,7 +6,7 @@ Bengali originals, stand-up comedy, web series and reels from ADDABAAZ (Kolkata)
 |---|---|
 | **Web app** | Installable PWA, offline app-shell, no build step (vanilla ES modules) |
 | **Accounts & sync** | Optional REST API (Node/Express + **MySQL**) — email, **Google** and **Facebook** sign-in, profiles, My List, Continue Watching, reminders |
-| **Premium video** | Files in a private **Cloudflare R2** bucket, served by signed URLs to signed-in viewers **with an active paid plan** (Razorpay, prepaid); everything else stays open |
+| **Premium access** | Any show or video can be gated to signed-in viewers with an active paid plan (Razorpay, prepaid). Private **Cloudflare R2** is optional and protects the media file itself with signed URLs; public/external sources may remain reachable outside the app |
 | **Works without a backend** | Falls back to on-device "local mode", so static hosting (GitHub Pages, Netlify…) still works |
 | **Android / iOS** | [Capacitor](https://capacitorjs.com) wrapper in [`mobile/`](mobile) around the same web bundle |
 

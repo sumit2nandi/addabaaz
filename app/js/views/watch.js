@@ -8,7 +8,7 @@ import { html, $, fmtDate, fmtViews, fmtDuration, timeAgo, shareOrCopy } from '.
 import { icon } from '../icons.js';
 import { createPlayer, loadYouTube } from '../players/index.js';
 import { go } from '../router.js';
-import { listBtn, videoCard, rail, enhanceRails, metaLine, toast, img } from '../ui/components.js';
+import { listBtn, videoCard, rail, enhanceRails, metaLine, toast, img, premiumMark } from '../ui/components.js';
 import { epRow } from './show.js';
 import { shareUrl, isNative } from '../platform.js';
 
@@ -22,11 +22,11 @@ export default async function watch(ctx) {
   const show = cat.show(v.showId), soon = !show && cat.soon(v.showId);
   const next = cat.nextEpisode(v);
   const title = cat.displayTitle(v);
+  // Can this viewer play it? 'ok' | 'login' | 'plan' | 'unavailable' (premium in static mode).
+  const gate = u.gateFor(v, cat);                   // Video access includes any Premium parent series.
   // Fetch the YouTube IFrame API while the page renders — script + handshake is the slowest part of playback
   // starting on mobile networks, so overlap it with everything else rather than starting it inside the player.
-  if (v.source.type === 'youtube') loadYouTube().catch(() => {});
-  // Can this viewer play it? 'ok' | 'login' | 'plan' | 'unavailable' (premium in static mode).
-  const gate = u.gateFor(v);                       // 'ok' | 'login' | 'plan' | 'unavailable'
+  if (v.source.type === 'youtube' && gate === 'ok') loadYouTube().catch(() => {});
   const here = encodeURIComponent('/watch/' + v.id);
   ctx.setTitle(title);
 
@@ -43,11 +43,12 @@ export default async function watch(ctx) {
           <div class="player-slot" id="playerSlot"></div>
           <div class="player-overlay" id="playerMsg" hidden></div>
           <div class="next-up" id="nextUp" hidden></div>
+          ${cat.isPremium(v) ? premiumMark({ cls: 'premium-mark-player' }) : ''}
         </div>
         <div class="watch-info">
           <div class="crumbs">${show ? html`<a href="#/show/${show.id}">${icon('left', { size: 16 })} ${show.titleEn || show.title}</a>` : soon ? html`<a href="#/soon/${soon.id}">${icon('left', { size: 16 })} ${soon.titleEn || soon.title}</a>` : html`<a href="#/">${icon('left', { size: 16 })} Home</a>`}</div>
           <h1 class="watch-title">${title}</h1>
-          ${metaLine([cat.label(v), fmtDate(v.publishedAt), `${fmtViews(v.views)} views`, fmtDuration(v.duration)])}
+          ${metaLine([cat.label(v), fmtDate(v.publishedAt), `${fmtViews(v.views)} views`, v.duration > 0 ? fmtDuration(v.duration) : ''])}
           <div class="watch-actions">
             ${show ? listBtn('show', show.id, { label: 'Add show to My List', cls: 'btn btn-ghost' }) : ''}
             ${listBtn('video', v.id, { label: 'Save video', cls: 'btn btn-ghost' })}
@@ -119,7 +120,7 @@ export default async function watch(ctx) {
     $('#retry', msg).onclick = () => { msg.hidden = true; startPlayer(); };
   };
   /* Screens-at-once seat (premium only) and first-party play statistics (plays and watch time, no personal data). */
-  const premium = v.access === 'premium', api = u.remote;
+  const premium = cat.isPremium(v), api = u.remote;
   let beat = null, tick = null, playedAt = 0, started = false;
   const flushWatch = () => { if (playedAt && api) { const secs = Math.round((Date.now() - playedAt) / 1000); playedAt = Date.now(); if (secs > 0) api.playEvent(v.id, 'progress', secs); } };
   const onPlaying = () => {

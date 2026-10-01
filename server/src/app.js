@@ -29,6 +29,7 @@ import { createBilling, billingConfigFromEnv } from './billing.js';
 import { STATES } from './gst.js';
 import { HttpError, bad, wrap, rateLimit } from './http.js';
 import { createCatalogStore } from './catalog.js';
+import { createYouTubeFeed } from './youtube-feed.js';
 import { createSeo } from './seo.js';
 import compression from 'compression';
 import { createAdminRouter } from './admin.js';
@@ -58,10 +59,11 @@ export function createApp({
   sessionHours = Number(process.env.ADMIN_SESSION_HOURS) || 12, // admin sessions are shorter than viewer sessions
   uploadDir = process.env.UPLOAD_DIR || path.join(ROOT, 'uploads'),   // admin image uploads (mount a persistent volume in production)
   contactWebhook = process.env.CONTACT_WEBHOOK_URL || '',
+  youtubeFeed = createYouTubeFeed(),                         // fetched only after an administrator explicitly previews uploads
   rate = true,
   catalogPath = path.join(ROOT, 'data/catalog.json'),
   studioPath = path.join(path.dirname(catalogPath), 'studio.json'),
-  r2 = createR2(),                                            // Cloudflare R2 (private bucket for premium video)
+  r2 = createR2(),                                            // Cloudflare R2 (private storage for video files)
   social = socialFromEnv(),                                   // { config, verifiers: { google?, facebook? } }
   publicApiUrl = process.env.PUBLIC_API_URL || '',            // absolute base for HLS URLs when behind a proxy
   streamTtl = Number(process.env.STREAM_URL_TTL) || 6 * 3600, // seconds a signed video URL stays valid
@@ -168,7 +170,7 @@ export function createApp({
   // Optional engagement/security features (password reset, PIN, ratings, comments, push, ...) live in features.js.
   const features = createFeatures({ db, secret, mailer, push, catalog, siteUrl: billing.config.siteUrl, rate, publicUser, notDisabled, userFromRequest: (req) => userFromRequest(req), plans: PLANS, options: { supportEmail: billing.config.supportEmail, ...featureOptions } });
 
-  // Create an account with e-mail + password. Validates input, creates the user and first profile, sends a verification e-mail (best effort) and returns a session token.
+  // Create an account with e-mail + password. A verification-mail failure must be visible to the user (the account is still created so they can sign in and retry).
   api.post('/auth/signup', authLimit, wrap(async (req, res) => {
     const { name = '', email = '', password = '' } = req.body || {};
     if (typeof email !== 'string' || !EMAIL.test(email.trim()) || email.length > 254) throw bad('Please enter a valid email address.', 'invalid_email');
@@ -184,8 +186,15 @@ export function createApp({
       const ex = await db.users.byEmail(user.email);
       throw new HttpError(409, 'email_taken', ex && !ex.passwordHash ? 'This email is already registered — use “Continue with Google/Facebook” to sign in.' : 'An account with this email already exists.');
     }
-    features.sendVerification({ ...user, emailVerifiedAt: null }).catch((e) => console.warn('[auth] verification email failed:', e.message));
-    res.status(201).json({ token: signToken(user.id, secret), user: publicUser(user), profiles: [profile] });
+    let verificationEmailSent = false;
+    try {
+      await features.sendVerification({ ...user, emailVerifiedAt: null }, { strict: true });
+      verificationEmailSent = mailer.provider === 'smtp';
+    } catch (e) {
+      // Keep the newly created account usable, but don't silently pretend its confirmation mail went out.
+      console.warn(`[auth] verification email failed${e.code ? ` (${e.code})` : ''}:`, e.message);
+    }
+    res.status(201).json({ token: signToken(user.id, secret), user: publicUser(user), profiles: [profile], verificationEmailSent });
   }));
   // Log in with e-mail + password. Returns a session token.
   api.post('/auth/login', authLimit, wrap(async (req, res) => {
@@ -243,8 +252,8 @@ export function createApp({
   api.post('/auth/apple', authLimit, wrap(async (req, res) => res.json(await socialSignIn('apple', { identityToken: req.body?.identityToken, name: req.body?.name }))));
   features.public(api);           // password reset, email verification, analytics, public ratings/comments
 
-  /* ---------- premium video (Cloudflare R2) ---------- */
-  // ---- Premium video (Cloudflare R2) ----
+  /* ---------- Cloudflare R2 video streaming ---------- */
+  // ---- Cloudflare R2 video streaming ----
   // Reads the optional `Authorization: Bearer` token without failing when it is missing (free videos need no login).
   const userFromRequest = async (req) => {
     const h = req.headers.authorization || '';
@@ -253,6 +262,12 @@ export function createApp({
   };
   // Small helpers: catalog lookup, the public base URL for links we hand out, and mp4-vs-HLS detection.
   const findVideo = (id) => catalog.video(id);
+  const isPremiumVideo = async (v) => {
+    if (v.access === 'premium') return true;
+    if (!v.showId) return false;
+    const { catalog: snapshot } = await catalog.get();
+    return snapshot.shows.some((s) => s.id === v.showId && s.access === 'premium');
+  };
   const originOf = (req) => (publicApiUrl || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
   const r2Format = (src) => src.format || (/\.m3u8$/i.test(src.key) ? 'hls' : 'mp4');
   /** Returns a playable URL for a video hosted in R2. Premium titles need a signed-in account with an active paid plan. */
@@ -261,7 +276,7 @@ export function createApp({
     if (!v) throw new HttpError(404, 'not_found', 'Unknown video.');
     if (v.source?.type !== 'r2') throw new HttpError(400, 'not_hosted', 'This video isn’t available right now.');
     // Premium gate: must be signed in (401), have a paid plan (402) and be within the simultaneous-screens limit (429). Free videos skip all of this.
-    if (v.access === 'premium') {
+    if (await isPremiumVideo(v)) {
       const user = await userFromRequest(req);
       if (!user) throw new HttpError(401, 'login_required', 'Please sign in to watch premium videos.');
       if ((await db.subscriptions.get(user.id)).planId === 'free') throw new HttpError(402, 'subscription_required', 'Subscribe to ADDABAAZ Plus to watch this video.');   // premium = signed in AND paid
@@ -333,7 +348,7 @@ export function createApp({
 
   /* ---------- admin console API (admin accounts, or ADMIN_TOKEN for scripts) — see server/src/admin.js ---------- */
   // Mount the admin console API. It does its own authentication (admin role or ADMIN_TOKEN).
-  api.use('/admin', createAdminRouter({ db, billing, catalog, r2, payments, mailer, push, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate }));
+  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate }));
 
   /* ---------- authenticated ---------- */
   // AUTH MIDDLEWARE: every route registered after this line requires a valid session token whose session version still matches.
@@ -527,7 +542,7 @@ export function createApp({
     app.use('/media', guardImages, express.static(path.join(ROOT, 'media'), opts(7 * 86_400_000)));
     app.use('/uploads', guardImages, express.static(uploadDir, { maxAge: '365d', immutable: true, index: false, dotfiles: 'ignore' }));   // admin-uploaded images (content-hash names)
     // The admin console: its own page + scripts, never cached, locked down with a strict CSP (no inline script, no framing).
-    const adminHeaders = (_q, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'self'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" }); next(); };
+    const adminHeaders = (_q, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'self'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' https://accounts.google.com https://connect.facebook.net https://appleid.cdn-apple.com; connect-src 'self' https:; frame-src 'self' https://accounts.google.com https://www.facebook.com https://appleid.apple.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" }); next(); };
     // Admin console page + its scripts.
     app.get(['/admin', '/admin/'], adminHeaders, (_q, res) => res.sendFile(path.join(ROOT, 'admin/index.html')));
     app.use('/admin', adminHeaders, express.static(path.join(ROOT, 'admin'), { index: false, dotfiles: 'ignore', etag: true }));
