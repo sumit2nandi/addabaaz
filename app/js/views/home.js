@@ -68,10 +68,13 @@ function mountHero(root, ctx) {
 // Two-row Coming Soon section: the legacy featured Durga banner above the current upcoming-title carousel.
 function comingSoonSection(cat) {
   if (!cat.upcoming.length) return html``;
+  const posters = cat.homePosters || {};
+  const desktopPoster = posters.releasingThisMonth || 'media/upcoming/durga-lg.webp';
+  const mobilePoster = posters.releasingThisMonthMobile || 'media/upcoming/durga-sm.webp';
   return html`<section class="rail r-poster home-coming-soon" aria-label="Coming Soon">
     <div class="rail-head"><div><h2>Coming Soon</h2><p class="rail-sub">New originals from ADDABAAZ</p></div></div>
     <a class="home-coming-soon-feature" href="#/upcoming" aria-label="Releasing this month — browse all upcoming releases">
-      <picture><source media="(max-width: 699px)" srcset="media/upcoming/durga-sm.webp">${img('media/upcoming/durga-lg.webp', 'ADDABAAZ original releasing this month')}</picture>
+      <picture><source media="(max-width: 699px)" srcset="${mobilePoster}">${img(desktopPoster, 'ADDABAAZ original releasing this month')}</picture>
       <span class="home-coming-soon-feature-shade" aria-hidden="true"></span>
       <span class="home-coming-soon-feature-badge">Releasing This Month</span>
     </a>
@@ -102,12 +105,12 @@ export default async function home(ctx) {
       ${rail({ title: 'Continue Watching', items: cw.map(({ video }) => videoCard(video, { showDuration: false })), cls: 'r-video' })}
       ${rec ? rail({ title: `Because you watched ${rec.because.titleEn || rec.because.title}`, items: rec.items.map((x) => showCard(x)), cls: 'r-poster' }) : ''}
       ${rail({ title: 'My List', items: mine, href: '#/list', cls: 'r-poster' })}
+      ${comingSoonSection(cat)}
       ${rail({ title: 'Latest Reels', subtitle: 'Bite-sized ADDABAAZ', items: cat.reels().slice(0, N + 6).map((v) => reelCard(v, { showDuration: false })), href: '#/reels', linkLabel: 'Watch reels', cls: 'r-reel' })}
       ${rail({ title: 'Latest Episodes & Videos', subtitle: 'Recent episodes and landscape uploads from ADDABAAZ', items: cat.latestVideos(N).map((v) => videoCard(v, { showDuration: false })), cls: 'r-video' })}
       ${rail({ title: 'Top 10 Episodes', subtitle: 'Most watched on ADDABAAZ', items: cat.trending(10, demoteMature ? { matureCap: 2 } : {}).map((v, i) => videoCard(v, { rank: i + 1, showDuration: false })), cls: 'r-top' })}
       ${rail({ title: 'Shows', items: cat.shows.map((s) => showCard(s)), href: '#/shows', linkLabel: 'Browse all', cls: 'r-poster' })}
       ${cat.shows.map((s) => rail({ title: s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title, items: cat.episodes(s.id).slice().reverse().map((v) => videoCard(v, { showName: false, showDuration: false })), href: `#/show/${s.id}`, linkLabel: 'Open show', cls: 'r-video' }))}
-      ${comingSoonSection(cat)}
       ${rail({ title: 'Behind the Scenes', items: cat.gallery.slice(0, N).map(galleryCard), href: '#/gallery', cls: 'r-poster' })}
     </div>
     <section class="cta-band">

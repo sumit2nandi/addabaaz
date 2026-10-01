@@ -53,9 +53,14 @@ export function adminDb({ q, tx, self, iso }) {
     async put(key, id, doc, { create = false } = {}) {
       const type = DB_TYPE[key];
       return tx(async (t) => {
-        // New items go to the end of their list; existing ones are replaced in place.
+        // New coming-soon posters lead their row; other new items go to the end. Existing items stay in place.
         if (create) {
-          const [{ next }] = await t.query('SELECT COALESCE(MAX(position), -1) + 1 AS next FROM catalog_items WHERE type = ?', [type]);
+          let next = 0;
+          if (key === 'upcoming') await t.query('UPDATE catalog_items SET position = position + 1 WHERE type = ?', [type]);
+          else {
+            const [{ next: position }] = await t.query('SELECT COALESCE(MAX(position), -1) + 1 AS next FROM catalog_items WHERE type = ?', [type]);
+            next = position;
+          }
           await t.query('INSERT INTO catalog_items (type, id, position, doc) VALUES (?,?,?,?)', [type, id, next, JSON.stringify(doc)]);
         } else {
           const res = await t.query('UPDATE catalog_items SET doc = ?, updated_at = UTC_TIMESTAMP(3) WHERE type = ? AND id = ?', [JSON.stringify(doc), type, id]);

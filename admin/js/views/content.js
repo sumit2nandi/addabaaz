@@ -10,6 +10,7 @@ const KINDS = [['episode', 'Episode'], ['reel', 'Reel'], ['clip', 'Clip'], ['tra
 const thumb = (v) => v.thumbnail ? imgSrc(v.thumbnail) : v.source?.type === 'youtube' ? `https://i.ytimg.com/vi/${v.source.id}/default.jpg` : '';
 // Rows per page in lists.
 const PAGE = 25;
+const HOME_POSTER_DEFAULTS = { releasingThisMonth: 'media/upcoming/durga-lg.webp', releasingThisMonthMobile: 'media/upcoming/durga-sm.webp' };
 
 // Draws the chosen section's list plus its add/edit dialogs. Saving calls the admin API and reloads the list.
 export default async function content(root, [section], ctx) {
@@ -402,11 +403,27 @@ export default async function content(root, [section], ctx) {
       extra: (form) => { if (create) { let t = false; form.id.addEventListener('input', () => { t = true; }); form.titleEn.addEventListener('input', () => { if (!t) form.id.value = slug(form.titleEn.value); }); } },
       onSubmit: async (v) => { create ? await api.post('/catalog/upcoming', v) : await api.put(`/catalog/upcoming/${encodeURIComponent(u.id)}`, v); toast('Saved'); await reload(); } });
   };
+  const editReleaseBanner = () => {
+    formModal({
+      title: 'Edit “Releasing This Month” poster', wide: true,
+      note: 'This artwork is the homepage banner above the Coming Soon carousel. Posters for the carousel are edited on each title below.',
+      fields: [
+        { k: 'releasingThisMonth', label: 'Desktop poster', type: 'image', maxWidth: 1600, wide: true, help: 'Wide artwork recommended.' },
+        { k: 'releasingThisMonthMobile', label: 'Mobile poster', type: 'image', maxWidth: 1000, wide: true, help: 'Optional separate crop for phones; if cleared, the bundled mobile artwork is restored.' },
+      ],
+      values: { ...HOME_POSTER_DEFAULTS, ...(data.homePosters || {}) },
+      onSubmit: async (v) => {
+        await api.put('/studio', { ...data.studio, homePosters: v });
+        toast('Releasing This Month poster saved'); await reload();
+      },
+    });
+  };
   function drawUpcoming() {
-    root.innerHTML = html`${pageHead('Coming soon', note, html`<button class="btn primary" id="new">${icon('plus', 16)} New title</button>`)}
+    root.innerHTML = html`${pageHead('Coming soon', 'Edit the homepage banner here, and edit each carousel poster with its title below.', html`<button class="btn" id="editReleaseBanner" title="Edit the Releasing This Month poster">${icon('image', 16)} Edit banner</button><button class="btn primary" id="new">${icon('plus', 16)} New title</button>`)}
       <div class="card flush">${data.upcoming.length ? html`<table class="tbl"><thead><tr><th></th><th>Title</th><th>Type</th><th class="end">Order</th><th></th></tr></thead><tbody>${data.upcoming.map((u, i) => html`<tr><td class="thumb"><img src="${imgSrc(u.poster)}" alt="" loading="lazy"></td><td><strong>${u.titleEn || u.title}</strong>${u.titleEn ? html`<br><small class="muted bn">${u.title}</small>` : ''}${u.note ? html`<br><small class="muted">${u.note}</small>` : ''}</td><td>${u.type}</td><td class="end nowrap">${orderBtns(u.id, i, data.upcoming.length)}</td>
         <td class="end nowrap"><button class="icon-btn" data-edit="${u.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${u.id}" title="Delete">${icon('trash', 16)}</button></td></tr>`)}</tbody></table>` : empty('Nothing announced.')}</div>`.s;
     $('#new').onclick = () => editUp(null);
+    $('#editReleaseBanner').onclick = editReleaseBanner;
     $$('[data-edit]', root).forEach((b) => b.onclick = () => editUp(data.upcoming.find((u) => u.id === b.dataset.edit)));
     $$('[data-del]', root).forEach((b) => b.onclick = async () => { const u = data.upcoming.find((x) => x.id === b.dataset.del); if (await confirmBox({ title: `Delete “${u.titleEn || u.title}”?`, text: 'Viewers’ reminders and list entries for it are removed too.', confirm: 'Delete', danger: true })) mutate(() => api.del(`/catalog/upcoming/${encodeURIComponent(u.id)}`), 'Deleted'); });
     wireMoves(data.upcoming);

@@ -222,6 +222,9 @@ test('catalog CRUD: validated writes show up in the public API immediately; ids 
 test('catalog: upcoming, gallery, reordering and the studio profile', async () => {
   const up = { id: 'soon-1', title: 'Soon', poster: seed.upcoming[0].poster, genres: ['Comedy'] };
   assert.equal((await A('POST', '/catalog/upcoming', up)).status, 201);
+  const afterUpcomingCreate = (await call('GET', '/catalog')).body;
+  assert.equal(afterUpcomingCreate.upcoming[0].id, 'soon-1', 'the newest admin-added poster leads the coming-soon rows');
+  assert.deepEqual(afterUpcomingCreate.homePosters, JSON.parse(fs.readFileSync(new URL('data/studio.json', ROOT), 'utf8')).homePosters);
   const g = { id: 'ph-1', group: 'Set', image: seed.gallery[0].image, caption: '' };
   assert.equal((await A('POST', '/catalog/gallery', g)).status, 201);
   assert.equal((await A('POST', '/catalog/gallery', { ...g, id: 'ph-2', image: 'https://cdn.example.com/x.jpg' })).status, 201);
@@ -233,8 +236,11 @@ test('catalog: upcoming, gallery, reordering and the studio profile', async () =
   // reminders for a removed upcoming title go too
   const st = (await A('GET', '/catalog')).body.studio;
   assert.equal((await A('PUT', '/studio', { ...st, studio: { ...st.studio, email: 'not-an-email' } })).status, 400);
-  const ok = await A('PUT', '/studio', { ...st, studio: { ...st.studio, tagline: 'A new tagline', phones: ['+91 1', '+91 2'] }, team: st.team.slice(0, 2) }); assert.equal(ok.status, 200);
-  const pub = (await call('GET', '/studio')).body; assert.equal(pub.studio.tagline, 'A new tagline'); assert.equal(pub.team.length, 2);
+  const bannerPosters = { releasingThisMonth: 'media/upcoming/poster-4-lg.webp', releasingThisMonthMobile: 'media/upcoming/poster-4-sm.webp' };
+  const bannerSave = await A('PUT', '/studio', { ...st, homePosters: bannerPosters }); assert.equal(bannerSave.status, 200);
+  assert.deepEqual((await call('GET', '/catalog')).body.homePosters, bannerPosters, 'homepage banner artwork is exposed from the editable studio settings');
+  const ok = await A('PUT', '/studio', { ...st, homePosters: bannerPosters, studio: { ...st.studio, tagline: 'A new tagline', phones: ['+91 1', '+91 2'] }, team: st.team.slice(0, 2) }); assert.equal(ok.status, 200);
+  const pub = (await call('GET', '/studio')).body; assert.equal(pub.studio.tagline, 'A new tagline'); assert.equal(pub.team.length, 2); assert.deepEqual(pub.homePosters, bannerPosters);
   await A('PUT', '/studio', st);
   assert.equal(((await audit('catalog.')).length) >= 8, true);
 });

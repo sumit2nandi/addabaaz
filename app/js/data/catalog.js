@@ -15,6 +15,7 @@ export class Catalog {
     this.videos = (data.videos || []).filter((v) => !v.hidden);
     this.upcoming = data.upcoming || [];
     this.gallery = data.gallery || [];
+    this.homePosters = data.homePosters || {};
     this._show = new Map(this.shows.map((s) => [s.id, s]));
     this._video = new Map(this.videos.map((v) => [v.id, v]));
     this._soon = new Map(this.upcoming.map((u) => [u.id, u]));

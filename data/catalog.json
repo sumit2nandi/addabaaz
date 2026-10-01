@@ -1,6 +1,10 @@
 {
  "schema": 1,
  "updatedAt": "2026-09-29",
+ "homePosters": {
+  "releasingThisMonth": "media/upcoming/durga-lg.webp",
+  "releasingThisMonthMobile": "media/upcoming/durga-sm.webp"
+ },
  "shows": [
   {
    "id": "shahid",

@@ -12,15 +12,17 @@ export function createCatalogStore({ db, catalogPath, studioPath = null, ttl = 3
 
   // Seed files are optional; a missing or broken file is treated as empty.
   const readJson = (p) => { try { return p && fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : null; } catch (e) { console.error(`[catalog] cannot read ${p}: ${e.message}`); return null; } };
+  const seedHomePosters = readJson(studioPath)?.homePosters || readJson(catalogPath)?.homePosters || {};
   // Import data/catalog.json into MySQL once (only the first server to try wins; the rest skip).
   const ensureSeeded = () => seeding ||= (async () => {
     const data = readJson(catalogPath);
     if (data && await db.catalog.seed(data, readJson(studioPath))) console.log(`[catalog] imported ${data.shows?.length || 0} shows and ${data.videos?.length || 0} videos from ${catalogPath} into MySQL`);
   })().catch((e) => { seeding = null; throw e; });
 
-  // Adds fast lookup tables (ids, videos by id) to a catalog snapshot.
+  // Adds fast lookup tables and exposes the editable homepage banner artwork in the public catalog.
   const index = (catalog, studio, v) => ({
-    catalog, studio, version: v,
+    catalog: { ...catalog, homePosters: { ...seedHomePosters, ...(catalog.homePosters || {}), ...(studio?.homePosters || {}) } },
+    studio, version: v,
     showIds: new Set(catalog.shows.map((s) => s.id)), upcomingIds: new Set(catalog.upcoming.map((u) => u.id)),
     videoById: new Map(catalog.videos.map((x) => [x.id, x])),
   });

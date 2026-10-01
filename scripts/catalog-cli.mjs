@@ -22,12 +22,14 @@ try {
   if (cmd === 'export') {
     const { catalog, studio } = await db.catalog.snapshot();
     if (!catalog.shows.length && !catalog.videos.length) { console.error('The database catalog is empty — nothing exported.'); process.exit(1); }
-    fs.writeFileSync(cat, JSON.stringify(catalog, null, 1) + '\n'); if (studio) fs.writeFileSync(stu, JSON.stringify(studio, null, 1) + '\n');
+    const out = { ...catalog, homePosters: studio?.homePosters || catalog.homePosters || {} };
+    fs.writeFileSync(cat, JSON.stringify(out, null, 1) + '\n'); if (studio) fs.writeFileSync(stu, JSON.stringify(studio, null, 1) + '\n');
     console.log(`✔ wrote data/catalog.json (${catalog.shows.length} shows, ${catalog.videos.length} videos, ${catalog.upcoming.length} upcoming, ${catalog.gallery.length} photos) and data/studio.json`);
   // IMPORT: replace the database catalog with the JSON files. Destructive, so it needs --force and the files must pass the same validation the admin console uses.
   } else {
     if (!flags.includes('--force')) { console.error('This REPLACES the catalog in MySQL with the JSON files. Re-run with --force.'); process.exit(1); }
-    const data = JSON.parse(fs.readFileSync(cat, 'utf8')), studio = JSON.parse(fs.readFileSync(stu, 'utf8'));
+    const data = JSON.parse(fs.readFileSync(cat, 'utf8')), studioFile = JSON.parse(fs.readFileSync(stu, 'utf8'));
+    const studio = { ...studioFile, homePosters: data.homePosters || studioFile.homePosters || {} };
     const problems = checkCatalog(data, studio, { fileExists: (rel) => fs.existsSync(path.join(root, rel)) });
     if (problems.length) { console.error('Refusing to import an invalid catalog:\n - ' + problems.join('\n - ')); process.exit(1); }
     await db.pool.query("DELETE FROM catalog_items");

@@ -36,8 +36,8 @@ security: [ { bearer: [] } ]
 paths:
   /health: { get: { security: [], summary: 'Liveness + service discovery (used by the app to detect API mode). Body includes db: up|down.', responses: { '200': { description: OK } } } }
   /health/ready: { get: { security: [], summary: 'Readiness probe — 503 when MySQL is unreachable.', responses: { '200': { description: Ready }, '503': { description: Database down } } } }
-  /studio: { get: { security: [], summary: 'About / team / services / contact details (edited in the admin console)', responses: { '200': { description: studio.json } } } }
-  /catalog: { get: { security: [], summary: Full catalog (shows, videos, upcoming, gallery), responses: { '200': { description: catalog.json } } } }
+  /studio: { get: { security: [], summary: 'About / team / services / contact details plus homepage poster settings (edited in the admin console)', responses: { '200': { description: studio.json } } } }
+  /catalog: { get: { security: [], summary: Full catalog (shows, videos, upcoming, gallery, homePosters), responses: { '200': { description: catalog.json with homepage banner artwork settings } } } }
   /plans: { get: { security: [], summary: 'Plans plus the active payment provider', responses: { '200': { description: '{ plans: [...], payments: { provider: razorpay|mock|none, keyId? }, billing: { gst: bool, coupons: bool, states: [{code,name}] } }' } } } }
   /auth/signup:
     post:

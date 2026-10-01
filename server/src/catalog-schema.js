@@ -1,6 +1,7 @@
 /**
  * The catalog schema in one place: used by the admin API (validates every write), by `npm run validate:catalog` and by the CLI import.
  * validate(type, input, ctx) → { doc, errors }  — `doc` is the normalised document to store (only known fields, trimmed, typed).
+ *   studio.homePosters stores homepage Coming Soon banner artwork; regular carousel posters live on upcoming items.
  *   ctx.fileExists(rel)  optional: check that local image paths (media/…, uploads/…) exist
  *   ctx.showIds / ctx.upcomingIds  optional Sets: check `showId` references
  */
@@ -153,7 +154,7 @@ const URL_OK = /^https?:\/\/[^\s"'<>]+$/;
 function studio(input, ctx) {
   const errors = [];
   const o = input && typeof input === 'object' && !Array.isArray(input) ? input : (errors.push('Studio info must be an object.'), {});
-  for (const k of Object.keys(o)) if (!['studio', 'missionEn', 'missionBn', 'services', 'team'].includes(k)) errors.push(`Unknown field "${k}".`);
+  for (const k of Object.keys(o)) if (!['studio', 'missionEn', 'missionBn', 'services', 'team', 'homePosters'].includes(k)) errors.push(`Unknown field "${k}".`);
   const st = reader(o.studio, ['name', 'tagline', 'address', 'mapsUrl', 'email', 'phones', 'whatsapp', 'social'], 'studio', ctx);
   st.str('name', { req: true, max: 80 }); st.str('tagline', { max: 300 }); st.list('address', { max: 120, maxItems: 8 });
   st.str('mapsUrl', { pattern: URL_OK, msg: 'mapsUrl must be a URL.', max: 500 }); st.str('email', { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, msg: 'email is not valid.', max: 254 });
@@ -161,7 +162,9 @@ function studio(input, ctx) {
   const soc = reader(o.studio?.social || {}, ['facebook', 'instagram', 'youtube', 'x', 'twitter', 'linkedin'], 'social', ctx);
   for (const k of ['facebook', 'instagram', 'youtube', 'x', 'twitter', 'linkedin']) soc.str(k, { pattern: URL_OK, msg: `${k} must be a URL.`, max: 500 });
   st.out.social = soc.out; errors.push(...st.errors, ...soc.errors);
-  const out = { studio: st.out };
+  const home = reader(o.homePosters || {}, ['releasingThisMonth', 'releasingThisMonthMobile'], 'homePosters', ctx);
+  home.img('releasingThisMonth'); home.img('releasingThisMonthMobile'); errors.push(...home.errors);
+  const out = { studio: st.out, homePosters: home.out };
   for (const k of ['missionEn', 'missionBn']) {
     const l = reader({ [k]: o[k] }, [k], k, ctx); l.list(k, { max: 400, maxItems: 12 }); errors.push(...l.errors); out[k] = l.out[k];
   }
