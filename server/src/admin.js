@@ -455,7 +455,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
 
   /* ---------- uploads ---------- */
   // Image upload: the raw file is the request body; the type is detected from its bytes (not the file name).
-  router.post('/uploads/image', express.raw({ type: () => true, limit: '4mb' }), wrap(async (req, res) => {
+  router.post('/uploads/image', express.raw({ type: () => true, limit: '10mb' }), wrap(async (req, res) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the image file as the request body.');
     const saved = saveImage(req.body, uploadDir); if (!saved) throw bad('Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
     await log(req, 'upload.image', saved.path, { bytes: saved.bytes });

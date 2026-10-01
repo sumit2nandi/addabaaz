@@ -224,7 +224,7 @@ paths:
   /admin/studio:
     put: { summary: 'Admin: replace the studio profile (About / Services / Contact)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '400': { description: validation } } }
   /admin/uploads/image:
-    post: { summary: 'Admin: upload an image (raw body, png/jpeg/webp/gif, ≤ 4 MB) → { path: uploads/<hash>.<ext> }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '413': { description: too large }, '400': { description: unsupported_image } } }
+    post: { summary: 'Admin: upload an image (raw body, png/jpeg/webp/gif, ≤ 10 MB) → { path: uploads/<hash>.<ext> }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '413': { description: too large }, '400': { description: unsupported_image } } }
   /admin/uploads/video:
     post: { summary: 'Admin: presigned PUT URL for a premium video in R2 { filename, slug } → { key, uploadUrl, expiresInSeconds }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '503': { description: storage_not_configured } } }
 

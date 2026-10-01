@@ -740,7 +740,7 @@ Prints requests per second and p50/p95/p99 latency per endpoint. The numbers dep
 | Premium video 503 `storage_not_configured` | `R2_*` variables missing. |
 | HLS video won't start | Bucket CORS missing; or behind a proxy without `PUBLIC_API_URL`; check `npm run r2:check`. |
 | Premium video 429 "Too many screens" | The account is playing on more devices than `STREAM_LIMIT`; stop one, or *Account → Your devices → Remove*. |
-| Uploads from the admin fail | Behind nginx: raise `client_max_body_size`. Video upload from the browser needs a write-capable R2 token and bucket CORS allowing `PUT`. |
+| Uploads from the admin fail | Image uploads are limited to 10 MB by the app; behind nginx, set `client_max_body_size 10m` or higher. Video upload from the browser needs a write-capable R2 token and bucket CORS allowing `PUT`. |
 | Admin says "That account isn't an administrator" | `npm run admin -- grant <email>`. |
 | Everyone got signed out | `JWT_SECRET` changed (or was unset and the server restarted in dev). |
 | Site shows old content after an update | The service worker caches the shell; hard-refresh once. Its version is in `sw.js`. |

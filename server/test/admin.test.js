@@ -247,7 +247,11 @@ test('uploads: images are sniffed, stored by content hash and served; videos get
   for (const [name, body, type] of [['svg', '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>', 'image/svg+xml'], ['html', '<script>alert(1)</script>', 'image/png'], ['empty', '', 'image/png']]) {
     const r = await A('POST', '/uploads/image', null, { raw: body, headers: { 'Content-Type': type } }); assert.equal(r.status, 400, name);
   }
-  assert.equal((await A('POST', '/uploads/image', null, { raw: Buffer.concat([PNG, Buffer.alloc(5 * 1024 * 1024)]), headers: { 'Content-Type': 'image/png' } })).status, 413);
+  const fiveMbImage = Buffer.concat([PNG, Buffer.alloc(5 * 1024 * 1024)]);
+  const fiveMbUpload = await A('POST', '/uploads/image', null, { raw: fiveMbImage, headers: { 'Content-Type': 'image/png' } });
+  assert.equal(fiveMbUpload.status, 201, '5 MB poster uploads fit under the 10 MB image request limit');
+  assert.equal(fiveMbUpload.body.bytes, fiveMbImage.length);
+  assert.equal((await A('POST', '/uploads/image', null, { raw: Buffer.concat([PNG, Buffer.alloc(11 * 1024 * 1024)]), headers: { 'Content-Type': 'image/png' } })).status, 413);
   assert.equal((await call('POST', '/admin/uploads/image', null, viewer.token, { raw: PNG })).status, 403);
   // an uploaded image can be used in the catalog (and a made-up uploads/ path cannot)
   assert.equal((await A('POST', '/catalog/gallery', { id: 'up-1', group: 'U', image: up.body.path })).status, 201);

@@ -67,7 +67,7 @@ Every admin write is validated with the same rules as `validate:catalog` (unique
 
 ## 4. Uploads
 
-- **Images** (posters, thumbnails, gallery, team photos): the browser shrinks them and converts to WebP, then sends ≤ 4 MB to `POST /api/v1/admin/uploads/image`. The server checks the real file type (not the extension), names the file by its content hash and stores it in `UPLOAD_DIR` (default `./uploads`), served at `/uploads/<hash>.webp` with a one-year cache. **Mount a persistent volume there** — the Docker image declares `/app/uploads` a volume and `docker-compose.yml` creates one. Back it up with the database. Native apps rewrite `uploads/…` to the API host automatically.
+- **Images** (posters, thumbnails, gallery, team photos): the browser shrinks them and converts to WebP when possible. `POST /api/v1/admin/uploads/image` accepts files up to 10 MB. The server checks the real file type (not the extension), names the file by its content hash and stores it in `UPLOAD_DIR` (default `./uploads`), served at `/uploads/<hash>.webp` with a one-year cache. **Mount a persistent volume there** — the Docker image declares `/app/uploads` a volume and `docker-compose.yml` creates one. Back it up with the database. Native apps rewrite `uploads/…` to the API host automatically.
 - **Premium videos** go **straight from the browser to your private R2 bucket** through a short-lived presigned `PUT` (the server never handles the video). This needs, once:
   1. an R2 API token with **write** access (Object Read & Write) — the read-only token recommended in `docs/PREMIUM.md` can play but not upload, so the server needs the write-capable one for uploads to work.;
   2. a **CORS rule on the bucket** allowing `PUT` from your site's origin, header `Content-Type`:
