@@ -168,7 +168,7 @@ export function createApp({
   // Optional engagement/security features (password reset, PIN, ratings, comments, push, ...) live in features.js.
   const features = createFeatures({ db, secret, mailer, push, catalog, siteUrl: billing.config.siteUrl, rate, publicUser, notDisabled, userFromRequest: (req) => userFromRequest(req), plans: PLANS, options: { supportEmail: billing.config.supportEmail, ...featureOptions } });
 
-  // Create an account with e-mail + password. Validates input, creates the user and first profile, sends a verification e-mail (best effort) and returns a session token.
+  // Create an account with e-mail + password. A verification-mail failure must be visible to the user (the account is still created so they can sign in and retry).
   api.post('/auth/signup', authLimit, wrap(async (req, res) => {
     const { name = '', email = '', password = '' } = req.body || {};
     if (typeof email !== 'string' || !EMAIL.test(email.trim()) || email.length > 254) throw bad('Please enter a valid email address.', 'invalid_email');
@@ -184,8 +184,15 @@ export function createApp({
       const ex = await db.users.byEmail(user.email);
       throw new HttpError(409, 'email_taken', ex && !ex.passwordHash ? 'This email is already registered — use “Continue with Google/Facebook” to sign in.' : 'An account with this email already exists.');
     }
-    features.sendVerification({ ...user, emailVerifiedAt: null }).catch((e) => console.warn('[auth] verification email failed:', e.message));
-    res.status(201).json({ token: signToken(user.id, secret), user: publicUser(user), profiles: [profile] });
+    let verificationEmailSent = false;
+    try {
+      await features.sendVerification({ ...user, emailVerifiedAt: null }, { strict: true });
+      verificationEmailSent = mailer.provider === 'smtp';
+    } catch (e) {
+      // Keep the newly created account usable, but don't silently pretend its confirmation mail went out.
+      console.warn(`[auth] verification email failed${e.code ? ` (${e.code})` : ''}:`, e.message);
+    }
+    res.status(201).json({ token: signToken(user.id, secret), user: publicUser(user), profiles: [profile], verificationEmailSent });
   }));
   // Log in with e-mail + password. Returns a session token.
   api.post('/auth/login', authLimit, wrap(async (req, res) => {

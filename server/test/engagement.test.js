@@ -47,7 +47,7 @@ const linkFrom = (mail, path) => new URL(String(mail.text).match(new RegExp(`htt
 const lastMailTo = async (email, subjectRe) => { for (let i = 0; i < 40; i++) { const m = [...mails].reverse().find((x) => x.to === email && subjectRe.test(x.subject)); if (m) return m; await new Promise((r) => setTimeout(r, 25)); } throw new Error(`no mail to ${email} matching ${subjectRe}`); };
 
 test('email verification: link confirms the account; tokens are single-use; resend is throttled', async () => {
-  const u = await signup(); assert.equal(u.user.emailVerified, false);
+  const u = await signup(); assert.equal(u.user.emailVerified, false); assert.equal(u.verificationEmailSent, true);
   const m = await lastMailTo(u.email, /Confirm your email/); const token = linkFrom(m, '/verify');
   assert.equal((await call('POST', '/auth/verify', { token: 'x'.repeat(30) })).status, 400);
   assert.equal((await call('POST', '/auth/verify', { token })).body.verified, true);
@@ -107,7 +107,10 @@ test('forgot/resend fail loudly instead of pretending an email was sent', async 
   try {
     const em = `honest${Date.now()}@example.com`;
     const su = await callOn(sFlaky, 'POST', '/auth/signup', { name: 'Honest', email: em, password: 'password123' });
-    assert.equal(su.status, 201);
+    assert.equal(su.status, 201, 'the account remains usable even if delivery fails');
+    assert.equal(su.body.verificationEmailSent, false, 'signup reports the failed verification mail instead of silently claiming success');
+    const [[{ verifyTokens }]] = await db.pool.query("SELECT COUNT(*) AS verifyTokens FROM auth_tokens WHERE user_id = ? AND purpose = 'verify'", [su.body.user.id]);
+    assert.equal(verifyTokens, 0, 'a failed mail does not create a token that throttles a resend');
 
     const f1 = await callOn(sFlaky, 'POST', '/auth/forgot', { email: em });
     assert.equal(f1.status, 503, 'a failed send is reported, not swallowed');
@@ -119,8 +122,7 @@ test('forgot/resend fail loudly instead of pretending an email was sent', async 
     assert.equal(f2.status, 202, 'the failed attempt left no throttle behind');
     assert.ok(extra.some((m) => m.to === em && /Reset your/.test(m.subject)), 'the retry actually delivered');
 
-    // Signup already issued a verify token (throttle state) even though that welcome mail failed, so
-    // clear it — the point under test is that a FAILED strict send reports 503 instead of pretending.
+    // The failed signup send left no verification token/throttle state behind, so resend can be retried.
     await db.pool.query("DELETE FROM auth_tokens WHERE user_id = ? AND purpose = 'verify'", [su.user.id]);
     broken = true;
     const rs = await callOn(sFlaky, 'POST', '/me/verify/resend', null, su.body.token);
@@ -134,6 +136,9 @@ test('forgot/resend fail loudly instead of pretending an email was sent', async 
     const prev = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
     try {
+      const noMailSignup = await callOn(sNone, 'POST', '/auth/signup', { name: 'No Mail', email: `missing${Date.now()}@example.com`, password: 'password123' });
+      assert.equal(noMailSignup.status, 201);
+      assert.equal(noMailSignup.body.verificationEmailSent, false, 'production signup reports missing SMTP configuration');
       for (const address of [em, 'nobody@example.com']) {           // identical for every address (no enumeration)
         const r = await callOn(sNone, 'POST', '/auth/forgot', { email: address });
         assert.equal(r.status, 503);

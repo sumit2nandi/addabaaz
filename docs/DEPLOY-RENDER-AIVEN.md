@@ -71,7 +71,7 @@ Then open `https://<your-service>.onrender.com/api/v1/health/ready`. It should s
 
 ## 5. Keep files and mail working (optional but important)
 * **Admin-uploaded images.** The free plan forgets them at every deploy. On a paid plan: service → **Disks → Add disk**, mount path `/var/data`, then add `UPLOAD_DIR=/var/data/uploads`. (A disk means a single instance and a short pause on each deploy.) Premium videos are not affected, because they live in Cloudflare R2.
-* **Email.** Render's free web services cannot reach the usual SMTP ports. Use a paid instance, or a mail provider that offers port 2525 and put it in `SMTP_URL` (see `SETUP.md` section 8).
+* **Email.** Render Free blocks outbound SMTP on the usual ports (25, 465 and 587), so a valid-looking `SMTP_URL` can still time out. Either use a paid Render instance, or choose an SMTP provider that supports port **2525** and set `SMTP_URL=smtp://USERNAME:PASSWORD@SMTP_HOST:2525` (STARTTLS; URL-encode special characters in the credentials). Do not use `smtps://...:465` on Render Free. After deploying, open `/admin` → Dashboard → System status → **Send test email** to check delivery; the server log shows the SMTP error code if it fails.
 * **Sleeping.** A free service sleeps when idle, so reminders and scheduled jobs wait for the next visit. A free uptime monitor (for example UptimeRobot) calling `/api/v1/health/ready` every 5 minutes keeps it awake. One always-on free service fits inside Render's 750 free hours a month; check this in your dashboard. The same pings also keep the Aiven free database active.
 
 ## 6. Create your first admin

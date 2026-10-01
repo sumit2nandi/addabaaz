@@ -20,7 +20,7 @@ components:
     Profile: { type: object, properties: { id: { type: string }, name: { type: string }, color: { type: integer } } }
     Auth:
       type: object
-      properties: { token: { type: string }, user: { $ref: '#/components/schemas/User' }, profiles: { type: array, items: { $ref: '#/components/schemas/Profile' } } }
+      properties: { token: { type: string }, user: { $ref: '#/components/schemas/User' }, profiles: { type: array, items: { $ref: '#/components/schemas/Profile' } }, verificationEmailSent: { type: boolean, description: 'Signup only; false means the account exists but the confirmation email was not delivered.' } }
     Library:
       type: object
       properties:
@@ -42,7 +42,7 @@ paths:
   /auth/signup:
     post:
       security: []
-      summary: Create account (+ first profile). Password 8–128 chars.
+      summary: Create account (+ first profile). Password 8–128 chars. Returns verificationEmailSent=false if the account was created but email delivery failed.
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name, email, password], properties: { name: { type: string }, email: { type: string }, password: { type: string } } } } } }
       responses: { '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Auth' } } } }, '409': { description: email_taken }, '429': { description: Rate limited } }
   /auth/login:
@@ -183,6 +183,8 @@ paths:
     get: { summary: 'Admin: dashboard numbers (revenue, subscribers, sign-ups, recent activity)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
   /admin/health:
     get: { summary: 'Admin: setup checklist (GSTIN, SMTP, R2, Razorpay, secrets…)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/email/test:
+    post: { summary: 'Admin: send a real SMTP diagnostic message to the signed-in administrator', security: [ { admin: [] } ], responses: { '200': { description: '{ sent: true, to }' }, '400': { description: administrator session required (ADMIN_TOKEN cannot receive mail) }, '503': { description: email_not_configured | email_send_failed } } }
   /admin/users:
     get: { summary: 'Admin: users, ?q=&filter=all|paid|free|expiring|expired|admin|disabled&limit=&offset=', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
   /admin/users/{id}:

@@ -61,7 +61,7 @@ const jobs = () => runScheduledJobs({ db, catalog: app.locals.catalog, push: app
 setTimeout(jobs, 10_000).unref();
 setInterval(jobs, 60_000).unref();
 if (process.env.NODE_ENV === 'production') {
-  if (!process.env.SMTP_URL) console.warn('[mail] SMTP_URL is not set — receipts, refund and reminder emails will NOT be sent.');
+  if (!process.env.SMTP_URL) console.warn('[mail] SMTP_URL is not set — verification, password-reset, receipt, refund and reminder emails will NOT be sent.');
   if (process.env.RAZORPAY_KEY_ID && !billing.config.gstEnabled) console.warn('[billing] GSTIN is not set — invoices are issued as plain receipts without GST.');
 }
 // Graceful shutdown: stop accepting connections, wait for in-flight e-mails, close the database, then exit (force-exit after 5 s).

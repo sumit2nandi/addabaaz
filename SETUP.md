@@ -415,7 +415,7 @@ Not included: GST e-invoice/IRN and return filing (they need a GST Suvidha Provi
 
 ### 8.7 Email (receipts, password reset, verification, refunds)
 
-Set `SMTP_URL`, `MAIL_FROM`, `SUPPORT_EMAIL` and `PUBLIC_SITE_URL` (links in emails use it). Any SMTP provider works (Amazon SES, Brevo, Mailgun, Zoho, Gmail app password…). Once SMTP is set, viewers must confirm their email before buying or commenting. Set up SPF/DKIM for your sending domain so mail doesn't land in spam.
+Set `SMTP_URL`, `MAIL_FROM`, `SUPPORT_EMAIL` and `PUBLIC_SITE_URL` (links in emails use it). Any SMTP provider works (Amazon SES, Brevo, Mailgun, Zoho, Gmail app password…). Once SMTP is set, viewers must confirm their email before buying or commenting. Set up SPF/DKIM for your sending domain so mail doesn't land in spam. After deploy, use `/admin` → Dashboard → System status → **Send test email** to verify the actual SMTP connection and delivery. On Render Free, ports 25/465/587 are blocked: use a provider with port 2525 (`SMTP_URL=smtp://username:password@smtp-host:2525`, STARTTLS) or a paid Render instance; URL-encode special characters in the username/password.
 
 ### 8.8 Push notifications
 

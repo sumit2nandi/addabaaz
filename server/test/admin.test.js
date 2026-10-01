@@ -59,6 +59,17 @@ const audit = async (action) => (await A('GET', `/audit?action=${encodeURICompon
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), crypto.randomBytes(64)]);
 const fakeJwt = (claims, secret = SECRET) => { const b = (o) => Buffer.from(JSON.stringify(o)).toString('base64url'); const body = `${b({ alg: 'HS256', typ: 'JWT' })}.${b(claims)}`; return `${body}.${crypto.createHmac('sha256', secret).update(body).digest('base64url')}`; };
 
+test('admin email diagnostic sends a real test message only to the signed-in administrator', async () => {
+  const before = sent.length;
+  const r = await A('POST', '/email/test');
+  assert.equal(r.status, 200); assert.deepEqual(r.body, { sent: true, to: 'boss@example.com' });
+  assert.equal(sent.length, before + 1); assert.equal(sent.at(-1).to, 'boss@example.com');
+  assert.match(sent.at(-1).subject, /email delivery test/);
+  assert.ok((await audit('email.test')).some((x) => x.actor === 'boss@example.com'));
+  assert.equal((await call('POST', '/admin/email/test', {}, viewer.token)).status, 403);
+  assert.equal((await call('POST', '/admin/email/test', {}, TOKEN)).body.error.code, 'email_test_requires_session');
+});
+
 test('schema: unit checks (ids, images, sources, unknown fields) and the shipped catalog is valid', () => {
   assert.deepEqual(checkCatalog(seed, JSON.parse(fs.readFileSync(new URL('data/studio.json', ROOT), 'utf8')), { fileExists: (rel) => fs.existsSync(new URL(rel, ROOT)) }), []);
   const bad = (type, doc, re) => { const { errors } = validate(type, doc, {}); assert.ok(errors.some((e) => re.test(e)), `${JSON.stringify(doc)} → ${errors}`); };
