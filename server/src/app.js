@@ -549,15 +549,18 @@ export function createApp({
   }
 
   // FINAL ERROR HANDLER: turns any thrown error into `{ error: { code, message } }`. Unexpected (500) errors are logged and hidden from the client.
-  // Only messages the server itself authored (HttpError) are ever shown; everything else — library errors,
-  // driver messages, anything technical — is replaced with a plain, user-appropriate sentence.
+  // Only errors that were *authored* for the client are ever shown — HttpError, PaymentError, BillingError
+  // (integer status + string code). Library/driver messages and everything else are replaced with a plain,
+  // user-appropriate sentence; the technical detail stays in the server log / error report.
   app.use((err, req, res, _next) => {
     if (err.type === 'entity.parse.failed') err = bad('Invalid JSON body.', 'invalid_json');
     if (err.type === 'entity.too.large') err = new HttpError(413, 'too_large', 'Request too large.');
     const status = err.status || 500;
     if (status >= 500 && !(err instanceof HttpError)) { console.error(err); try { app.locals.captureError?.(err, req); } catch { /* monitoring must never break error handling */ } db.errors.add({ source: 'server', message: `${req.method} ${req.path}: ${err.message}`, stack: err.stack, url: req.originalUrl, userAgent: req.get('user-agent') }).catch(() => {}); }   // expected 5xx (provider down, storage off) are not logged as crashes
-    const message = err instanceof HttpError && err.message ? err.message : (status >= 500 ? 'Something went wrong.' : 'That request couldn’t be completed.');
-    res.status(status).json({ error: { code: err.code || (status >= 500 ? 'server_error' : 'bad_request'), message } });
+    const authored = err instanceof HttpError || (Number.isInteger(err?.status) && typeof err?.code === 'string');
+    const message = authored && err.message ? err.message : (status >= 500 ? 'Something went wrong.' : 'That request couldn’t be completed.');
+    const code = authored && typeof err.code === 'string' ? err.code : (status >= 500 ? 'server_error' : 'bad_request');
+    res.status(status).json({ error: { code, message } });
   });
   // Expose internals for tests and for index.js (background jobs).
   app.db = db;
