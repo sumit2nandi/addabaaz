@@ -83,11 +83,11 @@ export default async function home(ctx) {
       ${rail({ title: 'Continue Watching', items: cw.map(({ video }) => videoCard(video)), cls: 'r-video' })}
       ${rec ? rail({ title: `Because you watched ${rec.because.titleEn || rec.because.title}`, items: rec.items.map((x) => showCard(x)), cls: 'r-poster' }) : ''}
       ${rail({ title: 'My List', items: mine, href: '#/list', cls: 'r-poster' })}
+      ${rail({ title: 'Latest Reels', subtitle: 'Bite-sized ADDABAAZ', items: cat.reels().slice(0, N + 6).map(reelCard), href: '#/reels', linkLabel: 'Watch reels', cls: 'r-reel' })}
       ${rail({ title: 'Latest Episodes & Videos', subtitle: 'Recent episodes and landscape uploads from ADDABAAZ', items: cat.latestVideos(N).map((v) => videoCard(v)), cls: 'r-video' })}
       ${rail({ title: 'Top 10 Episodes', subtitle: 'Most watched on ADDABAAZ', items: cat.trending(10, demoteMature ? { matureCap: 2 } : {}).map((v, i) => videoCard(v, { rank: i + 1 })), cls: 'r-top' })}
       ${rail({ title: 'Shows', items: cat.shows.map((s) => showCard(s)), href: '#/shows', linkLabel: 'Browse all', cls: 'r-poster' })}
       ${cat.shows.map((s) => rail({ title: s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title, items: cat.episodes(s.id).slice().reverse().map((v) => videoCard(v, { showName: false })), href: `#/show/${s.id}`, linkLabel: 'Open show', cls: 'r-video' }))}
-      ${rail({ title: 'Reels & Shorts', subtitle: 'Bite-sized ADDABAAZ', items: cat.reels().slice(0, N + 6).map(reelCard), href: '#/reels', linkLabel: 'Watch reels', cls: 'r-reel' })}
       ${rail({ title: 'Coming Soon', subtitle: 'New originals from ADDABAAZ', items: cat.upcoming.map(soonCard), href: '#/upcoming', cls: 'r-poster' })}
       ${rail({ title: 'Behind the Scenes', items: cat.gallery.slice(0, N).map(galleryCard), href: '#/gallery', cls: 'r-poster' })}
     </div>
