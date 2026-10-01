@@ -72,7 +72,7 @@ const itemList = (origin, items) => ({ '@type': 'ItemList', numberOfItems: items
 const video = (origin, v, cat, show, { url, full = true } = {}) => ({
   '@type': 'VideoObject', name: full ? clip(`${cat.displayTitle(v)}${show && !cat.displayTitle(v).includes(showName(show)) ? ` — ${showName(show)}` : ''}`, 110) : cat.displayTitle(v),
   description: videoDescription(v, show, cat), thumbnailUrl: [absUrl(origin, cat.thumb(v, 'hqdefault'))].filter(Boolean),
-  uploadDate: v.publishedAt, duration: isoDuration(v.duration), inLanguage: 'bn', isFamilyFriendly: true,
+  uploadDate: v.publishedAt, ...(v.duration > 0 ? { duration: isoDuration(v.duration) } : {}), inLanguage: 'bn', isFamilyFriendly: true,
   ...(url ? { url } : {}),
   ...(v.source?.type === 'youtube' ? { embedUrl: `https://www.youtube.com/embed/${v.source.id}` } : {}),
   ...(v.access === 'premium' ? { isAccessibleForFree: false } : { isAccessibleForFree: true }),
@@ -141,6 +141,11 @@ export function pageMeta({ path, query = {}, cat, studio = null, origin, plans =
     out.title = `Bengali Comedy & Drama Reels | ${SITE}`; out.canonical = '/reels';
     out.description = `Quick Bengali reels from ${SITE}: comedy sketches, stand-up clips and scenes from our web series. Swipe through and watch free.`;
     out.jsonld = [{ '@type': 'CollectionPage', name: 'Reels', url: `${origin}/reels` }, crumbs(origin, [home, ['Reels', '/reels']])];
+  // The latest channel videos already synced into the database-backed catalog.
+  } else if (view === 'youtube') {
+    out.title = `Latest YouTube Uploads | ${SITE}`; out.canonical = '/youtube';
+    out.description = `Browse the latest ADDABAAZ YouTube videos saved in the ${SITE} catalog. New uploads are added by an administrator.`;
+    out.jsonld = [{ '@type': 'CollectionPage', name: 'Latest from YouTube', url: `${origin}/youtube` }, crumbs(origin, [home, ['Latest from YouTube', '/youtube']])];
   // Coming-soon listing.
   } else if (view === 'upcoming') {
     out.title = `Coming Soon — New Bengali Web Series & Films | ${SITE}`; out.canonical = '/upcoming';

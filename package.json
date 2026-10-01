@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node server/src/index.js",
     "dev": "node --watch server/src/index.js",
-    "test": "node --test server/test/config.test.js server/test/cors.test.js server/test/api.test.js server/test/social-premium.test.js server/test/payments.test.js server/test/gst.test.js server/test/billing.test.js server/test/admin.test.js server/test/seo.test.js server/test/engagement.test.js server/test/backup.test.js",
+    "test": "node --test server/test/config.test.js server/test/cors.test.js server/test/api.test.js server/test/social-premium.test.js server/test/payments.test.js server/test/gst.test.js server/test/billing.test.js server/test/admin.test.js server/test/seo.test.js server/test/engagement.test.js server/test/backup.test.js server/test/youtube.test.js",
     "validate:catalog": "node scripts/validate-catalog.mjs",
     "images": "bash scripts/optimize-images.sh",
     "build:www": "node scripts/build-www.mjs",

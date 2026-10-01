@@ -39,12 +39,13 @@ const ld = (html) => JSON.parse(attr(html, /<script type="application\/ld\+json"
 test('routes: shared matcher', () => {
   assert.deepEqual(matchRoute('/show/shahid').params, { id: 'shahid' });
   assert.equal(matchRoute('/show/shahid/').view, 'show');
+  assert.equal(matchRoute('/youtube').view, 'youtube');
   assert.equal(matchRoute('/nope'), null);
   assert.equal(matchRoute('/show/%E0%A4%A'), null);          // malformed escape → no match, no throw
 });
 
 test('pageMeta: titles, descriptions, canonical, robots', () => {
-  for (const p of ['/', '/shows', '/show/shahid', '/upcoming', '/soon/trap', '/gallery', '/plans', '/about', '/services', '/contact']) {
+  for (const p of ['/', '/shows', '/show/shahid', '/youtube', '/upcoming', '/soon/trap', '/gallery', '/plans', '/about', '/services', '/contact']) {
     const m = meta(p);
     assert.equal(m.status, 200, p); assert.match(m.robots, /^index,follow/, p);
     assert.ok(m.title.length >= 10 && m.title.length <= 75, `${p} title length ${m.title.length}: ${m.title}`);
@@ -111,7 +112,7 @@ test('server: page HTML carries per-page metadata for crawlers that do not run J
 
 test('server: every public page renders for a direct visit, including the Reels feed (/reels) and a single reel', async () => {
   // Regression: /reels (no :id) used to crash the renderer -> 503 -> a reload or shared link of Reels showed the home page instead.
-  for (const path of ['/', '/shows', '/reels', '/upcoming', '/gallery', '/plans', '/about', '/search', '/account']) {
+  for (const path of ['/', '/shows', '/reels', '/youtube', '/upcoming', '/gallery', '/plans', '/about', '/search', '/account']) {
     const r = await get(path); assert.equal(r.status, 200, path);
     assert.match(await r.text(), /<meta name="ab:routing" content="history">/, path + ' must be served with real-URL routing');
   }

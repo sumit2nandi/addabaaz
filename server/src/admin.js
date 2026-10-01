@@ -24,7 +24,7 @@ const page = (req, dflt = 25, max = 100) => ({ limit: Math.min(Math.max(Number(r
  */
 // Every route below runs after the authentication middleware, so `req.admin` is always set.
 // Write actions call `log(...)` so the audit log records who did what.
-export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, push = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', env = process.env }) {
+export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2, payments, mailer, push = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', env = process.env }) {
   // The shared ADMIN_TOKEN (for scripts) only counts when it is long enough to be unguessable.
   const tokenOn = adminToken.length >= 24;
   if (adminToken && !tokenOn) console.warn('[admin] ADMIN_TOKEN is shorter than 24 characters — the token is ignored (admin accounts still work).');
@@ -228,6 +228,54 @@ export function createAdminRouter({ db, billing, catalog, r2, payments, mailer, 
   // Maps the `:type` URL segment (show, video, upcoming, gallery) to the collection; unknown types -> 404.
   const kindOf = (req) => { if (!TYPES[req.params.type]) throw new HttpError(404, 'not_found', 'Unknown catalog section.'); return { key: req.params.type, type: TYPES[req.params.type] }; };
   const invalid = (errors) => new HttpError(400, 'invalid_item', errors.join(' '));
+
+  // This is the only code path that reads YouTube's feed: it is behind the admin router and runs only on an explicit button click.
+  router.post('/catalog/youtube/refresh', wrap(async (req, res) => {
+    if (!youtubeFeed?.refresh) throw new HttpError(503, 'youtube_not_configured', 'YouTube catalog refresh is not configured on this server.');
+    let feed;
+    try { feed = await youtubeFeed.refresh(); }
+    catch (e) { console.warn(`[youtube] manual catalog refresh failed: ${e?.message || 'upstream request failed'}`); throw new HttpError(503, 'youtube_unavailable', 'YouTube could not be reached. The catalog was not changed. Please try again.'); }
+    if (!feed.configured) throw new HttpError(503, 'youtube_not_configured', 'Set a valid YOUTUBE_CHANNEL_ID before refreshing the YouTube catalog.');
+    if (!Array.isArray(feed.videos)) throw new HttpError(502, 'invalid_youtube_feed', 'YouTube returned an invalid upload list; the catalog was not changed.');
+
+    const uploads = feed.videos;
+    const snap = await catalog.get({ all: true });
+    const knownIds = new Set(snap.catalog.videos.map((v) => v.id));
+    const knownYoutubeIds = new Set(snap.catalog.videos.filter((v) => v.source?.type === 'youtube').map((v) => v.source.id));
+    let added = 0, cacheChanged = false;
+    for (const upload of uploads) {
+      // RSS has no duration or show/kind metadata. Save a free, unrated, standalone clip with unknown duration;
+      // an admin can set its real duration, rating, kind and show from the normal video editor.
+      if (knownIds.has(upload.id) || knownYoutubeIds.has(upload.id)) continue;
+      const candidate = {
+        id: upload.id,
+        showId: null,
+        kind: 'clip',
+        title: upload.title,
+        source: { type: 'youtube', id: upload.id },
+        thumbnail: upload.thumbnail,
+        duration: 0,
+        publishedAt: upload.publishedAt,
+        views: 0,
+        access: 'free',
+      };
+      const { doc, errors } = validate('video', candidate, ctxOf(snap));
+      if (errors.length) throw new HttpError(502, 'invalid_youtube_item', 'YouTube returned an upload that could not be added to the video catalog.');
+      try {
+        await db.catalog.put('videos', doc.id, doc, { create: true });
+        knownIds.add(doc.id); knownYoutubeIds.add(doc.source.id); added++; cacheChanged = true;
+      } catch (e) {
+        // The database's unique (type, id) key makes simultaneous refreshes safe across admin sessions/servers.
+        if (!isDuplicate(e)) throw e;
+        knownIds.add(doc.id); knownYoutubeIds.add(doc.source.id); cacheChanged = true;
+      }
+    }
+    if (cacheChanged) catalog.invalidate();
+    const skipped = uploads.length - added;
+    await log(req, 'catalog.youtube.refresh', 'youtube', { added, skipped, checkedAt: feed.updatedAt || null });
+    res.set('Cache-Control', 'no-store');
+    res.json({ added, skipped, checkedAt: feed.updatedAt || null });
+  }));
 
   // Full catalog including drafts and scheduled items (the public API hides those).
   router.get('/catalog', wrap(async (_req, res) => { const s = await catalog.get({ all: true }); res.json({ ...s.catalog, studio: s.studio }); }));

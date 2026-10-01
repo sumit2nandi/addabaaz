@@ -118,7 +118,7 @@ export default async function content(root, [section], ctx) {
     { k: 'access', label: 'Access', type: 'select', options: ACCESS, dflt: 'free', help: 'Premium needs the video hosted in R2.' },
     sourceField(),
     { k: 'thumbnail', label: 'Thumbnail', type: 'image', maxWidth: 1000, wide: true, help: 'Required for R2 videos; YouTube videos use their own thumbnail.' },
-    { k: 'duration', label: 'Duration (mm:ss)', req: true, placeholder: '12:34' }, { k: 'publishedAt', label: 'Published', type: 'datetime', req: true },
+    { k: 'duration', label: 'Duration (mm:ss)', req: true, placeholder: '12:34', help: 'The public YouTube feed has no duration. Imported videos show — until you enter the real runtime here.' }, { k: 'publishedAt', label: 'Published', type: 'datetime', req: true },
     { k: 'publishAt', label: 'Publish at (optional)', type: 'datetime', help: 'Leave empty to publish now. A future time hides the video from viewers, Google and the API until then — admins still see it, and followers get a notification when it goes live.' },
     ratingField, subtitlesField(),
     { k: 'views', label: 'Views', type: 'number', min: 0 },
@@ -152,13 +152,21 @@ export default async function content(root, [section], ctx) {
       } });
   };
   function drawVideos() {
-    root.innerHTML = html`${pageHead('Videos & reels', note, html`<button class="btn primary" id="new">${icon('plus', 16)} New video</button>`)}
+    const videoNote = `${note} YouTube sync is manual: it checks the channel only when clicked and imports new uploads as free, unrated clips with no show assignment. Set kind, show, rating and duration in Edit when you review them.`;
+    root.innerHTML = html`${pageHead('Videos & reels', videoNote, html`<button class="btn" id="refreshYoutube">${icon('refresh', 16)} Refresh YouTube catalog</button><button class="btn primary" id="new">${icon('plus', 16)} New video</button>`)}
       <div class="toolbar"><div class="search">${icon('search', 16)}<input id="q" type="search" placeholder="Search titles…" value="${F.q}"></div>
         <select id="fshow"><option value="">All shows</option>${data.shows.map((s) => html`<option value="${s.id}" ${F.show === s.id ? 'selected' : ''}>${s.titleEn || s.title}</option>`)}<option value="_none" ${F.show === '_none' ? 'selected' : ''}>No show</option></select>
         <select id="fkind"><option value="">All kinds</option>${KINDS.map((k) => html`<option value="${k.v}" ${F.kind === k.v ? 'selected' : ''}>${k.l}s</option>`)}</select>
         <select id="facc"><option value="">Free & premium</option><option value="premium" ${F.access === 'premium' ? 'selected' : ''}>Premium only</option><option value="free" ${F.access === 'free' ? 'selected' : ''}>Free only</option></select></div>
       <div id="list"></div>`.s;
     $('#new').onclick = () => editVideo(null);
+    $('#refreshYoutube').onclick = () => guard($('#refreshYoutube'), async () => {
+      const result = await api.post('/catalog/youtube/refresh');
+      await reload();
+      if (result.added) toast(`Imported ${plural(result.added, 'video')}${result.skipped ? ` · ${plural(result.skipped, 'upload')} already in the catalog` : ''}`);
+      else if (result.skipped) toast(`No new uploads · ${plural(result.skipped, 'video')} already in the catalog`);
+      else toast('No uploads found in the channel feed');
+    });
     const set = (k, el, ev) => el.addEventListener(ev, () => { F[k] = el.value; F.offset = 0; drawList(); });
     set('q', $('#q'), 'input'); set('show', $('#fshow'), 'change'); set('kind', $('#fkind'), 'change'); set('access', $('#facc'), 'change');
     drawList();
@@ -170,8 +178,8 @@ export default async function content(root, [section], ctx) {
     const pageRows = rows.slice(F.offset, F.offset + PAGE);
     $('#list').innerHTML = html`<div class="card flush">${rows.length ? html`<table class="tbl"><thead><tr><th></th><th>Title</th><th>Show</th><th>Duration</th><th>Published</th><th class="end">Views</th><th></th></tr></thead><tbody>
       ${pageRows.map((v) => html`<tr><td class="thumb wide">${thumb(v) ? html`<img src="${thumb(v)}" alt="" loading="lazy">` : ''}</td>
-        <td class="title-cell"><strong class="clip">${v.shortTitle || v.title}</strong><br>${badge(v.kind === 'episode' && v.episode ? `EP ${v.episode}` : v.kind)} ${v.access === 'premium' ? badge('premium', 'gold') : ''} ${v.publishAt && new Date(v.publishAt) > new Date() ? badge(`goes live ${fmtD(v.publishAt)}`, 'warn') : ''} ${v.source.type === 'r2' ? badge('R2') : ''}</td>
-        <td>${showTitle(v.showId) || html`<span class="muted">—</span>`}</td><td>${fmtDur(v.duration)}</td><td class="small">${fmtDT(v.publishedAt)}</td><td class="end">${v.views.toLocaleString('en-IN')}</td>
+        <td class="title-cell"><strong class="clip">${v.shortTitle || v.title}</strong><br>${badge(v.kind === 'episode' && v.episode ? `EP ${v.episode}` : v.kind)} ${v.source.type === 'youtube' ? badge('YouTube') : ''} ${v.access === 'premium' ? badge('premium', 'gold') : ''} ${v.publishAt && new Date(v.publishAt) > new Date() ? badge(`goes live ${fmtD(v.publishAt)}`, 'warn') : ''} ${v.source.type === 'r2' ? badge('R2') : ''}</td>
+        <td>${showTitle(v.showId) || html`<span class="muted">—</span>`}</td><td>${v.duration > 0 ? fmtDur(v.duration) : '—'}</td><td class="small">${fmtDT(v.publishedAt)}</td><td class="end">${v.views.toLocaleString('en-IN')}</td>
         <td class="end nowrap"><a class="icon-btn" href="/watch/${v.id}" target="_blank" rel="noopener" title="Open on site">${icon('external', 16)}</a><button class="icon-btn" data-edit="${v.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${v.id}" title="Delete">${icon('trash', 16)}</button></td></tr>`)}</tbody></table>` : empty('No videos match.')}</div>
       ${pager({ total: rows.length, offset: F.offset, limit: PAGE })}`.s;
     $$('[data-edit]', root).forEach((b) => b.onclick = () => editVideo(data.videos.find((v) => v.id === b.dataset.edit)));

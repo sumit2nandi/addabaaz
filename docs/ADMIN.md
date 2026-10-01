@@ -32,7 +32,7 @@ Security notes
 | **Dashboard** | revenue and sign-ups for 30 days, active subscribers, plans expiring within 7 days, open messages, recent payments/users, and a *Finish setting up* list (GSTIN, SMTP, R2, Razorpay keys, weak secrets…). When SMTP is configured, **Send test email** sends a real diagnostic message to the signed-in administrator. |
 | **Shows** | add / edit / delete / reorder; poster upload; "featured" on the home page. Deleting a show also deletes its videos (you are told how many first) |
 | **Videos & reels** (also) | each video has *Publish at* (scheduled release), *Maturity rating* (U / 7+ / 13+ / 16+ / 18+ — Kids profiles show only U and 7+) and *Subtitles* (upload .srt/.vtt). Shows have a rating too. |
-| **Videos & reels** | episodes, reels, trailers, clips. Filter by show/kind/access, 25 per page. Source = YouTube (paste the URL) or **premium video in R2** (upload from the browser or type the key). Access = free or premium |
+| **Videos & reels** | Episodes, reels, trailers and clips. Filter by show/kind/access, 25 per page. **Refresh YouTube catalog** manually checks the channel's latest 15 RSS entries and imports missing video IDs into MySQL; it never runs when the website loads. Imports start as free, unrated, show-less clips with unknown duration (shown as —), so review kind/show/rating/runtime in Edit. Repeated refreshes skip records already in the catalog. Sources can also be added directly as YouTube URLs or as **premium videos in R2**. |
 | **Coming soon** and **Gallery** | add / edit / delete / reorder; photo upload |
 | **Studio & team** | the About, Services and Contact pages: address, phones, WhatsApp, social links, mission text, services, team members with photos |
 | **Users** | search, filter (paid, expiring, expired, free, admins, disabled); rename, make/remove admin, disable/enable, delete; **give free access** (N days, no payment or invoice); end a plan |
@@ -82,11 +82,14 @@ Every admin write is validated with the same rules as `validate:catalog` (unique
 |---|---|---|
 | `ADMIN_SESSION_HOURS` | `12` | how long after sign-in the console keeps working |
 | `UPLOAD_DIR` | `./uploads` | where admin image uploads are stored |
+| `YOUTUBE_CHANNEL_ID` | `UCdG8idFz3zA7xOaca8H6qtw` | channel read only after an administrator clicks **Refresh YouTube catalog** |
 | `ADMIN_TOKEN` | *(empty)* | optional script token, 24+ characters |
 
 ## 6. Admin API
 
 Everything the console does is under `/api/v1/admin/*` (see `docs/openapi.yaml`), authenticated with the admin's normal bearer token, so you can script it. Errors use the usual `{ error: { code, message } }` shape; `401 admin_session_expired` means sign in again.
+
+`POST /api/v1/admin/catalog/youtube/refresh` is the only operation that fetches the YouTube Atom feed. It imports the channel's newest 15 entries into `catalog_items`, keyed by YouTube video ID, and skips existing IDs. The public website only reads the database-backed catalog; visiting a page never triggers a YouTube feed request. Set `YOUTUBE_CHANNEL_ID` to a valid channel ID if you need to override the built-in `@ADDABAAZ01` channel.
 
 ## Not included (yet)
 

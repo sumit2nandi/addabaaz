@@ -29,6 +29,7 @@ import { createBilling, billingConfigFromEnv } from './billing.js';
 import { STATES } from './gst.js';
 import { HttpError, bad, wrap, rateLimit } from './http.js';
 import { createCatalogStore } from './catalog.js';
+import { createYouTubeFeed } from './youtube-feed.js';
 import { createSeo } from './seo.js';
 import compression from 'compression';
 import { createAdminRouter } from './admin.js';
@@ -58,6 +59,7 @@ export function createApp({
   sessionHours = Number(process.env.ADMIN_SESSION_HOURS) || 12, // admin sessions are shorter than viewer sessions
   uploadDir = process.env.UPLOAD_DIR || path.join(ROOT, 'uploads'),   // admin image uploads (mount a persistent volume in production)
   contactWebhook = process.env.CONTACT_WEBHOOK_URL || '',
+  youtubeFeed = createYouTubeFeed(),                         // fetched only when an administrator manually refreshes the catalog
   rate = true,
   catalogPath = path.join(ROOT, 'data/catalog.json'),
   studioPath = path.join(path.dirname(catalogPath), 'studio.json'),
@@ -340,7 +342,7 @@ export function createApp({
 
   /* ---------- admin console API (admin accounts, or ADMIN_TOKEN for scripts) — see server/src/admin.js ---------- */
   // Mount the admin console API. It does its own authentication (admin role or ADMIN_TOKEN).
-  api.use('/admin', createAdminRouter({ db, billing, catalog, r2, payments, mailer, push, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate }));
+  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate }));
 
   /* ---------- authenticated ---------- */
   // AUTH MIDDLEWARE: every route registered after this line requires a valid session token whose session version still matches.

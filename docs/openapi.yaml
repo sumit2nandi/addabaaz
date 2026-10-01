@@ -204,6 +204,8 @@ paths:
     get: { summary: 'Admin: audit log, newest first, ?action=&before=<id>&limit=', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
   /admin/catalog:
     get: { summary: 'Admin: the whole catalog including the studio profile', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/catalog/youtube/refresh:
+    post: { summary: 'Admin: explicitly fetch the latest 15 channel uploads and import missing YouTube IDs into the database catalog. Imports are free, unrated clips with unknown duration; repeated refreshes are idempotent. Public website loads do not fetch this feed.', security: [ { admin: [] } ], responses: { '200': { description: '{ added, skipped, checkedAt }' }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '503': { description: youtube_not_configured | youtube_unavailable } } }
   /admin/catalog/{type}:
     post: { summary: 'Admin: add an item; type = shows|videos|upcoming|gallery. Validated like `npm run validate:catalog`', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '400': { description: validation }, '409': { description: exists } } }
   /admin/catalog/{type}/order:
