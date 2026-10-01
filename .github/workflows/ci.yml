@@ -24,8 +24,5 @@ jobs:
       - run: npm run validate:catalog
       - run: for f in $(find admin app -name '*.js'); do node --check "$f" || exit 1; done   # the browser code has no build step
       - run: node --test test/frontend/app-modules.test.mjs test/frontend/player-logic.test.mjs test/frontend/watch-autoplay.test.mjs   # stale-index deploy guard + player/autoplay behaviour
-      # TEMP DEBUG: surface failing test names as annotations (workflow logs are unreachable from the sandbox).
-      - run: |
-          set -o pipefail
-          npm test 2>&1 | tee /tmp/t.log || { grep -E "^not ok" /tmp/t.log | head -12 | while IFS= read -r l; do echo "::error::$l"; done; grep -E "^# (tests|pass|fail)" /tmp/t.log | while IFS= read -r l; do echo "::error::$l"; done; exit 1; }
+      - run: npm test
       - run: npm run build:www
