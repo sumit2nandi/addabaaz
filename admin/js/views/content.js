@@ -421,9 +421,29 @@ export default async function content(root, [section], ctx) {
     });
   };
   function drawUpcoming() {
-    root.innerHTML = html`${pageHead('Coming soon', 'Edit the homepage banner here, and edit each carousel poster with its title below.', html`<button class="btn" id="editReleaseBanner" title="Edit the Releasing This Month poster">${icon('image', 16)} Edit banner</button><button class="btn primary" id="new">${icon('plus', 16)} New title</button>`)}
-      <div class="card flush">${data.upcoming.length ? html`<table class="tbl"><thead><tr><th></th><th>Title</th><th>Type</th><th class="end">Order</th><th></th></tr></thead><tbody>${data.upcoming.map((u, i) => html`<tr><td class="thumb"><img src="${imgSrc(u.poster)}" alt="" loading="lazy"></td><td><strong>${u.titleEn || u.title}</strong>${u.titleEn ? html`<br><small class="muted bn">${u.title}</small>` : ''}${u.note ? html`<br><small class="muted">${u.note}</small>` : ''}</td><td>${u.type}</td><td class="end nowrap">${orderBtns(u.id, i, data.upcoming.length)}</td>
-        <td class="end nowrap"><button class="icon-btn" data-edit="${u.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${u.id}" title="Delete">${icon('trash', 16)}</button></td></tr>`)}</tbody></table>` : empty('Nothing announced.')}</div>`.s;
+    const posters = { ...HOME_POSTER_DEFAULTS, ...(data.homePosters || {}) };
+    const releaseTitle = data.upcoming.find((u) => u.id === posters.releasingThisMonthId);
+    const releaseTarget = releaseTitle ? (releaseTitle.titleEn || releaseTitle.title) : 'No Coming Soon detail page selected';
+    root.innerHTML = html`${pageHead('Coming soon', 'Manage the two poster categories shown to viewers: the featured release and the upcoming-title posters.')}
+      <section class="card release-category" aria-labelledby="releaseCategoryTitle">
+        <div class="card-head">
+          <div><h2 id="releaseCategoryTitle">Releasing This Month</h2><p class="muted">Featured on the homepage and linked to its Coming Soon detail page.</p></div>
+          <button class="btn" id="editReleaseBanner">${icon('image', 16)} Edit poster</button>
+        </div>
+        <div class="release-preview">
+          <figure><img src="${imgSrc(posters.releasingThisMonth)}" alt="Releasing This Month desktop poster" loading="lazy"><figcaption>Desktop poster</figcaption></figure>
+          <figure><img src="${imgSrc(posters.releasingThisMonthMobile)}" alt="Releasing This Month mobile poster" loading="lazy"><figcaption>Mobile poster</figcaption></figure>
+        </div>
+        <p class="release-target muted">Opens: <strong>${releaseTarget}</strong></p>
+      </section>
+      <section class="card flush" aria-labelledby="upcomingCategoryTitle">
+        <div class="card-head pad">
+          <div><h2 id="upcomingCategoryTitle">Coming Soon</h2><p class="muted">Manage the title posters in the upcoming releases collection.</p></div>
+          <button class="btn primary" id="new">${icon('plus', 16)} New title</button>
+        </div>
+        ${data.upcoming.length ? html`<table class="tbl"><thead><tr><th></th><th>Title</th><th>Type</th><th class="end">Order</th><th></th></tr></thead><tbody>${data.upcoming.map((u, i) => html`<tr><td class="thumb"><img src="${imgSrc(u.poster)}" alt="" loading="lazy"></td><td><strong>${u.titleEn || u.title}</strong>${u.titleEn ? html`<br><small class="muted bn">${u.title}</small>` : ''}${u.note ? html`<br><small class="muted">${u.note}</small>` : ''}</td><td>${u.type}</td><td class="end nowrap">${orderBtns(u.id, i, data.upcoming.length)}</td>
+        <td class="end nowrap"><button class="icon-btn" data-edit="${u.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${u.id}" title="Delete">${icon('trash', 16)}</button></td></tr>`)}</tbody></table>` : html`<div class="empty">${empty('Nothing announced.')}</div>`}
+      </section>`.s;
     $('#new').onclick = () => editUp(null);
     $('#editReleaseBanner').onclick = editReleaseBanner;
     $$('[data-edit]', root).forEach((b) => b.onclick = () => editUp(data.upcoming.find((u) => u.id === b.dataset.edit)));

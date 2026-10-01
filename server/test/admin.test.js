@@ -312,7 +312,13 @@ test('payments list + coupons: filters, delete only when never used; everything 
 test('the admin page is served with a strict CSP and is never cached', async () => {
   for (const p of ['/admin', '/admin/']) {
     const r = await fetch(root + p); assert.equal(r.status, 200); assert.match(r.headers.get('content-type'), /html/); assert.equal(r.headers.get('cache-control'), 'no-store');
-    assert.match(r.headers.get('content-security-policy'), /script-src 'self'/); assert.equal(r.headers.get('x-frame-options'), 'DENY');
+    const csp = r.headers.get('content-security-policy');
+    assert.match(csp, /script-src 'self'/);
+    assert.match(csp, /script-src[^;]*https:\/\/accounts\.google\.com/);
+    assert.match(csp, /script-src[^;]*https:\/\/connect\.facebook\.net/);
+    assert.match(csp, /script-src[^;]*https:\/\/appleid\.cdn-apple\.com/);
+    assert.match(csp, /frame-src[^;]*https:\/\/accounts\.google\.com/);
+    assert.equal(r.headers.get('x-frame-options'), 'DENY');
   }
   assert.equal((await fetch(root + '/admin/admin.css')).status, 200); assert.equal((await fetch(root + '/admin/js/main.js')).status, 200);
   assert.equal((await fetch(root + '/admin/../server/src/app.js')).status, 404);

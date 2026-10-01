@@ -45,6 +45,15 @@ export const api = {
     const r = await send('POST', '/auth/login', { body: { email, password }, base: '/api/v1' });
     setToken(r.token); return r;
   },
+  /** Provider settings and social sign-in use the same public authentication endpoints as the main site. */
+  authProviders: () => send('GET', '/auth/providers', { base: '/api/v1' }),
+  async loginSocial(provider, credential) {
+    const body = provider === 'google' ? { idToken: credential }
+      : provider === 'facebook' ? { accessToken: credential }
+        : { identityToken: credential.identityToken, name: credential.name };
+    const r = await send('POST', `/auth/${provider}`, { body, base: '/api/v1' });
+    setToken(r.token); return r;
+  },
   /** Authenticated file download (PDF invoices, CSV register). */
   async download(path, filename) {
     const res = await send('GET', path);          // returns the Response for non-JSON bodies
