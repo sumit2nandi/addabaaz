@@ -119,11 +119,17 @@ test('forgot/resend fail loudly instead of pretending an email was sent', async 
     assert.equal(f2.status, 202, 'the failed attempt left no throttle behind');
     assert.ok(extra.some((m) => m.to === em && /Reset your/.test(m.subject)), 'the retry actually delivered');
 
+    // Signup already issued a verify token (throttle state) even though that welcome mail failed, so
+    // clear it — the point under test is that a FAILED strict send reports 503 instead of pretending.
+    await db.pool.query("DELETE FROM auth_tokens WHERE user_id = ? AND purpose = 'verify'", [su.user.id]);
     broken = true;
     const rs = await callOn(sFlaky, 'POST', '/me/verify/resend', null, su.body.token);
     assert.equal(rs.status, 503, 'resend is equally honest');
     assert.equal(rs.body.error.code, 'email_send_failed');
     broken = false;
+    const rs2 = await callOn(sFlaky, 'POST', '/me/verify/resend', null, su.body.token);
+    assert.equal(rs2.status, 202, 'retrying after the failure really sends');
+    assert.ok(extra.some((m) => m.to === em && /Confirm your email/.test(m.subject)), 'the verify mail actually delivered');
 
     const prev = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
