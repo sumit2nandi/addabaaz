@@ -29,6 +29,7 @@ export default async function content(root, [section], ctx) {
   const draw = () => VIEWS[section]();
   const mutate = async (fn, ok) => { try { await fn(); toast(ok); await reload(); } catch (e) { toast(errMsg(e), 'err'); } };
   const videosOf = (id) => data.videos.filter((v) => v.showId === id);
+  const episodesOf = (id) => data.videos.filter((v) => v.showId === id && v.kind === 'episode');
   const showTitle = (id) => { const s = data.shows.find((x) => x.id === id) || data.upcoming.find((x) => x.id === id); return s ? (s.titleEn || s.title) : ''; };
   const isPremiumVideo = (v) => v.access === 'premium' || data.shows.some((s) => s.id === v.showId && s.access === 'premium');
   const move = (list, id, dir) => {
@@ -69,10 +70,12 @@ export default async function content(root, [section], ctx) {
   // Shows list and editor.
   function drawShows() {
     root.innerHTML = html`${pageHead('Shows', note, html`<button class="btn primary" id="new">${icon('plus', 16)} New show</button>`)}
-      <div class="card flush">${data.shows.length ? html`<table class="tbl"><thead><tr><th></th><th>Show</th><th>Type</th><th>Videos</th><th>Access</th><th class="end">Order</th><th></th></tr></thead><tbody>
+      <div class="card flush">${data.shows.length ? html`<table class="tbl"><thead><tr><th></th><th>Show</th><th>Type</th><th>Episodes</th><th>Access</th><th class="end">Order</th><th></th></tr></thead><tbody>
       ${data.shows.map((s, i) => html`<tr><td class="thumb"><img src="${imgSrc(s.poster)}" alt="" loading="lazy"></td>
         <td><strong>${s.titleEn || s.title}</strong>${s.titleEn ? html`<br><small class="muted bn">${s.title}</small>` : ''}${s.featured ? html` ${badge('featured', 'gold')}` : ''}</td>
-        <td>${s.type}<br><small class="muted">${s.status}</small></td><td>${videosOf(s.id).length}</td><td>${s.access === 'premium' ? badge('premium', 'gold') : badge('free')}</td>
+        <td>${s.type}<br><small class="muted">${s.status}</small></td>
+        <td class="nowrap"><a class="btn sm" href="#/videos?show=${encodeURIComponent(s.id)}&amp;kind=episode" title="Manage episodes for ${s.titleEn || s.title}">${icon('tv', 14)} Edit episodes</a><small class="muted">${episodesOf(s.id).length} episodes</small></td>
+        <td>${s.access === 'premium' ? badge('premium', 'gold') : badge('free')}</td>
         <td class="end nowrap">${orderBtns(s.id, i, data.shows.length)}</td>
         <td class="end nowrap"><a class="icon-btn" href="/show/${s.id}" target="_blank" rel="noopener" title="View on site">${icon('external', 16)}</a><button class="icon-btn" data-edit="${s.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${s.id}" title="Delete">${icon('trash', 16)}</button></td></tr>`)}</tbody></table>` : empty('No shows yet.')}</div>`.s;
     $('#new').onclick = () => editShow(null);
@@ -82,7 +85,7 @@ export default async function content(root, [section], ctx) {
   }
 
   /* ---------- videos ---------- */
-  const F = { q: '', show: '', kind: '', access: '', source: '', rating: '', duration: '', visibility: '', offset: 0 };
+  const F = { q: '', show: ctx.query?.get?.('show') || '', kind: ctx.query?.get?.('kind') || '', access: '', source: '', rating: '', duration: '', visibility: '', offset: 0 };
   const selectedVideoIds = new Set();
   const MAX_VIDEO_SELECTION = 500;
   const videoVisibility = (v) => v.hidden ? 'hidden' : v.publishAt && Date.parse(v.publishAt) > Date.now() ? 'scheduled' : 'visible';

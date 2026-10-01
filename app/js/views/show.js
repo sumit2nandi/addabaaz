@@ -3,7 +3,7 @@ import { app } from '../app.js';
 import { go } from '../router.js';
 import { html, $, fmtDuration, fmtViews, fmtDate, timeAgo, fmtRuntime } from '../util.js';
 import { icon } from '../icons.js';
-import { rail, enhanceRails, showCard, videoCard, reelCard, listBtn, img, heroBg, showMeta, toast } from '../ui/components.js';
+import { rail, enhanceRails, showCard, videoCard, reelCard, listBtn, img, heroBg, showMeta, premiumMark, toast } from '../ui/components.js';
 import { shareOrCopy } from '../util.js';
 import { shareUrl } from '../platform.js';
 // mountRating removed: like/dislike removed from the show page per requirement
@@ -13,7 +13,7 @@ export function epRow(v, { current = false } = {}) {
   const cat = app.catalog; const frac = app.user.fraction(v.id, v.duration);
   return html`<a class="ep-row ${current ? 'current' : ''}" href="#/watch/${v.id}" ${current ? html`aria-current="true"` : ''}>
     <span class="ep-num">${v.episode || '•'}</span>
-    <span class="ep-thumb">${img(cat.thumb(v), '')}${cat.isPremium(v) ? html`<span class="chip chip-premium">${icon('lock', { size: 11 })}</span>` : ''}${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}<span class="play-overlay">${icon('play', { size: 18 })}</span></span>
+    <span class="ep-thumb">${img(cat.thumb(v), '')}${cat.isPremium(v) ? premiumMark({ cls: 'premium-mark-compact' }) : ''}${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}<span class="play-overlay">${icon('play', { size: 18 })}</span></span>
     <span class="ep-info"><span class="ep-title">${cat.displayTitle(v)}</span>
       <span class="ep-meta">${fmtDuration(v.duration)} · ${fmtDate(v.publishedAt)} · ${fmtViews(v.views)} views ${frac >= 0.94 ? html`<em class="watched">${icon('check', { size: 12 })} Watched</em>` : ''}</span></span>
   </a>`;
@@ -35,15 +35,15 @@ export default async function showView(ctx) {
     <section class="detail-hero">
       <div class="hero-bg">${latest ? heroBg(cat.thumb(latest, 'maxresdefault'), s.posterLg || s.poster, { fallback: cat.thumb(latest, 'hqdefault') }) : heroBg(s.posterLg || s.poster, '')}</div>
       <div class="hero-shade"></div>
+      ${s.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
       <div class="hero-inner">
         <div class="detail-poster">${img(s.posterLg || s.poster, s.title, { lazy: false })}</div>
         <div class="hero-copy">
-          <div class="eyebrow">${s.type === 'series' ? 'Original Series' : s.type === 'podcast' ? 'Fake Podcast' : 'Stand-up Comedy'} ${s.access === 'premium' ? html`<span class="premium-inline">${icon('lock', { size: 11 })} Premium</span>` : ''}</div>
+          <div class="eyebrow">${s.type === 'series' ? 'Original Series' : s.type === 'podcast' ? 'Fake Podcast' : 'Stand-up Comedy'}</div>
           <h1 class="hero-title bn">${s.title}</h1>
           ${s.titleEn && s.titleEn !== s.title ? html`<div class="hero-title-en">${s.titleEn}</div>` : ''}
           ${showMeta(s)}
           ${s.tagline ? html`<p class="tagline bn">${s.tagline}</p>` : ''}
-          <p class="hero-desc">${s.description}</p>
           <div class="hero-actions">
             ${t ? html`<a class="btn btn-primary btn-lg" href="#/watch/${t.video.id}">${icon('play', { size: 20 })} ${label}</a>` : ''}
             ${trailer ? html`<a class="btn btn-glass btn-lg" href="#/watch/${trailer.id}">${icon('film', { size: 20 })} Trailer</a>` : ''}
@@ -60,6 +60,7 @@ export default async function showView(ctx) {
       </div>
     </section>
     <div class="page page-tight">
+      ${s.description ? html`<section class="show-description" aria-labelledby="showDescriptionTitle"><h2 id="showDescriptionTitle">Description</h2><p>${s.description}</p></section>` : ''}
       ${eps.length ? html`<section class="ep-section" aria-label="Episodes">
         <div class="section-bar"><h2>Episodes <span class="count">${eps.length}</span></h2>
           <button type="button" class="btn btn-ghost btn-sm" id="sortEps" data-order="asc">${icon('list', { size: 16 })} <span>Oldest first</span></button></div>

@@ -8,7 +8,7 @@ import { html, $, fmtDate, fmtViews, fmtDuration, timeAgo, shareOrCopy } from '.
 import { icon } from '../icons.js';
 import { createPlayer, loadYouTube } from '../players/index.js';
 import { go } from '../router.js';
-import { listBtn, videoCard, rail, enhanceRails, metaLine, toast, img } from '../ui/components.js';
+import { listBtn, videoCard, rail, enhanceRails, metaLine, toast, img, premiumMark } from '../ui/components.js';
 import { epRow } from './show.js';
 import { shareUrl, isNative } from '../platform.js';
 
@@ -43,11 +43,11 @@ export default async function watch(ctx) {
           <div class="player-slot" id="playerSlot"></div>
           <div class="player-overlay" id="playerMsg" hidden></div>
           <div class="next-up" id="nextUp" hidden></div>
+          ${cat.isPremium(v) ? premiumMark({ cls: 'premium-mark-player' }) : ''}
         </div>
         <div class="watch-info">
           <div class="crumbs">${show ? html`<a href="#/show/${show.id}">${icon('left', { size: 16 })} ${show.titleEn || show.title}</a>` : soon ? html`<a href="#/soon/${soon.id}">${icon('left', { size: 16 })} ${soon.titleEn || soon.title}</a>` : html`<a href="#/">${icon('left', { size: 16 })} Home</a>`}</div>
           <h1 class="watch-title">${title}</h1>
-          ${cat.isPremium(v) ? html`<span class="premium-inline">${icon('lock', { size: 11 })} Premium</span>` : ''}
           ${metaLine([cat.label(v), fmtDate(v.publishedAt), `${fmtViews(v.views)} views`, v.duration > 0 ? fmtDuration(v.duration) : ''])}
           <div class="watch-actions">
             ${show ? listBtn('show', show.id, { label: 'Add show to My List', cls: 'btn btn-ghost' }) : ''}

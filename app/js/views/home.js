@@ -3,7 +3,7 @@ import { app } from '../app.js';
 import { html, $, $$, fmtDate } from '../util.js';
 import { icon } from '../icons.js';
 import { CONFIG } from '../config.js';
-import { rail, enhanceRails, showCard, videoCard, reelCard, soonCard, galleryCard, listBtn, img, heroBg, showMeta } from '../ui/components.js';
+import { rail, enhanceRails, showCard, videoCard, reelCard, soonCard, galleryCard, listBtn, img, heroBg, showMeta, premiumMark } from '../ui/components.js';
 import { openLightbox } from '../ui/lightbox.js';
 
 // Picks the featured shows for the carousel.
@@ -23,9 +23,10 @@ function heroHtml(slides) {
       return html`<article class="hero-slide ${i === 0 ? 'active' : ''}" data-i="${i}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
         <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault') })}</div>
         <div class="hero-shade"></div>
+        ${show.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
         <div class="hero-inner">
           <div class="hero-copy">
-            <div class="eyebrow">${icon('play', { size: 12 })} ${show.type === 'series' ? 'Original Series' : show.type === 'podcast' ? 'Fake Podcast' : 'Stand-up Comedy'} ${show.access === 'premium' ? html`<span class="premium-inline">${icon('lock', { size: 11 })} Premium</span>` : ''}</div>
+            <div class="eyebrow">${icon('play', { size: 12 })} ${show.type === 'series' ? 'Original Series' : show.type === 'podcast' ? 'Fake Podcast' : 'Stand-up Comedy'}</div>
             <h1 class="hero-title bn">${show.title}</h1>
             ${show.titleEn && show.titleEn !== show.title ? html`<div class="hero-title-en">${show.titleEn}</div>` : ''}
             ${showMeta(show)}

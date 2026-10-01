@@ -21,6 +21,12 @@ export function heroBg(thumb, poster, { lazy = false, fallback } = {}) {
 export function ytImg(v, alt = '', { cls = '' } = {}) {
   return img(app.catalog.thumb(v, 'hqdefault'), alt, { cls });
 }
+// Subtle crown medallion used as the Premium mark on artwork, instead of a text pill over the image.
+export function premiumMark({ cls = '' } = {}) {
+  return html`<span class="premium-mark ${cls}" role="img" aria-label="Premium content" title="Premium content">
+    <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M5 10.5 10.4 15 16 6l5.6 9 5.4-4.5L24 25H8L5 10.5Z" fill="currentColor"/><path d="M8.5 27h15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="m16 2.1.9 1.8 2 .3-1.5 1.4.4 2-1.8-1-1.8 1 .4-2-1.5-1.4 2-.3L16 2.1Z" fill="currentColor"/></svg>
+  </span>`;
+}
 
 /* ---------- state-aware buttons (kept in sync globally by main.js) ---------- */
 // "My List" and "Remind me" buttons render their current state; syncButtons() refreshes every one on the page when the state changes.
@@ -52,11 +58,11 @@ export function syncButtons(root = document) {
 // Poster card for a show.
 export function showCard(s, { cls = '' } = {}) {
   return html`<a class="card card-poster ${cls}" href="#/show/${s.id}" aria-label="${s.titleEn || s.title}">
-    <div class="poster">${img(s.poster, s.title)}${s.access === 'premium' ? html`<span class="chip chip-premium chip-premium-left">${icon('lock', { size: 11 })} Premium</span>` : ''}</div>
+    <div class="poster">${img(s.poster, s.title)}${s.access === 'premium' ? premiumMark() : ''}</div>
     <div class="card-quick">${listBtn('show', s.id, { cls: 'icon-btn', iconOnly: true })}</div>
   </a>`;
 }
-// Thumbnail card for an episode/clip: optional duration, a resume progress bar, lock badge for premium and an optional rank number.
+// Thumbnail card for an episode/clip: optional duration, a resume progress bar, Premium mark and optional rank number.
 export function videoCard(v, { progress = true, rank = 0, showName = true, showDuration = true, cls = '' } = {}) {
   const cat = app.catalog; const show = cat.show(v.showId);
   const frac = progress ? app.user?.fraction(v.id, v.duration) || 0 : 0;
@@ -66,7 +72,7 @@ export function videoCard(v, { progress = true, rank = 0, showName = true, showD
     <div class="thumb">
       ${ytImg(v, cat.displayTitle(v))}
       <span class="chip chip-label">${cat.label(v)}</span>
-      ${cat.isPremium(v) ? html`<span class="chip chip-premium">${icon('lock', { size: 11 })} Premium</span>` : ''}
+      ${cat.isPremium(v) ? premiumMark() : ''}
       ${showDuration && v.duration > 0 ? html`<span class="chip chip-dur">${fmtDuration(v.duration)}</span>` : ''}
       <span class="play-overlay">${icon('play', { size: 22 })}</span>
       ${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}
@@ -81,7 +87,7 @@ export function videoCard(v, { progress = true, rank = 0, showName = true, showD
 export function reelCard(v, { showDuration = true } = {}) {
   const cat = app.catalog; const show = cat.show(v.showId);
   return html`<a class="card card-reel" href="#/reels/${v.id}" aria-label="${cat.displayTitle(v)}">
-    <div class="thumb">${ytImg(v, cat.displayTitle(v))}${cat.isPremium(v) ? html`<span class="chip chip-premium">${icon('lock', { size: 11 })} Premium</span>` : ''}<span class="play-overlay">${icon('play', { size: 20 })}</span>
+    <div class="thumb">${ytImg(v, cat.displayTitle(v))}${cat.isPremium(v) ? premiumMark() : ''}<span class="play-overlay">${icon('play', { size: 20 })}</span>
     ${showDuration ? html`<span class="chip chip-dur">${fmtDuration(v.duration)}</span>` : ''}</div>
     <div class="card-body"><div class="card-title">${cat.displayTitle(v)}</div>${show ? html`<div class="card-meta"><span>${show.titleEn || show.title}</span></div>` : ''}</div>
   </a>`;

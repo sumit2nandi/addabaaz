@@ -44,7 +44,10 @@ ul { margin: 0; padding: 0; list-style: none; }
 
 /* ---------- boot / loading ---------- */
 .boot, .page-loading { display: grid; place-items: center; gap: 22px; min-height: 70vh; align-content: center; }
-.boot img { border-radius: 50%; }
+.boot { gap: 0; }
+.boot-mark { position: relative; width: 116px; height: 116px; display: grid; place-items: center; }
+.boot-mark img { position: relative; z-index: 1; width: 88px; height: 88px; border-radius: 50%; object-fit: cover; box-shadow: 0 6px 24px rgba(0,0,0,.45); }
+.boot-ring { position: absolute; inset: 0; border: 3px solid rgba(255,255,255,.14); border-top-color: var(--accent); border-right-color: rgba(229,9,20,.55); border-radius: 50%; animation: spin .9s linear infinite; }
 /* The boot splash is an in-flow block, not a full-screen overlay — without this the footer/tab bar
    show a stray "ADDABAAZ" line at the bottom of the screen while the app loads. Hidden until the
    first page replaces #boot (JS marks the body .booted; the :has() rule covers a stalled boot). */
@@ -93,7 +96,8 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .nav-drop .menu a::after { display: none; }
 
 /* ---------- bottom tab bar (mobile) ---------- */
-.tabbar { position: fixed; z-index: 100; left: 50%; right: auto; bottom: calc(12px + var(--sab)); transform: translateX(-50%); width: min(680px, calc(100vw - 32px - var(--sal) - var(--sar))); height: var(--tabbar-h); padding: 0 7px; display: grid; grid-template-columns: repeat(var(--tabs, 5), minmax(0, 1fr)); background: rgba(5,5,7,.82); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,.12); border-radius: 999px; box-shadow: 0 10px 30px rgba(0,0,0,.48); }
+.tabbar { position: fixed; z-index: 100; left: 50%; right: auto; bottom: calc(12px + var(--sab)); transform: translate(-50%, 0); width: min(680px, calc(100vw - 32px - var(--sal) - var(--sar))); height: var(--tabbar-h); padding: 0 7px; display: grid; grid-template-columns: repeat(var(--tabs, 5), minmax(0, 1fr)); background: rgba(5,5,7,.82); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,.12); border-radius: 999px; box-shadow: 0 10px 30px rgba(0,0,0,.48); opacity: 1; visibility: visible; pointer-events: auto; transition: transform .32s var(--ease), opacity .22s ease, visibility 0s linear 0s; }
+.tabbar.scroll-hidden { transform: translate(-50%, calc(100% + 24px + var(--sab))); opacity: 0; visibility: hidden; pointer-events: none; transition: transform .32s var(--ease), opacity .22s ease, visibility 0s linear .32s; }
 .tabbar a { display: grid; place-items: center; align-content: center; gap: 3px; color: var(--muted); font-size: 11px; font-weight: 600; }
 .tabbar a.active { color: var(--accent-2); }
 .tabbar a.active svg { color: var(--accent-2); }
@@ -121,7 +125,7 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .chip-btn:hover { background: rgba(255,255,255,.12); }
 .chip-btn.active { background: #fff; color: #000; border-color: #fff; }
 .eyebrow { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; color: var(--gold); }
-.premium-inline { position: static; display: inline-flex; align-items: center; gap: 4px; margin-left: 5px; padding: 3px 6px; border-radius: 5px; background: var(--gold); color: #000; font-size: 9px; font-weight: 900; letter-spacing: .5px; }
+
 .meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--text-2); font-size: 13.5px; font-weight: 500; }
 .meta-line .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--muted); }
 
@@ -163,6 +167,9 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 /* ---------- pages ---------- */
 .page { padding: 28px var(--pad) 40px; max-width: 1600px; margin: 0 auto; }
 .page-tight { padding-top: 8px; } .page-narrow { max-width: 820px; }
+.show-description { max-width: 1000px; margin: 18px 0 28px; padding: 20px 22px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(135deg, rgba(255,255,255,.045), rgba(255,255,255,.015)); }
+.show-description h2 { margin-bottom: 8px; font-size: 19px; }
+.show-description p { max-width: 82ch; color: var(--text-2); line-height: 1.75; }
 .page-head { margin-bottom: 24px; display: grid; gap: 8px; } .page-head h1 { font-size: clamp(28px, 4.5vw, 44px); font-weight: 800; } .page-head p { color: var(--text-2); max-width: 70ch; }
 .sub-h { font-size: 20px; margin: 32px 0 14px; display: flex; align-items: baseline; gap: 10px; }
 .count { font-size: 13px; color: var(--muted); font-weight: 600; }
@@ -411,9 +418,14 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .btn-social.btn-facebook { background: #1877f2; border-color: #1877f2; }
 .or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; letter-spacing: .6px; text-transform: uppercase; }
 .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--border-2); }
-.chip-premium { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 4px; background: var(--gold); color: #000; font-weight: 800; font-size: 10.5px; letter-spacing: .4px; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; }
-.chip-premium-left { right: auto; left: 8px; }
-.ep-thumb .chip-premium { top: 4px; right: 4px; padding: 3px 5px; }
+.premium-mark { position: absolute; z-index: 6; top: 8px; right: 8px; width: 38px; height: 38px; display: grid; place-items: center; color: #f5d993; border: 1px solid rgba(245,217,147,.58); border-radius: 50%; background: linear-gradient(145deg, rgba(255,255,255,.19), rgba(15,12,6,.62)); box-shadow: 0 4px 16px rgba(0,0,0,.52), inset 0 0 10px rgba(245,197,24,.16); backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px); pointer-events: none; }
+.premium-mark::after { content: ''; position: absolute; inset: 3px; border: 1px solid rgba(245,217,147,.24); border-radius: 50%; }
+.premium-mark svg { width: 22px; height: 22px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+.premium-mark-compact { top: 4px; right: 4px; width: 30px; height: 30px; }
+.premium-mark-compact svg { width: 17px; height: 17px; }
+.premium-mark-hero { top: calc(var(--topbar-h) + var(--sat) + 16px); right: var(--pad); width: 46px; height: 46px; }
+.premium-mark-hero svg { width: 26px; height: 26px; }
+.premium-mark-player { top: 12px; right: 12px; width: 44px; height: 44px; }
 .player-overlay .row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 6px; }
 
 /* ---------- checkout dialog & billing history ---------- */
