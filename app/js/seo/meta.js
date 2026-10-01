@@ -75,7 +75,7 @@ const video = (origin, v, cat, show, { url, full = true } = {}) => ({
   uploadDate: v.publishedAt, ...(v.duration > 0 ? { duration: isoDuration(v.duration) } : {}), inLanguage: 'bn', isFamilyFriendly: true,
   ...(url ? { url } : {}),
   ...(v.source?.type === 'youtube' ? { embedUrl: `https://www.youtube.com/embed/${v.source.id}` } : {}),
-  ...(v.access === 'premium' ? { isAccessibleForFree: false } : { isAccessibleForFree: true }),
+  ...(cat.isPremium(v) ? { isAccessibleForFree: false } : { isAccessibleForFree: true }),
   ...(v.views ? { interactionStatistic: { '@type': 'InteractionCounter', interactionType: { '@type': 'WatchAction' }, userInteractionCount: v.views } } : {}),
 });
 

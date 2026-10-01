@@ -26,7 +26,7 @@ export default async function watch(ctx) {
   // starting on mobile networks, so overlap it with everything else rather than starting it inside the player.
   if (v.source.type === 'youtube') loadYouTube().catch(() => {});
   // Can this viewer play it? 'ok' | 'login' | 'plan' | 'unavailable' (premium in static mode).
-  const gate = u.gateFor(v);                       // 'ok' | 'login' | 'plan' | 'unavailable'
+  const gate = u.gateFor(v, cat);                   // Video access includes any Premium parent series.
   const here = encodeURIComponent('/watch/' + v.id);
   ctx.setTitle(title);
 
@@ -47,6 +47,7 @@ export default async function watch(ctx) {
         <div class="watch-info">
           <div class="crumbs">${show ? html`<a href="#/show/${show.id}">${icon('left', { size: 16 })} ${show.titleEn || show.title}</a>` : soon ? html`<a href="#/soon/${soon.id}">${icon('left', { size: 16 })} ${soon.titleEn || soon.title}</a>` : html`<a href="#/">${icon('left', { size: 16 })} Home</a>`}</div>
           <h1 class="watch-title">${title}</h1>
+          ${cat.isPremium(v) ? html`<span class="premium-inline">${icon('lock', { size: 11 })} Premium</span>` : ''}
           ${metaLine([cat.label(v), fmtDate(v.publishedAt), `${fmtViews(v.views)} views`, v.duration > 0 ? fmtDuration(v.duration) : ''])}
           <div class="watch-actions">
             ${show ? listBtn('show', show.id, { label: 'Add show to My List', cls: 'btn btn-ghost' }) : ''}
@@ -119,7 +120,7 @@ export default async function watch(ctx) {
     $('#retry', msg).onclick = () => { msg.hidden = true; startPlayer(); };
   };
   /* Screens-at-once seat (premium only) and first-party play statistics (plays and watch time, no personal data). */
-  const premium = v.access === 'premium', api = u.remote;
+  const premium = cat.isPremium(v), api = u.remote;
   let beat = null, tick = null, playedAt = 0, started = false;
   const flushWatch = () => { if (playedAt && api) { const secs = Math.round((Date.now() - playedAt) / 1000); playedAt = Date.now(); if (secs > 0) api.playEvent(v.id, 'progress', secs); } };
   const onPlaying = () => {

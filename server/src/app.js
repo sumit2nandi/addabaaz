@@ -262,6 +262,12 @@ export function createApp({
   };
   // Small helpers: catalog lookup, the public base URL for links we hand out, and mp4-vs-HLS detection.
   const findVideo = (id) => catalog.video(id);
+  const isPremiumVideo = async (v) => {
+    if (v.access === 'premium') return true;
+    if (!v.showId) return false;
+    const { catalog: snapshot } = await catalog.get();
+    return snapshot.shows.some((s) => s.id === v.showId && s.access === 'premium');
+  };
   const originOf = (req) => (publicApiUrl || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
   const r2Format = (src) => src.format || (/\.m3u8$/i.test(src.key) ? 'hls' : 'mp4');
   /** Returns a playable URL for a video hosted in R2. Premium titles need a signed-in account with an active paid plan. */
@@ -270,7 +276,7 @@ export function createApp({
     if (!v) throw new HttpError(404, 'not_found', 'Unknown video.');
     if (v.source?.type !== 'r2') throw new HttpError(400, 'not_hosted', 'This video isn’t available right now.');
     // Premium gate: must be signed in (401), have a paid plan (402) and be within the simultaneous-screens limit (429). Free videos skip all of this.
-    if (v.access === 'premium') {
+    if (await isPremiumVideo(v)) {
       const user = await userFromRequest(req);
       if (!user) throw new HttpError(401, 'login_required', 'Please sign in to watch premium videos.');
       if ((await db.subscriptions.get(user.id)).planId === 'free') throw new HttpError(402, 'subscription_required', 'Subscribe to ADDABAAZ Plus to watch this video.');   // premium = signed in AND paid

@@ -25,7 +25,7 @@ function heroHtml(slides) {
         <div class="hero-shade"></div>
         <div class="hero-inner">
           <div class="hero-copy">
-            <div class="eyebrow">${icon('play', { size: 12 })} ${show.type === 'series' ? 'Original Series' : show.type === 'podcast' ? 'Fake Podcast' : 'Stand-up Comedy'}</div>
+            <div class="eyebrow">${icon('play', { size: 12 })} ${show.type === 'series' ? 'Original Series' : show.type === 'podcast' ? 'Fake Podcast' : 'Stand-up Comedy'} ${show.access === 'premium' ? html`<span class="premium-inline">${icon('lock', { size: 11 })} Premium</span>` : ''}</div>
             <h1 class="hero-title bn">${show.title}</h1>
             ${show.titleEn && show.titleEn !== show.title ? html`<div class="hero-title-en">${show.titleEn}</div>` : ''}
             ${showMeta(show)}
@@ -70,9 +70,12 @@ function comingSoonSection(cat) {
   const posters = cat.homePosters || {};
   const desktopPoster = posters.releasingThisMonth || 'media/upcoming/durga-lg.webp';
   const mobilePoster = posters.releasingThisMonthMobile || 'media/upcoming/durga-sm.webp';
+  const featureTitle = cat.soon(posters.releasingThisMonthId);
+  const featureHref = featureTitle ? `#/soon/${featureTitle.id}` : '#/upcoming';
+  const featureLabel = featureTitle ? `Releasing this month — ${featureTitle.titleEn || featureTitle.title}` : 'Releasing this month — browse all upcoming releases';
   return html`<section class="rail r-poster home-coming-soon" aria-label="Coming Soon">
     <div class="rail-head"><div><h2>Coming Soon</h2><p class="rail-sub">New originals from ADDABAAZ</p></div><a class="see-all" href="#/upcoming">Show all ${icon('right', { size: 16 })}</a></div>
-    <a class="home-coming-soon-feature" href="#/upcoming" aria-label="Releasing this month — browse all upcoming releases">
+    <a class="home-coming-soon-feature" href="${featureHref}" aria-label="${featureLabel}">
       <picture><source media="(max-width: 699px)" srcset="${mobilePoster}">${img(desktopPoster, 'ADDABAAZ original releasing this month')}</picture>
       <span class="home-coming-soon-feature-shade" aria-hidden="true"></span>
       <span class="home-coming-soon-feature-badge">Releasing This Month</span>

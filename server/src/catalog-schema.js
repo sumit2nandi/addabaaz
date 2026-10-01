@@ -1,9 +1,9 @@
 /**
  * The catalog schema in one place: used by the admin API (validates every write), by `npm run validate:catalog` and by the CLI import.
  * validate(type, input, ctx) → { doc, errors }  — `doc` is the normalised document to store (only known fields, trimmed, typed).
- *   studio.homePosters stores homepage Coming Soon banner artwork; regular carousel posters live on upcoming items.
+ *   studio.homePosters stores the homepage Coming Soon artwork and its optional upcoming-detail target; carousel posters live on upcoming items.
  *   ctx.fileExists(rel)  optional: check that local image paths (media/…, uploads/…) exist
- *   ctx.showIds / ctx.upcomingIds  optional Sets: check `showId` references
+ *   ctx.showIds / ctx.upcomingIds  optional Sets: check catalog references
  */
 export const TYPES = { shows: 'show', videos: 'video', upcoming: 'upcoming', gallery: 'gallery' };
 // Reusable patterns and allowed values. IDs are short slugs; image paths must be local uploads/media files or https URLs; subtitle files must be .vtt.
@@ -85,6 +85,10 @@ function show(input, ctx) {
   r.str('tagline', { max: 300 }); r.str('description', { req: true, max: 3000 }); r.list('cast', { max: 60 }); r.str('language', { max: 40 });
   r.int('year', { min: 1900, max: 2100 }); r.oneOf('status', STATUSES, { dflt: 'ongoing' }); r.bool('featured'); r.img('poster', { req: true }); r.img('posterLg');
   r.oneOf('access', ACCESS, { dflt: 'free' }); r.oneOf('rating', RATINGS);
+  if (r.out.access === 'premium') {
+    const children = ctx.videosByShow?.get(r.out.id) || [];
+    if (children.some((v) => v.source?.type !== 'r2')) r.errors.push('Every video in a Premium show must be hosted in private R2 storage.');
+  }
   return r;
 }
 
@@ -113,6 +117,9 @@ function video(input, ctx) {
   }
   r.img('thumbnail'); r.int('duration', { req: true, max: 86400 }); r.date('publishedAt', { req: true }); r.int('views', { dflt: 0 });
   r.oneOf('access', ACCESS, { req: true }); r.oneOf('rating', RATINGS); r.date('publishAt'); r.bool('hidden', false);
+  if ((r.out.access === 'premium' || ctx.premiumShowIds?.has(r.out.showId)) && r.out.source?.type !== 'r2') {
+    r.errors.push('Premium videos and videos in Premium shows must be hosted in private R2 storage.');
+  }
   // Optional subtitle tracks: max 12, each with a language code, label and a .vtt file; one track per language.
   if (r.src.subtitles !== undefined && r.src.subtitles !== null) {
     const subs = r.src.subtitles;
@@ -162,8 +169,9 @@ function studio(input, ctx) {
   const soc = reader(o.studio?.social || {}, ['facebook', 'instagram', 'youtube', 'x', 'twitter', 'linkedin'], 'social', ctx);
   for (const k of ['facebook', 'instagram', 'youtube', 'x', 'twitter', 'linkedin']) soc.str(k, { pattern: URL_OK, msg: `${k} must be a URL.`, max: 500 });
   st.out.social = soc.out; errors.push(...st.errors, ...soc.errors);
-  const home = reader(o.homePosters || {}, ['releasingThisMonth', 'releasingThisMonthMobile'], 'homePosters', ctx);
-  home.img('releasingThisMonth'); home.img('releasingThisMonthMobile'); errors.push(...home.errors);
+  const home = reader(o.homePosters || {}, ['releasingThisMonth', 'releasingThisMonthMobile', 'releasingThisMonthId'], 'homePosters', ctx);
+  home.img('releasingThisMonth'); home.img('releasingThisMonthMobile'); home.str('releasingThisMonthId', { max: 64, pattern: ID, msg: 'releasingThisMonthId must be a valid upcoming-title ID.' });
+  ref(home, ctx, 'releasingThisMonthId', [ctx.upcomingIds].filter(Boolean)); errors.push(...home.errors);
   const out = { studio: st.out, homePosters: home.out };
   for (const k of ['missionEn', 'missionBn']) {
     const l = reader({ [k]: o[k] }, [k], k, ctx); l.list(k, { max: 400, maxItems: 12 }); errors.push(...l.errors); out[k] = l.out[k];
@@ -197,7 +205,10 @@ export function checkCatalog(cat, studioDoc, { fileExists } = {}) {
   const problems = [];
   const seen = (arr, label) => { const s = new Set(); for (const x of arr) { if (s.has(x.id)) problems.push(`duplicate ${label} id: ${x.id}`); s.add(x.id); } return s; };
   const showIds = seen(cat.shows || [], 'show'), upcomingIds = seen(cat.upcoming || [], 'upcoming'); seen(cat.videos || [], 'video'); seen(cat.gallery || [], 'gallery');
-  const ctx = { fileExists, showIds, upcomingIds };
+  const videosByShow = new Map();
+  for (const v of cat.videos || []) if (v.showId) { const list = videosByShow.get(v.showId) || []; list.push(v); videosByShow.set(v.showId, list); }
+  const premiumShowIds = new Set((cat.shows || []).filter((s) => s.access === 'premium').map((s) => s.id));
+  const ctx = { fileExists, showIds, upcomingIds, videosByShow, premiumShowIds };
   for (const [key, type] of Object.entries(TYPES)) for (const d of cat[key] || []) for (const e of validate(type, d, ctx).errors) problems.push(`${type} ${d?.id}: ${e}`);
   if (studioDoc) for (const e of validate('studio', studioDoc, ctx).errors) problems.push(`studio: ${e}`);
   return problems;

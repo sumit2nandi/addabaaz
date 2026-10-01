@@ -78,10 +78,13 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-cat-'));
 const catalog = JSON.parse(fs.readFileSync(new URL('../../data/catalog.json', import.meta.url), 'utf8'));
 const base = catalog.videos.find((v) => v.kind === 'episode');
 const mk = (id, extra) => ({ ...base, id, title: id, showId: base.showId, kind: 'clip', episode: null, ...extra });
+const premiumShowId = 'premium-parent-test';
+catalog.shows.push({ ...catalog.shows[0], id: premiumShowId, title: 'Premium parent', titleEn: 'Premium parent', access: 'premium', featured: false });
 catalog.videos.push(
   mk('prem-mp4', { access: 'premium', source: { type: 'r2', key: 'premium/prem-mp4/video.mp4' } }),
   mk('prem-hls', { access: 'premium', source: { type: 'r2', key: 'premium/prem-hls/master.m3u8' } }),
   mk('free-r2', { access: 'free', source: { type: 'r2', key: 'free/free-r2.mp4' } }),
+  mk('prem-parent-r2', { showId: premiumShowId, access: 'free', thumbnail: base.thumbnail || catalog.shows[0].poster, source: { type: 'r2', key: 'premium/premium-parent-test/episode.mp4' } }),
 );
 fs.writeFileSync(path.join(tmp, 'catalog.json'), JSON.stringify(catalog));
 
@@ -174,14 +177,17 @@ const paidUser = async (email) => { const u = await signup(email); await pay(u.t
 
 test('premium (R2): needs sign-in AND a paid plan; free R2 videos are public', async () => {
   const anon = await call('POST', '/videos/prem-mp4/stream'); assert.equal(anon.status, 401); assert.equal(anon.body.error.code, 'login_required');
+  assert.equal((await call('POST', '/videos/prem-parent-r2/stream')).status, 401, 'a Premium parent series gates its R2 episodes too');
   assert.equal((await call('POST', '/videos/prem-mp4/stream', null, 'a.b.c')).status, 401);
   assert.equal((await call('POST', '/videos/nope/stream')).status, 404);
   assert.equal((await call('POST', `/videos/${base.id}/stream`)).status, 400);                    // YouTube video: nothing to sign
   const free = await call('POST', '/videos/free-r2/stream'); assert.equal(free.status, 200); assert.match(free.body.url, /^https:\/\/r2\.test\/free\/free-r2\.mp4\?ttl=21600$/);
   const u = await signup('viewer@example.com');                                                    // signed in but NOT paid
   const unpaid = await call('POST', '/videos/prem-mp4/stream', null, u.token); assert.equal(unpaid.status, 402); assert.equal(unpaid.body.error.code, 'subscription_required');
+  assert.equal((await call('POST', '/videos/prem-parent-r2/stream', null, u.token)).status, 402);
   assert.equal((await call('POST', '/videos/free-r2/stream', null, u.token)).status, 200);        // free titles are never gated
   await pay(u.token);
+  assert.equal((await call('POST', '/videos/prem-parent-r2/stream', null, u.token)).status, 200, 'a paid member can stream an R2 episode of a Premium series');
   const r = await call('POST', '/videos/prem-mp4/stream', null, u.token);
   assert.equal(r.status, 200); assert.equal(r.body.type, 'mp4'); assert.equal(r.body.url, 'https://r2.test/premium/prem-mp4/video.mp4?ttl=21600'); assert.ok(Date.parse(r.body.expiresAt) > Date.now());
   assert.equal(r.headers.get('cache-control'), 'no-store');

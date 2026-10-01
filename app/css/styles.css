@@ -121,6 +121,7 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .chip-btn:hover { background: rgba(255,255,255,.12); }
 .chip-btn.active { background: #fff; color: #000; border-color: #fff; }
 .eyebrow { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; color: var(--gold); }
+.premium-inline { position: static; display: inline-flex; align-items: center; gap: 4px; margin-left: 5px; padding: 3px 6px; border-radius: 5px; background: var(--gold); color: #000; font-size: 9px; font-weight: 900; letter-spacing: .5px; }
 .meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--text-2); font-size: 13.5px; font-weight: 500; }
 .meta-line .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--muted); }
 
@@ -178,17 +179,12 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 
 /* ---------- grids ---------- */
 .grid { display: grid; gap: 22px 16px; }
-.grid-shows { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-.grid-upcoming-pending, .grid-upcoming-portrait { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-.grid-upcoming-landscape { grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); }
-.grid-upcoming-landscape .show-tile { max-width: 640px; }
-.upcoming-poster-group { margin-top: 24px; }
-.upcoming-poster-group > h2 { margin-bottom: 14px; font-size: clamp(17px, 2vw, 21px); }
+.grid-shows, .grid-upcoming { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .grid-videos { grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); }
 .grid-reels { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 .grid-gallery { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .show-tile { display: grid; gap: 10px; align-content: start; } .show-tile-info { display: grid; gap: 6px; justify-items: start; } .show-tile-info > a { font-size: 17px; font-weight: 600; }
-@media (min-width: 700px) { .grid-shows, .grid-gallery, .grid-upcoming-portrait { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); } .grid-reels { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); } }
+@media (min-width: 700px) { .grid-shows, .grid-gallery, .grid-upcoming { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); } .grid-reels { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); } }
 
 /* ---------- cards ---------- */
 .card { position: relative; display: block; border-radius: var(--radius); transition: transform .3s var(--ease), box-shadow .3s; text-align: left; background: none; border: 0; padding: 0; width: 100%; }
@@ -197,6 +193,7 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .poster img, .thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s var(--ease); }
 .poster-adaptive { aspect-ratio: 2/3; }
 .poster-adaptive img, .poster-soon img { object-fit: contain; }
+.home-coming-soon .poster-soon img { object-fit: cover; }
 .card-soon:hover .poster-adaptive-image, .card-soon:hover .poster-soon-image { transform: none; }
 img.img-failed { opacity: 0; }
 .card-gallery .poster { aspect-ratio: 2/3; cursor: zoom-in; }
@@ -415,6 +412,7 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; letter-spacing: .6px; text-transform: uppercase; }
 .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--border-2); }
 .chip-premium { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 4px; background: var(--gold); color: #000; font-weight: 800; font-size: 10.5px; letter-spacing: .4px; text-transform: uppercase; padding: 3px 7px; border-radius: 6px; }
+.chip-premium-left { right: auto; left: 8px; }
 .ep-thumb .chip-premium { top: 4px; right: 4px; padding: 3px 5px; }
 .player-overlay .row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 6px; }
 

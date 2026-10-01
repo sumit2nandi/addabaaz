@@ -52,7 +52,7 @@ export function syncButtons(root = document) {
 // Poster card for a show.
 export function showCard(s, { cls = '' } = {}) {
   return html`<a class="card card-poster ${cls}" href="#/show/${s.id}" aria-label="${s.titleEn || s.title}">
-    <div class="poster">${img(s.poster, s.title)}</div>
+    <div class="poster">${img(s.poster, s.title)}${s.access === 'premium' ? html`<span class="chip chip-premium chip-premium-left">${icon('lock', { size: 11 })} Premium</span>` : ''}</div>
     <div class="card-quick">${listBtn('show', s.id, { cls: 'icon-btn', iconOnly: true })}</div>
   </a>`;
 }
@@ -66,7 +66,7 @@ export function videoCard(v, { progress = true, rank = 0, showName = true, showD
     <div class="thumb">
       ${ytImg(v, cat.displayTitle(v))}
       <span class="chip chip-label">${cat.label(v)}</span>
-      ${v.access === 'premium' ? html`<span class="chip chip-premium">${icon('lock', { size: 11 })} Premium</span>` : ''}
+      ${cat.isPremium(v) ? html`<span class="chip chip-premium">${icon('lock', { size: 11 })} Premium</span>` : ''}
       ${showDuration && v.duration > 0 ? html`<span class="chip chip-dur">${fmtDuration(v.duration)}</span>` : ''}
       <span class="play-overlay">${icon('play', { size: 22 })}</span>
       ${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}
@@ -81,12 +81,12 @@ export function videoCard(v, { progress = true, rank = 0, showName = true, showD
 export function reelCard(v, { showDuration = true } = {}) {
   const cat = app.catalog; const show = cat.show(v.showId);
   return html`<a class="card card-reel" href="#/reels/${v.id}" aria-label="${cat.displayTitle(v)}">
-    <div class="thumb">${ytImg(v, cat.displayTitle(v))}<span class="play-overlay">${icon('play', { size: 20 })}</span>
+    <div class="thumb">${ytImg(v, cat.displayTitle(v))}${cat.isPremium(v) ? html`<span class="chip chip-premium">${icon('lock', { size: 11 })} Premium</span>` : ''}<span class="play-overlay">${icon('play', { size: 20 })}</span>
     ${showDuration ? html`<span class="chip chip-dur">${fmtDuration(v.duration)}</span>` : ''}</div>
     <div class="card-body"><div class="card-title">${cat.displayTitle(v)}</div>${show ? html`<div class="card-meta"><span>${show.titleEn || show.title}</span></div>` : ''}</div>
   </a>`;
 }
-// Fixed portrait card for upcoming rails. The dedicated upcoming page handles landscape grouping separately.
+// Fixed portrait card for upcoming rails. The dedicated upcoming page uses adaptive portrait frames and preserves full artwork.
 export function soonCard(u) {
   return html`<a class="card card-poster card-soon" href="#/soon/${u.id}" aria-label="${u.titleEn || u.title} — coming soon">
     <div class="poster poster-soon">${img(u.poster, 'Coming soon poster', { cls: 'poster-soon-image' })}<span class="chip chip-soon">Coming soon</span></div>
@@ -98,22 +98,6 @@ export function galleryCard(g, i) {
 }
 
 /* ---------- rails ---------- */
-// Resize an upcoming poster frame to the image's real orientation after it loads, avoiding portrait-cropping of landscape art.
-export function fitAdaptivePosters(root, onFit = () => {}) {
-  root.querySelectorAll('.poster-adaptive-image').forEach((image) => {
-    const frame = image.closest('.poster-adaptive'); if (!frame) return;
-    const fit = () => {
-      const { naturalWidth: width, naturalHeight: height } = image;
-      const orientation = width > height ? 'landscape' : 'portrait';
-      if (width > 0 && height > 0) frame.style.aspectRatio = `${width} / ${height}`;
-      frame.dataset.orientation = orientation;
-      onFit(image, orientation);
-    };
-    if (image.complete) fit();
-    else { image.addEventListener('load', fit, { once: true }); image.addEventListener('error', fit, { once: true }); }
-  });
-}
-
 // A horizontal scrolling row with a heading and a "See all" link.
 export function rail({ title, subtitle = '', items = [], href = '', linkLabel = 'See all', cls = '', id = '' }) {
   if (!items.length) return html``;
@@ -129,7 +113,6 @@ export function rail({ title, subtitle = '', items = [], href = '', linkLabel = 
 }
 // Wire up the left/right scroll buttons of every rail under `root` (enable/disable at the ends).
 export function enhanceRails(root) {
-  fitAdaptivePosters(root);
   root.querySelectorAll('.rail-track').forEach((track) => {
     const wrap = track.parentElement; const l = wrap.querySelector('.left'); const r = wrap.querySelector('.right');
     const upd = () => { l.disabled = track.scrollLeft < 4; r.disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 4; wrap.classList.toggle('no-scroll', track.scrollWidth <= track.clientWidth + 4); };

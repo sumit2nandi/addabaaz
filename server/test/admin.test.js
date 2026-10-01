@@ -71,13 +71,22 @@ test('admin email diagnostic sends a real test message only to the signed-in adm
 });
 
 test('schema: unit checks (ids, images, sources, unknown fields) and the shipped catalog is valid', () => {
-  assert.deepEqual(checkCatalog(seed, JSON.parse(fs.readFileSync(new URL('data/studio.json', ROOT), 'utf8')), { fileExists: (rel) => fs.existsSync(new URL(rel, ROOT)) }), []);
+  const studioSeed = JSON.parse(fs.readFileSync(new URL('data/studio.json', ROOT), 'utf8'));
+  assert.deepEqual(checkCatalog(seed, studioSeed, { fileExists: (rel) => fs.existsSync(new URL(rel, ROOT)) }), []);
+  const soonIds = new Set(seed.upcoming.map((u) => u.id));
+  assert.deepEqual(validate('studio', { ...studioSeed, homePosters: { ...studioSeed.homePosters, releasingThisMonthId: seed.upcoming[0].id } }, { upcomingIds: soonIds }).errors, []);
+  assert.ok(validate('studio', { ...studioSeed, homePosters: { ...studioSeed.homePosters, releasingThisMonthId: 'missing-title' } }, { upcomingIds: soonIds }).errors.some((e) => /releasingThisMonthId.*does not exist/.test(e)));
   const bad = (type, doc, re) => { const { errors } = validate(type, doc, {}); assert.ok(errors.some((e) => re.test(e)), `${JSON.stringify(doc)} → ${errors}`); };
   bad('show', { id: 'a b', title: 'x', description: 'd', poster: 'media/x.webp' }, /id may only/);
+  const parent = seed.shows[0], nonPrivateChild = seed.videos.find((v) => v.showId === parent.id && v.source?.type !== 'r2');
+  assert.ok(nonPrivateChild, 'fixture has a public-source child episode');
+  assert.ok(validate('show', { ...parent, access: 'premium' }, { videosByShow: new Map([[parent.id, [nonPrivateChild]]]) }).errors.some((e) => /Every video in a Premium show/.test(e)));
+  assert.ok(validate('video', { ...nonPrivateChild, access: 'free' }, { premiumShowIds: new Set([parent.id]) }).errors.some((e) => /hosted in private R2/.test(e)));
   bad('show', { id: 'a', title: 'x', description: 'd', poster: '../etc/passwd' }, /poster/);
   bad('show', { id: 'a', title: 'x', description: 'd', poster: 'javascript:alert(1)' }, /poster/);
   bad('show', { id: 'a', title: 'x', description: 'd', poster: 'https://x.test/p.webp', isAdmin: true }, /Unknown field "isAdmin"/);
   bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'youtube', id: 'short' }, duration: 5, publishedAt: '2026-01-01', access: 'free' }, /11-character/);
+  bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'youtube', id: 'abcdefghijk' }, duration: 5, publishedAt: '2026-01-01', access: 'premium' }, /hosted in private R2/);
   bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'r2', key: 'premium/../x.mp4' }, thumbnail: 'https://x.test/t.jpg', duration: 5, publishedAt: '2026-01-01', access: 'premium' }, /safe R2 object key/);
   bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'r2', key: 'premium/x.mp4' }, duration: 5, publishedAt: '2026-01-01', access: 'premium' }, /thumbnail/);
   bad('video', { id: 'v', kind: 'reel', title: 't', source: { type: 'mp4', url: 'ftp://x' }, duration: 5, publishedAt: 'nope', access: 'free' }, /source.url|publishedAt/);
@@ -236,7 +245,7 @@ test('catalog: upcoming, gallery, reordering and the studio profile', async () =
   // reminders for a removed upcoming title go too
   const st = (await A('GET', '/catalog')).body.studio;
   assert.equal((await A('PUT', '/studio', { ...st, studio: { ...st.studio, email: 'not-an-email' } })).status, 400);
-  const bannerPosters = { releasingThisMonth: 'media/upcoming/poster-4-lg.webp', releasingThisMonthMobile: 'media/upcoming/poster-4-sm.webp' };
+  const bannerPosters = { releasingThisMonth: 'media/upcoming/poster-4-lg.webp', releasingThisMonthMobile: 'media/upcoming/poster-4-sm.webp', releasingThisMonthId: seed.upcoming[0].id };
   const bannerSave = await A('PUT', '/studio', { ...st, homePosters: bannerPosters }); assert.equal(bannerSave.status, 200);
   assert.deepEqual((await call('GET', '/catalog')).body.homePosters, bannerPosters, 'homepage banner artwork is exposed from the editable studio settings');
   const ok = await A('PUT', '/studio', { ...st, homePosters: bannerPosters, studio: { ...st.studio, tagline: 'A new tagline', phones: ['+91 1', '+91 2'] }, team: st.team.slice(0, 2) }); assert.equal(ok.status, 200);

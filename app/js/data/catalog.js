@@ -38,6 +38,10 @@ export class Catalog {
   show(id) { return this._show.get(id); }
   video(id) { return this._video.get(id); }
   soon(id) { return this._soon.get(id); }
+  /** Premium access is inherited from the parent series so every episode is gated consistently. */
+  isPremium(video) {
+    return video?.access === 'premium' || (video?.showId && this._show.get(video.showId)?.access === 'premium') || false;
+  }
   get genres() { return this._genres; }
 
   /** Episodes of a show in watch order (EP 1 → n). */

@@ -10,7 +10,7 @@ const KINDS = [['episode', 'Episode'], ['reel', 'Reel'], ['clip', 'Clip'], ['tra
 const thumb = (v) => v.thumbnail ? imgSrc(v.thumbnail) : v.source?.type === 'youtube' ? `https://i.ytimg.com/vi/${v.source.id}/default.jpg` : '';
 // Rows per page in lists.
 const PAGE = 25;
-const HOME_POSTER_DEFAULTS = { releasingThisMonth: 'media/upcoming/durga-lg.webp', releasingThisMonthMobile: 'media/upcoming/durga-sm.webp' };
+const HOME_POSTER_DEFAULTS = { releasingThisMonth: 'media/upcoming/durga-lg.webp', releasingThisMonthMobile: 'media/upcoming/durga-sm.webp', releasingThisMonthId: 'mayer-golpo' };
 
 // Draws the chosen section's list plus its add/edit dialogs. Saving calls the admin API and reloads the list.
 export default async function content(root, [section], ctx) {
@@ -30,6 +30,7 @@ export default async function content(root, [section], ctx) {
   const mutate = async (fn, ok) => { try { await fn(); toast(ok); await reload(); } catch (e) { toast(errMsg(e), 'err'); } };
   const videosOf = (id) => data.videos.filter((v) => v.showId === id);
   const showTitle = (id) => { const s = data.shows.find((x) => x.id === id) || data.upcoming.find((x) => x.id === id); return s ? (s.titleEn || s.title) : ''; };
+  const isPremiumVideo = (v) => v.access === 'premium' || data.shows.some((s) => s.id === v.showId && s.access === 'premium');
   const move = (list, id, dir) => {
     const ids = list.map((x) => x.id), i = ids.indexOf(id), j = i + dir; if (j < 0 || j >= ids.length) return;
     [ids[i], ids[j]] = [ids[j], ids[i]]; return mutate(() => api.put(`/catalog/${section}/order`, { ids }), 'Order saved');
@@ -42,7 +43,7 @@ export default async function content(root, [section], ctx) {
     { k: 'title', label: 'Title', req: true }, { k: 'titleEn', label: 'Title in English' },
     { k: 'type', label: 'Type', type: 'select', options: SHOW_TYPES, dflt: 'series' },
     { k: 'status', label: 'Status', type: 'select', options: [{ v: 'ongoing', l: 'Ongoing' }, { v: 'completed', l: 'Completed' }, { v: 'paused', l: 'Paused' }], dflt: 'ongoing' },
-    { k: 'access', label: 'Access', type: 'select', options: ACCESS, dflt: 'free' },
+    { k: 'access', label: 'Access', type: 'select', options: ACCESS, dflt: 'free', help: 'Every video in a Premium series must be hosted in private R2 storage.' },
     { k: 'language', label: 'Language' }, { k: 'year', label: 'Year', type: 'number', min: 1900, max: 2100 },
     { k: 'genres', label: 'Genres', type: 'tags', wide: true }, { k: 'cast', label: 'Cast', type: 'tags', wide: true },
     { k: 'tagline', label: 'Tagline', wide: true, max: 300, help: 'One line. Shown under the title and used in Google results — about 60–120 characters works best.' },
@@ -128,7 +129,7 @@ export default async function content(root, [section], ctx) {
     { k: 'title', label: 'Title', req: true, wide: true, max: 300 }, { k: 'shortTitle', label: 'Short title (optional, shown on cards)', wide: true, max: 120 },
     { k: 'description', label: 'Description for Google (optional)', type: 'textarea', wide: true, max: 500, help: 'One or two sentences about this video (120–155 characters is ideal). Episodes get an automatic description from their show if this is empty; reels are kept out of Google unless you write one.' },
     { k: 'episode', label: 'Episode number', type: 'number', min: 1, help: 'Episodes only.' },
-    { k: 'access', label: 'Access', type: 'select', options: ACCESS, dflt: 'free', help: 'Premium needs the video hosted in R2.' },
+    { k: 'access', label: 'Access', type: 'select', options: ACCESS, dflt: 'free', help: 'Premium videos and every video in a Premium series must be hosted in private R2 storage.' },
     sourceField(),
     { k: 'thumbnail', label: 'Thumbnail', type: 'image', maxWidth: 1000, wide: true, help: 'Required for R2 videos; YouTube videos use their own thumbnail.' },
     { k: 'duration', label: 'Duration (mm:ss)', req: true, placeholder: '12:34', help: 'The public YouTube feed has no duration. Imported videos show — until you enter the real runtime here.' }, { k: 'publishedAt', label: 'Published', type: 'datetime', req: true },
@@ -334,7 +335,7 @@ export default async function content(root, [section], ctx) {
       return (!q || text.includes(q))
         && (!F.show || (F.show === '_none' ? !v.showId : v.showId === F.show))
         && (!F.kind || v.kind === F.kind)
-        && (!F.access || v.access === F.access)
+        && (!F.access || isPremiumVideo(v) === (F.access === 'premium'))
         && (!F.source || v.source?.type === F.source)
         && (!F.rating || (F.rating === 'unrated' ? !v.rating : v.rating === F.rating))
         && (!F.duration || (F.duration === 'unknown' ? !(v.duration > 0) : v.duration > 0))
@@ -348,7 +349,7 @@ export default async function content(root, [section], ctx) {
     $('#videoSelectedCount').textContent = `${plural(selectedVideoIds.size, 'video')} selected`;
     $('#list').innerHTML = html`<div class="card flush">${rows.length ? html`<table class="tbl"><thead><tr><th class="select-col"><input type="checkbox" id="selectPage" aria-label="Select this page"></th><th></th><th>Title</th><th>Show</th><th>Website</th><th>Duration</th><th>Published</th><th class="end">Views</th><th></th></tr></thead><tbody>
       ${pageRows.map((v) => html`<tr><td class="select-col"><input type="checkbox" data-video-select="${v.id}" aria-label="Select ${v.title}" ${selectedVideoIds.has(v.id) ? 'checked' : ''}></td><td class="thumb wide">${thumb(v) ? html`<img src="${thumb(v)}" alt="" loading="lazy">` : ''}</td>
-        <td class="title-cell"><strong class="clip">${v.shortTitle || v.title}</strong><br>${badge(youtubeKindLabel(v))} ${badge(v.source?.type === 'youtube' ? 'YouTube' : v.source?.type === 'r2' ? 'R2' : v.source?.type?.toUpperCase() || 'Video')} ${v.access === 'premium' ? badge('premium', 'gold') : ''}</td>
+        <td class="title-cell"><strong class="clip">${v.shortTitle || v.title}</strong><br>${badge(youtubeKindLabel(v))} ${badge(v.source?.type === 'youtube' ? 'YouTube' : v.source?.type === 'r2' ? 'R2' : v.source?.type?.toUpperCase() || 'Video')} ${isPremiumVideo(v) ? badge('premium', 'gold') : ''}</td>
         <td>${showTitle(v.showId) || html`<span class="muted">—</span>`}</td><td>${videoVisibility(v) === 'hidden' ? badge('Hidden', 'bad') : videoVisibility(v) === 'scheduled' ? badge('Scheduled', 'warn') : badge('Visible', 'ok')}</td>
         <td>${v.duration > 0 ? fmtDur(v.duration) : '—'}</td><td class="small">${fmtDT(v.publishedAt)}</td><td class="end">${Number(v.views || 0).toLocaleString('en-IN')}</td>
         <td class="end nowrap"><a class="icon-btn" href="/watch/${v.id}" target="_blank" rel="noopener" title="Open on site">${icon('external', 16)}</a><button class="icon-btn" data-edit="${v.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${v.id}" title="Delete">${icon('trash', 16)}</button></td></tr>`)}</tbody></table>` : empty('No videos match.')}</div>
@@ -406,8 +407,9 @@ export default async function content(root, [section], ctx) {
   const editReleaseBanner = () => {
     formModal({
       title: 'Edit “Releasing This Month” poster', wide: true,
-      note: 'This artwork is the homepage banner above the Coming Soon carousel. Posters for the carousel are edited on each title below.',
+      note: 'This artwork is the homepage banner above the Coming Soon carousel. Choose the matching title so clicking the banner opens its detail page; add the title below first if it is not listed.',
       fields: [
+        { k: 'releasingThisMonthId', label: 'Coming Soon detail page', type: 'select', wide: true, options: [{ v: '', l: '— Choose a title —' }, ...data.upcoming.map((u) => ({ v: u.id, l: u.titleEn ? `${u.titleEn} · ${u.title}` : u.title }))], help: 'The feature poster opens this title’s detail page. Until a title is selected, it opens the Coming Soon list.' },
         { k: 'releasingThisMonth', label: 'Desktop poster', type: 'image', maxWidth: 1600, wide: true, help: 'Wide artwork recommended.' },
         { k: 'releasingThisMonthMobile', label: 'Mobile poster', type: 'image', maxWidth: 1000, wide: true, help: 'Optional separate crop for phones; if cleared, the bundled mobile artwork is restored.' },
       ],

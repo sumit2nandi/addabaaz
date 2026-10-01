@@ -252,8 +252,15 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     if (!base) return false;
     const file = path.resolve(base, ...rest); return file.startsWith(path.resolve(base) + path.sep) && fs.existsSync(file);
   };
-  // Extra context the catalog validator needs (existing show ids etc.).
-  const ctxOf = (snap) => ({ fileExists, showIds: snap.showIds, upcomingIds: snap.upcomingIds });
+  // Extra context the catalog validator needs (existing IDs and each show's private-playback requirements).
+  const ctxOf = (snap) => {
+    const videosByShow = new Map();
+    for (const v of snap.catalog.videos || []) if (v.showId) { const list = videosByShow.get(v.showId) || []; list.push(v); videosByShow.set(v.showId, list); }
+    return {
+      fileExists, showIds: snap.showIds, upcomingIds: snap.upcomingIds, videosByShow,
+      premiumShowIds: new Set((snap.catalog.shows || []).filter((s) => s.access === 'premium').map((s) => s.id)),
+    };
+  };
   // Maps the `:type` URL segment (show, video, upcoming, gallery) to the collection; unknown types -> 404.
   const kindOf = (req) => { if (!TYPES[req.params.type]) throw new HttpError(404, 'not_found', 'Unknown catalog section.'); return { key: req.params.type, type: TYPES[req.params.type] }; };
   const invalid = (errors) => new HttpError(400, 'invalid_item', errors.join(' '));
@@ -449,7 +456,8 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   }));
   // The About/studio page content.
   router.put('/studio', wrap(async (req, res) => {
-    const { doc, errors } = validate('studio', req.body, { fileExists }); if (errors.length) throw invalid(errors);
+    const snap = await catalog.get({ all: true });
+    const { doc, errors } = validate('studio', req.body, ctxOf(snap)); if (errors.length) throw invalid(errors);
     await db.catalog.putStudio(doc); catalog.invalidate(); await log(req, 'catalog.studio.update'); res.json({ studio: doc });
   }));
 

@@ -13,7 +13,7 @@ export function epRow(v, { current = false } = {}) {
   const cat = app.catalog; const frac = app.user.fraction(v.id, v.duration);
   return html`<a class="ep-row ${current ? 'current' : ''}" href="#/watch/${v.id}" ${current ? html`aria-current="true"` : ''}>
     <span class="ep-num">${v.episode || '•'}</span>
-    <span class="ep-thumb">${img(cat.thumb(v), '')}${v.access === 'premium' ? html`<span class="chip chip-premium">${icon('lock', { size: 11 })}</span>` : ''}${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}<span class="play-overlay">${icon('play', { size: 18 })}</span></span>
+    <span class="ep-thumb">${img(cat.thumb(v), '')}${cat.isPremium(v) ? html`<span class="chip chip-premium">${icon('lock', { size: 11 })}</span>` : ''}${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}<span class="play-overlay">${icon('play', { size: 18 })}</span></span>
     <span class="ep-info"><span class="ep-title">${cat.displayTitle(v)}</span>
       <span class="ep-meta">${fmtDuration(v.duration)} · ${fmtDate(v.publishedAt)} · ${fmtViews(v.views)} views ${frac >= 0.94 ? html`<em class="watched">${icon('check', { size: 12 })} Watched</em>` : ''}</span></span>
   </a>`;
@@ -38,7 +38,7 @@ export default async function showView(ctx) {
       <div class="hero-inner">
         <div class="detail-poster">${img(s.posterLg || s.poster, s.title, { lazy: false })}</div>
         <div class="hero-copy">
-          <div class="eyebrow">${s.type === 'series' ? 'Original Series' : s.type === 'podcast' ? 'Fake Podcast' : 'Stand-up Comedy'}</div>
+          <div class="eyebrow">${s.type === 'series' ? 'Original Series' : s.type === 'podcast' ? 'Fake Podcast' : 'Stand-up Comedy'} ${s.access === 'premium' ? html`<span class="premium-inline">${icon('lock', { size: 11 })} Premium</span>` : ''}</div>
           <h1 class="hero-title bn">${s.title}</h1>
           ${s.titleEn && s.titleEn !== s.title ? html`<div class="hero-title-en">${s.titleEn}</div>` : ''}
           ${showMeta(s)}

@@ -3,7 +3,8 @@
  "updatedAt": "2026-09-29",
  "homePosters": {
   "releasingThisMonth": "media/upcoming/durga-lg.webp",
-  "releasingThisMonthMobile": "media/upcoming/durga-sm.webp"
+  "releasingThisMonthMobile": "media/upcoming/durga-sm.webp",
+  "releasingThisMonthId": "mayer-golpo"
  },
  "shows": [
   {
@@ -2978,6 +2979,15 @@
   }
  ],
  "upcoming": [
+  {
+   "id": "mayer-golpo",
+   "title": "মায়ের গল্প",
+   "type": "film",
+   "note": "পুরাণ · ইতিহাস · অধিকার",
+   "poster": "media/upcoming/durga-sm.webp",
+   "posterLg": "media/upcoming/durga-lg.webp",
+   "backdrop": "media/upcoming/durga-lg.webp"
+  },
   {
    "id": "central-calcutta-boarding",
    "title": "সেন্ট্রাল ক্যালকাটা বোর্ডিং",
