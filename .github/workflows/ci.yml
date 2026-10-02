@@ -25,5 +25,5 @@ jobs:
       - run: for f in $(find admin app -name '*.js'); do node --check "$f" || exit 1; done   # the browser code has no build step
       - run: node --test test/frontend/app-modules.test.mjs test/frontend/player-logic.test.mjs test/frontend/watch-autoplay.test.mjs   # stale-index deploy guard + player/autoplay behaviour
       # TEMPORARY: surface failing test details as annotations (CI logs are unreachable from the sandbox)
-      - run: set -o pipefail; npm test | tee /tmp/t.log || { grep -A8 '^not ok' /tmp/t.log | head -160 | sed 's/^/::error::/' ; exit 1; }
+      - run: set -o pipefail; npm test | tee /tmp/t.log || { grep -A22 '^not ok' /tmp/t.log | head -400 | sed 's/^/::error::/' ; exit 1; }
       - run: npm run build:www
