@@ -95,9 +95,10 @@ function nativePlugin(providers) {
 const benignCancel = (e) => /(^|[\s:])(cancel(ed|led)?)\.?$/i.test(String(e?.message || '').trim());
 
 /* ---------- native: Google via the system browser (Chrome Custom Tab) ----------
- * Opens the API's /auth/google/native-start in real Chrome; after the user signs in, the return
- * page deep-links in.addabaaz.app://oauth?ticket=… back into the app (MainActivity has an intent
- * filter for that scheme), and the ticket is exchanged for our session by signInSocial. */
+ * Opens the API's /auth/google/native-page (the website's own Google button) in real Chrome;
+ * after the user signs in, that page deep-links in.addabaaz.app://oauth?ticket=… back into the
+ * app (MainActivity has an intent filter for that scheme), and the ticket is exchanged for our
+ * session by signInSocial. platform.js's generic deep-link router skips the `oauth` host. */
 const APP_SCHEME = 'in.addabaaz.app';
 export function nativeGoogleTicket() {
   const Browser = window.Capacitor?.Plugins?.Browser, App = window.Capacitor?.Plugins?.App;

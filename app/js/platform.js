@@ -25,6 +25,9 @@ export function initPlatform() {
   P.App?.addListener?.('appUrlOpen', ({ url }) => {
     try {
       const u = new URL(url);
+      // The Google sign-in ticket deep-link (in.addabaaz.app://oauth?ticket=…) is consumed by
+      // social.js's own appUrlOpen listener - routing it as a page would show "Scene not found".
+      if (u.host === 'oauth') return;
       const path = /^https?:$/.test(u.protocol) ? u.pathname + u.search : (u.hash.replace(/^#/, '') || (u.host + u.pathname)).replace(/^\/?/, '/');
       if (path.length > 1) location.hash = '#' + path;
     } catch { /* ignore malformed links */ }
