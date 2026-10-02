@@ -6,12 +6,19 @@ import { CONFIG } from '../config.js';
 import { rail, enhanceRails, showCard, videoCard, reelCard, soonCard, galleryCard, listBtn, img, heroBg, showMeta, premiumMark } from '../ui/components.js';
 import { openLightbox } from '../ui/lightbox.js';
 
-// Picks the featured shows for the carousel. Each slide also carries the show's YouTube trailer
-// (when it has one): the active slide plays it muted with an unmute switch, like the main-branch hero.
+// Picks the featured shows for the carousel. Every show slide carries a muted preview that starts
+// when the slide activates - the show's trailer, or its first episode when there is no trailer
+// (the episode only plays when the viewer's gate allows it; otherwise the poster stays). Like the
+// main-branch hero, playback starts muted with an unmute switch on the banner; each slide's preview
+// never plays longer than 5 seconds and the carousel moves on every 5 seconds.
 function heroSlides() {
   const cat = app.catalog;
   return cat.shows.filter((s) => s.featured && cat.episodes(s.id).length)
-    .map((s) => ({ show: s, latest: cat.latestEpisode(s.id), trailer: cat.videos.find((v) => v.showId === s.id && v.kind === 'trailer' && v.source?.type === 'youtube') }))
+    .map((s) => {
+      const trailer = cat.videos.find((v) => v.showId === s.id && v.kind === 'trailer' && v.source?.type === 'youtube');
+      const first = !trailer ? [...cat.episodes(s.id)].sort((a, b) => (a.episode || 0) - (b.episode || 0) || a.publishedAt.localeCompare(b.publishedAt))[0] : null;
+      return { show: s, latest: cat.latestEpisode(s.id), preview: trailer || first };
+    })
     .sort((a, b) => b.latest.publishedAt.localeCompare(a.latest.publishedAt));
 }
 
@@ -19,14 +26,14 @@ function heroSlides() {
 function heroHtml(slides) {
   const cat = app.catalog, u = app.user;
   return html`<section class="hero" aria-roledescription="carousel" aria-label="Featured shows">
-    ${slides.map(({ show, latest, trailer }, i) => {
+    ${slides.map(({ show, latest, preview }, i) => {
       const t = u.resumeTarget(cat, show.id);
       return html`<article class="hero-slide ${i === 0 ? 'active' : ''}" data-i="${i}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
         <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault') })}</div>
-        <div class="hero-video" data-trailer="${trailer ? trailer.source.id : ''}" aria-hidden="true"></div>
+        <div class="hero-video" data-prev-id="${preview ? preview.id : ''}" data-prev-type="${preview ? (preview.source.type === 'youtube' ? 'yt' : 'file') : ''}" aria-hidden="true"></div>
         <div class="hero-shade"></div>
         ${show.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
-        ${trailer ? html`<button type="button" class="hero-sound" data-sound aria-pressed="false" aria-label="Unmute trailer">${icon('mute', { size: 18 })}</button>` : ''}
+        ${preview ? html`<button type="button" class="hero-sound" data-sound aria-pressed="false" aria-label="Unmute preview">${icon('mute', { size: 18 })}</button>` : ''}
         <div class="hero-inner">
           <div class="hero-copy">
             <div class="eyebrow">${icon('play', { size: 12 })} ${show.type === 'series' ? 'Original Series' : show.type === 'podcast' ? 'Fake Podcast' : 'Stand-up Comedy'}</div>
@@ -54,17 +61,35 @@ export const heroTrailerSrc = (id) => `https://www.youtube-nocookie.com/embed/${
 function mountHero(root, ctx) {
   const hero = $('.hero', root); if (!hero) return;
   const slides = $$('.hero-slide', hero), dots = $$('[data-dot]', hero);
-  let i = 0, timer, vTimer, paused = false;
-  const setSound = (btn, unmuted) => { btn.setAttribute('aria-pressed', String(unmuted)); btn.setAttribute('aria-label', unmuted ? 'Mute trailer' : 'Unmute trailer'); btn.innerHTML = icon(unmuted ? 'volume' : 'mute', { size: 18 }).s; };
-  const stopVideo = () => { clearTimeout(vTimer); $$('.hero-video', hero).forEach((b) => (b.innerHTML = '')); };
+  let i = 0, timer, vTimer, capT, paused = false;
+  const SLIDE_MS = 5000;   // a banner slide never lasts longer than 5 seconds…
+  const CAP_MS = 5000;     // …and a slide's preview never plays longer than 5 seconds (unless unmuted)
+  let unmuted = false;
+  const setSound = (btn, on) => { btn.setAttribute('aria-pressed', String(on)); btn.setAttribute('aria-label', on ? 'Mute preview' : 'Unmute preview'); btn.innerHTML = icon(on ? 'volume' : 'mute', { size: 18 }).s; };
+  const pausePreview = (slide) => {
+    const f = $('iframe', slide);
+    if (f) { try { f.contentWindow?.postMessage?.(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*'); } catch { /* iframe gone */ } }
+    $('video', slide)?.pause?.();
+  };
+  const stopVideo = () => { clearTimeout(vTimer); clearTimeout(capT); $$('.hero-video', hero).forEach((b) => (b.innerHTML = '')); };
   const startVideo = (slide) => {
-    clearTimeout(vTimer);
-    const box = $('.hero-video', slide), id = box?.dataset.trailer;
+    clearTimeout(vTimer); clearTimeout(capT);
+    const box = $('.hero-video', slide), id = box?.dataset.prevId, type = box?.dataset.prevType;
     if (!id || document.hidden || window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
-    // Let the slide's crossfade start first; the poster underneath covers the iframe's first frame.
-    vTimer = setTimeout(() => {
+    // Let the slide's crossfade start first; the poster underneath covers the first frame.
+    vTimer = setTimeout(async () => {
       if (!slide.classList.contains('active') || document.hidden) return;
-      box.innerHTML = `<iframe src="${heroTrailerSrc(id)}" title="" allow="autoplay" tabindex="-1"></iframe>`;
+      if (type === 'yt') box.innerHTML = `<iframe src="${heroTrailerSrc(id)}" title="" allow="autoplay" tabindex="-1"></iframe>`;
+      else {
+        // First-episode fallback: needs a signed URL, which the API refuses for locked content -
+        // in that case the poster simply stays. Never block the carousel on a slow answer.
+        try {
+          const s = await app.user.streamUrl(app.catalog.video(id));
+          if (!slide.classList.contains('active')) return;
+          box.innerHTML = `<video src="${s.url}" muted autoplay playsinline></video>`;
+        } catch { /* locked or offline: poster only */ }
+      }
+      if (!unmuted) capT = setTimeout(() => pausePreview(slide), CAP_MS);
     }, 900);
   };
   const show = (n) => {
@@ -72,18 +97,25 @@ function mountHero(root, ctx) {
     slides.forEach((s, k) => s.classList.toggle('active', k === i));
     dots.forEach((d, k) => { d.classList.toggle('active', k === i); d.setAttribute('aria-selected', k === i); });
     $$('img[loading=lazy]', slides[i]).forEach((im) => (im.loading = 'eager'));
+    unmuted = false;
     $$('[data-sound]', hero).forEach((b) => setSound(b, false));   // every slide (re)starts muted
     stopVideo(); startVideo(slides[i]);
   };
-  const schedule = () => { clearInterval(timer); if (slides.length > 1) timer = setInterval(() => { if (!paused && !document.hidden) show(i + 1); }, 9000); };
+  const schedule = () => { clearInterval(timer); if (slides.length > 1 && !unmuted) timer = setInterval(() => { if (!paused && !document.hidden) show(i + 1); }, SLIDE_MS); };
   dots.forEach((d) => d.addEventListener('click', () => { show(+d.dataset.dot); schedule(); }));
   hero.addEventListener('mouseenter', () => (paused = true)); hero.addEventListener('mouseleave', () => (paused = false));
   hero.addEventListener('focusin', () => (paused = true)); hero.addEventListener('focusout', () => (paused = false));
   hero.addEventListener('click', (e) => {
     const b = e.target.closest('[data-sound]'); if (!b) return;
-    const unmuted = b.getAttribute('aria-pressed') !== 'true';
-    try { $('iframe', b.closest('.hero-slide'))?.contentWindow?.postMessage?.(JSON.stringify({ event: 'command', func: unmuted ? 'unMute' : 'mute', args: [] }), '*'); } catch { /* iframe not ready */ }
-    setSound(b, unmuted);
+    const slide = b.closest('.hero-slide');
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    const f = $('iframe', slide), vid = $('video', slide);
+    if (f) { try { f.contentWindow?.postMessage?.(JSON.stringify({ event: 'command', func: on ? 'unMute' : 'mute', args: [] }), '*'); } catch { /* iframe not ready */ } }
+    if (vid) vid.muted = !on;
+    unmuted = on;
+    if (on) { clearInterval(timer); clearTimeout(capT); }   // chose to listen: stop the rotation and the 5 s cap
+    else schedule();                                       // muted again: the 5 s slideshow resumes
+    setSound(b, on);
   });
   let x0 = null;
   hero.addEventListener('pointerdown', (e) => { x0 = e.clientX; });
