@@ -11,6 +11,7 @@ import { go } from '../router.js';
 import { listBtn, videoCard, rail, enhanceRails, metaLine, toast, img, premiumMark } from '../ui/components.js';
 import { epRow } from './show.js';
 import { shareUrl } from '../platform.js';
+import { unlockRotation, lockPortrait, landscapeNow } from '../orientation.js';
 
 // mountRating, mountComments removed: like/dislike/comments disabled per requirement
 
@@ -149,6 +150,21 @@ export default async function watch(ctx) {
   // 'buffering' keeps whatever state it was in, so a mid-play stall does not make the crown flash back in.
   const markPlaying = (on) => $('#playerBox', ctx.root)?.classList.toggle('is-playing', on);
   const onIdle = (stop) => { flushWatch(); playedAt = 0; clearInterval(tick); tick = null; clearInterval(beat); beat = null; if (stop && premium && u.account && api) api.stopPlayback().catch(() => {}); };
+
+  /* ---------- rotate-to-fullscreen (native only, landscape videos only) ----------
+   * The app itself never rotates (portrait lock in the manifest). While a landscape video is
+   * actively playing the activity is unlocked, so turning the phone rotates the WebView and the
+   * player goes full-screen (body.rot-fs). Pause/end/leave re-locks portrait. Reels stay portrait. */
+  const isReel = v.kind === 'reel';
+  let landscape = isReel ? false : v.source.type === 'youtube' ? true : null;   // html5: learned from metadata
+  let playingNow = false;
+  const applyFs = () => document.body.classList.toggle('rot-fs', playingNow && landscape === true && landscapeNow());
+  const onOrient = () => applyFs();
+  window.addEventListener('orientationchange', onOrient);
+  window.addEventListener('resize', onOrient);
+  const rotPlay = () => { playingNow = true; if (landscape === true) unlockRotation(); applyFs(); };
+  const rotStop = () => { playingNow = false; document.body.classList.remove('rot-fs'); if (!isReel) lockPortrait(); };
+  const rotDims = (w, h) => { if (isReel || !(w > 0 && h > 0)) return; landscape = w > h; if (playingNow) (landscape ? unlockRotation() : lockPortrait()); applyFs(); };
   // Autoplay: a countdown card for the next episode; tapping cancels or plays now.
   const showNextUp = () => {
     const box = $('#nextUp', ctx.root);
@@ -193,7 +209,8 @@ export default async function watch(ctx) {
         onGestureUnmuted: () => { if (dead) return; $('#unmutePill', ctx.root)?.remove(); },
         onProgress: (t, d) => persist(t, d),
         onEnded: () => { u.saveProgress(v.id, lastD || v.duration, lastD || v.duration, { flush: true }); if (next && u.pref('autoplayNext')) showNextUp(); },
-        onState: (s, code) => { if (s === 'playing') { markPlaying(true); $('#playPill', ctx.root)?.remove(); onPlaying(); } else if (s === 'paused') { markPlaying(false); onIdle(false); } else if (s === 'ended') { markPlaying(false); onIdle(true); } else if (s === 'error') { markPlaying(false); onIdle(true); failed(code); } },
+        onDimensions: rotDims,
+        onState: (s, code) => { if (s === 'playing') { markPlaying(true); $('#playPill', ctx.root)?.remove(); onPlaying(); rotPlay(); } else if (s === 'paused') { markPlaying(false); onIdle(false); rotStop(); } else if (s === 'ended') { markPlaying(false); onIdle(true); rotStop(); } else if (s === 'error') { markPlaying(false); onIdle(true); rotStop(); failed(code); } },
       });
       if (dead) ctl.destroy();
       if (ctl.castSupported?.()) { const cb = $('#castBtn', ctx.root); cb.hidden = false; cb.onclick = () => ctl.cast().catch((e) => { if (e?.name !== 'NotAllowedError') toast('No cast devices found nearby.'); }); }
@@ -213,6 +230,8 @@ export default async function watch(ctx) {
   window.addEventListener('pagehide', onHide);
   ctx.onCleanup(() => {
     dead = true; clearInterval(countdown); onIdle(true);
+    window.removeEventListener('orientationchange', onOrient); window.removeEventListener('resize', onOrient);
+    document.body.classList.remove('rot-fs'); lockPortrait();
     document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', onHide);
     if (ctl) { const t = ctl.time(); if (t > 0) u.saveProgress(v.id, t, ctl.duration() || v.duration, { flush: true }); ctl.destroy(); }
   });
