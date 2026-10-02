@@ -319,7 +319,10 @@ img.img-failed { opacity: 0; }
 @media (min-width: 720px) { .ep-row { grid-template-columns: 44px 200px 1fr; gap: 20px; padding: 12px 16px; } .ep-list.compact .ep-row { grid-template-columns: 26px 104px 1fr; padding: 8px; gap: 10px; } }
 
 /* ---------- watch ---------- */
-.watch { display: grid; gap: 20px; padding-top: calc(var(--topbar-h) + var(--sat)); }
+/* No top padding here: the space below the fixed topbar already comes from `#view` (see the topbar
+   rules above). Adding it in both places pushed the player down a second topbar height, which showed
+   up as a blank black band between the topbar and the video. */
+.watch { display: grid; gap: 20px; }
 /* Grid items size to their min-content by default: a card rail's min-content is its whole row of cards
  * (~1700px), which forced the whole watch page wide on phones (Chrome then zooms out = "desktop look").
  * Every item must be allowed to shrink to the available width. */
