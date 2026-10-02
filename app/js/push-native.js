@@ -4,19 +4,16 @@
  * app registers that token with the API (POST /api/v1/devices); Admin → Broadcast sends through
  * Firebase Cloud Messaging. Browser/PWA push remains separate Web Push (app/js/push.js).
  *
- * The plugin is accessed through Capacitor.registerPlugin so this web bundle needs no direct import.
+ * Native Capacitor injects a legacy Plugins proxy; newer Capacitor runtimes also expose registerPlugin.
  * Native push is enabled only in app builds whose CI job has the Firebase client config files.
  */
 import { app } from './app.js';
+import { resolveNativeMessagingPlugin } from './native-messaging-plugin.js';
 
 const TOKEN_KEY = 'ab.pushToken';
 const enabled = () => window.ADDABAAZ_ENV?.NATIVE_PUSH_ENABLED === true;
 // The plugin proxy, or null in browsers / app builds without Firebase configuration.
-const plugin = () => {
-  const C = window.Capacitor;
-  if (!enabled() || !C?.isNativePlatform?.() || typeof C.registerPlugin !== 'function') return null;
-  try { return C.registerPlugin('FirebaseMessaging'); } catch { return null; }
-};
+const plugin = () => resolveNativeMessagingPlugin(window.Capacitor, enabled());
 export const nativePushSupported = () => !!plugin();
 const platformName = () => { try { return window.Capacitor?.getPlatform?.() || 'android'; } catch { return 'android'; } };
 const label = () => { try { return window.Capacitor?.getPlatform?.() === 'ios' ? 'iPhone / iPad' : 'Android app'; } catch { return 'App'; } };

@@ -101,7 +101,8 @@ test('the databases pieces exist and the app registers its token', () => {
   assert.match(read('server/src/db-admin.js'), /async emailAudience\(/, 'e-mail audiences come from the Users filters');
   assert.match(read('server/src/db-admin.js'), /async setEmailOptOut\(/, 'unsubscribe is honoured');
   // The phone apps: token registration on sign-in, cleanup on sign-out, tap → page.
-  assert.match(read('app/js/push-native.js'), /registerPlugin\('FirebaseMessaging'\)/, 'the Firebase plugin is reached without a bundler');
+  assert.match(read('app/js/native-messaging-plugin.js'), /Plugins\?\.FirebaseMessaging/, 'uses Capacitor native bridge plugin proxies in plain HTML apps');
+  assert.match(read('app/js/native-messaging-plugin.js'), /registerPlugin\('FirebaseMessaging'\)/, 'supports Capacitor module-runtime registration too');
   assert.match(read('app/js/push-native.js'), /P\.getToken\(\)/, 'Android and iOS use FCM registration tokens');
   assert.match(read('app/js/push-native.js'), /tokenReceived/, 'rotated FCM tokens are re-registered');
   assert.match(read('app/js/push-native.js'), /u\.remote\.registerDevice\(token/, 'the token is registered with the API');

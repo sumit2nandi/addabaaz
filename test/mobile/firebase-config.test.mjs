@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { configureAndroidFirebase, configureIosFirebase } from '../../mobile/scripts/configure-firebase.mjs';
 import { patchAppDelegate } from '../../mobile/scripts/patch-ios.mjs';
+import { resolveNativeMessagingPlugin } from '../../app/js/native-messaging-plugin.js';
 
 const androidConfig = (packageName = 'in.addabaaz.app') => JSON.stringify({
   project_info: { project_number: '123456789', project_id: 'addabaaz-test', storage_bucket: 'addabaaz-test.appspot.com' },
@@ -40,6 +41,22 @@ test('iOS Firebase config validates the bundle id and writes GoogleService-Info.
   assert.match(fs.readFileSync(output, 'utf8'), /<key>PROJECT_ID<\/key><string>addabaaz-test<\/string>/);
   assert.throws(() => configureIosFirebase(iosConfig('com.wrong.app'), { output }), /BUNDLE_ID must be in\.addabaaz\.app/);
   assert.throws(() => configureIosFirebase('not a plist', { output }), /complete XML GoogleService-Info\.plist/);
+});
+
+test('native FCM uses Capacitor injected plugin proxy when core registerPlugin is not exposed globally', () => {
+  const injected = { getToken() {} };
+  const C = { isNativePlatform: () => true, Plugins: { FirebaseMessaging: injected } };
+  assert.equal(resolveNativeMessagingPlugin(C, true), injected);
+  assert.equal(resolveNativeMessagingPlugin(C, false), null);
+  assert.equal(resolveNativeMessagingPlugin({ ...C, isNativePlatform: () => false }, true), null);
+});
+
+test('native FCM falls back to registerPlugin on runtimes that expose it', () => {
+  const injected = { getToken() {} };
+  let registered = '';
+  const C = { isNativePlatform: () => true, registerPlugin: (name) => { registered = name; return injected; } };
+  assert.equal(resolveNativeMessagingPlugin(C, true), injected);
+  assert.equal(registered, 'FirebaseMessaging');
 });
 
 test('iOS Firebase notification callbacks are patched idempotently', () => {
