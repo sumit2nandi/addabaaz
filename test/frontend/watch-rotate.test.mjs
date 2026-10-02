@@ -104,3 +104,25 @@ test('reels never unlock rotation, even while playing', async () => {
   turn(90);
   assert.ok(!document.body.classList.contains('rot-fs'), 'reels never full-screen on rotation');
 });
+
+test('native ships its own player controls; its fullscreen button uses the app flow, not the WebView custom view', async () => {
+  const opts = await mount('vy');
+  assert.equal(opts.controls, false, 'native player runs with the native controls OFF (their fullscreen breaks on rotation)');
+  const root = document.getElementById('view');
+  const bar = root.querySelector('.vctl');
+  assert.ok(bar, 'the custom control bar is mounted');
+  for (const n of ['play', 'mute', 'fs']) assert.ok(bar.querySelector(`[data-v="${n}"]`), `${n} button present`);
+  opts.onState('playing');
+  const [f0, h0] = [calls.fsEnter, calls.sbHide];
+  bar.querySelector('[data-v="fs"]').dispatchEvent(new window.Event('click', { bubbles: true }));
+  assert.ok(document.body.classList.contains('watch-fs'), 'fs button full-screens through the app layout');
+  assert.ok(calls.fsEnter > f0 && calls.sbHide > h0, 'fs button enters the immersive WebView fullscreen');
+  const [x0, s0] = [calls.fsExit, calls.sbShow];
+  turn(90);
+  assert.ok(document.body.classList.contains('rot-fs'), 'rotating during app fullscreen still lands in the tested rot flow');
+  turn(0);
+  assert.ok(document.body.classList.contains('watch-fs'), 'back to portrait stays in fullscreen');
+  bar.querySelector('[data-v="fs"]').dispatchEvent(new window.Event('click', { bubbles: true }));
+  assert.ok(!document.body.classList.contains('watch-fs'), 'second tap leaves fullscreen');
+  assert.ok(calls.fsExit > x0 && calls.sbShow > s0, 'leaving restores the bars');
+});

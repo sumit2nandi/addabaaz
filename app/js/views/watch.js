@@ -10,7 +10,7 @@ import { createPlayer, loadYouTube } from '../players/index.js';
 import { go } from '../router.js';
 import { listBtn, videoCard, rail, enhanceRails, metaLine, toast, img, premiumMark } from '../ui/components.js';
 import { epRow } from './show.js';
-import { shareUrl } from '../platform.js';
+import { shareUrl, isNative } from '../platform.js';
 import { unlockRotation, lockPortrait, landscapeNow, enterImmersive, exitImmersive } from '../orientation.js';
 
 // mountRating, mountComments removed: like/dislike/comments disabled per requirement
@@ -44,6 +44,16 @@ export default async function watch(ctx) {
           <div class="player-slot" id="playerSlot"></div>
           <div class="player-overlay" id="playerMsg" hidden></div>
           <div class="next-up" id="nextUp" hidden></div>
+          ${isNative ? html`<div class="vctl" hidden>
+            <input type="range" class="vctl-seek" min="0" max="1000" step="1" value="0" aria-label="Seek">
+            <div class="vctl-row">
+              <button type="button" class="vctl-btn" data-v="play" aria-label="Play">${icon('play', { size: 22 })}</button>
+              <span class="vctl-time" aria-hidden="true">0:00</span>
+              <span class="vctl-sp"></span>
+              <button type="button" class="vctl-btn" data-v="mute" aria-label="Mute">${icon('volume', { size: 22 })}</button>
+              <button type="button" class="vctl-btn" data-v="fs" aria-label="Full screen">${icon('expand', { size: 22 })}</button>
+            </div>
+          </div>` : ''}
           ${cat.isPremium(v) ? premiumMark({ cls: 'premium-mark-player' }) : ''}
         </div>
         <div class="watch-info">
@@ -171,6 +181,51 @@ export default async function watch(ctx) {
   const rotPlay = () => { playingNow = true; if (landscape === true) unlockRotation(); applyFs(); };
   const rotStop = () => { playingNow = false; setFs(false); if (!isReel) lockPortrait(); };
   const rotDims = (w, h) => { if (isReel || !(w > 0 && h > 0)) return; landscape = w > h; if (playingNow) (landscape ? unlockRotation() : lockPortrait()); applyFs(); };
+
+  /* ---------- native player controls ----------
+   * On native the player runs with its OWN controls OFF: the WebView's native fullscreen button
+   * enters a custom-view fullscreen that breaks on rotation (black video, white strips both
+   * sides). This bar (play/pause, seek, time, mute, fullscreen) drives the player through `ctl`
+   * instead; the fullscreen toggle uses the app's own immersive flow, so rotation during it goes
+   * through the tested rot path. Browsers keep the native controls. */
+  const vctl = !isNative ? null : (() => {
+    const bar = $('.vctl', ctx.root); if (!bar) return null;
+    const seek = $('.vctl-seek', bar), tEl = $('.vctl-time', bar);
+    const btn = (n) => $(`.vctl-btn[data-v="${n}"]`, bar);
+    let hideT = null, scrubbing = false;
+    const show = () => { bar.hidden = false; clearTimeout(hideT); hideT = setTimeout(() => { if (playingNow) bar.hidden = true; }, 3000); };
+    const draw = () => {
+      btn('play').innerHTML = icon(playingNow ? 'pause' : 'play', { size: 22 }).s;
+      btn('play').setAttribute('aria-label', playingNow ? 'Pause' : 'Play');
+      btn('mute').innerHTML = icon(ctl?.isMuted?.() ? 'mute' : 'volume', { size: 22 }).s;
+      btn('fs').innerHTML = icon(document.body.classList.contains('watch-fs') || fsOn ? 'shrink' : 'expand', { size: 22 }).s;
+    };
+    const setFsClass = (on) => {
+      document.body.classList.toggle('watch-fs', on);
+      if (on) { enterImmersive(); if (playingNow) unlockRotation(); } else { exitImmersive(); if (!isReel) lockPortrait(); }
+    };
+    bar.addEventListener('click', (e) => {
+      const b = e.target.closest('.vctl-btn'); if (!b) { show(); return; }
+      if (b.dataset.v === 'play') { if (playingNow) ctl?.pause?.(); else Promise.resolve(ctl?.play?.()).catch(() => {}); }
+      if (b.dataset.v === 'mute') { if (ctl?.isMuted?.()) ctl.unmute?.(); else ctl?.mute?.(); }
+      if (b.dataset.v === 'fs') setFsClass(!document.body.classList.contains('watch-fs'));
+      draw(); show();
+    });
+    seek.addEventListener('pointerdown', () => { scrubbing = true; });
+    seek.addEventListener('pointerup', () => { scrubbing = false; });
+    seek.addEventListener('change', () => {
+      scrubbing = false;
+      const d = ctl?.duration?.() || 0;
+      if (d > 0) ctl.seek((Number(seek.value) / 1000) * d);
+      show();
+    });
+    // Tap anywhere on the video brings the bar back (it auto-hides while playing).
+    $('#playerBox', ctx.root)?.addEventListener('click', (e) => { if (!e.target.closest('.vctl')) show(); });
+    return {
+      show, draw, scrub: () => scrubbing, seek, tEl,
+      stop: () => { clearTimeout(hideT); setFsClass(false); },
+    };
+  })();
   // Autoplay: a countdown card for the next episode; tapping cancels or plays now.
   const showNextUp = () => {
     const box = $('#nextUp', ctx.root);
@@ -193,6 +248,9 @@ export default async function watch(ctx) {
       $('#unmutePill', ctx.root)?.remove(); $('#playPill', ctx.root)?.remove();
       ctl = await createPlayer(slot, media, {
         start, autoplay: true,
+        // Native: our own control bar replaces the player's native controls (see vctl above) —
+        // the native fullscreen button's custom-view path breaks on rotation. Web keeps theirs.
+        controls: !isNative,
         // The player still runs muted after main's unmute lifts (rare — the browser refused sound):
         // offer one tap to turn the sound on.
         onAutoplayMuted: () => {
@@ -213,12 +271,17 @@ export default async function watch(ctx) {
         },
         // The player's first-gesture auto-unmute fired: sound is on, the pill is obsolete.
         onGestureUnmuted: () => { if (dead) return; $('#unmutePill', ctx.root)?.remove(); },
-        onProgress: (t, d) => persist(t, d),
+        onProgress: (t, d) => {
+          persist(t, d);
+          if (vctl && d > 0 && !vctl.scrub()) vctl.seek.value = String(Math.round((t / d) * 1000));
+          if (vctl) vctl.tEl.textContent = `${fmtDuration(t)} / ${fmtDuration(d || 0)}`;
+        },
         onEnded: () => { u.saveProgress(v.id, lastD || v.duration, lastD || v.duration, { flush: true }); if (next && u.pref('autoplayNext')) showNextUp(); },
         onDimensions: rotDims,
-        onState: (s, code) => { if (s === 'playing') { markPlaying(true); $('#playPill', ctx.root)?.remove(); onPlaying(); rotPlay(); } else if (s === 'paused') { markPlaying(false); onIdle(false); rotStop(); } else if (s === 'ended') { markPlaying(false); onIdle(true); rotStop(); } else if (s === 'error') { markPlaying(false); onIdle(true); rotStop(); failed(code); } },
+        onState: (s, code) => { if (s === 'playing') { markPlaying(true); $('#playPill', ctx.root)?.remove(); onPlaying(); rotPlay(); } else if (s === 'paused') { markPlaying(false); onIdle(false); rotStop(); } else if (s === 'ended') { markPlaying(false); onIdle(true); rotStop(); } else if (s === 'error') { markPlaying(false); onIdle(true); rotStop(); failed(code); } if (vctl && s !== 'buffering') { vctl.draw(); vctl.show(); } },
       });
       if (dead) ctl.destroy();
+      else vctl?.draw();
       if (ctl.castSupported?.()) { const cb = $('#castBtn', ctx.root); cb.hidden = false; cb.onclick = () => ctl.cast().catch((e) => { if (e?.name !== 'NotAllowedError') toast('No cast devices found nearby.'); }); }
     } catch (e) {
       console.warn(e);
@@ -237,7 +300,7 @@ export default async function watch(ctx) {
   ctx.onCleanup(() => {
     dead = true; clearInterval(countdown); onIdle(true);
     window.removeEventListener('orientationchange', onOrient); window.removeEventListener('resize', onOrient);
-    setFs(false); lockPortrait();
+    vctl?.stop(); setFs(false); lockPortrait();
     document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', onHide);
     if (ctl) { const t = ctl.time(); if (t > 0) u.saveProgress(v.id, t, ctl.duration() || v.duration, { flush: true }); ctl.destroy(); }
   });

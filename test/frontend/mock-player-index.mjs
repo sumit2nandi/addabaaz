@@ -6,7 +6,7 @@ export async function createPlayer(container, media, opts = {}) {
     engine: 'mock',
     __played: false, __unmuted: false, __destroyed: false,
     play() { this.__played = true; return Promise.resolve(); },
-    pause() {}, mute() {}, unmute() { this.__unmuted = true; }, isMuted: () => !this.__unmuted,
+    pause() {}, mute() {}, unmute() { this.__unmuted = true; }, isMuted() { return !this.__unmuted; },
     time: () => 0, duration: () => 0, seek() {}, destroy() { this.__destroyed = true; },
     castSupported: () => false,
   };
