@@ -80,25 +80,27 @@ export default async function watch(ctx) {
   // mountComments($('#commentsBox', ctx.root), { video: v });
   // The player area shows a message instead of the player when the viewer is locked out.
   const msg = $('#playerMsg', ctx.root), slot = $('#playerSlot', ctx.root);
-  // Behind the lock wall the video's own artwork is shown instead of a black background: the video's thumbnail
-  // (YouTube/R2 artwork) first, then its poster, then the parent show/soon artwork. If the remote thumbnail
-  // can't load on some network, the same-origin artwork takes over via the image fallback (data-fb).
+  // Behind the lock wall the video's own artwork is shown instead of a black background. The same-origin
+  // artwork (poster/backdrop) is painted as a CSS background - no image element, nothing that can fail or be
+  // hidden - and when the video has a remote thumbnail (YouTube/R2) it is layered on top as a real image that
+  // simply drops out if the viewer's network can't fetch it, revealing the background underneath.
+  const thumb = v.thumbnail || cat.thumb(v);
   const localArt = v.poster || (show || soon)?.backdrop || (show || soon)?.poster || '';
-  const wallArt = v.thumbnail || cat.thumb(v) || localArt;
   const wall = (kind) => {
     msg.hidden = false; slot.innerHTML = '';
     const box = $('#playerBox', ctx.root);
-    if (wallArt && !box.classList.contains('has-wall')) {
+    const base = localArt || thumb;
+    if (base && !box.classList.contains('has-wall')) {
       box.classList.add('has-wall');
-      box.insertAdjacentHTML('afterbegin', img(wallArt, '', { cls: 'player-wall-art', lazy: false, fallback: wallArt !== localArt ? localArt : '' }).s);
+      box.insertAdjacentHTML('afterbegin', html`<div class="player-wall-bg" style="background-image:url('${base}')"></div>${thumb && thumb !== base ? img(thumb, '', { cls: 'player-wall-art', lazy: false }) : ''}`.s);
     }
     msg.innerHTML = kind === 'login'
-      ? html`${icon('lock', { size: 40 })}<h2>Sign in to watch</h2><p>This is ADDABAAZ Premium. Sign in or create a free account to watch it — everything else on ADDABAAZ stays open to everyone.</p><div class="row"><a class="btn btn-primary btn-lg" href="#/signin?next=${here}">Sign in</a><a class="btn btn-ghost btn-lg" href="#/signup?next=${here}">Create account</a></div>`.s
+      ? html`${icon('lock', { size: 40 })}<h2>Sign in to watch</h2><div class="row"><a class="btn btn-primary btn-lg" href="#/signin?next=${here}">Sign in</a><a class="btn btn-ghost btn-lg" href="#/signup?next=${here}">Create account</a></div>`.s
       : kind === 'plan'
         ? isNative
-          ? html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><p>This title needs an active ADDABAAZ Plus plan. Plans are managed on the ADDABAAZ website — once you've subscribed with this account it unlocks here.</p><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s
-          : html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><p>You're signed in — subscribe to watch this title and get early access to every new original.</p><a class="btn btn-primary btn-lg" href="#/plans?next=${here}">${icon('crown', { size: 20 })} See plans</a>`.s
-        : html`${icon('lock', { size: 40 })}<h2>Premium video needs an account</h2><p>This copy of ADDABAAZ runs without the ADDABAAZ API, so premium titles can't be unlocked here.</p><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s;
+          ? html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s
+          : html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><a class="btn btn-primary btn-lg" href="#/plans?next=${here}">${icon('crown', { size: 20 })} See plans</a>`.s
+        : html`${icon('lock', { size: 40 })}<h2>Premium video needs an account</h2><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s;
   };
   // Locked: show the wall and stop; no player is created.
   if (gate !== 'ok') { wall(gate); return; }

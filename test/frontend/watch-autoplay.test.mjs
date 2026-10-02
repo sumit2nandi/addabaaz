@@ -132,18 +132,20 @@ test('locked premium shows the video artwork behind the lock wall instead of a b
     const root = await mountLocked('vp');
     const box = root.querySelector('#playerBox');
     assert.ok(box.classList.contains('has-wall'), 'the player box flags that artwork sits behind the wall');
-    const art = box.querySelector('img.player-wall-art');
-    assert.ok(art, 'the video thumbnail/poster is drawn behind the lock wall');
-    assert.equal(art.getAttribute('src'), 'media/premium-vp.webp');
+    const bg = box.querySelector('.player-wall-bg');
+    assert.ok(bg, 'the same-origin artwork is painted as a CSS background (cannot fail or be hidden)');
+    assert.match(bg.getAttribute('style'), /media\/premium-vp\.webp/);
+    assert.equal(box.querySelector('img.player-wall-art'), null, 'no separate thumbnail layer when there is no remote thumb');
     assert.equal(root.querySelector('#playerMsg').hidden, false, 'the lock wall itself still shows');
+    assert.equal(root.querySelector('#playerMsg p'), null, 'no descriptive text under the lock icon');
     assert.equal(root.querySelector('#playerSlot').innerHTML, '', 'no player is created while locked');
 
-    // A YouTube-sourced premium video uses its thumbnail, with the show's own artwork as the
-    // on-error fallback, so a network that blocks i.ytimg.com still sees artwork, not black.
+    // A YouTube-sourced premium video layers its remote thumbnail over the same-origin background,
+    // so a network that blocks i.ytimg.com still sees the show artwork, never a black box.
     const ytRoot = await mountLocked('vpy');
-    const ytArt = ytRoot.querySelector('img.player-wall-art');
-    assert.equal(ytArt.getAttribute('src'), 'https://i.ytimg.com/vi/zzz/hqdefault.jpg');
-    assert.equal(ytArt.getAttribute('data-fb'), 'media/shows/s1.webp', 'same-origin artwork takes over if the thumbnail fails');
+    const ytBox = ytRoot.querySelector('#playerBox');
+    assert.match(ytBox.querySelector('.player-wall-bg').getAttribute('style'), /media\/shows\/s1\.webp/);
+    assert.equal(ytBox.querySelector('img.player-wall-art').getAttribute('src'), 'https://i.ytimg.com/vi/zzz/hqdefault.jpg');
   } finally {
     app.user.gateFor = originalGate;
   }
@@ -151,6 +153,7 @@ test('locked premium shows the video artwork behind the lock wall instead of a b
 
 test('lock-wall CSS: artwork covers the box and the wall stays readable over it', () => {
   const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
-  assert.match(css, /img\.player-wall-art \{[^}]*object-fit: cover/, 'the artwork fills the player box instead of a black background');
+  assert.match(css, /\.player-wall-bg \{[^}]*background-size: cover/, 'the same-origin artwork fills the player box instead of a black background');
+  assert.match(css, /img\.player-wall-art \{[^}]*object-fit: cover/, 'the remote thumbnail layer also fills the box');
   assert.match(css, /\.player-box\.has-wall \.player-overlay \{[^}]*linear-gradient/, 'the wall dims the artwork so its text stays readable');
 });

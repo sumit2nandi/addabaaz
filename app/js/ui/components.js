@@ -59,7 +59,6 @@ export function syncButtons(root = document) {
 export function showCard(s, { cls = '' } = {}) {
   return html`<a class="card card-poster ${cls}" href="#/show/${s.id}" aria-label="${s.titleEn || s.title}">
     <div class="poster">${img(s.poster, s.title)}${s.access === 'premium' ? premiumMark() : ''}</div>
-    ${s.tagline ? html`<p class="show-card-tagline bn">${s.tagline}</p>` : ''}
     <div class="card-quick">${listBtn('show', s.id, { cls: 'icon-btn', iconOnly: true })}</div>
   </a>`;
 }
