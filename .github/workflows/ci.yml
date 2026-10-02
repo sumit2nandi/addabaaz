@@ -24,6 +24,13 @@ jobs:
       - run: npm run validate:catalog
       - run: for f in $(find admin app -name '*.js'); do node --check "$f" || exit 1; done   # the browser code has no build step
       - run: node --test test/frontend/app-modules.test.mjs test/frontend/player-logic.test.mjs test/frontend/watch-autoplay.test.mjs   # stale-index deploy guard + player/autoplay behaviour
-      # TEMPORARY: surface failing test details as annotations (CI logs are unreachable from the sandbox)
-      - run: set -o pipefail; npm test | tee /tmp/t.log || { grep -A60 '^not ok' /tmp/t.log | head -900 | sed 's/^/::error::/' ; exit 1; }
+      - run: set -o pipefail; npm test 2>&1 | tee /tmp/t.log
+      # TEMPORARY (CI logs are unreachable from the sandbox): on failure, publish the first failing TAP
+      # block as ONE annotation (GitHub truncates the list of annotations, so a single line carries all
+      # of it) and the full log as an artifact (`gh run download <run> -n test-log`).
+      - if: failure()
+        run: awk '/^not ok/{f=1} f{print; if (/^  \.\.\.$/) exit}' /tmp/t.log | head -150 | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/^/::error::/' || true
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: test-log, path: /tmp/t.log, retention-days: 5, if-no-files-found: ignore }
       - run: npm run build:www
