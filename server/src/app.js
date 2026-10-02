@@ -429,7 +429,7 @@ export function createApp({
 
   /* ---------- admin console API (admin accounts, or ADMIN_TOKEN for scripts) — see server/src/admin.js ---------- */
   // Mount the admin console API. It does its own authentication (admin role or ADMIN_TOKEN).
-  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, campaigns, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate }));
+  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, campaigns, unsubscribeUrlFor, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate }));
 
   /* ---------- authenticated ---------- */
   // AUTH MIDDLEWARE: every route registered after this line requires a valid session token whose session version still matches.
