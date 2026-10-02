@@ -56,7 +56,7 @@ Free content never needs an account. Titles marked `access: "premium"` are gated
 1. **Payments:** Razorpay prepaid passes on the web are built (`server/src/payments.js`, `docs/PREMIUM.md`). GST invoices, coupons, refunds and emails are built too (`docs/BILLING.md`). Still to do: StoreKit/Play Billing via RevenueCat for in-app purchase in the store apps, an admin web UI, e-invoicing/IRN if your turnover requires it.
 2. **Own video pipeline:** upload → transcode to HLS (Mux, Cloudflare Stream, AWS MediaConvert) → signed URLs → DRM (Widevine/FairPlay) for premium; enables downloads and Chromecast/AirPlay.
 3. **Social login** (Google/Apple; Apple is mandatory in iOS apps that offer other social logins) and email verification / password reset (needs an email provider).
-4. **Push notifications** for reminders and new episodes (FCM/APNs).
+4. ~~**Push notifications** for reminders and new episodes (native FCM + browser Web Push).~~ done — see [MOBILE.md](MOBILE.md#push-notifications-no-laptop-setup).
 5. **External CMS integration** (or headless CMS: Sanity/Strapi/Directus) generating catalog data. The current admin console includes a manual YouTube preview/selection/import flow with batch undo; public pages never contact YouTube for its feed.
 6. ~~**SEO**~~ done — see [SEO.md](SEO.md).
 7. **Analytics & recommendations** (watch-time events → "Because you watched…"), A/B tests on the hero.

@@ -429,10 +429,10 @@ kept in the Campaigns list.
    `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:support@addabaaz.in`, restart. Viewers switch it on under
    *Account → Notifications*. iPhones receive web push only when the site is added to the Home Screen
    (iOS 16.4+).
-2. **Phone apps (FCM):** create a Firebase project, add the service-account JSON as
-   `FCM_SERVICE_ACCOUNT` (or `FCM_SERVICE_ACCOUNT_FILE`) and rebuild the app with
-   `google-services.json` — full steps in `docs/MOBILE.md` → *Push notifications*. The apps register
-   their device token on sign-in; nothing else to do.
+2. **Phone apps (FCM):** create a Firebase project; set `FCM_SERVICE_ACCOUNT` in the API host and add
+   the Android/iOS client config files as GitHub Actions secrets so cloud builds can inject them. No
+   local commands are needed. Exact secret names and steps: `docs/MOBILE.md` → *Push notifications
+   (no-laptop setup)*. The apps register their FCM token on sign-in.
 3. **E-mail:** needs `SMTP_URL` + `MAIL_FROM`. Every campaign mail has a one-click unsubscribe link;
    people who unsubscribe are skipped afterwards (receipts and account mail are unaffected).
 4. New episodes and launch reminders are sent automatically to the people who follow a show or set a

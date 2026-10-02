@@ -1,52 +1,41 @@
-/* App push for the native Android / iOS shells (Firebase Cloud Messaging via @capacitor/push-notifications).
+/* Native app push notifications, using one Firebase Cloud Messaging token on Android and iOS.
  *
- * The phone app gets an FCM/APNs token from the plugin and registers it with the server
- * (POST /api/v1/devices); Admin → Broadcast then sends app notifications to every registered device.
- * The web build never runs this file's native path — in a browser `nativePushSupported()` is false and
- * the browser's own Web-Push subscription (push.js) is used instead.
+ * The Firebase Messaging Capacitor plugin returns an FCM registration token on both platforms. The
+ * app registers that token with the API (POST /api/v1/devices); Admin → Broadcast sends through
+ * Firebase Cloud Messaging. Browser/PWA push remains separate Web Push (app/js/push.js).
  *
- * The plugin is reached through `Capacitor.registerPlugin`, so the web bundle needs no npm import and
- * works even in a build that was made before the plugin was added (it just reports "not supported").
+ * The plugin is accessed through Capacitor.registerPlugin so this web bundle needs no direct import.
+ * Native push is enabled only in app builds whose CI job has the Firebase client config files.
  */
 import { app } from './app.js';
 
 const TOKEN_KEY = 'ab.pushToken';
-// The plugin proxy, or null when this is not a native build / the plugin is missing from the shell.
+const enabled = () => window.ADDABAAZ_ENV?.NATIVE_PUSH_ENABLED === true;
+// The plugin proxy, or null in browsers / app builds without Firebase configuration.
 const plugin = () => {
   const C = window.Capacitor;
-  if (!C?.isNativePlatform?.() || typeof C.registerPlugin !== 'function') return null;
-  try { return C.registerPlugin('PushNotifications'); } catch { return null; }
+  if (!enabled() || !C?.isNativePlatform?.() || typeof C.registerPlugin !== 'function') return null;
+  try { return C.registerPlugin('FirebaseMessaging'); } catch { return null; }
 };
 export const nativePushSupported = () => !!plugin();
 const platformName = () => { try { return window.Capacitor?.getPlatform?.() || 'android'; } catch { return 'android'; } };
-// The last token this device registered (kept so sign-out can clean it up and so a returning
-// sign-in does not have to wait for `register()` again).
+const label = () => { try { return window.Capacitor?.getPlatform?.() === 'ios' ? 'iPhone / iPad' : 'Android app'; } catch { return 'App'; } };
 const knownToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } };
-const rememberToken = (t) => { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch { /* private mode */ } };
-const label = () => { try { const p = window.Capacitor?.getPlatform?.(); return p === 'ios' ? 'iPhone / iPad' : 'Android app'; } catch { return 'App'; } };
+const rememberToken = (token) => { try { token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY); } catch { /* private mode */ } };
 
-/** Calls a plugin method that may not exist in this build (never throws). */
+/** Calls a plugin method that may not exist in an older build (never throws). */
 const tryCall = async (P, method, ...args) => { try { return await P[method]?.(...args); } catch { return null; } };
 
-/** Asks for permission (if needed) and returns this device's push token. */
+/** Requests permission if needed and returns the platform-independent FCM registration token. */
 async function fetchToken() {
   const P = plugin();
-  if (!P) throw Object.assign(new Error('This app build has no push support.'), { friendly: true });
+  if (!P) throw Object.assign(new Error('Firebase push is not configured in this app build.'), { friendly: true });
   let perm = await tryCall(P, 'checkPermissions');
-  if (perm && perm.receive !== 'granted') perm = await tryCall(P, 'requestPermissions');
-  if (perm && perm.receive !== 'granted') throw Object.assign(new Error('Notifications weren’t allowed.'), { friendly: true });
-  const token = await new Promise((resolve, reject) => {
-    let settled = false;
-    const done = (fn, v) => { if (!settled) { settled = true; clearTimeout(t); fn(v); } };
-    const t = setTimeout(() => done(reject, new Error('The device did not return a push token.')), 20_000);
-    Promise.resolve()
-      // Listeners must exist before register(), otherwise the first token is missed.
-      .then(() => P.addListener('registration', (tok) => done(resolve, tok?.value || '')))
-      .then(() => P.addListener('registrationError', (e) => done(reject, new Error(e?.error || 'Push registration failed.'))))
-      .then(() => P.register?.())
-      .catch((e) => done(reject, e));
-  });
-  if (!token) throw new Error('The device did not return a push token.');
+  if (['prompt', 'prompt-with-rationale'].includes(perm?.receive)) perm = await tryCall(P, 'requestPermissions');
+  if (!perm || perm.receive !== 'granted') throw Object.assign(new Error('Notifications weren’t allowed.'), { friendly: true });
+  const result = await P.getToken();
+  const token = String(result?.token || '').trim();
+  if (!token) throw new Error('Firebase did not return a push token.');
   return token;
 }
 
@@ -55,8 +44,11 @@ export async function attachNativePush({ force = false } = {}) {
   const u = app.user;
   if (!plugin() || !u?.remote || !u.account) return null;
   try {
-    const token = (!force && knownToken()) || await fetchToken();
+    // Ask Firebase for the current token every sign-in; it can rotate while the app is closed.
+    const token = await fetchToken();
+    const previous = knownToken();
     rememberToken(token);
+    if (previous && previous !== token) await u.remote.removeDevice(previous).catch(() => {});
     await u.remote.registerDevice(token, platformName(), label());
     return token;
   } catch (e) {
@@ -74,10 +66,9 @@ export async function detachNativePush() {
   try { await app.user.remote?.removeDevice?.(token); } catch { /* best effort */ }
 }
 
-/** Taps on an app notification open the page the broadcast pointed at (see the admin Broadcast page). */
-function initTaps() {
-  const P = plugin(); if (!P) return;
-  try { P.addListener('pushNotificationActionPerformed', (action) => {
+/** Taps on an app notification open the link the broadcast was sent with. */
+function initTaps(P) {
+  try { P.addListener('notificationActionPerformed', (action) => {
     const url = String(action?.notification?.data?.url || '');
     if (!url) return;
     if (/^https?:\/\//.test(url)) { try { window.open(url, '_blank'); } catch { /* popup blocked */ } return; }
@@ -85,21 +76,38 @@ function initTaps() {
   }); } catch { /* no listener support in this build */ }
 }
 
+/** Refreshes the server registration when Firebase rotates this installation's token. */
+function listenForTokenRefresh(P) {
+  try { P.addListener('tokenReceived', async ({ token: next } = {}) => {
+    const token = String(next || '').trim(), u = app.user;
+    if (!token || !u?.remote || !u.account) return;
+    const previous = knownToken();
+    rememberToken(token);
+    if (previous && previous !== token) await u.remote.removeDevice(previous).catch(() => {});
+    await u.remote.registerDevice(token, platformName(), label()).catch((e) => console.warn('[push] token refresh failed:', e?.message || e));
+  }); } catch { /* no listener support in this build */ }
+}
+
 /**
- * Wires app push for a native shell: after each sign-in the device token is registered for the
- * account, and taps open the linked page. Called by push.js's initPush().
+ * Wires native push: after each sign-in the device token is registered for the account, and taps
+ * open the linked page. Called by push.js's initPush().
  */
 export function initNativePush() {
-  if (!plugin()) return;
+  const P = plugin(); if (!P) return;
+  listenForTokenRefresh(P);
   app.user.on('account', () => attachNativePush().catch(() => {}));
   if (app.user.account) attachNativePush().catch(() => {});          // already signed in
-  initTaps();
+  initTaps(P);
 }
 
 /** Is this device currently registered for the signed-in account? (settings screen) */
 export async function nativePushState() {
   const u = app.user;
-  if (!plugin() || !u?.remote || !u.account) return { supported: false };
-  const devices = await u.remote.devices?.().then((r) => r.devices || []).catch(() => []);
-  return { supported: true, enabled: true, native: true, subscribed: !!knownToken() && !!devices?.length, permission: 'prompt', prefs: null };
+  const P = plugin();
+  if (!P || !u?.remote || !u.account) return { supported: false };
+  const [devices, permission] = await Promise.all([
+    u.remote.devices?.().then((r) => r.devices || []).catch(() => []),
+    tryCall(P, 'checkPermissions'),
+  ]);
+  return { supported: true, enabled: true, native: true, subscribed: !!knownToken() && !!devices?.length, permission: permission?.receive || 'prompt', prefs: null };
 }

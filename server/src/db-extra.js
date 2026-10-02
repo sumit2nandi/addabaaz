@@ -137,7 +137,7 @@ export function extraDb({ q, tx, iso }) {
     async claim(kind, ref, userId) { return (await q('INSERT IGNORE INTO notify_sent (kind, ref, user_id) VALUES (?,?,?)', [kind, ref, userId])).affectedRows === 1; },
   };
 
-  // ---- Native app push devices (FCM/APNs tokens; the Capacitor apps POST these to /api/v1/devices) ----
+  // ---- Native app push devices (FCM tokens; the Capacitor apps POST these to /api/v1/devices) ----
   const devices = {
     /**
      * Registers (or refreshes) a token for a user; the same token on another account moves to it.
