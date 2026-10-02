@@ -65,3 +65,32 @@ The data contract is the REST API + `catalog.json` (see `openapi.yaml`), so a Sw
 | White screen after update | `npm run build:www` before `cap sync` (the apps embed `../www`) |
 | Can't reach API from Android emulator | Use `https://` and a real hostname (cleartext is blocked); for local dev use `adb reverse` or a tunnel |
 | Status bar overlaps header | Safe-area insets are handled in CSS; make sure `viewport-fit=cover` is in `index.html` (it is) |
+
+## Native Google sign-in (why a Custom Tab, not the WebView)
+
+Google refuses sign-in inside WebViews, and the native Google SDK needs every
+build keystore's SHA-1 registered in the Google Cloud console - impossible for
+cloud CI debug builds. The app therefore opens
+`<API>/api/v1/auth/google/native-start` in a Chrome Custom Tab
+(@capacitor/browser). Google redirects back (implicit `id_token` flow - no
+client secret anywhere) to `/api/v1/auth/google/native-return`; that page
+verifies the token through the same `POST /auth/google` endpoint, mints a
+2-minute single-use ticket and deep-links `in.addabaaz.app://oauth?ticket=…`
+into the app (MainActivity gets the scheme filter from
+`patch-android.mjs`), which exchanges it at `POST /auth/ticket` for its own
+session.
+
+One-time Google Console setup: add
+`https://<your-api-host>/api/v1/auth/google/native-return` to the Web OAuth
+client's **Authorized redirect URIs**. No Android OAuth client / SHA-1 needed.
+
+## App identity
+
+- The installed app is named **Addabaaz** (`capacitor.config.json` appName,
+  re-asserted on `strings.xml` by `patch-android.mjs`).
+- Launcher/install icons are the website logo (`mobile/android-icons/`,
+  stamped over the stock Capacitor icons on every sync; regenerate with
+  `bash mobile/scripts/gen-launcher-icons.sh`).
+- The Android 12+ system splash shows the dark logo artwork
+  (`windowSplashScreenAnimatedIcon` = the splash drawable), so launching never
+  shows white squares around the logo.

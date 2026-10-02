@@ -13,8 +13,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { lockPortrait, isPortraitLocked } from './android-manifest.mjs';
+import { lockPortrait, isPortraitLocked, addOAuthRedirect, hasOAuthRedirect } from './android-manifest.mjs';
 import { stampLauncherIcons } from './android-icons.mjs';
+
+// Deep-link scheme for the Google sign-in redirect back into the app (= the Capacitor appId;
+// the API's google-return.js deep-links to the same scheme, keep them in step).
+const APP_SCHEME = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'capacitor.config.json'), 'utf8')).appId;
 
 const MIN_AGP = '8.9.1';           // Android Gradle Plugin
 const SDK = 36;                    // compileSdk and targetSdk (Android 16)
@@ -38,12 +42,24 @@ patch('build.gradle', `Android Gradle Plugin -> ${MIN_AGP} (if it was lower)`, (
 patch('variables.gradle', `compileSdk/targetSdk -> ${SDK} (if they were lower)`, (t) =>
   t.replace(/((?:compileSdkVersion|targetSdkVersion)\s*=\s*)(\d+)/g, (m, pre, v) => (Number(v) < SDK ? pre + SDK : m)));
 
-patch('app/src/main/AndroidManifest.xml', 'main activity locked to portrait', (t) => {
-  const out = lockPortrait(t);
+patch('app/src/main/AndroidManifest.xml', 'main activity locked to portrait + OAuth deep-link filter', (t) => {
+  const out = addOAuthRedirect(lockPortrait(t), APP_SCHEME);
   // Never ship an app that rotates by accident: if the generated manifest no longer looks the way this expects, stop the build.
   if (!isPortraitLocked(out)) throw new Error('[android:patch] could not lock MainActivity to portrait - AndroidManifest.xml changed shape; update mobile/scripts/android-manifest.mjs.');
+  if (!hasOAuthRedirect(out, APP_SCHEME)) throw new Error('[android:patch] could not add the OAuth redirect filter - AndroidManifest.xml changed shape; update mobile/scripts/android-manifest.mjs.');
   return out;
 });
+
+// The install screen and title bar show the brand name exactly as the user reads it on the website.
+patch('app/src/main/res/values/strings.xml', 'app_name -> Addabaaz', (t) =>
+  t.replace(/<string name="app_name">[^<]*<\/string>/, '<string name="app_name">Addabaaz</string>'));
+
+// Android 12+ system splash: use the dark logo artwork as the splash icon instead of the launcher
+// icon's square, so launching never shows white squares around the logo.
+patch('app/src/main/res/values/styles.xml', 'system splash shows the dark logo artwork', (t) =>
+  t.includes('windowSplashScreenAnimatedIcon') ? t : t.replace(
+    /(<style name="AppTheme\.NoActionBarLaunch"[^>]*>\s*<item name="android:background">@drawable\/splash<\/item>)/,
+    '$1\n        <item name="android:windowSplashScreenBackground">#050505</item>\n        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash</item>'));
 
 // The APK installs with the website logo as its launcher icon (not the stock Capacitor bot):
 // the pre-rendered logo PNGs replace every mipmap density and the adaptive-icon XML is dropped.

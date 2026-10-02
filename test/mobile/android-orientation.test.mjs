@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { lockPortrait, isPortraitLocked } from '../../mobile/scripts/android-manifest.mjs';
+import { lockPortrait, isPortraitLocked, addOAuthRedirect, hasOAuthRedirect } from '../../mobile/scripts/android-manifest.mjs';
 
 // The Android app must not rotate to landscape when the phone is turned: the main activity is locked to portrait in the
 // generated AndroidManifest.xml. mobile/android is generated in CI (`cap add android`) and git-ignored, so the lock is applied by
@@ -47,12 +47,28 @@ test('a manifest without MainActivity is reported as not locked (so the build ca
   assert.equal(isPortraitLocked(lockPortrait(odd)), false);
 });
 
+test('addOAuthRedirect puts the app-scheme deep-link filter on MainActivity only, idempotently', () => {
+  const scheme = 'in.addabaaz.app';
+  const withFilter = addOAuthRedirect(generated, scheme);
+  assert.ok(hasOAuthRedirect(withFilter, scheme), 'the deep-link filter is present');
+  const start = withFilter.indexOf('.MainActivity');
+  const close = withFilter.indexOf('</activity>', start);
+  const filter = withFilter.indexOf(`android:scheme="${scheme}"`);
+  assert.ok(filter > start && filter < close, 'the filter sits inside the MainActivity element');
+  assert.match(withFilter, /android.intent.category.BROWSABLE/, 'browsers may hand the link to the app');
+  assert.equal(addOAuthRedirect(withFilter, scheme), withFilter, 'a second patch changes nothing');
+  const other = '<activity android:name="com.example.Other" android:exported="true"/>';
+  const two = addOAuthRedirect(generated.replace('</application>', `${other}\n    </application>`), scheme);
+  assert.equal((two.match(new RegExp(`android:scheme="${scheme}"`, 'g')) || []).length, 1, 'other activities get no filter');
+});
+
 test('npm run android:patch locks the generated project, is idempotent, and fails loudly on an unknown manifest', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-android-'));
   try {
     fs.mkdirSync(path.join(dir, 'scripts'));
     for (const f of ['patch-android.mjs', 'android-manifest.mjs', 'android-icons.mjs']) fs.copyFileSync(new URL(f, SCRIPTS), path.join(dir, 'scripts', f));
     fs.cpSync(new URL('../../mobile/android-icons', import.meta.url), path.join(dir, 'android-icons'), { recursive: true });
+    fs.copyFileSync(new URL('../../mobile/capacitor.config.json', import.meta.url), path.join(dir, 'capacitor.config.json'));
     const manifest = path.join(dir, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
     fs.mkdirSync(path.dirname(manifest), { recursive: true });
     fs.writeFileSync(manifest, generated);
@@ -63,7 +79,7 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'src', 'main', 'res', 'mipmap-mdpi', 'ic_launcher.png')), 'the patch also stamps the logo launcher icons');
     const patched = fs.readFileSync(manifest, 'utf8');
     assert.equal(isPortraitLocked(patched), true);
-    assert.equal(patched, lockPortrait(generated));
+    assert.equal(patched, addOAuthRedirect(lockPortrait(generated), 'in.addabaaz.app'), 'portrait lock plus the Google sign-in deep-link filter');
 
     const second = run();
     assert.equal(/locked to portrait/.test(second), false, 'a second run has nothing to change');

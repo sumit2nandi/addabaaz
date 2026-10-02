@@ -10,6 +10,7 @@
 import { html, $ } from './util.js';
 import { icon } from './icons.js';
 import { isNative } from './platform.js';
+import { CONFIG } from './config.js';
 
 // Loads a third-party SDK script once; rejects if it cannot load (ad blockers, offline).
 const loaded = {};
@@ -92,6 +93,39 @@ function nativePlugin(providers) {
 // cancelling — notably "…activity is cancelled by the user", which actually means the Google OAuth
 // client / SHA-1 is misconfigured — must be shown, or sign-in dies with no feedback at all.
 const benignCancel = (e) => /(^|[\s:])(cancel(ed|led)?)\.?$/i.test(String(e?.message || '').trim());
+
+/* ---------- native: Google via the system browser (Chrome Custom Tab) ----------
+ * Opens the API's /auth/google/native-start in real Chrome; after the user signs in, the return
+ * page deep-links in.addabaaz.app://oauth?ticket=… back into the app (MainActivity has an intent
+ * filter for that scheme), and the ticket is exchanged for our session by signInSocial. */
+const APP_SCHEME = 'in.addabaaz.app';
+export function nativeGoogleTicket() {
+  const Browser = window.Capacitor?.Plugins?.Browser, App = window.Capacitor?.Plugins?.App;
+  if (!Browser?.open || !App?.addListener) throw soft('Google sign-in isn’t available in this app build.');
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let urlHandle = null, closeHandle = null, timer = null;
+    const cleanup = () => {
+      clearTimeout(timer);
+      Promise.resolve(urlHandle).then((h) => h?.remove?.()).catch(() => {});
+      Promise.resolve(closeHandle).then((h) => h?.remove?.()).catch(() => {});
+      try { Browser.close?.(); } catch { /* already closed */ }
+    };
+    const settle = (fn) => { if (settled) return; settled = true; cleanup(); fn(); };
+    timer = setTimeout(() => settle(() => reject(soft('Google sign-in timed out — please try again.'))), 120_000);
+    urlHandle = App.addListener('appUrlOpen', (ev) => {
+      const url = String(ev?.url || '');
+      if (!url.startsWith(`${APP_SCHEME}://oauth`)) return;
+      const ticket = new URL(url).searchParams.get('ticket');
+      settle(() => (ticket ? resolve({ ticket }) : reject(Object.assign(new Error('cancelled'), { cancelled: true }))));
+    });
+    // Closing the tab without finishing = the user changed their mind: a quiet cancel, not an error.
+    closeHandle = Browser.addListener?.('browserFinished', () => settle(() => reject(Object.assign(new Error('cancelled'), { cancelled: true }))));
+    const base = CONFIG.apiBase && CONFIG.apiBase !== 'off' ? CONFIG.apiBase : '';
+    Browser.open({ url: `${base}/api/v1/auth/google/native-start` })
+      .catch(() => settle(() => reject(soft('Couldn’t open Google — check your connection.'))));
+  });
+}
 async function nativeCredential(provider, providers) {
   const { SL, ready } = nativePlugin(providers); await ready;
   const call = (opts, msg) => Promise.race([
@@ -100,15 +134,10 @@ async function nativeCredential(provider, providers) {
   ]);
   try {
     if (provider === 'apple') { const r = await call({ provider: 'apple', options: { scopes: ['email', 'name'] } }, 'Apple sign-in didn’t respond — please try again.'); const n = r.result?.profile; return { identityToken: r.result?.idToken, name: n ? [n.givenName, n.familyName].filter(Boolean).join(' ') : '' }; }
-    // No `scopes` on the Google call on purpose: the plugin ALWAYS requests email+profile+openid
-    // itself, and passing custom scopes is rejected on Android unless MainActivity implements the
-    // plugin's marker interface ("You CANNOT use scopes without modifying the main activity").
-    if (provider === 'google') {
-      const r = await call({ provider: 'google' }, 'Google sign-in didn’t respond — please try again.');
-      const idToken = r?.result?.idToken;
-      if (!idToken) throw soft('Google sign-in returned nothing — please try again.');
-      return idToken;
-    }
+    // Google on native never uses the in-app SDK: Google blocks WebView sign-in and the SDK needs
+    // every build keystore's SHA-1 registered in the Google console. The OAuth dance happens in
+    // real Chrome (Custom Tab) and the app receives a one-time ticket over a deep link instead.
+    if (provider === 'google') return nativeGoogleTicket();
     const r = await call({ provider: 'facebook', options: { permissions: ['email', 'public_profile'] } }, 'Facebook sign-in didn’t respond — please try again.');
     const token = r?.result?.accessToken?.token;
     if (!token) throw soft('Facebook sign-in returned nothing — please try again.');

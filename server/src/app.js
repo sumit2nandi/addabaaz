@@ -215,7 +215,7 @@ export function createApp({
   const LABEL = { google: 'Google', facebook: 'Facebook', apple: 'Apple' };
   // Shared by Google, Facebook and Apple: verify the provider's token, then find or create our own account.
   // An existing account with the same *verified* e-mail is linked rather than duplicated.
-  async function socialSignIn(provider, credential) {
+  async function socialSignIn(provider, credential, opts = {}) {
     const verifier = social.verifiers?.[provider];
     if (!verifier) throw new HttpError(501, 'provider_not_configured', `${LABEL[provider]} sign-in isn’t enabled on this server.`);
     let claims;
@@ -246,12 +246,69 @@ export function createApp({
     notDisabled(user);
     await db.identities.touch(provider, claims.subject);
     if (!user.emailVerifiedAt) await db.accounts.markVerified(user.id);           // the provider already verified this address
+    // Native apps: instead of handing the session to the (external) browser that did the OAuth
+    // dance, hand back a 2-minute single-use ticket the app exchanges for its own session.
+    if (opts.ticket) return { ticket: signJwt({ aud: 'oauth-ticket', sub: user.id, sv: user.sessionVersion, jti: crypto.randomUUID() }, secret, 120) };
     return { token: signToken(user.id, secret, undefined, user.sessionVersion), user: publicUser({ ...user, emailVerifiedAt: user.emailVerifiedAt || true }), profiles: await db.profiles.list(user.id), isNew };
   }
   // One endpoint per provider; the body carries the provider's ID token / access token.
-  api.post('/auth/google', authLimit, wrap(async (req, res) => res.json(await socialSignIn('google', req.body?.idToken))));
+  api.post('/auth/google', authLimit, wrap(async (req, res) => res.json(await socialSignIn('google', req.body?.idToken, { ticket: req.body?.ticket === true }))));
   api.post('/auth/facebook', authLimit, wrap(async (req, res) => res.json(await socialSignIn('facebook', req.body?.accessToken))));
   api.post('/auth/apple', authLimit, wrap(async (req, res) => res.json(await socialSignIn('apple', { identityToken: req.body?.identityToken, name: req.body?.name }))));
+
+  /* ---------- native Google sign-in (Custom Tab + one-time ticket deep link) ----------
+   * Google refuses sign-in inside WebViews, and the native SDK needs every build keystore's
+   * SHA-1 registered in the Google console. So the app opens this start URL in real Chrome
+   * (Custom Tab); Google redirects back (implicit id_token flow - no client secret needed);
+   * the return page verifies the id_token through the very same /auth/google endpoint and
+   * deep-links a 2-minute single-use ticket into the app, which exchanges it for a session.
+   * Only the Web OAuth client id is required (plus the native-return URI listed as an
+   * authorized redirect URI in the Google console). */
+  const APP_SCHEME = 'in.addabaaz.app';   // = the Capacitor appId; AndroidManifest gets this scheme as a redirect filter
+  const usedTickets = new Map();          // jti -> expiry (ms); single-use enforcement for /auth/ticket
+  const forgetUsedTickets = () => { const now = Date.now(); for (const [k, v] of usedTickets) if (v < now) usedTickets.delete(k); };
+  api.get('/auth/google/native-start', (req, res) => {
+    const clientId = social.config.google?.clientId;
+    if (!clientId) throw new HttpError(501, 'provider_not_configured', 'Google sign-in isn’t enabled on this server.');
+    const q = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: `${originOf(req)}/api/v1/auth/google/native-return`,
+      response_type: 'id_token',                       // implicit flow: the return page receives the id_token in the URL fragment
+      scope: 'openid email profile',
+      nonce: crypto.randomBytes(16).toString('hex'),
+      prompt: 'select_account',                        // always show the account chooser, like the web flow
+    });
+    res.redirect(302, `https://accounts.google.com/o/oauth2/v2/auth?${q}`);
+  });
+  // The redirect target: a tiny same-origin page (JS lives in an external file - the site CSP
+  // forbids inline scripts) that turns the id_token fragment into a ticket and deep-links home.
+  api.get('/auth/google/native-return', (_req, res) => {
+    res.type('html').set('Cache-Control', 'no-store').send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ADDABAAZ</title><body style="margin:0;background:#050505;color:#eee;font:15px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh">
+<p id="out">Signing you in — returning to the ADDABAAZ app…</p><script src="/api/v1/auth/google-return.js"></script>`);
+  });
+  api.get('/auth/google-return.js', (_req, res) => {
+    res.type('application/javascript').set('Cache-Control', 'no-store').send(`(function () {
+  var out = document.getElementById('out');
+  var m = /[#&]id_token=([^&]+)/.exec(location.hash);
+  if (!m) { out.textContent = 'Google sign-in didn’t finish — please try again in the app.'; return; }
+  fetch('/api/v1/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: decodeURIComponent(m[1]), ticket: true }) })
+    .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error((j.error && j.error.message) || 'Sign-in failed'); return j; }); })
+    .then(function (j) { out.textContent = 'Returning to the app…'; location.replace('${APP_SCHEME}://oauth?ticket=' + encodeURIComponent(j.ticket)); })
+    .catch(function (e) { out.textContent = e.message || 'Sign-in failed — please try again in the app.'; });
+})();`);
+  });
+  // The app's WebView exchanges the single-use ticket for its own session token.
+  api.post('/auth/ticket', authLimit, wrap(async (req, res) => {
+    const claims = verifyToken(String(req.body?.ticket || ''), secret);
+    if (!claims || claims.aud !== 'oauth-ticket' || !claims.jti) throw new HttpError(401, 'invalid_ticket', 'Sign-in ticket invalid or expired.');
+    forgetUsedTickets();
+    if (usedTickets.has(claims.jti)) throw new HttpError(401, 'invalid_ticket', 'This sign-in ticket was already used.');
+    usedTickets.set(claims.jti, Date.now() + 130_000);
+    const user = notDisabled(await db.users.byId(String(claims.sub)));
+    if (!user) throw new HttpError(401, 'invalid_ticket', 'Sign-in ticket invalid or expired.');
+    res.json({ token: signToken(user.id, secret, undefined, user.sessionVersion), user: publicUser(user), profiles: await db.profiles.list(user.id), isNew: false });
+  }));
   features.public(api);           // password reset, email verification, analytics, public ratings/comments
 
   /* ---------- Cloudflare R2 video streaming ---------- */

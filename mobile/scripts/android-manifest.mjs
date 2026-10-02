@@ -22,3 +22,26 @@ export function lockPortrait(xml) {
 /** True when the main activity is locked to portrait (used to fail loudly if a future Capacitor template no longer matches). */
 export const isPortraitLocked = (xml) => (xml.match(ACTIVITY_TAG) || [])
   .some((tag) => isMainActivity(tag) && /android:screenOrientation\s*=\s*"portrait"/.test(tag));
+
+// Google sign-in on native ends in a deep link back into the app (in.addabaaz.app://oauth?ticket=…).
+// MainActivity needs a VIEW/BROWSABLE intent filter for that scheme, or Android never routes the link home.
+const oauthFilter = (scheme) => `
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="${scheme}" />
+            </intent-filter>`;
+
+/** Adds the OAuth deep-link intent filter to MainActivity. Idempotent; leaves other activities alone. */
+export function addOAuthRedirect(xml, scheme) {
+  if (xml.includes(`android:scheme="${scheme}"`)) return xml;
+  const i = xml.indexOf('.MainActivity');
+  if (i === -1) return xml;
+  const close = xml.indexOf('</activity>', i);
+  if (close === -1) return xml;
+  return xml.slice(0, close) + oauthFilter(scheme) + '\n        ' + xml.slice(close);
+}
+
+/** True when MainActivity can receive the app-scheme deep link used by Google sign-in. */
+export const hasOAuthRedirect = (xml, scheme) => xml.includes(`android:scheme="${scheme}"`);

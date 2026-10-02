@@ -81,7 +81,10 @@ export class RemoteAdapter {
   /** Google / Facebook: the API verifies the provider credential and returns our own session. */
   async signInSocial(provider, credential) {
     if (provider === 'apple') return this.signInApple(credential.identityToken, credential.name);
-    const r = await this.api.post(`/auth/${provider}`, provider === 'google' ? { idToken: credential } : { accessToken: credential });
+    // Native Google hands over a one-time ticket (the OAuth dance happened in a Custom Tab).
+    const r = credential?.ticket
+      ? await this.api.post('/auth/ticket', { ticket: credential.ticket })
+      : await this.api.post(`/auth/${provider}`, provider === 'google' ? { idToken: credential } : { accessToken: credential });
     this.api.setToken(r.token); return r;
   }
   async providers() { try { return this.#providers ||= await this.api.get('/auth/providers'); } catch { return { password: true }; } }
