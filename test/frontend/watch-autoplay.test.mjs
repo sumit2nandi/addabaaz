@@ -16,6 +16,7 @@ globalThis.localStorage = window.localStorage ?? { getItem: () => null, setItem:
 globalThis.fetch = globalThis.fetch || (async () => { throw new Error('offline'); });
 window.fetch = globalThis.fetch;
 Element.prototype.scrollIntoView = () => {};
+globalThis.ResizeObserver = class { observe() {} disconnect() {} };   // rails (related videos) measure themselves; linkedom has no layout
 
 register(new URL('./watch-mock-loader.mjs', import.meta.url));
 const { Catalog } = await import('../../app/js/data/catalog.js');
@@ -23,19 +24,20 @@ const { app } = await import('../../app/js/app.js');
 const watch = (await import('../../app/js/views/watch.js')).default;
 
 const VIDEO = { id: 'v1', kind: 'episode', episode: 1, title: 'Test episode', showId: 's1', duration: 100, views: 1, publishedAt: '2026-09-01T00:00:00Z', source: { type: 'youtube', id: 'abc' } };
-app.catalog = app.fullCatalog = new Catalog({ schema: 1, updatedAt: '', shows: [{ id: 's1', title: 'Show', titleEn: 'Show', genres: [], cast: [], type: 'series' }], videos: [VIDEO], upcoming: [], gallery: [] });
+const PREMIUM_VIDEO = { ...VIDEO, id: 'vp', episode: 2, title: 'Premium episode', access: 'premium', source: { type: 'r2', key: 'premium/x.mp4' } };
+app.catalog = app.fullCatalog = new Catalog({ schema: 1, updatedAt: '', shows: [{ id: 's1', title: 'Show', titleEn: 'Show', genres: [], cast: [], type: 'series' }], videos: [VIDEO, PREMIUM_VIDEO], upcoming: [], gallery: [] });
 app.user = {
   remote: null, account: null, profiles: [], profile: { id: 'p1', name: 'T' }, activeId: 'p1', supportsAuth: false, isKids: false,
   gateFor: () => 'ok', progressOf: () => null, isFinished: () => false, pref: () => true, setPref: () => {},
   saveProgress: () => {}, fraction: () => 0, inList: () => false, hasReminder: () => false, on: () => {}, needsProfileChoice: () => false,
 };
 
-async function mount() {
+async function mount(id = 'v1') {
   globalThis.__watchOpts = null; globalThis.__watchCtl = null;
   document.getElementById('view').innerHTML = '';
   const root = document.createElement('div');
   document.getElementById('view').appendChild(root);
-  const ctx = { root, params: { id: 'v1' }, query: {}, path: '/watch/v1', setTitle: () => {}, onCleanup: () => {} };
+  const ctx = { root, params: { id }, query: {}, path: `/watch/${id}`, setTitle: () => {}, onCleanup: () => {} };
   await watch(ctx);
   await new Promise((r) => setTimeout(r, 30));   // startPlayer() resolves (mock player)
   assert.ok(globalThis.__watchCtl, 'the player was created');
@@ -72,4 +74,42 @@ test('muted autostart offers a one-tap "Tap to unmute" pill', async () => {
   assert.ok(pill, 'unmute pill shown for muted autostart');
   pill.dispatchEvent(new window.Event('click', { bubbles: true }));
   assert.equal(ctl.__unmuted, true);
+});
+
+// The player mock is not given a stream URL for R2 videos, so give the premium page one.
+app.user.streamUrl = async () => ({ type: 'mp4', url: 'https://r2.test/premium/x.mp4' });
+
+test('premium crown: top-left of the player, hidden while the video plays, back on pause / end / error', async () => {
+  await mount('vp');
+  const box = document.querySelector('#playerBox');
+  assert.ok(box.classList.contains('has-premium'), 'a premium video marks its player box');
+  const mark = box.querySelector('.premium-mark.premium-mark-player');
+  assert.ok(mark, 'the crown is drawn inside the player box');
+  assert.equal(box.classList.contains('is-playing'), false, 'visible before playback starts');
+  const { opts } = { opts: globalThis.__watchOpts };
+
+  opts.onState('buffering');
+  assert.equal(box.classList.contains('is-playing'), false, 'still visible while the first frames load');
+  opts.onState('playing');
+  assert.equal(box.classList.contains('is-playing'), true, 'hidden (via .is-playing) while the video plays');
+  opts.onState('buffering');
+  assert.equal(box.classList.contains('is-playing'), true, 'a mid-play stall does not make the crown flash back in');
+  opts.onState('paused');
+  assert.equal(box.classList.contains('is-playing'), false, 'back on pause');
+  opts.onState('playing');
+  assert.equal(box.classList.contains('is-playing'), true);
+  opts.onState('ended');
+  assert.equal(box.classList.contains('is-playing'), false, 'back when the video ends');
+  opts.onState('playing');
+  opts.onState('error', 2);
+  assert.equal(box.classList.contains('is-playing'), false, 'back when playback fails');
+});
+
+test('free videos get no crown and no premium markers', async () => {
+  await mount('v1');
+  const box = document.querySelector('#playerBox');
+  assert.equal(box.querySelector('.premium-mark'), null);
+  assert.equal(box.classList.contains('has-premium'), false);
+  globalThis.__watchOpts.onState('playing');   // toggling the state class on a free video is harmless
+  assert.equal(box.querySelector('.premium-mark'), null);
 });

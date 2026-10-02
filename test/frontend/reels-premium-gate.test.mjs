@@ -41,10 +41,12 @@ test('premium Reels are visibly marked and never autoplay for a signed-out viewe
 
     const section = root.querySelector('.reel');
     assert.ok(section.querySelector('.premium-mark'), 'the Reel displays the premium indicator');
+    assert.ok(section.querySelector('.reel-frame.has-premium .premium-mark'), 'the crown sits inside the premium reel frame');
     observer.callback([{ target: section, isIntersecting: true, intersectionRatio: 1 }]);
     assert.equal(section.querySelector('.reel-gate h2')?.textContent, 'Sign in to watch');
     assert.equal(section.querySelector('.reel-gate a')?.getAttribute('href'), '#/signin?next=%2Freels%2Fpremium-reel');
     assert.equal(section.querySelector('.reel-player'), null, 'locked Reels never create a player');
+    assert.equal(section.classList.contains('playing'), false, 'a locked reel never counts as playing, so its crown stays visible');
     assert.equal(streamRequests, 0);
     cleanup?.();
   } finally {

@@ -116,16 +116,21 @@ function recentlyAddedSection(cat, N) {
   </section>`;
 }
 
+// The artwork a Releasing This Month slide shows: the wide backdrop first, then the large poster, then the card poster
+// (the same order as the title's own page). Release posters are finished landscape artwork with their title and logo
+// printed on them, so the slide shows the whole picture, uncovered: no overlaid gradient, title or badge.
+const releaseArt = (item) => item.backdrop || item.posterLg || item.poster;
+
+// Landscape (16:9) slideshow. `contain` keeps the entire artwork visible; if a poster is not 16:9 (say a portrait one) it is centred
+// over a blurred copy of itself instead of being cropped. The heading above the slideshow already says "Releasing This Month".
 function releaseSlideshow(items) {
   return html`<div class="home-release-showcase">
     <div class="home-release-carousel" data-release-carousel role="region" aria-roledescription="carousel" aria-label="Releasing This Month">
       ${items.map((item, i) => {
-        const title = item.titleEn || item.title;
+        const title = item.titleEn || item.title, art = releaseArt(item);
         return html`<a class="home-release-slide ${i === 0 ? 'active' : ''}" data-release-slide="${i}" href="#/soon/${item.id}" aria-label="${title} — Releasing This Month" aria-hidden="${i !== 0}">
-          ${img(item.poster, `${title} — Releasing This Month`, { lazy: i > 0 })}
-          <span class="home-release-shade" aria-hidden="true"></span>
-          <span class="home-release-badge">Releasing This Month</span>
-          <span class="home-release-title">${title}</span>
+          ${img(art, '', { cls: 'home-release-bg', lazy: i > 0 })}
+          ${img(art, `${title} — Releasing This Month`, { cls: 'home-release-art', lazy: i > 0 })}
         </a>`;
       })}
       ${items.length > 1 ? html`<div class="home-release-arrows">
@@ -137,7 +142,7 @@ function releaseSlideshow(items) {
   </div>`;
 }
 
-// Releasing titles rotate as portrait posters; the remaining titles stay in the Coming Soon rail.
+// Releasing titles rotate as full landscape posters; the remaining titles stay in the Coming Soon rail.
 function comingSoonSection(cat) {
   const releases = cat.upcomingByCategory('releasing-this-month');
   const comingSoon = cat.upcomingByCategory('coming-soon');

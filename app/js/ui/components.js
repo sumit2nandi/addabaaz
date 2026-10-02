@@ -21,10 +21,10 @@ export function heroBg(thumb, poster, { lazy = false, fallback } = {}) {
 export function ytImg(v, alt = '', { cls = '' } = {}) {
   return img(app.catalog.thumb(v, 'hqdefault'), alt, { cls });
 }
-// Subtle crown medallion used as the Premium mark on artwork, instead of a text pill over the image.
+// Subtle crown medallion used as the Premium mark on artwork, instead of a text pill over the image. The outline crown matches the crown line icon in menus and on Plans.
 export function premiumMark({ cls = '' } = {}) {
   return html`<span class="premium-mark ${cls}" role="img" aria-label="Premium content" title="Premium content">
-    <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M5 10.5 10.4 15 16 6l5.6 9 5.4-4.5L24 25H8L5 10.5Z" fill="currentColor"/><path d="M8.5 27h15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="m16 2.1.9 1.8 2 .3-1.5 1.4.4 2-1.8-1-1.8 1 .4-2-1.5-1.4 2-.3L16 2.1Z" fill="currentColor"/></svg>
+    <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M5.4 23.4 4 11.8l6.2 4.9L16 7.6l5.8 9.1 6.2-4.9-1.4 11.6Z" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"/><path d="M7 27.6h18" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>
   </span>`;
 }
 
@@ -68,12 +68,13 @@ export function videoCard(v, { progress = true, rank = 0, showName = true, showD
   const cat = app.catalog; const show = cat.show(v.showId);
   const frac = progress ? app.user?.fraction(v.id, v.duration) || 0 : 0;
   const rankEl = rank ? html`<span class="rank" aria-hidden="true">${rank}</span>` : '';
+  const premium = cat.isPremium(v);   // the crown takes the top-left corner; the label chip moves beside it
   return html`<a class="card card-video ${rank ? 'ranked' : ''} ${cls}" href="#/watch/${v.id}" aria-label="${cat.displayTitle(v)}">
     ${rankEl}
     <div class="thumb">
       ${ytImg(v, cat.displayTitle(v))}
-      <span class="chip chip-label">${cat.label(v)}</span>
-      ${cat.isPremium(v) ? premiumMark() : ''}
+      <span class="chip chip-label ${premium ? 'chip-after-mark' : ''}">${cat.label(v)}</span>
+      ${premium ? premiumMark() : ''}
       ${showDuration && v.duration > 0 ? html`<span class="chip chip-dur">${fmtDuration(v.duration)}</span>` : ''}
       <span class="play-overlay">${icon('play', { size: 22 })}</span>
       ${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}

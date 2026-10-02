@@ -33,7 +33,7 @@ export default async function reels(ctx) {
   // The per-reel content (cover, tap layer, caption, action buttons) — injected only while the section is near
   // the current one, removed again when it scrolls out of the keep-window.
   const contentHtml = (v, i) => { const show = cat.show(v.showId) || cat.soon(v.showId); return html`
-    <div class="reel-frame">
+    <div class="reel-frame ${cat.isPremium(v) ? 'has-premium' : ''}">
       <div class="reel-slot">${img(cat.thumb(v), '', { lazy: i > 2 })}<div class="reel-loading"><div class="spinner"></div></div></div>
       ${cat.isPremium(v) ? premiumMark() : ''}
       <button type="button" class="reel-tap" data-reel-tap aria-label="Play or pause"><span class="reel-pp">${icon('play', { size: 34 })}</span></button>

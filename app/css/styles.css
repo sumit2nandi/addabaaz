@@ -96,8 +96,8 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .nav-drop .menu a::after { display: none; }
 
 /* ---------- bottom tab bar (mobile) ---------- */
-.tabbar { position: fixed; z-index: 100; left: 50%; right: auto; bottom: calc(12px + var(--sab)); transform: translate(-50%, 0); width: min(680px, calc(100vw - 32px - var(--sal) - var(--sar))); height: var(--tabbar-h); padding: 0 7px; display: grid; grid-template-columns: repeat(var(--tabs, 5), minmax(0, 1fr)); background: rgba(5,5,7,.82); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,.12); border-radius: 999px; box-shadow: 0 10px 30px rgba(0,0,0,.48); opacity: 1; visibility: visible; pointer-events: auto; transition: transform .32s var(--ease), opacity .22s ease, visibility 0s linear 0s; }
-.tabbar.scroll-hidden { transform: translate(-50%, calc(100% + 24px + var(--sab))); opacity: 0; visibility: hidden; pointer-events: none; transition: transform .32s var(--ease), opacity .22s ease, visibility 0s linear .32s; }
+/* Pinned on purpose: the floating bar never slides, fades or hides while the page (or the Reels feed) scrolls. */
+.tabbar { position: fixed; z-index: 100; left: 50%; right: auto; bottom: calc(12px + var(--sab)); transform: translate(-50%, 0); width: min(680px, calc(100vw - 32px - var(--sal) - var(--sar))); height: var(--tabbar-h); padding: 0 7px; display: grid; grid-template-columns: repeat(var(--tabs, 5), minmax(0, 1fr)); background: rgba(5,5,7,.82); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,.12); border-radius: 999px; box-shadow: 0 10px 30px rgba(0,0,0,.48); }
 .tabbar a { display: grid; place-items: center; align-content: center; gap: 3px; color: var(--muted); font-size: 11px; font-weight: 600; }
 .tabbar a.active { color: var(--accent-2); }
 .tabbar a.active svg { color: var(--accent-2); }
@@ -231,25 +231,26 @@ img.img-failed { opacity: 0; }
 .rail { margin: 0 0 30px; } .rail-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 0 var(--pad); margin-bottom: 12px; }
 .rail-head-minimal { justify-content: flex-end; margin-bottom: 0; }
 .rail-head h2 { font-size: clamp(18px, 2.4vw, 23px); font-weight: 700; } .rail-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
-.home-release-showcase { display: grid; justify-items: center; margin: 0 var(--pad) 20px; }
-.home-release-carousel { position: relative; width: clamp(190px, 38vw, 350px); aspect-ratio: 2 / 3; overflow: hidden; border: 1px solid var(--border-2); border-radius: 18px; background: var(--panel); box-shadow: 0 18px 48px rgba(0,0,0,.4); }
+.home-release-showcase { display: block; margin: 0 var(--pad) 20px; }
+/* Full landscape (16:9) banner: the width of the page content (capped on very wide screens so it never fills a whole monitor). */
+.home-release-carousel { position: relative; width: 100%; max-width: 1240px; margin: 0 auto; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--border-2); border-radius: 18px; background: var(--panel); box-shadow: 0 18px 48px rgba(0,0,0,.4); }
 .home-release-slide { position: absolute; inset: 0; display: block; opacity: 0; visibility: hidden; transform: scale(1.025); transition: opacity .45s ease, transform .6s var(--ease), visibility .45s; }
 .home-release-slide.active { opacity: 1; visibility: visible; transform: scale(1); }
-.home-release-slide > img { width: 100%; height: 100%; object-fit: cover; }
-.home-release-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.15), transparent 30%, rgba(0,0,0,.08) 52%, rgba(0,0,0,.78)); pointer-events: none; }
-.home-release-badge { position: absolute; top: 14px; left: 14px; z-index: 1; padding: 7px 11px; border-radius: 7px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; box-shadow: 0 4px 14px #0007; }
-.home-release-title { position: absolute; z-index: 1; left: 18px; right: 18px; bottom: 20px; color: #fff; font-size: clamp(18px, 2.2vw, 24px); line-height: 1.25; font-weight: 800; text-shadow: 0 2px 12px #000; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* The whole artwork is always visible. `contain` shows 16:9 art edge to edge; any other shape (e.g. a portrait poster) sits centred over a
+   blurred copy of itself, so nothing is ever cropped. Nothing is drawn over the art: release posters carry their own title and logo. */
+.home-release-slide > img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.home-release-art { object-fit: contain; }
+.home-release-bg { object-fit: cover; filter: blur(24px) brightness(.55); transform: scale(1.12); }
 .home-release-arrows { position: absolute; z-index: 2; inset: 0; padding: 0 10px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
-.home-release-arrow { pointer-events: auto; display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--border-2); border-radius: 50%; background: rgba(0,0,0,.62); color: #fff; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: background .2s, transform .2s; }
+.home-release-arrow { pointer-events: auto; display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--border-2); border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: background .2s, transform .2s; }
 .home-release-arrow:hover { background: var(--accent); transform: scale(1.06); }
 .home-release-dots { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 14px 12px 0; }
 .home-release-dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 999px; background: rgba(255,255,255,.38); transition: width .2s, background .2s; }
 .home-release-dots button.active { width: 22px; background: var(--accent); }
 @media (max-width: 639px) {
-  .home-release-carousel { width: clamp(190px, 76vw, 330px); border-radius: 14px; }
-  .home-release-badge { top: 10px; left: 10px; padding: 6px 9px; font-size: 9px; letter-spacing: .45px; border-radius: 6px; }
-  .home-release-title { left: 14px; right: 14px; bottom: 15px; font-size: 19px; }
-  .home-release-arrow { width: 36px; height: 36px; }
+  .home-release-carousel { border-radius: 14px; }
+  .home-release-arrows { padding: 0 6px; }
+  .home-release-arrow { width: 32px; height: 32px; background: rgba(0,0,0,.5); }
 }
 .see-all { display: inline-flex; align-items: center; gap: 2px; color: var(--text-2); font-weight: 700; font-size: 13.5px; white-space: nowrap; } .see-all:hover { color: var(--gold); }
 .page .rail-head, .page-tight .rail-head { padding: 0; } .page-tight .rail-track { padding-left: 0; padding-right: 0; }
@@ -439,14 +440,21 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .btn-social.btn-facebook { background: #1877f2; border-color: #1877f2; }
 .or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; letter-spacing: .6px; text-transform: uppercase; }
 .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--border-2); }
-.premium-mark { position: absolute; z-index: 6; top: 8px; right: 8px; width: 38px; height: 38px; display: grid; place-items: center; color: #f5d993; border: 1px solid rgba(245,217,147,.58); border-radius: 50%; background: linear-gradient(145deg, rgba(255,255,255,.19), rgba(15,12,6,.62)); box-shadow: 0 4px 16px rgba(0,0,0,.52), inset 0 0 10px rgba(245,197,24,.16); backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px); pointer-events: none; }
+.premium-mark { position: absolute; z-index: 6; top: 8px; left: 8px; width: 38px; height: 38px; display: grid; place-items: center; color: #f5d993; border: 1px solid rgba(245,217,147,.58); border-radius: 50%; background: linear-gradient(145deg, rgba(255,255,255,.19), rgba(15,12,6,.62)); box-shadow: 0 4px 16px rgba(0,0,0,.52), inset 0 0 10px rgba(245,197,24,.16); backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px); pointer-events: none; transition: opacity .25s ease, transform .25s ease, visibility 0s linear 0s; }
 .premium-mark::after { content: ''; position: absolute; inset: 3px; border: 1px solid rgba(245,217,147,.24); border-radius: 50%; }
 .premium-mark svg { width: 22px; height: 22px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
-.premium-mark-compact { top: 4px; right: 4px; width: 30px; height: 30px; }
+.premium-mark-compact { top: 4px; left: 4px; width: 30px; height: 30px; }
 .premium-mark-compact svg { width: 17px; height: 17px; }
-.premium-mark-hero { top: calc(var(--topbar-h) + var(--sat) + 16px); right: var(--pad); width: 46px; height: 46px; }
+.premium-mark-hero { top: calc(var(--topbar-h) + var(--sat) + 16px); left: var(--pad); width: 46px; height: 46px; }
 .premium-mark-hero svg { width: 26px; height: 26px; }
-.premium-mark-player { top: 12px; right: 12px; width: 44px; height: 44px; }
+.premium-mark-player { top: 12px; left: 12px; width: 44px; height: 44px; }
+/* The crown marks premium video but never covers it while it plays: hidden during playback (watch page: .is-playing set from the player's
+   state; Reels: the active reel that is not paused) and back whenever the video is paused, ended or failed. */
+.player-box.is-playing .premium-mark, .reel.playing:not(.paused) .premium-mark { opacity: 0; transform: scale(.85); visibility: hidden; transition: opacity .25s ease, transform .25s ease, visibility 0s linear .25s; }
+/* Other things that live in the top-left corner make room for the crown. */
+.chip-label.chip-after-mark { left: 54px; top: 17px; }
+.player-box.has-premium .unmute-pill { left: 68px; }
+.reel-frame.has-premium .unmute-pill { left: 58px; }
 .player-overlay .row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 6px; }
 
 /* ---------- checkout dialog & billing history ---------- */

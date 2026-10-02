@@ -39,7 +39,7 @@ export default async function watch(ctx) {
   ctx.root.innerHTML = html`
     <div class="watch">
       <div class="watch-main">
-        <div class="player-box" id="playerBox">
+        <div class="player-box ${cat.isPremium(v) ? 'has-premium' : ''}" id="playerBox">
           <div class="player-slot" id="playerSlot"></div>
           <div class="player-overlay" id="playerMsg" hidden></div>
           <div class="next-up" id="nextUp" hidden></div>
@@ -133,6 +133,9 @@ export default async function watch(ctx) {
       beat = setInterval(hb, 30_000);
     }
   };
+  // The Premium crown (top-left of the video) steps aside while the video plays and returns on pause, end or error.
+  // 'buffering' keeps whatever state it was in, so a mid-play stall does not make the crown flash back in.
+  const markPlaying = (on) => $('#playerBox', ctx.root)?.classList.toggle('is-playing', on);
   const onIdle = (stop) => { flushWatch(); playedAt = 0; clearInterval(tick); tick = null; clearInterval(beat); beat = null; if (stop && premium && u.account && api) api.stopPlayback().catch(() => {}); };
   // Autoplay: a countdown card for the next episode; tapping cancels or plays now.
   const showNextUp = () => {
@@ -178,7 +181,7 @@ export default async function watch(ctx) {
         onGestureUnmuted: () => { if (dead) return; $('#unmutePill', ctx.root)?.remove(); },
         onProgress: (t, d) => persist(t, d),
         onEnded: () => { u.saveProgress(v.id, lastD || v.duration, lastD || v.duration, { flush: true }); if (next && u.pref('autoplayNext')) showNextUp(); },
-        onState: (s, code) => { if (s === 'playing') { $('#playPill', ctx.root)?.remove(); onPlaying(); } else if (s === 'paused') onIdle(false); else if (s === 'ended') onIdle(true); else if (s === 'error') { onIdle(true); failed(code); } },
+        onState: (s, code) => { if (s === 'playing') { markPlaying(true); $('#playPill', ctx.root)?.remove(); onPlaying(); } else if (s === 'paused') { markPlaying(false); onIdle(false); } else if (s === 'ended') { markPlaying(false); onIdle(true); } else if (s === 'error') { markPlaying(false); onIdle(true); failed(code); } },
       });
       if (dead) ctl.destroy();
       if (ctl.castSupported?.()) { const cb = $('#castBtn', ctx.root); cb.hidden = false; cb.onclick = () => ctl.cast().catch((e) => { if (e?.name !== 'NotAllowedError') toast('No cast devices found nearby.'); }); }
