@@ -132,7 +132,7 @@ export default async function watch(ctx) {
     $('#retry', msg).onclick = () => { msg.hidden = true; startPlayer(); };
   };
   /* Screens-at-once seat (premium only) and first-party play statistics (plays and watch time, no personal data). */
-  const premium = cat.isPremium(v), api = u.remote;
+  const premium = cat.isPremium(v) && !cat.isFreeKind(v), api = u.remote;   // free kinds never take a premium screen seat
   let beat = null, tick = null, playedAt = 0, started = false;
   const flushWatch = () => { if (playedAt && api) { const secs = Math.round((Date.now() - playedAt) / 1000); playedAt = Date.now(); if (secs > 0) api.playEvent(v.id, 'progress', secs); } };
   const onPlaying = () => {

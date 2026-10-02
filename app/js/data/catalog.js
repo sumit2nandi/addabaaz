@@ -47,6 +47,11 @@ export class Catalog {
   isPremium(video) {
     return video?.access === 'premium' || (video?.showId && this._show.get(video.showId)?.access === 'premium') || false;
   }
+  // Trailers, clips and reels are the marketing for a title: they always play for everyone,
+  // even when flagged premium themselves or belonging to a Plus-only show (the gate skips them).
+  isFreeKind(video) {
+    return video?.kind === 'trailer' || video?.kind === 'reel' || video?.kind === 'clip';
+  }
   get genres() { return this._genres; }
 
   /** Episodes of a show in watch order (EP 1 → n). */

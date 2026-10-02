@@ -46,7 +46,13 @@ const config = { ...cfg0, database: `addabaaz_test_bill_${process.pid}_${Date.no
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-bill-'));
 const catalog = JSON.parse(fs.readFileSync(new URL('../../data/catalog.json', import.meta.url), 'utf8'));
 const base = catalog.videos.find((v) => v.kind === 'episode');
-catalog.videos.push({ ...base, id: 'prem', title: 'prem', kind: 'clip', episode: null, access: 'premium', source: { type: 'r2', key: 'premium/prem/video.mp4' } });
+catalog.videos.push({ ...base, id: 'prem', title: 'prem', access: 'premium', source: { type: 'r2', key: 'premium/prem/video.mp4' } });
+// A Plus-only show whose trailer/clip/reel must still stream for everyone, while its episodes stay locked.
+catalog.shows.push({ ...catalog.shows[0], id: 'pshow', title: 'Locked show', featured: false, access: 'premium' });
+for (const kind of ['trailer', 'reel', 'clip']) {
+  catalog.videos.push({ ...base, id: `free-${kind}`, title: `free ${kind}`, kind, episode: null, showId: 'pshow', access: 'premium', source: { type: 'r2', key: `premium/${kind}.mp4` } });
+}
+catalog.videos.push({ ...base, id: 'lock-ep', title: 'locked episode', showId: 'pshow', access: 'premium', source: { type: 'r2', key: 'premium/lock-ep.mp4' } });
 fs.writeFileSync(path.join(tmp, 'catalog.json'), JSON.stringify(catalog));
 const fakeR2 = { configured: true, presignGet: (key) => `https://r2.test/${key}`, getText: async () => null };
 
@@ -266,6 +272,21 @@ test('flat coupons never exceed the price or push the charge below ₹1; the reo
   assert.equal((await call('POST', '/payments/checkout', { planId: 'plus-monthly', couponCode: 'NEARFREE', billing: MH }, w.token)).body.error.code, 'invalid_coupon', 'the single redemption is held by the open order');
   const pid = 'pay_near'; assert.equal((await call('POST', '/payments/verify', { orderId: c2.body.orderId, paymentId: pid, signature: hmac(KEY_SECRET, `${c2.body.orderId}|${pid}`) }, v.token)).status, 200);
   const inv = await db.invoices.byId((await invoicesOf(v))[0].invoice.id); assert.equal(inv.total, 100); assert.equal(inv.igst, 15); assert.equal(inv.taxable, 85, 'Goa ≠ Maharashtra → IGST');
+});
+
+test('trailers, clips and reels stream for everyone, even premium ones under a Plus-only show', async () => {
+  for (const kind of ['trailer', 'reel', 'clip']) {
+    const anon = await call('POST', `/videos/free-${kind}/stream`);          // no account at all
+    assert.equal(anon.status, 200, `${kind} of a premium show streams anonymously`);
+    assert.match(anon.body.url, /r2\.test/, `${kind} gets a signed URL without any gate`);
+  }
+  const u = await signup();                                                  // signed in but on the free plan
+  for (const kind of ['trailer', 'reel', 'clip']) {
+    assert.equal((await call('POST', `/videos/free-${kind}/stream`, null, u.token)).status, 200, `${kind} needs no plan`);
+  }
+  // Episodes of the same show stay locked: 401 anonymous, 402 on the free plan.
+  assert.equal((await call('POST', '/videos/lock-ep/stream')).status, 401);
+  assert.equal((await call('POST', '/videos/lock-ep/stream', null, u.token)).status, 402);
 });
 
 test('parallel checkouts cannot both take the last redemption', async () => {

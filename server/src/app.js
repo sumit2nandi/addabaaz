@@ -29,6 +29,7 @@ import { createBilling, billingConfigFromEnv } from './billing.js';
 import { STATES } from './gst.js';
 import { HttpError, bad, wrap, rateLimit } from './http.js';
 import { createCatalogStore } from './catalog.js';
+import { FREE_KINDS } from './catalog-schema.js';
 import { createYouTubeFeed } from './youtube-feed.js';
 import { createSeo } from './seo.js';
 import compression from 'compression';
@@ -264,6 +265,7 @@ export function createApp({
   // Small helpers: catalog lookup, the public base URL for links we hand out, and mp4-vs-HLS detection.
   const findVideo = (id) => catalog.video(id);
   const isPremiumVideo = async (v) => {
+    if (FREE_KINDS.includes(v.kind)) return false;   // trailers, clips and reels are never locked, even for premium shows
     if (v.access === 'premium') return true;
     if (!v.showId) return false;
     const { catalog: snapshot } = await catalog.get();

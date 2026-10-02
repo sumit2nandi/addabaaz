@@ -3,6 +3,7 @@ import { HttpError, bad, wrap, rateLimit } from './http.js';
 import { isDuplicate } from './db.js';
 import { hashPassword, verifyPassword, signToken } from './auth.js';
 import { endpointHash } from './push.js';
+import { FREE_KINDS } from './catalog-schema.js';
 import * as mail from './emails.js';
 
 // Small shared helpers for this file.
@@ -227,6 +228,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       api.post('/playback/heartbeat', limit('hb', 30, 60_000), wrap(async (req, res) => {
         const v = typeof req.body?.videoId === 'string' ? await catalog.video(req.body.videoId) : null;
         if (!v) throw new HttpError(404, 'not_found', 'Unknown video.');
+        if (FREE_KINDS.includes(v.kind)) return res.json({ ok: true });   // trailers/clips/reels never take a premium screen seat
         const d = deviceOf(req);
         const r = await db.playback.touch(req.user.id, d.id, d.label, v.id, { limit: cfg.streamLimit, windowSec: cfg.heartbeatWindowSec });
         if (!r.ok) throw new HttpError(429, 'stream_limit', `Your plan allows ${cfg.streamLimit} screens at once. Stop playback on another device to continue.`);
