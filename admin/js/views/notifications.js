@@ -41,7 +41,7 @@ export default async function notifications(root, _p, ctx) {
     const list = meta.campaigns || [];
     history.innerHTML = list.length
       ? html`<table class="tbl compact"><thead><tr><th>Broadcast</th><th>Audience</th><th>Progress</th><th>Status</th><th>When</th></tr></thead><tbody>${list.map(row)}</tbody></table>`.s
-      : empty('Nothing broadcast yet.');
+      : empty('Nothing broadcast yet.').s;
     const active = list.filter((c) => !done(c.status)).length;
     live.textContent = active ? `${active} sending…` : '';
   };
