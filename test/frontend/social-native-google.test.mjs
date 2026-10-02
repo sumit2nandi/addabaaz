@@ -42,6 +42,16 @@ test('native Google opens the OAuth start URL in a Custom Tab and resolves the d
   assert.deepEqual(await p, { ticket: 'tkt-123' });
 });
 
+test('the tab closing as the deep link hands off does NOT cancel the sign-in', async () => {
+  const p = nativeGoogleTicket();
+  await tick();
+  // Chrome closes the Custom Tab the moment the ticket deep link launches the app -
+  // browserFinished lands first; the ticket must still win.
+  fire('browserFinished', {});
+  fire('appUrlOpen', { url: 'in.addabaaz.app://oauth?ticket=tkt-race' });
+  assert.deepEqual(await p, { ticket: 'tkt-race' });
+});
+
 test('closing the tab without signing in is a quiet cancel, and late deep links are ignored', async () => {
   const p = nativeGoogleTicket();
   await tick();

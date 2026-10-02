@@ -121,7 +121,12 @@ export function nativeGoogleTicket() {
       settle(() => (ticket ? resolve({ ticket }) : reject(Object.assign(new Error('cancelled'), { cancelled: true }))));
     });
     // Closing the tab without finishing = the user changed their mind: a quiet cancel, not an error.
-    closeHandle = Browser.addListener?.('browserFinished', () => settle(() => reject(Object.assign(new Error('cancelled'), { cancelled: true }))));
+    // BUT the tab also closes by itself when the ticket deep link hands off to the app, so a closed
+    // tab is only a cancel once the deep link has had a moment to land (otherwise sign-in silently
+    // dies right after the user picked their Google profile).
+    closeHandle = Browser.addListener?.('browserFinished', () => {
+      setTimeout(() => settle(() => reject(Object.assign(new Error('cancelled'), { cancelled: true }))), 2000);
+    });
     const base = CONFIG.apiBase && CONFIG.apiBase !== 'off' ? CONFIG.apiBase : '';
     Browser.open({ url: `${base}/api/v1/auth/google/native-page` })
       .catch(() => settle(() => reject(soft('Couldn’t open Google — check your connection.'))));
