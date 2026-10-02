@@ -91,3 +91,14 @@ exchanges it at `POST /auth/ticket` for its own session.
 - The Android 12+ system splash shows the dark logo artwork
   (`windowSplashScreenAnimatedIcon` = the splash drawable), so launching never
   shows white squares around the logo.
+
+## Stable debug signing (APK updates install over old ones)
+
+Every CI runner used to generate its own throwaway debug keystore, so Android
+treated each new APK as a different developer and refused the update
+("Something went wrong. App not installed."). `mobile/keystores/ci-debug.p12`
+is one shared DEBUG key (public by design - it signs nothing sensitive);
+`patch-android.mjs` copies it into the app module and points the `debug`
+build type at it (`android-gradle.mjs`). New APKs now install as ordinary
+updates. Users who installed an APK from BEFORE this change must uninstall
+once.

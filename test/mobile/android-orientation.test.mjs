@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { lockPortrait, isPortraitLocked, addOAuthRedirect, hasOAuthRedirect } from '../../mobile/scripts/android-manifest.mjs';
+import { stableSigning, hasStableSigning } from '../../mobile/scripts/android-gradle.mjs';
 
 // The Android app must not rotate to landscape when the phone is turned: the main activity is locked to portrait in the
 // generated AndroidManifest.xml. mobile/android is generated in CI (`cap add android`) and git-ignored, so the lock is applied by
@@ -62,16 +63,63 @@ test('addOAuthRedirect puts the app-scheme deep-link filter on MainActivity only
   assert.equal((two.match(new RegExp(`android:scheme="${scheme}"`, 'g')) || []).length, 1, 'other activities get no filter');
 });
 
+// The app/build.gradle Capacitor 7 generates (`npx cap add android`), for the signing patch.
+const GRADLE = `apply plugin: 'com.android.application'
+
+android {
+    namespace "in.addabaaz.app"
+    compileSdkVersion rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "in.addabaaz.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+}
+`;
+
+test('stableSigning points debug builds at the shared CI key, idempotently', () => {
+  const signed = stableSigning(GRADLE);
+  assert.ok(hasStableSigning(signed), 'the ciDebug signing config is present');
+  assert.match(signed, /storeFile file\('ci-debug\.p12'\)/);
+  assert.match(signed, /storeType 'PKCS12'/);
+  const bt = signed.indexOf('buildTypes');
+  const dbg = signed.indexOf('debug {', bt);
+  const rel = signed.indexOf('release {', bt);
+  assert.ok(dbg > bt && dbg < rel, 'the debug build type is declared before release');
+  assert.match(signed, /debug \{\s*signingConfig signingConfigs\.ciDebug/, 'debug builds use the shared key');
+  assert.equal(signed.match(/signingConfig signingConfigs\.ciDebug/g).length, 1, 'release keeps its default signing');
+  assert.equal(stableSigning(signed), signed, 'idempotent: patching on every `cap sync` is safe');
+  assert.equal(stableSigning('no android block here'), 'no android block here', 'unknown files pass through untouched');
+});
+
 test('npm run android:patch locks the generated project, is idempotent, and fails loudly on an unknown manifest', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-android-'));
   try {
     fs.mkdirSync(path.join(dir, 'scripts'));
-    for (const f of ['patch-android.mjs', 'android-manifest.mjs', 'android-icons.mjs']) fs.copyFileSync(new URL(f, SCRIPTS), path.join(dir, 'scripts', f));
+    for (const f of ['patch-android.mjs', 'android-manifest.mjs', 'android-icons.mjs', 'android-gradle.mjs']) fs.copyFileSync(new URL(f, SCRIPTS), path.join(dir, 'scripts', f));
     fs.cpSync(new URL('../../mobile/android-icons', import.meta.url), path.join(dir, 'android-icons'), { recursive: true });
     fs.copyFileSync(new URL('../../mobile/capacitor.config.json', import.meta.url), path.join(dir, 'capacitor.config.json'));
+    fs.mkdirSync(path.join(dir, 'keystores'));
+    fs.copyFileSync(new URL('../../mobile/keystores/ci-debug.p12', import.meta.url), path.join(dir, 'keystores', 'ci-debug.p12'));
     const manifest = path.join(dir, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
     fs.mkdirSync(path.dirname(manifest), { recursive: true });
     fs.writeFileSync(manifest, generated);
+    const buildGradle = path.join(dir, 'android', 'app', 'build.gradle');
+    fs.writeFileSync(buildGradle, GRADLE);
     const run = () => execFileSync(process.execPath, [path.join(dir, 'scripts', 'patch-android.mjs')], { cwd: dir, encoding: 'utf8', stdio: 'pipe' });
 
     const first = run();
@@ -80,6 +128,8 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     const patched = fs.readFileSync(manifest, 'utf8');
     assert.equal(isPortraitLocked(patched), true);
     assert.equal(patched, addOAuthRedirect(lockPortrait(generated), 'in.addabaaz.app'), 'portrait lock plus the Google sign-in deep-link filter');
+    assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'ci-debug.p12')), 'the shared CI key was copied into the app module');
+    assert.ok(hasStableSigning(fs.readFileSync(buildGradle, 'utf8')), 'debug builds are signed with the shared key, so new APKs install over old ones');
 
     const second = run();
     assert.equal(/locked to portrait/.test(second), false, 'a second run has nothing to change');

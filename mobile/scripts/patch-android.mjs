@@ -15,6 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lockPortrait, isPortraitLocked, addOAuthRedirect, hasOAuthRedirect } from './android-manifest.mjs';
 import { stampLauncherIcons } from './android-icons.mjs';
+import { stableSigning, hasStableSigning } from './android-gradle.mjs';
 
 // Deep-link scheme for the Google sign-in redirect back into the app (= the Capacitor appId;
 // the API's google-return.js deep-links to the same scheme, keep them in step).
@@ -60,6 +61,21 @@ patch('app/src/main/res/values/styles.xml', 'system splash shows the dark logo a
   t.includes('windowSplashScreenAnimatedIcon') ? t : t.replace(
     /(<style name="AppTheme\.NoActionBarLaunch"[^>]*>\s*<item name="android:background">@drawable\/splash<\/item>)/,
     '$1\n        <item name="android:windowSplashScreenBackground">#050505</item>\n        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash</item>'));
+
+// Every CI APK is signed with the same shared debug key, so a fresh build installs as an
+// UPDATE over an older one (Android refuses "App not installed" signature-mismatch updates
+// when each runner used its own throwaway keystore). The key is a DEBUG key checked into the
+// repo on purpose - it protects nothing and is meant to be public.
+const keystore = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'keystores', 'ci-debug.p12');
+if (fs.existsSync(keystore)) {
+  fs.copyFileSync(keystore, path.join(root, 'app', 'ci-debug.p12'));
+  console.log('[android:patch] app/ci-debug.p12: shared CI debug signing key');
+}
+patch('app/build.gradle', 'debug builds signed with the shared CI key (new APKs update old installs)', (t) => {
+  const out = stableSigning(t);
+  if (!hasStableSigning(out)) throw new Error('[android:patch] could not add the stable debug signing config - app/build.gradle changed shape; update mobile/scripts/android-gradle.mjs.');
+  return out;
+});
 
 // The APK installs with the website logo as its launcher icon (not the stock Capacitor bot):
 // the pre-rendered logo PNGs replace every mipmap density and the adaptive-icon XML is dropped.
