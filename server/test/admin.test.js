@@ -362,6 +362,56 @@ test('payments list + coupons: filters, delete only when never used; everything 
   assert.equal((await call('GET', '/admin/audit', null, viewer.token)).status, 403);
 });
 
+test('one address = one account: look-alike duplicates are reported and can be merged', async () => {
+  // A second account for the same address, exactly as it happens in practice: the person pasted an
+  // invisible character (U+200B), so MySQL saw a different string (this is the legacy row shape).
+  const viewerEmail = 'viewer@example.com';
+  const dupId = 'dup-user-0000-0000-0000-000000000001';
+  const zwsp = 'viewer\u200b@example.com';
+  await db.pool.query('INSERT INTO users (id, email, email_norm, email_dup, name, password_hash) VALUES (?,?,NULL,1,?,?)', [dupId, zwsp, 'Viewer Two', 'x']);
+  await db.pool.query('INSERT INTO profiles (id, user_id, name, color) VALUES (?,?,?,0)', ['dup-profile-1', dupId, 'Viewer']);
+  await db.pool.query('INSERT INTO push_devices (id, user_id, platform, token_hash, token, label) VALUES (?,?,?,?,?,?)', ['dup-device-1', dupId, 'android', 'dup-hash-1', 'dup-token-'.padEnd(30, 'x'), 'Old phone']);
+  await db.pool.query("INSERT INTO comments (id, video_id, user_id, author, body, status) VALUES ('dup-comment-1', 'some-video', ?, 'Viewer', 'hello', 'visible')", [dupId]);
+  await db.pool.query('UPDATE users SET email_dup = 1, email_norm = NULL WHERE id = ?', [dupId]);
+
+  // The report finds the pair, and shows WHY they look identical.
+  const rep = (await A('GET', '/users/duplicates')).body;
+  const group = rep.groups.find((g) => g.users.some((u) => u.id === dupId));
+  assert.ok(group, 'the duplicate pair is reported');
+  assert.equal(group.count, 2);
+  const weird = group.users.find((u) => u.id === dupId), normal = group.users.find((u) => u.id === viewer.id);
+  assert.equal(weird.emailPlain, false); assert.match(weird.emailVisible, /⟨U+200B⟩/);
+  assert.equal(normal.emailPlain, true); assert.equal(normal.emailVisible, viewerEmail);
+  assert.equal(weird.dup, true);
+
+  // Merging anything that is not a duplicate is refused.
+  const third = await signup('third@example.com', 'Third Person');
+  assert.equal((await A('POST', '/users/merge', { keepId: viewer.id, removeId: third.id })).body.error.code, 'not_duplicates');
+  assert.equal((await A('POST', '/users/merge', { keepId: viewer.id, removeId: viewer.id })).status, 400);
+
+  // Merge the duplicate into the account that stays: profiles, device, comment and the subscription follow.
+  // The duplicate got the LONGER plan, so merging must keep that (the better access wins, never the worse).
+  await A('POST', `/users/${dupId}/grant`, { days: 400 });
+  const merged = await A('POST', '/users/merge', { keepId: viewer.id, removeId: dupId });
+  assert.equal(merged.status, 200, JSON.stringify(merged.body));
+  assert.ok(merged.body.moved.profiles >= 1); assert.ok(merged.body.moved.devices >= 1);
+  assert.ok(merged.body.moved.comments >= 1); assert.equal(merged.body.moved.subscription, 'moved');
+  assert.equal((await A('GET', `/users/${dupId}`)).status, 404, 'the extra account is gone');
+  const kept = (await A('GET', `/users/${viewer.id}`)).body;
+  assert.ok(kept.profiles.length >= 2, 'the other account’s profile moved over');
+  assert.equal(kept.subscription.planId, 'plus-monthly', 'the paid plan followed the person');
+  const [movedComment] = await db.pool.query('SELECT user_id FROM comments WHERE id = ?', ['dup-comment-1']);
+  assert.equal(movedComment[0].user_id, viewer.id, 'the comment moved');
+  assert.ok((await audit('user.merge')).some((e) => e.target === dupId && e.meta.keep === viewer.id));
+
+  // The surviving row now owns the normalized address, so a new account for it is impossible.
+  const again = await call('POST', '/auth/signup', { name: 'Copy Cat', email: zwsp, password: 'password123' });
+  assert.equal(again.status, 409); assert.equal(again.body.error.code, 'email_taken');
+  assert.equal((await call('POST', '/auth/signup', { name: 'Copy Cat', email: viewerEmail, password: 'password123' })).status, 409);
+  const after = (await A('GET', '/users/duplicates')).body.groups;
+  assert.equal(after.some((g) => g.users.some((u) => u.id === viewer.id || u.id === dupId)), false, 'nothing left to merge');
+});
+
 test('the admin page is served with a strict CSP and is never cached', async () => {
   for (const p of ['/admin', '/admin/']) {
     const r = await fetch(root + p); assert.equal(r.status, 200); assert.match(r.headers.get('content-type'), /html/); assert.equal(r.headers.get('cache-control'), 'no-store');

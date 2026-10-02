@@ -29,6 +29,12 @@ if (process.env.DB_MIGRATE !== 'false') {                       // set DB_MIGRAT
   const applied = await migrate(db, { log: (m) => console.log('[migrate]', m) });
   if (applied.length) console.log(`[migrate] applied ${applied.length} migration(s)`);
 }
+// One address = one account: rewrite stored addresses in the normalized form (migration 012 could only
+// lower-case and trim them in SQL). Rows that collide are flagged for Admin → Users → merge.
+try {
+  const n = await db.adminUsers.renormalizeEmails();
+  if (n.updated || n.flagged) console.log(`[users] email normalization: ${n.updated} updated, ${n.flagged} duplicate row(s) flagged for merging`);
+} catch (e) { console.error('[users] email normalization failed:', e.message); }
 // DISABLE_RATE_LIMIT=true is for load tests on a staging copy only — it is ignored in production.
 const noRate = /^(1|true)$/i.test(process.env.DISABLE_RATE_LIMIT || '') && process.env.NODE_ENV !== 'production';
 if (noRate) console.warn('⚠ Rate limiting is OFF (DISABLE_RATE_LIMIT) — never expose this instance publicly.');

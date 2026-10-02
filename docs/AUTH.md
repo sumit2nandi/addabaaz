@@ -75,3 +75,13 @@ Setup (needs a paid Apple Developer account):
 | `GET /me` | adds `providers: ['google', …]` and `hasPassword` |
 
 Errors: `401 invalid_credential` (bad/expired/foreign token), `400 email_required | email_unverified`, `501 provider_not_configured`, `503 provider_unavailable` (Google/Facebook unreachable).
+
+## One address = one account
+
+The address is normalized before it is compared or stored (`server/src/email-address.js`): NFKC folding
+(full-width `＠`/letters → ASCII), invisible characters removed (zero-width space, soft hyphen, BOM,
+non-breaking space, line separators), lower-cased. `users.email_norm` is UNIQUE, so a second account for the
+same address is refused with `409 email_taken` — including two sign-ups racing each other, and including
+Google/Facebook/Apple sign-in, which links the existing account instead. Legacy rows that collided are
+merged from **Admin → Users** (`user.merge`, audited). Sign-in accepts either the stored or the normalized
+form, so a person who signed up before this can still get in with the address they know.

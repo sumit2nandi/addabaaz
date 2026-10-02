@@ -4,6 +4,7 @@ import { isDuplicate } from './db.js';
 import { hashPassword, verifyPassword, signToken } from './auth.js';
 import { endpointHash } from './push.js';
 import { FREE_KINDS } from './catalog-schema.js';
+import { normalizeEmail } from './email-address.js';
 import * as mail from './emails.js';
 
 // Small shared helpers for this file.
@@ -114,7 +115,9 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         requireMail();
         const email = String(req.body?.email || '').trim().toLowerCase();
         if (!EMAIL.test(email) || email.length > 254) throw bad('Please enter a valid email address.', 'invalid_email');
-        const user = await db.users.byEmail(email);
+        // Normalized lookup first; a row that still carries un-normalized characters (waiting for a merge
+        // in Admin → Users) has no `email_norm`, so fall back to the address exactly as it is stored.
+        const user = (await db.users.byEmailNorm(normalizeEmail(email).email)) || (await db.users.byEmail(email));
         if (user && !user.disabledAt) {
           const last = await db.authTokens.lastIssuedAt(user.id, 'reset');
           if (!last || Date.now() - last.getTime() > 60_000) {        // one email a minute per account

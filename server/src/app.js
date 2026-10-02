@@ -31,6 +31,7 @@ import { mailerFromEnv } from './mailer.js';
 import { createBilling, billingConfigFromEnv } from './billing.js';
 import { STATES } from './gst.js';
 import { HttpError, bad, wrap, rateLimit } from './http.js';
+import { normalizeEmail } from './email-address.js';
 import { createCatalogStore } from './catalog.js';
 import { FREE_KINDS } from './catalog-schema.js';
 import { createYouTubeFeed } from './youtube-feed.js';
@@ -186,11 +187,16 @@ export function createApp({
   // Create an account with e-mail + password. A verification-mail failure must be visible to the user (the account is still created so they can sign in and retry).
   api.post('/auth/signup', authLimit, wrap(async (req, res) => {
     const { name = '', email = '', password = '' } = req.body || {};
-    if (typeof email !== 'string' || !EMAIL.test(email.trim()) || email.length > 254) throw bad('Please enter a valid email address.', 'invalid_email');
+    // One address = one account: the address is normalized (case, full-width characters and invisible
+    // paste artefacts removed) before it is compared or stored — see server/src/email-address.js.
+    const norm = normalizeEmail(email);
+    // An address that only becomes usable after cleaning ("rupa @example.com", a full-width ＠) is fine:
+    // the stored address is always the normalized one.
+    if (typeof email !== 'string' || email.length > 254 || !norm.ok || (typeof email === 'string' && email.trim() === '')) throw bad('Please enter a valid email address.', 'invalid_email');
     if (typeof password !== 'string' || password.length < 8 || password.length > 128) throw bad('Password must be 8–128 characters.', 'weak_password');
     if (typeof name !== 'string' || !name.trim() || name.length > 60) throw bad('Please enter your name.', 'invalid_name');
-    // Passwords are hashed (scrypt) before they touch the database; e-mails are stored lower-case.
-    const user = { id: crypto.randomUUID(), email: email.trim().toLowerCase(), name: name.trim(), passwordHash: hashPassword(password) };
+    // Passwords are hashed (scrypt) before they touch the database.
+    const user = { id: crypto.randomUUID(), email: norm.email, emailNorm: norm.email, name: name.trim(), passwordHash: hashPassword(password) };
     const profile = { id: crypto.randomUUID(), name: user.name.split(/\s+/)[0].slice(0, 24), color: 0 };
     // The unique e-mail index is the real duplicate check (safe against two simultaneous sign-ups).
     try { await db.users.createWithProfile(user, profile); }
@@ -212,7 +218,7 @@ export function createApp({
   // Log in with e-mail + password. Returns a session token.
   api.post('/auth/login', authLimit, wrap(async (req, res) => {
     const { email = '', password = '' } = req.body || {};
-    const user = await db.users.byEmail(String(email).trim().toLowerCase());
+    const user = (await db.users.byEmailNorm(normalizeEmail(email).email)) || (await db.users.byEmail(String(email).trim().toLowerCase()));
     // Always run a hash to keep timing similar whether or not the user exists.
     const ok = user?.passwordHash ? verifyPassword(String(password), user.passwordHash) : (verifyPassword(String(password), 'scrypt$00$00'), false);   // social-only accounts have no password
     if (!ok) throw new HttpError(401, 'invalid_credentials', 'Incorrect email or password.');
@@ -236,18 +242,20 @@ export function createApp({
     let user = await db.identities.userFor(provider, claims.subject), isNew = false;
     // First time we see this social identity.
     if (!user) {
-      if (!claims.email) throw bad(`${LABEL[provider]} didn’t share an email address. Please sign up with email instead.`, 'email_required');
+      const norm = normalizeEmail(claims.email);
+      if (!claims.email || !norm.ok) throw bad(`${LABEL[provider]} didn’t share an email address. Please sign up with email instead.`, 'email_required');
       if (!claims.emailVerified) throw bad('Your email address isn’t verified with the provider.', 'email_unverified');
-      user = await db.users.byEmail(claims.email);
+      claims.email = norm.email;
+      user = (await db.users.byEmailNorm(norm.email)) || (await db.users.byEmail(claims.email));
       if (user) await db.identities.link(user.id, ident);              // same verified email → same person: link the provider
       else {
         const name = (claims.name || claims.email.split('@')[0]).trim().slice(0, 60);
-        const fresh = { id: crypto.randomUUID(), email: claims.email, name };
+        const fresh = { id: crypto.randomUUID(), email: norm.email, emailNorm: norm.email, name };
         const profile = { id: crypto.randomUUID(), name: name.split(/\s+/)[0].slice(0, 24), color: 0 };
         try { await db.identities.createUser(fresh, profile, ident); user = fresh; isNew = true; }
         catch (e) {
           if (!isDuplicate(e)) throw e;                                   // lost a race with a parallel request: use the winner
-          user = (await db.identities.userFor(provider, claims.subject)) || (await db.users.byEmail(claims.email));
+          user = (await db.identities.userFor(provider, claims.subject)) || (await db.users.byEmailNorm(norm.email));
           if (user) await db.identities.link(user.id, ident);
         }
       }

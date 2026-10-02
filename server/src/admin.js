@@ -4,6 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { HttpError, bad, wrap, rateLimit } from './http.js';
 import { isDuplicate } from './db.js';
+import { visibleEmail } from './email-address.js';
 import { verifyToken, sessionValid } from './auth.js';
 import { PLANS, paidPlan } from './plans.js';
 import { validate, TYPES } from './catalog-schema.js';
@@ -118,6 +119,24 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   router.get('/users', wrap(async (req, res) => res.json(await db.adminUsers.list({ q: typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '', filter: String(req.query.filter || 'all'), ...page(req) }))));
   // Loads a user or answers 404.
   const userOr404 = async (id) => { const u = await db.adminUsers.get(String(id)); if (!u) throw new HttpError(404, 'not_found', 'Unknown user.'); return u; };
+  /* Accounts that ended up sharing one e-mail address (invisible characters, full-width @, spaces …).
+   * Registered BEFORE `/users/:id` so the path is not read as a user id. */
+  router.get('/users/duplicates', wrap(async (_req, res) => {
+    const normalized = await db.adminUsers.renormalizeEmails();      // legacy rows first, so the report is exact
+    const groups = await db.adminUsers.duplicateGroups();
+    res.json({
+      groups: groups.map((g) => ({ ...g, users: g.users.map((u) => ({ ...u, emailVisible: visibleEmail(u.email), emailPlain: /^[\x20-\x7E]*$/.test(u.email) })) })),
+      normalized,
+    });
+  }));
+  // Merge two accounts that share an address: everything moves to the one that stays, the other is deleted.
+  router.post('/users/merge', wrap(async (req, res) => {
+    const keepId = String(req.body?.keepId || ''), removeId = String(req.body?.removeId || '');
+    if (!keepId || !removeId) throw bad('Both accounts are required.');
+    const out = await db.adminUsers.mergeUsers(keepId, removeId);
+    await log(req, 'user.merge', removeId, { keep: keepId, email: out.keep.email, moved: out.moved });
+    res.json(out);
+  }));
   router.get('/users/:id', wrap(async (req, res) => {
     const u = await userOr404(req.params.id);
     const [profiles, subscription, providers, pays] = await Promise.all([db.profiles.list(u.id), db.subscriptions.get(u.id), db.identities.providersOf(u.id), db.payments.listRecent({ userId: u.id, limit: 50 })]);

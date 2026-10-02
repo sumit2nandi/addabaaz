@@ -11,6 +11,8 @@ const PLURAL = Object.fromEntries(Object.entries(DB_TYPE).map(([k, v]) => [v, k]
 const istDay = (d) => new Date(d.getTime() + 330 * 60_000).toISOString().slice(0, 10);
 
 /** Admin-console queries: database-backed catalog, audit log, user/message management, dashboard numbers. Mixed into createDb(). */
+import { normalizeEmail, emailKey } from './email-address.js';
+
 export function adminDb({ q, tx, self, iso }) {
   // Every catalog write increments a version number; the public catalog cache uses it to know when to reload.
   const bump = (t) => t.query("UPDATE catalog_meta SET n = n + 1, at = UTC_TIMESTAMP(3) WHERE k = 'version'");
@@ -254,6 +256,147 @@ export function adminDb({ q, tx, self, iso }) {
       if (sets.length) await q(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, [...vals, id]);
     },
     async countAdmins() { return (await q('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1 AND disabled_at IS NULL'))[0].n; },
+    /* ---- One address = one account (Admin → Users → “accounts sharing one e-mail”) ----
+     * The UNIQUE index on users.email cannot see invisible characters (zero-width space, soft hyphen,
+     * full-width ＠ …), and rows created before migration 012 only carry the address as typed. These
+     * three methods bring every stored address to the same normalized form, list the rows that still
+     * collide, and merge a pair into one account on the admin's word. */
+
+    /**
+     * Groups all accounts by the NORMALIZED address — the same definition signup, sign-in and the
+     * broadcast audience use. SQL alone cannot do this (it cannot strip a zero-width space), so the
+     * grouping happens here; the table is read once.
+     */
+    async scanEmailGroups({ details = false } = {}) {
+      const rows = await q(details
+        ? `SELECT u.id, u.email, u.email_norm, u.email_dup, u.name, u.created_at, u.is_admin, u.disabled_at, s.plan_id, s.expires_at,
+             (SELECT COUNT(*) FROM profiles p WHERE p.user_id = u.id) AS profiles,
+             (SELECT GROUP_CONCAT(i.provider ORDER BY i.created_at) FROM auth_identities i WHERE i.user_id = u.id) AS providers,
+             (SELECT COUNT(*) FROM push_devices d WHERE d.user_id = u.id) AS devices
+           FROM users u LEFT JOIN subscriptions s ON s.user_id = u.id`
+        : 'SELECT id, email, created_at FROM users');
+      const byKey = new Map();
+      for (const r of rows) {
+        const k = emailKey(r.email);
+        if (!byKey.has(k)) byKey.set(k, []);
+        byKey.get(k).push(r);
+      }
+      // Oldest first everywhere: the first row of a group is the account that keeps the address.
+      for (const list of byKey.values()) list.sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : (a.id < b.id ? -1 : 1)));
+      return byKey;
+    },
+
+    /**
+     * Brings `email_norm`/`email_dup` in line with the normalized addresses: the oldest account of an
+     * address owns it, every other row is flagged for the admin to merge. Idempotent, run at boot and
+     * whenever the duplicate report is opened (this is what catches the invisible-character rows SQL
+     * could not clean up in the migration).
+     */
+    async renormalizeEmails() {
+      const byKey = await adminUsers.scanEmailGroups();
+      let scanned = 0, updated = 0, flagged = 0;
+      for (const [key, rows] of byKey) {
+        scanned += rows.length;
+        for (const [i, r] of rows.entries()) {
+          const owner = i === 0;
+          try {
+            const res = owner
+              ? await q('UPDATE users SET email_norm = ?, email_dup = 0 WHERE id = ? AND (email_norm IS NULL OR email_norm <> ? OR email_dup <> 0)', [key, r.id, key])
+              : await q('UPDATE users SET email_norm = NULL, email_dup = 1 WHERE id = ? AND (email_norm IS NOT NULL OR email_dup = 0)', [r.id]);
+            if (i === 0) updated += res.affectedRows; else if (res.affectedRows) flagged++;
+          } catch (e) {
+            // Another row already holds this address at the database level: this one is the duplicate.
+            if (e?.code !== 'ER_DUP_ENTRY') throw e;
+            await q('UPDATE users SET email_norm = NULL, email_dup = 1 WHERE id = ?', [r.id]);
+            flagged++;
+          }
+        }
+      }
+      return { scanned, updated, flagged };
+    },
+
+    /** Groups of accounts whose stored addresses are the same address. Empty array = nothing to fix. */
+    async duplicateGroups({ limit = 25 } = {}) {
+      const byKey = await adminUsers.scanEmailGroups({ details: true });
+      return [...byKey.entries()]
+        .filter(([, rows]) => rows.length > 1)
+        .slice(0, limit)
+        .map(([key, rows]) => ({
+          key, count: rows.length,
+          users: rows.map((r) => ({
+            id: r.id, name: r.name, email: r.email, emailNorm: r.email_norm, dup: !!r.email_dup,
+            createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabled: !!r.disabled_at,
+            planId: r.plan_id || 'free', expiresAt: iso(r.expires_at), profiles: Number(r.profiles), devices: Number(r.devices),
+            providers: r.providers ? r.providers.split(',') : [],
+          })),
+        }));
+    },
+
+    /**
+     * Merges `removeId` into `keepId` — everything the person did follows them to the account that stays,
+     * then the extra account is deleted. Only accounts with the same address may be merged.
+     * Returns what moved, for the audit log.
+     */
+    async mergeUsers(keepId, removeId) {
+      if (!keepId || !removeId || keepId === removeId) throw bad('Pick two different accounts.');
+      const keep = await self.users.byId(keepId), remove = await self.users.byId(removeId);
+      if (!keep || !remove) throw new HttpError(404, 'not_found', 'Account not found.');
+      const a = normalizeEmail(keep.email).email, b = normalizeEmail(remove.email).email;
+      if (a !== b) throw new HttpError(409, 'not_duplicates', 'These accounts do not share an e-mail address — merge is only for duplicates.');
+
+      const moved = {};
+      await tx(async (t) => {
+        const run = async (label, sql, args) => { const r = await t.query(sql, args); moved[label] = r.affectedRows; };
+        // Rows that follow the account itself.
+        await run('profiles', 'UPDATE profiles SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
+        await run('identities', 'UPDATE auth_identities SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
+        await run('payments', 'UPDATE payments SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
+        await run('invoices', 'UPDATE invoices SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
+        await run('refundRequests', 'UPDATE refund_requests SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
+        await run('comments', 'UPDATE comments SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
+        await run('pushSubscriptions', 'UPDATE push_subscriptions SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
+        await run('devices', 'UPDATE push_devices SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
+        await run('errorReports', 'UPDATE error_log SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
+        // Tables whose key includes the user: drop the rows that would collide, then move the rest.
+        for (const [label, table] of [['playbackSessions', 'playback_sessions'], ['commentReports', 'comment_reports'], ['notifySent', 'notify_sent']]) {
+          await t.query(`DELETE r FROM ${table} r JOIN ${table} k ON k.user_id = ? AND r.user_id = ?${label === 'playbackSessions' ? ' AND k.device_id = r.device_id' : label === 'commentReports' ? ' AND k.comment_id = r.comment_id' : ' AND k.kind = r.kind AND k.ref = r.ref'}`, [keepId, removeId]);
+          await run(label, `UPDATE ${table} SET user_id = ? WHERE user_id = ?`, [keepId, removeId]);
+        }
+        // One-off tokens (password reset / verification links) belong to the account being removed.
+        await t.query('DELETE FROM auth_tokens WHERE user_id = ?', [removeId]);
+        // The subscription is kept only if it gives more access than the one the surviving account has.
+        // t.query already returns the rows (db.js unwraps the driver result), so index ONCE.
+        const keepSubs = await t.query('SELECT plan_id, expires_at FROM subscriptions WHERE user_id = ?', [keepId]);
+        const removeSubs = await t.query('SELECT plan_id, expires_at FROM subscriptions WHERE user_id = ?', [removeId]);
+        const ks = keepSubs[0], rs = removeSubs[0];
+        moved.subscription = 'kept';
+        if (ks && rs) {
+          const paid = (p) => p && p.plan_id !== 'free';
+          const better = (rs.expires_at && (!ks.expires_at || rs.expires_at > ks.expires_at)) || (paid(rs) && !paid(ks));
+          if (better) { await t.query('DELETE FROM subscriptions WHERE user_id = ?', [keepId]); await t.query('UPDATE subscriptions SET user_id = ? WHERE user_id = ?', [keepId, removeId]); moved.subscription = 'moved'; }
+          else await t.query('DELETE FROM subscriptions WHERE user_id = ?', [removeId]);
+        } else if (rs) { await t.query('UPDATE subscriptions SET user_id = ? WHERE user_id = ?', [keepId, removeId]); moved.subscription = 'moved'; }
+        // Carry over what the two accounts told us about the person: admin stays admin, a verified or
+        // unsubscribed address stays that way. Names, passwords and sessions stay with the kept account.
+        await t.query(`UPDATE users k, users r SET
+            k.is_admin = GREATEST(k.is_admin, r.is_admin),
+            k.email_verified_at = COALESCE(k.email_verified_at, r.email_verified_at),
+            k.email_opt_out_at = GREATEST(COALESCE(k.email_opt_out_at, '1970-01-01'), COALESCE(r.email_opt_out_at, '1970-01-01'))
+          WHERE k.id = ? AND r.id = ?`, [keepId, removeId]);
+        await t.query("UPDATE users SET email_opt_out_at = NULL WHERE id = ? AND email_opt_out_at = '1970-01-01'", [keepId]);
+        // The extra account goes first, so the surviving row can take the address even when the
+        // duplicate (not the kept account) was the one holding it.
+        await t.query('DELETE FROM users WHERE id = ?', [removeId]);   // cascades to anything still pointing at it
+        try { await t.query('UPDATE users SET email_norm = ?, email_dup = 0 WHERE id = ?', [a, keepId]); }
+        catch (e) {
+          // Belt and braces: another account holds this address, so this one stays flagged for the next report.
+          if (e?.code !== 'ER_DUP_ENTRY') throw e;
+          await t.query('UPDATE users SET email_norm = NULL, email_dup = 1 WHERE id = ?', [keepId]);
+          moved.emailNorm = 'held by another account';
+        }
+      });
+      return { keep: { id: keepId, email: keep.email, name: keep.name }, removed: { id: removeId, email: remove.email, name: remove.name }, moved };
+    },
     /* ---- Broadcast e-mail audiences (Admin → Notifications → Email) ----
      * Same filters as the Users page (`filter` is one of USER_FILTERS). Disabled accounts are never
      * mailed, and neither is anyone who clicked the unsubscribe link in an earlier campaign. */
@@ -272,7 +415,7 @@ export function adminDb({ q, tx, self, iso }) {
     async setEmailOptOut(userId, on = true) { return (await q('UPDATE users SET email_opt_out_at = ? WHERE id = ?', [on ? new Date() : null, userId])).affectedRows === 1; },
     async emailOptOut(userId) { const r = (await q('SELECT email_opt_out_at FROM users WHERE id = ?', [userId]))[0]; return !!(r && r.email_opt_out_at); },
     // Used by the `npm run admin` command line to grant/revoke admin rights.
-    async setAdminByEmail(email, isAdmin) { return (await q('UPDATE users SET is_admin = ? WHERE email = ?', [isAdmin ? 1 : 0, email])).affectedRows === 1; },
+    async setAdminByEmail(email, isAdmin) { return (await q('UPDATE users SET is_admin = ? WHERE email = ? OR email_norm = ?', [isAdmin ? 1 : 0, email, email])).affectedRows >= 1; },
     async admins() { return (await q('SELECT id, email, name FROM users WHERE is_admin = 1 ORDER BY created_at')).map((r) => ({ id: r.id, email: r.email, name: r.name })); },
   };
 

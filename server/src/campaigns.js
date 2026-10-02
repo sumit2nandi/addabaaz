@@ -10,6 +10,7 @@
 // `campaigns` is updated after every batch, so the console can poll progress. Campaigns left
 // unfinished by a deploy or crash are resumed at boot (runScheduledJobs → campaigns.resume()).
 import crypto from 'node:crypto';
+import { emailKey } from './email-address.js';
 
 /**
  * @param {object}   o
@@ -50,11 +51,17 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
   async function runEmail(campaign, { unsubscribeUrlFor, siteUrl }) {
     let cursor = campaign.cursor || 0, total = campaign.total || 0;
     let sent = 0, failed = 0, skipped = 0;                          // deltas since the last progress() call
+    // One message per ADDRESS: two account rows that share an address (legacy duplicates, which the
+    // admin merge in Admin → Users cleans up) must not receive the same e-mail twice.
+    const seen = new Set();
     try {
       for (;;) {
         const page = await db.adminUsers.emailAudience(campaign.audience, { limit: pageSize, offset: cursor });
         if (!page.length) break;
         for (const u of page) {
+          const address = emailKey(u.email);
+          if (seen.has(address)) { skipped++; continue; }
+          seen.add(address);
           try {
             const message = email({ name: u.name, email: u.email, subject: campaign.title, body: campaign.body, button: campaign.button ? { label: campaign.button, url: campaign.url } : null, siteUrl, unsubscribeUrl: unsubscribeUrlFor ? unsubscribeUrlFor(u) : '' });
             const r = await mailer.send({ to: u.email, ...message });
