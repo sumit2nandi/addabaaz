@@ -5,10 +5,15 @@
 // Google Play only accepts new apps and updates that target API 36. This script raises those numbers - and only ever raises them,
 // so running it twice (or on an already-newer project) changes nothing.
 //
+// It also locks the app to portrait: the main activity gets android:screenOrientation="portrait" in AndroidManifest.xml, so turning
+// the phone never switches the app to landscape (the whole UI is designed for portrait). To allow rotation again, remove the
+// `patch('app/src/main/AndroidManifest.xml', ...)` call at the bottom of this file - otherwise every sync would put the lock back.
+//
 // It runs automatically after `npm run sync` and `npm run add:android`; you can also run it by hand:  npm run android:patch
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { lockPortrait, isPortraitLocked } from './android-manifest.mjs';
 
 const MIN_AGP = '8.9.1';           // Android Gradle Plugin
 const SDK = 36;                    // compileSdk and targetSdk (Android 16)
@@ -31,5 +36,12 @@ patch('build.gradle', `Android Gradle Plugin -> ${MIN_AGP} (if it was lower)`, (
 
 patch('variables.gradle', `compileSdk/targetSdk -> ${SDK} (if they were lower)`, (t) =>
   t.replace(/((?:compileSdkVersion|targetSdkVersion)\s*=\s*)(\d+)/g, (m, pre, v) => (Number(v) < SDK ? pre + SDK : m)));
+
+patch('app/src/main/AndroidManifest.xml', 'main activity locked to portrait', (t) => {
+  const out = lockPortrait(t);
+  // Never ship an app that rotates by accident: if the generated manifest no longer looks the way this expects, stop the build.
+  if (!isPortraitLocked(out)) throw new Error('[android:patch] could not lock MainActivity to portrait - AndroidManifest.xml changed shape; update mobile/scripts/android-manifest.mjs.');
+  return out;
+});
 
 console.log('[android:patch] done. In Android Studio: SDK Manager -> install "Android 16 (API 36)" if asked, then File -> Sync Project with Gradle Files.');
