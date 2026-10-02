@@ -154,6 +154,8 @@ test('locked premium shows the video artwork behind the lock wall instead of a b
 test('lock-wall CSS: artwork covers the box and the wall stays readable over it', () => {
   const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
   assert.match(css, /\.player-wall-bg \{[^}]*background-size: cover/, 'the same-origin artwork fills the player box instead of a black background');
+  assert.match(css, /\.player-wall-bg \{[^}]*z-index: 1/, 'the artwork paints above the opaque black player slot');
   assert.match(css, /img\.player-wall-art \{[^}]*object-fit: cover/, 'the remote thumbnail layer also fills the box');
+  assert.match(css, /img\.player-wall-art \{[^}]*z-index: 1/, 'the thumbnail layer also paints above the slot');
   assert.match(css, /\.player-box\.has-wall \.player-overlay \{[^}]*linear-gradient/, 'the wall dims the artwork so its text stays readable');
 });

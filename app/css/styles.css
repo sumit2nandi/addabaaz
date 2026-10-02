@@ -317,10 +317,11 @@ img.img-failed { opacity: 0; }
 .player-overlay { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; text-align: center; padding: 20px; background: radial-gradient(circle, rgba(30,30,36,.95), rgba(0,0,0,.98)); z-index: 3; } .player-overlay[hidden], .next-up[hidden] { display: none; }
 .player-overlay h2 { font-size: 22px; } .player-overlay p { color: var(--text-2); max-width: 44ch; }
 /* Locked premium: the video's own artwork fills the player box behind the wall instead of a black background.
-   The same-origin artwork is a CSS background (it always paints, no image events involved); the remote video
-   thumbnail, when there is one, paints on top and simply drops out (img-failed) if the network can't fetch it. */
-.player-wall-bg { position: absolute; inset: 0; background-size: cover; background-position: center; filter: brightness(.55) saturate(.9); }
-img.player-wall-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: brightness(.55) saturate(.9); }
+   The same-origin artwork is a CSS background; the remote video thumbnail, when there is one, paints on top and
+   simply drops out (img-failed) if the network can't fetch it. Both layers must sit ABOVE the empty player slot
+   (which is itself an opaque black absolute-positioned box) and BELOW the z-3 overlay. */
+.player-wall-bg { position: absolute; inset: 0; z-index: 1; background-size: cover; background-position: center; filter: brightness(.55) saturate(.9); }
+img.player-wall-art { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; filter: brightness(.55) saturate(.9); }
 .player-box.has-wall .player-overlay { background: linear-gradient(180deg, rgba(10, 10, 14, .55), rgba(0, 0, 0, .88)); } .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; } .row.end { justify-content: flex-end; }
 .next-up { position: absolute; right: 14px; bottom: 14px; z-index: 4; max-width: calc(100% - 28px); }
 .next-card { display: flex; gap: 14px; align-items: center; background: rgba(12,12,14,.94); border: 1px solid var(--border-2); border-radius: var(--radius); padding: 10px; backdrop-filter: blur(10px); } .next-card img { width: 120px; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; } .next-card > div { display: grid; gap: 6px; font-size: 13px; }
