@@ -25,7 +25,7 @@ async function attachSubtitles(v, tracks = []) {
 }
 
 // Plays MP4 or HLS (including protected R2 video) in a <video> element and returns the same controller interface as the YouTube player (play, pause, seek, destroy…).
-export async function createHtml5Player(container, video, { start = 0, autoplay = true, muted = false, controls = true, onProgress, onEnded, onState } = {}) {
+export async function createHtml5Player(container, video, { start = 0, autoplay = true, muted = false, controls = true, onProgress, onEnded, onState, onDimensions } = {}) {
   container.innerHTML = '';
   const v = document.createElement('video');
   v.controls = controls; v.muted = muted; v.playsInline = true; v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', ''); v.autoplay = autoplay; v.preload = 'metadata';
@@ -42,7 +42,7 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
     else throw Object.assign(new Error('This video format isn’t supported on your device.'), { friendly: true });
   } else v.src = url;
 
-  v.addEventListener('loadedmetadata', () => { if (start > 0 && !hls) v.currentTime = start; }, { once: true });
+  v.addEventListener('loadedmetadata', () => { if (start > 0 && !hls) v.currentTime = start; onDimensions?.(v.videoWidth, v.videoHeight); }, { once: true });
   v.addEventListener('timeupdate', () => { const n = Date.now(); if (n - lastEmit > 1000) { lastEmit = n; onProgress?.(v.currentTime, v.duration || 0); } });
   v.addEventListener('playing', () => onState?.('playing'));
   v.addEventListener('pause', () => { onProgress?.(v.currentTime, v.duration || 0); onState?.('paused'); });

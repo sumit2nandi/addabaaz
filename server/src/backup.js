@@ -18,6 +18,7 @@ import zlib from 'node:zlib';
 import crypto from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
 import { Readable, PassThrough } from 'node:stream';
+import { StringDecoder } from 'node:string_decoder';
 import mysql from 'mysql2/promise';
 import { dbConfigFromEnv } from './config.js';
 import { createR2 } from './r2.js';
@@ -28,16 +29,32 @@ const MAGIC = Buffer.from('ABBK1');
 const SKIP = new Set(['schema_migrations']);
 /** Async line iterator over a stream (errors on the stream surface as exceptions from the for-await). */
 // Reads a stream and yields one text line at a time (each line is one JSON record).
-async function* lines(stream) {
+export async function* lines(stream) {
   let rest = '';
-  try { for await (const chunk of stream) { rest += chunk.toString('utf8'); let i; while ((i = rest.indexOf('\n')) >= 0) { yield rest.slice(0, i); rest = rest.slice(i + 1); } } }
-  catch (e) { throw e instanceof SyntaxError ? e : new Error(stream.friendly || e.message); }
+  // A chunk can end in the middle of a multi-byte character (gunzip emits fixed-size blocks), so the
+  // bytes are decoded through one StringDecoder that carries the partial character over to the next
+  // chunk. Decoding each chunk on its own would turn such a character into U+FFFD and quietly corrupt
+  // the restored row (only for some titles, depending on where the boundaries fall).
+  const decoder = new StringDecoder('utf8');
+  try {
+    for await (const chunk of stream) {
+      rest += decoder.write(chunk);
+      let i;
+      while ((i = rest.indexOf('\n')) >= 0) { yield rest.slice(0, i); rest = rest.slice(i + 1); }
+    }
+    rest += decoder.end();
+  } catch (e) { throw e instanceof SyntaxError ? e : new Error(stream.friendly || e.message); }
   if (rest) yield rest;
 }
 // Quotes a table name for SQL (table names come from the database itself, never from users).
 const q = (id) => `\`${String(id).replace(/`/g, '')}\``;
 // Rows inserted per statement when restoring.
 const BATCH = 500;
+// Tables whose rows carry large binary values (uploaded images) are paged in small steps, so a page never needs hundreds of megabytes ...
+const PAGE_ROWS = { uploaded_files: 20 };
+// ... and a restore INSERT is also cut once its binary values add up to about this much, to stay well under MySQL's max_allowed_packet.
+const BATCH_BYTES = 4 * 1024 * 1024;
+const binaryChars = (row) => Object.values(row).reduce((n, v) => n + (v && typeof v === 'object' && typeof v.$b64 === 'string' ? v.$b64.length : 0), 0);
 
 // JSON cannot hold binary or JSON columns natively: Buffers are wrapped as { $b64 } and decoded again on restore.
 const encodeValue = (v) => (Buffer.isBuffer(v) ? { $b64: v.toString('base64') } : v);
@@ -90,11 +107,12 @@ export async function createBackup({ file, config, uploadDir, passphrase = '', n
     for (const t of tables) {
       let last = 0;
       // stream in pages by LIMIT/OFFSET on the snapshot — simple, and tables here are small
+      const size = PAGE_ROWS[t] || 2000;
       for (;;) {
-        const [page] = await conn.query(`SELECT * FROM ${q(t)} LIMIT ? OFFSET ?`, [2000, last]);
+        const [page] = await conn.query(`SELECT * FROM ${q(t)} LIMIT ? OFFSET ?`, [size, last]);
         if (!page.length) break;
         for (const r of page) { line({ t: 'row', table: t, row: Object.fromEntries(Object.entries(r).map(([k, v]) => [k, encodeValue(v)])) }); rows++; }
-        last += page.length; if (page.length < 2000) break;
+        last += page.length; if (page.length < size) break;
         if (chunks.writableNeedDrain) await new Promise((r) => chunks.once('drain', r));
       }
     }
@@ -156,15 +174,15 @@ export async function restoreBackup({ file, config, uploadDir, passphrase = '', 
     try {
       for (const t of Object.keys(info.tables)) { if (!have.has(t)) throw new Error(`Table ${t} doesn't exist in the target database.`); await conn.query(`DELETE FROM ${q(t)}`); cols.set(t, new Set((await conn.query(`SHOW COLUMNS FROM ${q(t)}`))[0].map((c) => c.Field))); }
       const buf = new Map(); let rows = 0, files = 0;
-      const flush = async (t) => { const b = buf.get(t); if (!b?.rows.length) return; await conn.query(`INSERT INTO ${q(t)} (${b.keys.map(q).join(',')}) VALUES ?`, [b.rows]); rows += b.rows.length; b.rows = []; };
+      const flush = async (t) => { const b = buf.get(t); if (!b?.rows.length) return; await conn.query(`INSERT INTO ${q(t)} (${b.keys.map(q).join(',')}) VALUES ?`, [b.rows]); rows += b.rows.length; b.rows = []; b.bytes = 0; };
       const pending = [];
       const rl = lines(await openBackup(file, passphrase));
       for await (const l of rl) {
         if (!l) continue; const o = JSON.parse(l);
         if (o.t === 'row') {
           const known = cols.get(o.table), keys = Object.keys(o.row).filter((k) => known.has(k));
-          let b = buf.get(o.table); if (!b) { b = { keys, rows: [] }; buf.set(o.table, b); }
-          b.rows.push(b.keys.map((k) => decodeValue(o.row[k]))); if (b.rows.length >= BATCH) await flush(o.table);
+          let b = buf.get(o.table); if (!b) { b = { keys, rows: [], bytes: 0 }; buf.set(o.table, b); }
+          b.rows.push(b.keys.map((k) => decodeValue(o.row[k]))); b.bytes += binaryChars(o.row); if (b.rows.length >= BATCH || b.bytes >= BATCH_BYTES) await flush(o.table);
         } else if (o.t === 'file') pending.push(o);
         if (pending.length && pending.length % 50 === 0) log(`${pending.length} files read…`);
       }

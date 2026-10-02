@@ -250,7 +250,8 @@ All settings are environment variables (see `.env.example`, which has the same l
 | `PUBLIC_API_URL` | — | Public address of the API when it differs from the site (needed for HLS video behind a proxy). |
 | `CORS_ORIGINS` | `*` | Allowed browser origins, comma separated. Sign-in uses bearer tokens, so `*` is safe; restrict it if you like. |
 | `TRUST_PROXY` | — | Number of reverse proxies in front of the app (e.g. `1`). Needed so rate limits and logs see real visitor IPs. |
-| `UPLOAD_DIR` | `./uploads` | Where admin-uploaded images and subtitles are stored. **Put a persistent volume here** (Docker) — on a Hostinger Web App use a folder outside the deployed app (section 10.2-C). |
+| `UPLOAD_DIR` | `./uploads` | Local **cache** of admin-uploaded images and subtitles. The real copies are stored in MySQL (table `uploaded_files`), so a restart or redeploy that empties this folder loses nothing — files are served from MySQL and copied back. A folder outside the deployed app (section 10.2-C) or a Docker volume just saves re-reading them. |
+| `IMAGE_ALLOWED_HOSTS` | *(empty)* | Optional: extra hosts (comma-separated) whose pages may show `/media` and `/uploads` images. The site (`PUBLIC_SITE_URL`, with and without `www`), `CORS_ORIGINS` entries and the native app (`app.addabaaz.in`) are always allowed. |
 
 ### Database
 
@@ -304,7 +305,8 @@ All settings are environment variables (see `.env.example`, which has the same l
 
 | Variable | Meaning |
 |---|---|
-| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push. Generate with `npx web-push generate-vapid-keys`; subject like `mailto:support@addabaaz.in`. |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push (browsers). Generate with `npx web-push generate-vapid-keys`; subject like `mailto:support@addabaaz.in`. |
+| `FCM_SERVICE_ACCOUNT` or `FCM_SERVICE_ACCOUNT_FILE` | App push to the Android/iOS apps: the Firebase service-account JSON itself, or a path to it. See `docs/MOBILE.md`. |
 | `GA4_MEASUREMENT_ID` | `G-XXXXXXX` — optional Google Analytics 4; loads only after the visitor accepts. |
 | `SENTRY_DSN` | Optional server error alerts (also `npm i @sentry/node`). |
 | `CONTACT_WEBHOOK_URL` | Optional: POST every contact-form message to Slack/Zapier/etc. |
@@ -417,12 +419,24 @@ Not included: GST e-invoice/IRN and return filing (they need a GST Suvidha Provi
 
 Set `SMTP_URL`, `MAIL_FROM`, `SUPPORT_EMAIL` and `PUBLIC_SITE_URL` (links in emails use it). Any SMTP provider works (Amazon SES, Brevo, Mailgun, Zoho, Gmail app password…). Once SMTP is set, viewers must confirm their email before buying or commenting. Set up SPF/DKIM for your sending domain so mail doesn't land in spam. After deploy, use `/admin` → Dashboard → System status → **Send test email** to verify the actual SMTP connection and delivery. On Render Free, ports 25/465/587 are blocked: use a provider with port 2525 (`SMTP_URL=smtp://username:password@smtp-host:2525`, STARTTLS) or a paid Render instance; URL-encode special characters in the username/password.
 
-### 8.8 Push notifications
+### 8.8 Notifications & broadcasts (app push + e-mail)
 
-1. `npx web-push generate-vapid-keys`
-2. Set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:support@addabaaz.in`, restart.
-3. Viewers switch it on under *Account → Notifications*. New episodes and launch reminders are sent automatically; send announcements from `/admin → Notifications`.
-4. iPhones receive web push only when the site is added to the Home Screen (iOS 16.4+).
+Everything is sent from `/admin → Broadcast`: choose *App push* or *E-mail*, pick an audience, write the
+message, send a test to yourself, then send. Progress (sent / total / failed / skipped) is shown live and
+kept in the Campaigns list.
+
+1. **Browsers (Web Push):** `npx web-push generate-vapid-keys`, then set `VAPID_PUBLIC_KEY`,
+   `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:support@addabaaz.in`, restart. Viewers switch it on under
+   *Account → Notifications*. iPhones receive web push only when the site is added to the Home Screen
+   (iOS 16.4+).
+2. **Phone apps (FCM):** create a Firebase project, add the service-account JSON as
+   `FCM_SERVICE_ACCOUNT` (or `FCM_SERVICE_ACCOUNT_FILE`) and rebuild the app with
+   `google-services.json` — full steps in `docs/MOBILE.md` → *Push notifications*. The apps register
+   their device token on sign-in; nothing else to do.
+3. **E-mail:** needs `SMTP_URL` + `MAIL_FROM`. Every campaign mail has a one-click unsubscribe link;
+   people who unsubscribe are skipped afterwards (receipts and account mail are unaffected).
+4. New episodes and launch reminders are sent automatically to the people who follow a show or set a
+   reminder (web push + app push).
 
 ### 8.9 Analytics and error monitoring
 
@@ -456,7 +470,7 @@ Business hosting is shared hosting, so three things work differently from a norm
 
 | Limit | What it means | What you do |
 |---|---|---|
-| **Deploys erase the app folder** | Everything inside the deployed app (`hbuilds/…`, `public_html`) is replaced on every deploy. Images uploaded from `/admin` would be lost. | Store uploads in a separate folder (**10.2-C**). |
+| **Deploys erase the app folder** | Everything inside the deployed app (`hbuilds/…`, `public_html`) is replaced on every deploy. Images uploaded from `/admin` are kept in MySQL, so they survive; only the local upload cache is emptied. | Nothing required; optionally keep the cache outside the app (**10.2-C**). |
 | **The process sleeps when idle** | Hostinger stops your app when nobody visits and restarts it on the next request. Timer-based jobs (renewal reminders, new-episode pushes) only run while it is awake. | A free uptime monitor pings it every 5 minutes (**10.2-E**). |
 | **No command line** | You can't run `npm run admin` or `npm run backup`. | Make the first admin and take backups with phpMyAdmin and hPanel (**10.2-D**, section 13). |
 
@@ -480,7 +494,7 @@ Business hosting is shared hosting, so three things work differently from a norm
    | `DB_NAME`, `DB_USER`, `DB_PASSWORD` | from step 10.2-A below (Hostinger adds a prefix like `u123456789_`) |
    | `DB_POOL_SIZE` | `5` (shared plans limit connections per database user) |
    | `TRUST_PROXY` | `1` |
-   | `UPLOAD_DIR` | a folder **outside** the deployed app — see 10.2-C |
+   | `UPLOAD_DIR` | optional: a folder **outside** the deployed app (a cache; uploads themselves are stored in MySQL) — see 10.2-C |
 
    Do **not** set `PORT`: Hostinger chooses it and the app reads it automatically. Add the optional feature variables (Razorpay, R2, SMTP …) when you reach section 8.
 
@@ -530,13 +544,17 @@ Business hosting is shared hosting, so three things work differently from a norm
 4. Open **Set environment variables** and add every variable from the table in 10.1 (or use **Import .env** with a file made from `.env.example` — delete its `DATABASE_URL=…change-me…` line first, because `DATABASE_URL` takes priority over the `DB_*` variables). Values are stored encrypted and survive redeploys. Saving changes redeploys the app.
 5. Click **Deploy**. Hostinger installs the packages, starts the app and shows a **Running** badge. On the very first start the app creates all tables and imports the starting catalog from `data/catalog.json`. Watch **Deployments → build log** and **Runtime logs** — you should see `[migrate] applied 6 migration(s)` and `ADDABAAZ running on …`.
 
-**C. Keep uploads safe (important)**
+**C. Uploads and deploys**
 
-Hostinger **replaces everything inside the deployed app on every deployment** (`~/domains/<your-domain>/hbuilds/…` and `public_html`) — direct edits are not preserved. Images and subtitles uploaded from `/admin` are files, so they must live somewhere a deploy never touches:
+Hostinger **replaces everything inside the deployed app on every deployment** (`~/domains/<your-domain>/hbuilds/…` and `public_html`) — direct edits are not preserved. Images and subtitles uploaded from `/admin` are therefore **stored in your MySQL database** (table `uploaded_files`), not only as files: a deploy cannot lose them, every visitor on every device sees them, and your phpMyAdmin export (section 13) contains them. The app also keeps a copy in the upload folder (`UPLOAD_DIR`) to serve them faster, and quietly rebuilds that copy from MySQL whenever it is empty. So the folder is a cache and nothing needs to be done here.
+
+*Optional:* to avoid re-reading images from MySQL after each deploy, keep the cache outside the deployed app:
 
 1. hPanel → **File Manager** → in your home folder (the one that contains `domains/`) create `addabaaz-data/uploads`.
-2. Add the environment variable `UPLOAD_DIR=/home/u123456789/addabaaz-data/uploads` (use your real account id; the File Manager shows the full path).
-3. Redeploy, then in `/admin` upload a test image, redeploy **again**, and confirm the image is still there. If it is missing, the app can't write outside its folder on your plan — ask Hostinger support, or skip the Upload button: the image boxes in `/admin` also accept a path like `media/shows/my-poster.webp` (put the file in the repository's `media/` folder and push — it deploys with the code) or any `https://…` image address.
+2. Add the environment variable `UPLOAD_DIR=/home/u123456789/addabaaz-data/uploads` (use your real account id; the File Manager shows the full path) and redeploy.
+3. If the app cannot write there, nothing breaks — images are simply served straight from MySQL.
+
+Images uploaded **before** uploads were stored in MySQL (migration `010_uploaded_files`) existed only as files and may already be gone after an earlier deploy: open `/admin`, edit the title, upload the image again and save (once).
 
 Videos stored in **R2** are not affected: they go straight from the browser to Cloudflare R2, never to Hostinger's disk.
 
@@ -642,7 +660,7 @@ Before publishing:
 **Hostinger Web App (no command line).** `npm run backup` cannot be run there, so use what Hostinger gives you — and do all three:
 
 1. **Database:** hPanel → *Databases* → **phpMyAdmin** → select your database → **Export** (Quick, SQL) and keep the file somewhere else, weekly and before every big change. Restoring = phpMyAdmin → **Import**. Also turn on / check Hostinger's own **Backups** page in hPanel (its schedule depends on your plan).
-2. **Uploaded images:** File Manager → `addabaaz-data/uploads` → compress and download it now and then (the catalog stores only the file names).
+2. **Uploaded images and subtitles** are stored in the database (table `uploaded_files`), so the phpMyAdmin export in step 1 already contains them; `addabaaz-data/uploads` (if you made it) is only a cache.
 3. **Settings:** keep a copy of every environment variable (especially `JWT_SECRET`) in a password manager.
 
 Test an import on a spare database once, before you need it. The `npm run backup` command below is for computers where you have a terminal (your own machine, or a copy of the site you run locally).
@@ -699,7 +717,7 @@ Prints requests per second and p50/p95/p99 latency per endpoint. The numbers dep
 - [ ] `NODE_ENV=production`, strong unique `JWT_SECRET`, `PUBLIC_SITE_URL` correct, HTTPS working, one hostname.
 - [ ] MySQL password strong; database **not** exposed to the internet; automated backups running and one restore tested.
 - [ ] `TRUST_PROXY` set to match your proxy chain (`1` on Hostinger).
-- [ ] **Hostinger:** `UPLOAD_DIR` points outside the deployed app and an uploaded image survived a redeploy; uptime monitor on `/api/v1/health/ready` running; a phpMyAdmin export downloaded and stored off Hostinger.
+- [ ] **Hostinger:** an image uploaded in `/admin` is still shown after a redeploy (uploads are stored in MySQL); uptime monitor on `/api/v1/health/ready` running; a phpMyAdmin export downloaded and stored off Hostinger.
 - [ ] At least one admin (`npm run admin -- grant …`); no leftover test admins.
 - [ ] Razorpay **live** keys + webhook set, one real low-value payment and refund tried.
 - [ ] `GSTIN` and business details set; a test invoice checked by your accountant.
@@ -722,7 +740,7 @@ Prints requests per second and p50/p95/p99 latency per endpoint. The numbers dep
 | Hostinger: Runtime log shows `ERR_REQUIRE_ASYNC_MODULE` | The entry file is `server/src/index.js` (or another ES-module file with top-level `await`). Set **Entry file** to `server.cjs` and redeploy. |
 | Hostinger: app is "Running" but the site shows an error / 503 | Open **Runtime logs**. Usual causes: a missing or mistyped environment variable, wrong `DB_*` values, or an entry file that doesn't exist (use `server.cjs`). Never hard-code a port — the app reads `PORT`. |
 | Hostinger: 403 after a redeploy | Hostinger regenerates `public_html/.htaccess` on each deploy; don't edit it by hand — just redeploy. |
-| Hostinger: admin-uploaded images vanish after a deploy | `UPLOAD_DIR` is inside the app folder. Set it to a folder outside `domains/<domain>/hbuilds` (section 10.2-C). |
+| An uploaded poster/image shows on one device but not on others, or vanished after a deploy | It was uploaded before images were stored in MySQL, so its file was lost with the old disk. Upload it again in `/admin` and save the title (once); new uploads are permanent (section 10.2-C). |
 | Hostinger: reminders / notifications arrive late | The process sleeps when idle. Add the 5-minute uptime monitor (section 10.2-E). |
 | Hostinger: `Too many connections` / `max_user_connections` | Lower `DB_POOL_SIZE` (try `3`–`5`). |
 | Hostinger: SQL syntax errors on the first start | The database is probably MariaDB and hit something the app doesn't support there. Copy the exact error from the **Runtime logs** and send it to whoever maintains the code — it is a small fix in `server/migrations/` or `server/src/db*.js`. Ask Hostinger support which engine/version your database runs. |

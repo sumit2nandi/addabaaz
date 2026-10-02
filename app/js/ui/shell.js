@@ -17,42 +17,6 @@ const TABS = [['/', 'Home', 'home'], ['/shows', 'Shows', 'tv'], ['/reels', 'Reel
 // A visitor who is not signed in has no personal "Me" area (and no profile to show): only offered once signed in, or when this build has no sign-in at all.
 const isGuest = () => !!app.user?.supportsAuth && !app.user?.account;
 let lastPath = '/';
-let tabbarScrollWired = false;
-
-// The floating mobile tabs tuck away while scrolling down and return on an upward scroll.
-// Listen in capture phase too: the Reels feed scrolls inside its own element rather than the page window.
-function wireTabbarAutoHide() {
-  if (tabbarScrollWired || !$('#tabbar')) return;
-  tabbarScrollWired = true;
-  const bar = $('#tabbar');
-  const positions = new WeakMap(), motions = new WeakMap();
-  const seed = (source, y) => { positions.set(source, y); motions.set(source, { direction: 0, distance: 0 }); };
-  seed(window, Math.max(0, window.scrollY || 0));
-  const onScroll = (event) => {
-    const target = event.target;
-    const source = target === document || target === window || !target?.nodeType ? window : target;
-    if (source !== window && (!(source.scrollHeight > source.clientHeight + 2) || source.clientHeight < 1)) return;
-    const y = Math.max(0, Number(source === window ? window.scrollY : source.scrollTop) || 0);
-    if (!positions.has(source)) { seed(source, y); return; }
-    const delta = y - positions.get(source);
-    positions.set(source, y);
-    if (Math.abs(delta) < 0.5) return;
-    const direction = delta > 0 ? 1 : -1;
-    const motion = motions.get(source) || { direction: 0, distance: 0 };
-    if (motion.direction !== direction) { motion.direction = direction; motion.distance = 0; }
-    motion.distance += Math.abs(delta);
-    if (direction < 0 && y <= 8) {
-      bar.classList.remove('scroll-hidden');
-      motion.distance = 0;
-    } else if (motion.distance >= 8) {
-      bar.classList.toggle('scroll-hidden', direction > 0);
-      motion.distance = 0;
-    }
-    motions.set(source, motion);
-  };
-  window.addEventListener('scroll', onScroll, { passive: true });
-  document.addEventListener('scroll', onScroll, { capture: true, passive: true });
-}
 
 // Which top-level menu item a URL belongs to (so "/watch/…" highlights the right tab).
 const section = (path) => {
@@ -78,7 +42,6 @@ export function renderShell() {
     </div>`.s;
   renderProfileMenu();
   wireMenus();
-  wireTabbarAutoHide();
   window.addEventListener('scroll', () => $('#topbar').classList.toggle('scrolled', window.scrollY > 24), { passive: true });
   document.addEventListener('keydown', (e) => {
     if (e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName)) { e.preventDefault(); go('/search'); }

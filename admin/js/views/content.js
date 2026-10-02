@@ -413,9 +413,9 @@ export default async function content(root, [section], ctx) {
   const upFields = (create) => [
     { k: 'id', label: 'ID', req: true, readonly: !create, max: 64, help: create ? 'Letters, digits, - and _.' : '' }, { k: 'title', label: 'Title', req: true }, { k: 'titleEn', label: 'Title in English' },
     { k: 'type', label: 'Type', type: 'select', options: SHOW_TYPES, dflt: 'series' },
-    { k: 'category', label: 'Homepage category', type: 'select', options: UPCOMING_CATEGORIES, dflt: 'coming-soon', wide: true, help: 'Releasing This Month posters appear in the homepage slideshow. Coming Soon posters stay in the homepage rail.' },
+    { k: 'category', label: 'Homepage category', type: 'select', options: UPCOMING_CATEGORIES, dflt: 'coming-soon', wide: true, help: 'Releasing This Month titles play in the homepage slideshow as a full landscape (16:9) banner that shows the whole artwork, so upload the 16:9 artwork as the Backdrop below (it falls back to the large poster, then the card poster). Coming Soon posters stay in the homepage rail.' },
     { k: 'genres', label: 'Genres', type: 'tags' }, { k: 'note', label: 'Note (e.g. “New comedy web series”)', wide: true, max: 200 },
-    { k: 'poster', label: 'Poster (card)', type: 'image', req: true, maxWidth: 700, wide: true }, { k: 'posterLg', label: 'Poster (large)', type: 'image', wide: true }, { k: 'backdrop', label: 'Backdrop (wide, optional)', type: 'image', wide: true },
+    { k: 'poster', label: 'Poster (card)', type: 'image', req: true, maxWidth: 700, wide: true }, { k: 'posterLg', label: 'Poster (large)', type: 'image', wide: true }, { k: 'backdrop', label: 'Backdrop (wide 16:9 — shown in the Releasing This Month slideshow)', type: 'image', wide: true },
   ];
   const editUp = (u) => {
     const create = !u;

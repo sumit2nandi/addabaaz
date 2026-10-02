@@ -81,7 +81,12 @@ function plainIframe(container, videoId, start, autoplay, muted, controls) {
     mute() { isMuted = true; cmd('{"event":"command","func":"mute","args":""}'); },
     unmute() { isMuted = false; cmd('{"event":"command","func":"unMute","args":""}'); cmd('{"event":"command","func":"setVolume","args":"[100]"}'); },
     isMuted: () => isMuted,
-    time: () => 0, duration: () => 0, seek() {}, play() {}, pause() {},
+    // Drive the frame through the postMessage command API (enablejsapi=1) so the custom controls
+    // still work on native even when the IFrame API itself failed to load.
+    play() { cmd('{"event":"command","func":"playVideo","args":""}'); },
+    pause() { cmd('{"event":"command","func":"pauseVideo","args":""}'); },
+    seek(s) { cmd(`{"event":"command","func":"seekTo","args":[${Math.max(0, Math.floor(s))},true]}`); },
+    time: () => 0, duration: () => 0,
     destroy() { container.innerHTML = ''; },
   };
 }

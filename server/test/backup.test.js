@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { createApp } from '../src/app.js';
 import { createDb } from '../src/db.js';
@@ -55,7 +56,11 @@ test('backup → wipe → restore round-trips every table and uploaded file (enc
   const s = await call('POST', '/auth/signup', { name: 'Round Trip', email: 'rt@example.com', password: 'password123' });
   await db.pool.query("INSERT INTO comments (id, video_id, user_id, author, body) VALUES ('c1','v1',?, 'Round', 'দারুণ! 🎉 emoji and “quotes”')", [s.body.user.id]);
   await db.pool.query("INSERT INTO error_log (source, message) VALUES ('client', 'boom')");
-  const before = await counts(); assert.ok(before.users >= 2 && before.catalog_items > 0, 'there is data to lose');
+  // Uploaded images live in MySQL too (the upload folder is only a cache): big binary rows must survive the round trip. Three ~1.5 MB
+  // images make the restore cut its INSERT by size (it flushes once the binary values add up to about 4 MB).
+  const blobs = [0, 1, 2].map((i) => ({ name: `${String(i + 1).repeat(24)}.png`, data: crypto.randomBytes(1_500_000 + i) }));
+  for (const b of blobs) await db.uploads.put(b.name, 'image/png', b.data);
+  const before = await counts(); assert.ok(before.users >= 2 && before.catalog_items > 0, 'there is data to lose'); assert.equal(before.uploaded_files, 3);
   const usersBefore = (await db.pool.query('SELECT id, email, password_hash, created_at FROM users ORDER BY id'))[0];
   const catBefore = (await db.pool.query('SELECT * FROM catalog_items ORDER BY 1,2'))[0];
 
@@ -79,6 +84,10 @@ test('backup → wipe → restore round-trips every table and uploaded file (enc
   assert.deepEqual((await db.pool.query('SELECT id, email, password_hash, created_at FROM users ORDER BY id'))[0], usersBefore, 'users incl. password hashes and timestamps are identical');
   assert.deepEqual((await db.pool.query('SELECT * FROM catalog_items ORDER BY 1,2'))[0], catBefore, 'catalog (JSON columns) is identical');
   assert.equal((await db.pool.query("SELECT body FROM comments WHERE id = 'c1'"))[0][0].body, 'দারুণ! 🎉 emoji and “quotes”', 'unicode survives');
+  for (const b of blobs) {
+    const back = await db.uploads.get(b.name);
+    assert.equal(back.type, 'image/png'); assert.deepEqual(back.data, b.data, 'images stored in MySQL are byte-identical after the restore');
+  }
   assert.deepEqual(fs.readFileSync(path.join(uploads2, 'a.bin')), Buffer.from([0, 1, 2, 250, 251, 252, 255]), 'binary uploads are byte-identical');
   assert.match(fs.readFileSync(path.join(uploads2, 'sub', 'b.vtt'), 'utf8'), /হ্যালো/);
   // and the restored accounts can sign in

@@ -320,21 +320,107 @@ test('admin: comment moderation queue — approve, hide, delete', async () => {
   assert.equal((await call('GET', '/admin/comments', null, u.token)).status, 403);
 });
 
-test('admin: notifications go to the chosen audience and are audited; bad input refused', async () => {
+// Broadcast sending happens in the background, so the tests poll the campaign row.
+const waitCampaign = async (id, at = adm) => {
+  for (let i = 0; i < 200; i++) {
+    const c = (await at('GET', `/notifications/${id}`)).body;
+    if (c && ['sent', 'partial', 'failed', 'cancelled'].includes(c.status)) return c;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error(`campaign ${id} did not finish`);
+};
+const broadcast = async (body, at = adm) => { const r = await at('POST', '/notifications/send', body); assert.equal(r.status, 202, JSON.stringify(r.body)); return waitCampaign(r.body.id, at); };
+
+test('admin: push broadcasts go to the chosen audience, with progress and audit; bad input refused', async () => {
   const u = await signup(); const cat = (await call('GET', '/catalog')).body; const show = cat.shows[1], up = cat.upcoming[0];
   const sub = { endpoint: 'https://push.example/admin1', keys: { p256dh: 'p'.repeat(20), auth: 'a'.repeat(10) } };
   await call('POST', '/push/subscribe', { subscription: sub }, u.token);
-  const meta = (await adm('GET', '/notifications')).body; assert.equal(meta.configured, true); assert.ok(meta.audiences.some((a) => a.id === `show:${show.id}`)); assert.ok(meta.subscribers >= 1);
+  const meta = (await adm('GET', '/notifications')).body;
+  assert.equal(meta.configured, true); assert.equal(meta.push.web, true); assert.equal(meta.push.native, false);
+  assert.equal(meta.email.configured, true); assert.ok(meta.email.audiences.some((a) => a.id === 'all' && a.count >= 1));
+  assert.ok(meta.audiences.some((a) => a.id === `show:${show.id}`)); assert.ok(meta.subscribers >= 1);
   assert.equal((await adm('POST', '/notifications/send', { title: '', body: 'x' })).status, 400);
   assert.equal((await adm('POST', '/notifications/send', { title: 'T', body: 'B', url: '//evil.com' })).status, 400);
   assert.equal((await adm('POST', '/notifications/send', { title: 'T', body: 'B', audience: 'show:nope' })).status, 400);
-  pushed.length = 0; let r = await adm('POST', '/notifications/send', { title: 'Big news', body: 'Season 2 is here', url: '/plans', audience: 'news' }); assert.equal(r.status, 200); assert.equal(r.body.sent, 0, 'news is opt-in');
-  r = await adm('POST', '/notifications/send', { title: 'Hello all', body: 'Body', audience: 'all' }); assert.ok(r.body.sent >= 1); assert.equal(pushed.at(-1).title, 'Hello all');
-  pushed.length = 0; assert.equal((await adm('POST', '/notifications/send', { title: 'Show', body: 'B', audience: `show:${show.id}` })).body.sent, 0, 'nobody follows it');
-  await call('PUT', `/profiles/${u.profiles[0].id}/reminders/${up.id}`, null, u.token);
-  assert.equal((await adm('POST', '/notifications/send', { title: 'Live', body: 'B', audience: `launch:${up.id}` })).body.sent, 1);
-  assert.ok((await adm('GET', '/notifications')).body.history.length >= 3);
+  assert.equal((await adm('POST', '/notifications/send', { channel: 'email', title: 'T', body: 'B', audience: 'not-a-filter' })).status, 400);
   assert.equal((await fetch(`${base}/admin/notifications/send`, { method: 'POST' })).status, 401);
+  pushed.length = 0;
+  let c = await broadcast({ title: 'Big news', body: 'Season 2 is here', url: '/plans', audience: 'news' });
+  assert.equal(c.status, 'sent'); assert.equal(c.sent, 0, 'news is opt-in'); assert.equal(c.channel, 'push');
+  c = await broadcast({ title: 'Hello all', body: 'Body', audience: 'all' });
+  assert.ok(c.sent >= 1); assert.ok(c.total >= c.sent); assert.equal(c.status, 'sent'); assert.equal(c.by, 'ADMIN_TOKEN');
+  assert.equal(pushed.at(-1).title, 'Hello all');
+  pushed.length = 0;
+  assert.equal((await broadcast({ title: 'Show', body: 'B', audience: `show:${show.id}` })).sent, 0, 'nobody follows it');
+  await call('PUT', `/profiles/${u.profiles[0].id}/reminders/${up.id}`, null, u.token);
+  assert.equal((await broadcast({ title: 'Live', body: 'B', audience: `launch:${up.id}` })).sent, 1);
+  const hist = (await adm('GET', '/notifications')).body;
+  assert.ok(hist.campaigns.length >= 4); assert.ok(hist.history.length >= 4);
+  assert.equal(hist.campaigns[0].title, 'Live', 'newest first');
+  const audit = (await adm('GET', '/audit?action=notification.send')).body.entries;
+  assert.ok(audit.some((e) => e.target === `launch:${up.id}`));
+});
+
+test('admin: app push reaches registered devices through FCM and drops dead tokens; e-mail campaigns honour unsubscribe', async () => {
+  // A second app whose push service has a fake Firebase Cloud Messaging sender (no credentials needed).
+  const fcmSent = []; const dead = ['dead-token-' + 'z'.repeat(24)];
+  const fcm = { configured: true, send: async (tokens, message) => { fcmSent.push({ tokens, message }); return { sent: tokens.length - 1, failed: 0, dead }; } };
+  const push2 = createPush({ db, vapid: { publicKey: 'x' }, sender: fakeSender, fcm });
+  const app2 = createApp({ db, jwtSecret: 'test-secret', rate: false, mailer: createMailer({ transport: { sendMail: async (m) => { mails.push(m); } } }), push: push2, adminToken: ADMIN, features: { streamLimit: 1, reportsToHide: 2, refundWindowDays: 7 } });
+  const server2 = app2.listen(0); await new Promise((r) => server2.once('listening', r));
+  const base2 = `http://127.0.0.1:${server2.address().port}/api/v1`;
+  const adm2 = (method, p, body) => fetch(`${base2}/admin${p}`, { method, headers: { Authorization: `Bearer ${ADMIN}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }).then(async (r) => { const t = await r.text(); let j = null; try { j = t ? JSON.parse(t) : null; } catch { /* text */ } return { status: r.status, body: j }; });
+  try {
+    const u = await signup();
+    // Device registration: reject junk, be idempotent, list per account.
+    assert.equal((await call('POST', '/devices', { token: 'short' }, u.token)).status, 400);
+    assert.equal((await call('POST', '/devices', { token: 't'.repeat(60) })).status, 401, 'sign-in required');
+    const good = 'fcm-device-token-' + 'a'.repeat(30);
+    assert.equal((await call('POST', '/devices', { token: good, platform: 'android', label: 'Pixel 7' }, u.token)).status, 201);
+    assert.equal((await call('POST', '/devices', { token: good }, u.token)).status, 201, 'the same token twice is fine');
+    const mine = (await call('GET', '/devices', null, u.token)).body.devices;
+    assert.equal(mine.length, 1); assert.equal(mine[0].platform, 'android'); assert.equal(mine[0].label, 'Pixel 7');
+    assert.equal((await call('DELETE', '/devices', { token: good }, u.token)).status, 204); assert.equal((await call('GET', '/devices', null, u.token)).body.devices.length, 0);
+
+    // A broadcast reaches every registered token (and the web subscriptions of the audience) in one go.
+    const token2 = 'fcm-device-token-' + 'b'.repeat(30);
+    await call('POST', '/devices', { token: token2 }, u.token);
+    await db.devices.upsert(u.user.id, { hash: crypto.createHash('sha256').update(dead[0]).digest('hex'), token: dead[0], platform: 'android' });
+    assert.ok((await adm2('GET', '/notifications')).body.push.nativeDevices >= 2, 'app push is reported as configured');
+    fcmSent.length = 0; pushed.length = 0;
+    const c = await broadcast({ channel: 'push', title: 'App push', body: 'Hello phones', audience: 'all' }, adm2);
+    assert.equal(c.status, 'sent');
+    assert.equal(fcmSent.at(-1).message.title, 'App push'); assert.equal(fcmSent.at(-1).message.body, 'Hello phones'); assert.equal(fcmSent.at(-1).message.url, '/');
+    assert.equal(fcmSent.at(-1).message.tag, `campaign-${c.id}`);
+    assert.deepEqual([...fcmSent.at(-1).tokens].sort(), [token2, dead[0]].sort());
+    assert.equal(await db.devices.count(), 1, 'the dead token was removed, the good one kept');
+
+    // E-mail campaigns: plain-text body becomes paragraphs, every mail carries a working unsubscribe link.
+    mails.length = 0;
+    const mailUser = await signup();
+    const mail = await broadcast({ channel: 'email', title: 'New this week', body: 'Hello!\n\nSeason 2 is streaming.', url: '/plans', button: 'Watch now', audience: 'all' });
+    assert.equal(mail.status, 'sent'); assert.ok(mail.sent >= 1); assert.equal(mail.total >= mail.sent, true);
+    const got = mails.find((m) => m.to === mailUser.email && /New this week/.test(m.subject));
+    assert.ok(got, 'the announcement reached a normal account (the account’s own verification mail is not it)');
+    assert.match(got.subject, /New this week/);
+    assert.match(got.html, /Season 2 is streaming/); assert.match(got.html, /Watch now/);
+    const unsub = String(got.text).match(/https:\/\/addabaaz\.in\/api\/v1\/notifications\/unsubscribe\?u=[^&\s]+&t=[\w-]+/)[0];
+    assert.equal((await fetch(unsub.replace('https://addabaaz.in', root))).status, 200);
+    assert.equal(await db.adminUsers.emailOptOut(mailUser.user.id), true);
+    // A forged token changes nothing.
+    assert.equal((await fetch(unsub.replace('https://addabaaz.in', root).replace(/t=[\w-]+/, 't=forged'))).status, 200);
+    mails.length = 0;
+    const again = await broadcast({ channel: 'email', title: 'Second announcement', body: 'More news', audience: 'all' });
+    assert.equal(again.status, 'sent');
+    assert.equal(mails.some((m) => m.to === mailUser.email && /Second announcement/.test(m.subject)), false, 'unsubscribed accounts are skipped');
+    const evicted = (await adm('GET', '/notifications')).body.email.audiences.find((a) => a.id === 'all');
+    assert.ok(evicted.count >= 1);
+
+    // Test sends: only from a signed-in admin session, and they never reach the audience.
+    assert.equal((await adm2('POST', '/notifications/test', { channel: 'email', title: 'T', body: 'B' })).status, 400);
+    const viewer = await signup(); const viewerAdm = (m, p, b) => fetch(`${base2}/admin${p}`, { method: m, headers: { Authorization: `Bearer ${viewer.token}`, 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined });
+    assert.equal((await viewerAdm('GET', '/notifications')).status, 403);
+  } finally { server2.close(); }
 });
 
 test('admin: analytics and error log views', async () => {

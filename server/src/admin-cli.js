@@ -5,6 +5,7 @@
  *   node server/src/admin-cli.js list
  * In Docker:  docker compose exec app node server/src/admin-cli.js grant you@example.com */
 import { createDb } from './db.js';
+import { normalizeEmail } from './email-address.js';
 import { migrate } from './migrate.js';
 
 // Read the command (grant | revoke | list) and e-mail from the command line.
@@ -22,8 +23,8 @@ try {
     console.log(admins.length ? admins.map((a) => `${a.email}  (${a.name})`).join('\n') : 'No administrators yet. Run: grant <email>');
   } else {
     const e = email.trim().toLowerCase();
-    if (cmd === 'revoke' && (await db.adminUsers.countAdmins()) <= 1 && (await db.users.byEmail(e))?.isAdmin) { console.error('Refusing to remove the last administrator.'); process.exitCode = 1; }
-    else if (!(await db.adminUsers.setAdminByEmail(e, cmd === 'grant'))) { console.error(`No account with the email ${e}. Sign up on the site first.`); process.exitCode = 1; }
+    if (cmd === 'revoke' && (await db.adminUsers.countAdmins()) <= 1 && (await db.users.byEmailNorm(normalizeEmail(e).email))?.isAdmin) { console.error('Refusing to remove the last administrator.'); process.exitCode = 1; }
+    else if (!(await db.adminUsers.setAdminByEmail(normalizeEmail(e).email, cmd === 'grant'))) { console.error(`No account with the email ${e}. Sign up on the site first.`); process.exitCode = 1; }
     else console.log(`${e} is ${cmd === 'grant' ? 'now' : 'no longer'} an administrator.`);
   }
 } finally { await db.close(); }

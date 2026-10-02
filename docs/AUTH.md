@@ -75,3 +75,19 @@ Setup (needs a paid Apple Developer account):
 | `GET /me` | adds `providers: ['google', …]` and `hasPassword` |
 
 Errors: `401 invalid_credential` (bad/expired/foreign token), `400 email_required | email_unverified`, `501 provider_not_configured`, `503 provider_unavailable` (Google/Facebook unreachable).
+
+## One address = one account
+
+The address is normalized before it is compared or stored (`server/src/email-address.js`): NFKC folding
+(full-width `＠`/letters → ASCII), every kind of space and every invisible character removed (non-breaking
+space, ideographic space, zero-width space, soft hyphen, BOM, line separators), then lower-cased.
+`users.email_norm` is UNIQUE, so a second account for the same address is refused with `409 email_taken` —
+including two sign-ups racing each other, and including Google/Facebook/Apple sign-in, which links the
+existing account instead.
+
+Why the old `UNIQUE (email)` was not enough: MySQL's `utf8mb4_unicode_ci` ignores some characters (a
+zero-width space) but gives others — a non-breaking space, an ideographic space, a full-width `＠` — a
+weight of their own. A copy-pasted address was therefore a *different string*, and a database whose `users`
+table predates the unique key could even hold two rows with the very same address. Rows that already
+collided are listed in **Admin → Users** and merged from there (`user.merge`, audited); sign-in and password
+reset accept either the stored or the normalized form, so nobody who signed up earlier is locked out.

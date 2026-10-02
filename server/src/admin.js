@@ -4,10 +4,11 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { HttpError, bad, wrap, rateLimit } from './http.js';
 import { isDuplicate } from './db.js';
+import { visibleEmail, plainEmail } from './email-address.js';
 import { verifyToken, sessionValid } from './auth.js';
 import { PLANS, paidPlan } from './plans.js';
 import { validate, TYPES } from './catalog-schema.js';
-import { saveImage, saveSubtitle, videoKey } from './uploads.js';
+import { describeImage, describeSubtitle, cacheUpload, UPLOAD_NAME, videoKey } from './uploads.js';
 import { adminExtraRoutes } from './admin-extra.js';
 import { suggestYouTubeKind } from './youtube-feed.js';
 
@@ -33,7 +34,7 @@ const page = (req, dflt = 25, max = 100) => ({ limit: Math.min(Math.max(Number(r
  */
 // Every route below runs after the authentication middleware, so `req.admin` is always set.
 // Write actions call `log(...)` so the audit log records who did what.
-export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2, payments, mailer, push = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', env = process.env }) {
+export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2, payments, mailer, push = null, campaigns = null, unsubscribeUrlFor = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', env = process.env }) {
   // The shared ADMIN_TOKEN (for scripts) only counts when it is long enough to be unguessable.
   const tokenOn = adminToken.length >= 24;
   if (adminToken && !tokenOn) console.warn('[admin] ADMIN_TOKEN is shorter than 24 characters — the token is ignored (admin accounts still work).');
@@ -101,11 +102,12 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
       item('gst', 'GST invoicing', billing.config.gstEnabled, billing.config.gstEnabled ? `Invoices are issued under GSTIN ${billing.config.gstin}.` : 'GSTIN is not set — purchases get plain receipts without GST.'),
       item('mail', 'Email', mailer.provider === 'smtp', mailer.provider === 'smtp' ? 'SMTP is configured. Use Send test email below to check actual delivery.' : 'SMTP_URL is not set — verification, password-reset and billing emails are not sent.'),
       item('r2', 'Private video storage (R2)', !!r2.configured, r2.configured ? `Bucket “${r2.bucket}” is configured.` : 'R2 is not configured — R2-hosted videos cannot play (optional for other sources).'),
-      item('push', 'Web push', !!push?.configured, push?.configured ? 'VAPID keys are set; notifications can be sent.' : 'VAPID keys are not set — push notifications are off (optional).', 'info'),
+      item('push', 'Web push', !!push?.configured, push?.configured ? 'VAPID keys are set; broadcasts reach browsers and installed web apps.' : 'VAPID keys are not set — browser notifications are off (optional).', 'info'),
+      item('apppush', 'App push', !!push?.nativeConfigured, push?.nativeConfigured ? 'The Firebase service account is set; the Android/iOS apps receive broadcasts.' : 'FCM_SERVICE_ACCOUNT is not set — the phone apps cannot receive broadcasts (optional; see docs/MOBILE.md).', 'info'),
       item('apple', 'Apple sign-in', !!social.verifiers?.apple, social.verifiers?.apple ? 'Enabled.' : 'Not configured (optional; required only for iOS apps that offer other social logins).', 'info'),
       item('google', 'Google sign-in', !!social.verifiers?.google, social.verifiers?.google ? 'Enabled.' : 'Not configured (optional).', 'info'),
       item('facebook', 'Facebook sign-in', !!social.verifiers?.facebook, social.verifiers?.facebook ? 'Enabled.' : 'Not configured (optional).', 'info'),
-      item('uploads', 'Image uploads', uploads, uploads ? `Saved to ${uploadDir}${prod ? ' — make sure this folder is on a persistent volume.' : ''}` : `Cannot write to ${uploadDir}.`),
+      item('uploads', 'Image uploads', dbUp, dbUp ? `Stored in MySQL, so they survive restarts and redeploys. ${uploads ? `A local copy is kept in ${uploadDir} to serve them faster.` : `The local cache folder ${uploadDir} is not writable, so files are served straight from MySQL.`}` : 'MySQL is not reachable, so images and subtitles cannot be saved.', 'error'),
       item('site', 'Public site URL', !!env.PUBLIC_SITE_URL, env.PUBLIC_SITE_URL ? env.PUBLIC_SITE_URL : 'PUBLIC_SITE_URL is not set — links in emails, canonical URLs and the sitemap fall back to the address of each request. Set it to your https address (no trailing slash).', prod ? 'warn' : 'info'),
       item('indexing', 'Google indexing', indexing, indexing ? 'Search engines may index the site: robots.txt and /sitemap.xml are live.' : 'Search engines are told NOT to index this site (robots.txt disallows all). That is right for staging; on the live site set NODE_ENV=production or ALLOW_INDEXING=true.', prod ? 'warn' : 'info'),
       item('admins', 'Administrators', (await db.adminUsers.countAdmins()) > 0, `${await db.adminUsers.countAdmins()} admin account(s).`, 'warn'),
@@ -117,6 +119,24 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   router.get('/users', wrap(async (req, res) => res.json(await db.adminUsers.list({ q: typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '', filter: String(req.query.filter || 'all'), ...page(req) }))));
   // Loads a user or answers 404.
   const userOr404 = async (id) => { const u = await db.adminUsers.get(String(id)); if (!u) throw new HttpError(404, 'not_found', 'Unknown user.'); return u; };
+  /* Accounts that ended up sharing one e-mail address (invisible characters, full-width @, spaces …).
+   * Registered BEFORE `/users/:id` so the path is not read as a user id. */
+  router.get('/users/duplicates', wrap(async (_req, res) => {
+    const normalized = await db.adminUsers.renormalizeEmails();      // legacy rows first, so the report is exact
+    const groups = await db.adminUsers.duplicateGroups();
+    res.json({
+      groups: groups.map((g) => ({ ...g, users: g.users.map((u) => ({ ...u, emailVisible: visibleEmail(u.email), emailPlain: plainEmail(u.email) })) })),
+      normalized,
+    });
+  }));
+  // Merge two accounts that share an address: everything moves to the one that stays, the other is deleted.
+  router.post('/users/merge', wrap(async (req, res) => {
+    const keepId = String(req.body?.keepId || ''), removeId = String(req.body?.removeId || '');
+    if (!keepId || !removeId) throw bad('Both accounts are required.');
+    const out = await db.adminUsers.mergeUsers(keepId, removeId);
+    await log(req, 'user.merge', removeId, { keep: keepId, email: out.keep.email, moved: out.moved });
+    res.json(out);
+  }));
   router.get('/users/:id', wrap(async (req, res) => {
     const u = await userOr404(req.params.id);
     const [profiles, subscription, providers, pays] = await Promise.all([db.profiles.list(u.id), db.subscriptions.get(u.id), db.identities.providersOf(u.id), db.payments.listRecent({ userId: u.id, limit: 50 })]);
@@ -254,6 +274,20 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   };
   // Extra context the catalog validator needs to check existing references and media files.
   const ctxOf = (snap) => ({ fileExists, showIds: snap.showIds, upcomingIds: snap.upcomingIds });
+  // Uploaded images and subtitles live in MySQL; the upload folder is only a cache that a restart or redeploy can empty. So a document may
+  // legitimately refer to an upload that is not on this server's disk. The validator is synchronous, so first look up the stored uploads
+  // that the document mentions, then let `fileExists` accept those too.
+  const uploadNamesIn = (value, found = new Set()) => {
+    if (found.size >= 200) return found;
+    if (typeof value === 'string') { const m = /^uploads\/([^/]+)$/.exec(value.trim()); if (m && UPLOAD_NAME.test(m[1])) found.add(m[1]); }
+    else if (Array.isArray(value)) value.forEach((v) => uploadNamesIn(v, found));
+    else if (value && typeof value === 'object') Object.values(value).forEach((v) => uploadNamesIn(v, found));
+    return found;
+  };
+  const ctxFor = async (snap, doc) => {
+    const stored = await db.uploads.existing([...uploadNamesIn(doc)]);
+    return { ...ctxOf(snap), fileExists: (rel) => fileExists(rel) || (rel.startsWith('uploads/') && stored.has(rel.slice('uploads/'.length))) };
+  };
   // Maps the `:type` URL segment (show, video, upcoming, gallery) to the collection; unknown types -> 404.
   const kindOf = (req) => { if (!TYPES[req.params.type]) throw new HttpError(404, 'not_found', 'Unknown catalog section.'); return { key: req.params.type, type: TYPES[req.params.type] }; };
   const invalid = (errors) => new HttpError(400, 'invalid_item', errors.join(' '));
@@ -417,7 +451,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   // Create an item: validated by catalog-schema.js, stored in MySQL, then the cache is cleared so the site updates.
   router.post('/catalog/:type', wrap(async (req, res) => {
     const { key, type } = kindOf(req), snap = await catalog.get({ all: true });
-    const { doc, errors } = validate(type, req.body, ctxOf(snap)); if (errors.length) throw invalid(errors);
+    const { doc, errors } = validate(type, req.body, await ctxFor(snap, req.body)); if (errors.length) throw invalid(errors);
     try { await db.catalog.put(key, doc.id, doc, { create: true }); } catch (e) { if (isDuplicate(e)) throw new HttpError(409, 'exists', `A ${type} with the id “${doc.id}” already exists.`); throw e; }
     catalog.invalidate(); await log(req, `catalog.${type}.create`, doc.id, { title: doc.title || doc.caption || doc.id });
     res.status(201).json({ item: doc });
@@ -434,7 +468,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     const { key, type } = kindOf(req), snap = await catalog.get({ all: true });
     const body = { ...(req.body || {}) }; if (body.id === undefined) body.id = req.params.id;
     if (body.id !== req.params.id) throw bad('An id can’t be changed — create a new item instead.');
-    const { doc, errors } = validate(type, body, ctxOf(snap)); if (errors.length) throw invalid(errors);
+    const { doc, errors } = validate(type, body, await ctxFor(snap, body)); if (errors.length) throw invalid(errors);
     if (!(await db.catalog.put(key, doc.id, doc))) throw new HttpError(404, 'not_found', `Unknown ${type}.`);
     catalog.invalidate(); await log(req, `catalog.${type}.update`, doc.id, { title: doc.title || doc.caption || doc.id });
     res.json({ item: doc });
@@ -450,24 +484,28 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   // The About/studio page content.
   router.put('/studio', wrap(async (req, res) => {
     const snap = await catalog.get({ all: true });
-    const { doc, errors } = validate('studio', req.body, ctxOf(snap)); if (errors.length) throw invalid(errors);
+    const { doc, errors } = validate('studio', req.body, await ctxFor(snap, req.body)); if (errors.length) throw invalid(errors);
     await db.catalog.putStudio(doc); catalog.invalidate(); await log(req, 'catalog.studio.update'); res.json({ studio: doc });
   }));
 
   /* ---------- uploads ---------- */
   // Image upload: the raw file is the request body; the type is detected from its bytes (not the file name).
+  // The file is saved in MySQL (durable, and shared by every server instance), then copied into the upload folder as a local cache.
+  const keepUpload = async (file) => { await db.uploads.put(file.name, file.type, file.data); cacheUpload(uploadDir, file.name, file.data); };
   router.post('/uploads/image', express.raw({ type: () => true, limit: '10mb' }), wrap(async (req, res) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the image file as the request body.');
-    const saved = saveImage(req.body, uploadDir); if (!saved) throw bad('Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
+    const saved = describeImage(req.body); if (!saved) throw bad('Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
+    await keepUpload(saved);
     await log(req, 'upload.image', saved.path, { bytes: saved.bytes });
     res.status(201).json({ path: saved.path, bytes: saved.bytes, type: saved.type });
   }));
   // Subtitle upload (.vtt or .srt; converted to WebVTT).
   router.post('/uploads/subtitle', express.raw({ type: () => true, limit: '2mb' }), wrap(async (req, res) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the .vtt or .srt file as the request body.');
-    const saved = saveSubtitle(req.body, uploadDir); if (!saved) throw bad('That does not look like a WebVTT (.vtt) or SubRip (.srt) subtitle file.', 'unsupported_subtitle');
+    const saved = describeSubtitle(req.body); if (!saved) throw bad('That does not look like a WebVTT (.vtt) or SubRip (.srt) subtitle file.', 'unsupported_subtitle');
+    await keepUpload(saved);
     await log(req, 'upload.subtitle', saved.path, { cues: saved.cues });
-    res.status(201).json(saved);
+    res.status(201).json({ path: saved.path, cues: saved.cues, bytes: saved.bytes });
   }));
   /** Presigned PUT so the browser sends a big video straight to the private R2 bucket (never through this server). */
   // Returns a presigned URL so the browser uploads the big video file straight to R2 (it never passes through this server).
@@ -480,6 +518,6 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   }));
 
   // More admin endpoints (analytics, comments moderation, refund requests, notifications, errors ...) live in admin-extra.js.
-  adminExtraRoutes({ router, db, billing, catalog, push, mailer, log, siteUrl: billing.config.siteUrl });
+  adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns, unsubscribeUrlFor, log, siteUrl: billing.config.siteUrl });
   return router;
 }

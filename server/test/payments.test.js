@@ -32,7 +32,9 @@ const config = { ...cfg0, database: `addabaaz_test_pay_${process.pid}_${Date.now
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-pay-'));
 const catalog = JSON.parse(fs.readFileSync(new URL('../../data/catalog.json', import.meta.url), 'utf8'));
 const base = catalog.videos.find((v) => v.kind === 'episode');
-catalog.videos.push({ ...base, id: 'prem', title: 'prem', kind: 'clip', episode: null, access: 'premium', source: { type: 'r2', key: 'premium/prem/video.mp4' } });
+// The locked video must be an episode: since "trailers, clips and reels are never locked",
+// those kinds stream for everyone even with access:'premium' (pinned in billing.test.js).
+catalog.videos.push({ ...base, id: 'prem', title: 'prem', episode: 99, access: 'premium', source: { type: 'r2', key: 'premium/prem/video.mp4' } });
 fs.writeFileSync(path.join(tmp, 'catalog.json'), JSON.stringify(catalog));
 const fakeR2 = { configured: true, presignGet: (key) => `https://r2.test/${key}`, getText: async () => null };
 

@@ -19,6 +19,7 @@ import { initConsent, trackPage } from './consent.js';
 import { initErrorReporting, friendly } from './errors.js';
 import { initPush } from './push.js';
 import { initPullToRefresh } from './ui/ptr.js';
+import { initFullscreenRotation } from './orientation.js';
 
 // Native-shell hooks must run before anything else.
 initPlatform();
@@ -57,13 +58,28 @@ async function boot() {
   }
   router.start();
   networkStatus();
-  initPullToRefresh();
+  initPullToRefresh(softRefresh);   // app AND mobile browsers: never a reload, so never the boot logo
+  initFullscreenRotation();   // the app is portrait-only; the screen turns only in video fullscreen
   initConsent(); initErrorReporting(); initPush();
   window.addEventListener('ab:ready', trackPage);
   installPrompt();
   wireImageFallbacks();
   lockMedia();
   registerServiceWorker();
+}
+
+/** Pull-to-refresh EVERYWHERE (the app and mobile browsers): re-fetch catalog + account and
+ * re-render the current screen in place. A full location.reload() would replay the website's boot
+ * logo splash, and a refresh must never show that - the small pull indicator covers the update
+ * instead (the browser's own pull-to-refresh, which reloads, is turned off in styles.css). */
+async function softRefresh() {
+  try {
+    const base = CONFIG.apiBase, useApi = !!app.api;
+    const catalog = await loadCatalog(useApi ? `${base}/api/v1/catalog` : 'data/catalog.json', undefined, { mediaBase: useApi ? base : '' });
+    app.fullCatalog = catalog; app.catalog = catalog; applyKids();
+    await app.user.init();
+  } catch { /* offline or API hiccup: re-render with the data we already have */ }
+  app.router?.resolve();
 }
 
 /** A Kids profile browses a filtered catalog (only titles rated U or 7+). */

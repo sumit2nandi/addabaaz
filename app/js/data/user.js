@@ -75,6 +75,7 @@ export class User extends Emitter {
   providers() { return this.remote ? this.remote.providers() : Promise.resolve({ password: false }); }
   /** Can this viewer play `video` right now? Premium access may come from its parent series. */
   gateFor(video, catalog) {
+    if (catalog?.isFreeKind?.(video)) return 'ok';   // trailers, clips and reels are never locked, even on premium shows
     if (video?.access !== 'premium' && catalog?.show?.(video?.showId)?.access !== 'premium') return 'ok';
     if (!this.supportsAuth) return 'unavailable';
     if (!this.account) return 'login';

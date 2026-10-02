@@ -137,6 +137,49 @@ export function extraDb({ q, tx, iso }) {
     async claim(kind, ref, userId) { return (await q('INSERT IGNORE INTO notify_sent (kind, ref, user_id) VALUES (?,?,?)', [kind, ref, userId])).affectedRows === 1; },
   };
 
+  // ---- Native app push devices (FCM/APNs tokens; the Capacitor apps POST these to /api/v1/devices) ----
+  const devices = {
+    /**
+     * Registers (or refreshes) a token for a user; the same token on another account moves to it.
+     * A re-registration that only carries the token (the apps usually just send that) keeps the stored
+     * platform and label instead of wiping them.
+     */
+    async upsert(userId, { hash, token, platform = null, label = null }) {
+      const plat = ['android', 'ios', 'web'].includes(platform) ? platform : null;
+      const lab = label ? String(label).slice(0, 120) : null;
+      await q(`INSERT INTO push_devices (id, user_id, platform, token_hash, token, label) VALUES (UUID(),?,COALESCE(?,'android'),?,?,?)
+        ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), token = VALUES(token), platform = COALESCE(?, platform), label = COALESCE(?, label), fail_count = 0, last_seen = UTC_TIMESTAMP(3)`,
+      [userId, plat, hash, String(token).slice(0, 512), lab, plat, lab]);
+    },
+    /** Removes one token (sign-out, permission revoked). Returns the number of rows deleted. */
+    async remove(userId, hash) { return (await q('DELETE FROM push_devices WHERE user_id = ? AND token_hash = ?', [userId, hash])).affectedRows; },
+    async removeHash(hash) { await q('DELETE FROM push_devices WHERE token_hash = ?', [hash]); },
+    async listFor(userId) { return (await q('SELECT platform, label, last_seen FROM push_devices WHERE user_id = ? ORDER BY last_seen DESC', [userId])).map((r) => ({ platform: r.platform, label: r.label, lastSeen: iso(r.last_seen) })); },
+    async count() { return Number((await q('SELECT COUNT(*) AS n FROM push_devices'))[0].n); },
+    /** Every registered token, for a broadcast. */
+    async audience() { return (await q('SELECT token FROM push_devices')).map((r) => r.token); },
+    /** The tokens (+ owner) of the people a targeted audience reaches (same audience shapes as db.push.audience). */
+    async audienceFor(a) {
+      const sel = 'SELECT pd.token, pd.user_id FROM push_devices pd';
+      let rows;
+      if (a.kind === 'episodes') {
+        const vids = a.videoIds?.length ? a.videoIds : ['\u0000'];
+        rows = await q(`${sel} WHERE pd.user_id IN (
+          SELECT p.user_id FROM profiles p JOIN list_items l ON l.profile_id = p.id AND l.item_type = 'show' AND l.item_id = ?
+          UNION SELECT p.user_id FROM profiles p JOIN watch_progress w ON w.profile_id = p.id AND w.video_id IN (?))`, [a.showId, vids]);
+      } else if (a.kind === 'launches') rows = await q(`${sel} WHERE pd.user_id IN (SELECT p.user_id FROM profiles p JOIN reminders r ON r.profile_id = p.id AND r.upcoming_id = ?)`, [a.upcomingId]);
+      else if (a.kind === 'user') rows = await q(`${sel} WHERE pd.user_id = ?`, [a.userId]);
+      else rows = await q(sel);
+      return rows.map((r) => ({ token: r.token, userId: r.user_id }));
+    },
+    async ok(hash) { await q('UPDATE push_devices SET last_seen = UTC_TIMESTAMP(3), fail_count = 0 WHERE token_hash = ?', [hash]); },
+    /** A failed (but not dead) send; tokens failing 5 times in a row are dropped by purge(). */
+    async failed(hash) { await q('UPDATE push_devices SET fail_count = fail_count + 1 WHERE token_hash = ?', [hash]); },
+    async purge() { await q('DELETE FROM push_devices WHERE fail_count >= 5 OR last_seen < UTC_TIMESTAMP(3) - INTERVAL 180 DAY'); },
+  };
+
+  // ---- Broadcast campaigns (Admin → Notifications: push and e-mail blasts with live progress) ----
+
   // ---- Which devices are streaming right now (enforces the simultaneous-stream limit) ----
   const playback = {
     /** Registers/refreshes this device. Refuses (ok:false) when `limit` OTHER devices were active within `windowSec`. */
@@ -218,5 +261,37 @@ export function extraDb({ q, tx, iso }) {
   };
 
   // Everything above becomes a property of the main `db` object.
-  return { authTokens, accounts, ratings, comments, push, playback, playStats, refundRequests, errors };
+
+  // ---- Broadcast campaigns: one row per admin broadcast, updated as it sends ----
+  const mapCampaign = (r) => ({
+    id: r.id, channel: r.channel, audience: r.audience, title: r.title, body: r.body, url: r.url, button: r.button,
+    status: r.status, total: Number(r.total), sent: Number(r.sent), failed: Number(r.failed), skipped: Number(r.skipped),
+    cursor: Number(r.page_cursor), test: !!r.is_test, error: r.error, by: r.created_by,
+    createdAt: iso(r.created_at), updatedAt: iso(r.updated_at), finishedAt: iso(r.finished_at),
+  });
+  const campaigns = {
+    async create(c) {
+      await q(`INSERT INTO campaigns (id, channel, audience, title, body, url, button, status, is_test, created_by)
+        VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [c.id, c.channel, String(c.audience).slice(0, 120), String(c.title).slice(0, 200), String(c.body).slice(0, 20_000), c.url || null, c.button || null, c.status || 'queued', c.test ? 1 : 0, c.by || null]);
+    },
+    async get(id) { const r = (await q('SELECT * FROM campaigns WHERE id = ?', [id]))[0]; return r ? mapCampaign(r) : null; },
+    // Progress updates while a campaign sends (called after every batch).
+    async progress(id, { sent, failed, skipped, total, cursor }) {
+      await q(`UPDATE campaigns SET sent = sent + ?, failed = failed + ?, skipped = skipped + ?, total = GREATEST(total, ?), page_cursor = ?, status = 'sending', updated_at = UTC_TIMESTAMP(3) WHERE id = ?`,
+      [Number(sent) || 0, Number(failed) || 0, Number(skipped) || 0, Number(total) || 0, Number(cursor) || 0, id]);
+    },
+    async finish(id, status, error = null) {
+      await q('UPDATE campaigns SET status = ?, error = ?, updated_at = UTC_TIMESTAMP(3), finished_at = UTC_TIMESTAMP(3) WHERE id = ?', [status, error ? String(error).slice(0, 300) : null, id]);
+    },
+    async list({ limit = 25 } = {}) { return (await q('SELECT * FROM campaigns ORDER BY created_at DESC LIMIT ?', [limit])).map(mapCampaign); },
+    /**
+     * Campaigns left unfinished (a deploy or crash mid-send). Only rows that have not moved for five
+     * minutes are returned, so a campaign another instance is actively sending is never picked up twice.
+     */
+    async unfinished() { return (await q("SELECT * FROM campaigns WHERE status IN ('queued','sending') AND is_test = 0 AND updated_at < UTC_TIMESTAMP(3) - INTERVAL 5 MINUTE ORDER BY created_at LIMIT 5")).map(mapCampaign); },
+    async prune() { await q("DELETE FROM campaigns WHERE finished_at IS NOT NULL AND finished_at < UTC_TIMESTAMP(3) - INTERVAL 365 DAY"); },
+  };
+
+  return { authTokens, accounts, ratings, comments, push, devices, campaigns, playback, playStats, refundRequests, errors };
 }

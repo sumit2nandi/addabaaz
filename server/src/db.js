@@ -4,6 +4,7 @@
 // The rest of the server only ever calls these methods, e.g. `db.users.byEmail(...)`, never raw SQL.
 import mysql from 'mysql2/promise';
 import { dbConfigFromEnv } from './config.js';
+import { normalizeEmail } from './email-address.js';
 import { billingDb } from './db-billing.js';
 import { adminDb } from './db-admin.js';
 import { extraDb } from './db-extra.js';
@@ -55,7 +56,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
   }
 
   // Row mappers: database column names -> API field names.
-  const userRow = (r) => r && { id: r.id, email: r.email, name: r.name, passwordHash: r.password_hash, createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabledAt: iso(r.disabled_at), emailVerifiedAt: iso(r.email_verified_at), sessionVersion: r.session_version || 0, hasPin: !!r.parental_pin_hash };
+  const userRow = (r) => r && { id: r.id, email: r.email, emailNorm: r.email_norm || null, emailDup: !!r.email_dup, name: r.name, passwordHash: r.password_hash, createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabledAt: iso(r.disabled_at), emailVerifiedAt: iso(r.email_verified_at), sessionVersion: r.session_version || 0, hasPin: !!r.parental_pin_hash };
   const profileRow = (r) => ({ id: r.id, name: r.name, color: r.color, ...(r.kids ? { kids: true } : {}) });
 
   // The public object. `self` is also handed to the extension modules so they can call each other's methods.
@@ -69,13 +70,16 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
 
     // ---- Accounts ----
     users: {
-      // Lookups return null when nothing matches.
+      // Lookups return null when nothing matches. `byEmail` compares the raw stored address;
+      // `byEmailNorm` the normalized one — the two are the same for every account created since
+      // migration 012, and differ only for rows the admin duplicate report flags (legacy, unknown chars).
       async byEmail(email) { return userRow((await q('SELECT * FROM users WHERE email = ?', [email]))[0]); },
+      async byEmailNorm(norm) { return userRow((await q('SELECT * FROM users WHERE email_norm = ?', [norm]))[0]); },
       async byId(id) { return userRow((await q('SELECT * FROM users WHERE id = ?', [id]))[0]); },
       /** Creates the user and their first profile atomically. Throws ER_DUP_ENTRY if the email exists. */
       async createWithProfile(user, profile) {
         await tx(async (t) => {
-          await t.query('INSERT INTO users (id, email, name, password_hash) VALUES (?,?,?,?)', [user.id, user.email, user.name, user.passwordHash]);
+          await t.query('INSERT INTO users (id, email, email_norm, name, password_hash) VALUES (?,?,?,?,?)', [user.id, user.email, user.emailNorm || normalizeEmail(user.email).email, user.name, user.passwordHash]);
           await t.query('INSERT INTO profiles (id, user_id, name, color) VALUES (?,?,?,?)', [profile.id, user.id, profile.name, profile.color]);
         });
       },
@@ -95,7 +99,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       /** New passwordless account + first profile + identity, atomically. Throws ER_DUP_ENTRY on an email/identity race. */
       async createUser(user, profile, { provider, subject, email }) {
         await tx(async (t) => {
-          await t.query('INSERT INTO users (id, email, name, password_hash) VALUES (?,?,?,NULL)', [user.id, user.email, user.name]);
+          await t.query('INSERT INTO users (id, email, email_norm, name, password_hash) VALUES (?,?,?,?,NULL)', [user.id, user.email, user.emailNorm || normalizeEmail(user.email).email, user.name]);
           await t.query('INSERT INTO profiles (id, user_id, name, color) VALUES (?,?,?,?)', [profile.id, user.id, profile.name, profile.color]);
           await t.query('INSERT INTO auth_identities (provider, subject, user_id, email, last_login_at) VALUES (?,?,?,?,UTC_TIMESTAMP(3))', [provider, subject, user.id, email]);
         });

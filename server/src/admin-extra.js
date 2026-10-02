@@ -8,7 +8,7 @@ const asPage = (req, dflt = 50, max = 200) => ({ limit: Math.min(Math.max(Number
  * Admin routes for the engagement features: analytics, comment moderation, refund requests, push notifications, error log.
  * Mounted by createAdminRouter (so they sit behind the same admin sign-in, rate limit and audit log).
  */
-export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, log, siteUrl }) {
+export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns = null, unsubscribeUrlFor = null, log, siteUrl }) {
   /* ---------- badges for the sidebar ---------- */
   // Counts shown as badges in the admin sidebar: comments to review, refund requests pending, recent errors.
   router.get('/inbox', wrap(async (_req, res) => {
@@ -99,32 +99,86 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, l
     res.sendStatus(204);
   }));
 
-  /* ---------- push notifications ---------- */
-  // Push notification composer data: is push configured, how many subscribers, the audiences that can be targeted, and recent sends.
+  /* ---------- broadcast notifications: app push + e-mail (Admin → Notifications) ---------- */
+  // Everything the Broadcast page needs: which channels are configured, how many devices/accounts each
+  // audience reaches, the people a campaign can be sent to, and the recent broadcasts with their progress.
+  const EMAIL_AUDIENCES = [
+    { id: 'all', label: 'All accounts' },
+    { id: 'paid', label: 'Active subscribers' },
+    { id: 'free', label: 'Free accounts' },
+    { id: 'expiring', label: 'Expiring within 7 days' },
+    { id: 'expired', label: 'Expired subscriptions' },
+  ];
+  const pushConfigured = () => !!(push?.configured || push?.nativeConfigured);
+  const mailConfigured = () => mailer?.provider === 'smtp';
   router.get('/notifications', wrap(async (_req, res) => {
     const snap = await catalog.get({ all: true });
+    const [webSubscribers, nativeDevices, optedOut] = await Promise.all([db.push.count(), db.devices.count(), db.adminUsers.emailOptOutCount()]);
+    const emailAudiences = await Promise.all(EMAIL_AUDIENCES.map(async (a) => ({ ...a, count: await db.adminUsers.emailAudienceCount(a.id) })));
+    const recent = (await db.campaigns.list({ limit: 25 })).map((c) => ({ ...c, at: c.createdAt }));
     res.json({
-      configured: !!push?.configured, publicKey: push?.publicKey || '', subscribers: await db.push.count(),
+      // Channel status: push (web + native apps) and e-mail.
+      push: { configured: pushConfigured(), web: !!push?.configured, native: !!push?.nativeConfigured, webSubscribers, nativeDevices, publicKey: push?.publicKey || '' },
+      email: { configured: mailConfigured(), from: mailer?.from || '', optedOut, audiences: emailAudiences },
+      // Legacy keys (older admin builds / scripts read these).
+      configured: pushConfigured(), publicKey: push?.publicKey || '', subscribers: webSubscribers,
       audiences: [{ id: 'news', label: 'Announcements — people who opted in to news' }, { id: 'all', label: 'Everyone who turned notifications on' },
         ...snap.catalog.shows.map((s) => ({ id: `show:${s.id}`, label: `Followers of ${s.titleEn || s.title}` })), ...snap.catalog.upcoming.map((u) => ({ id: `launch:${u.id}`, label: `Reminders for ${u.titleEn || u.title}` }))],
-      history: (await db.audit.list({ action: 'notification.send', limit: 15 })).map((a) => ({ at: a.at, by: a.actor, audience: a.target, ...a.meta })),
+      history: recent, campaigns: recent,
     });
   }));
-  // Send a push message. Title/body/link are length-limited; the link must be a site path or https URL; the audience is validated against the catalog.
+  // Send a broadcast (push or e-mail). Title/body/link are length-limited; the link must be a site path or
+  // https URL; the audience is validated against the catalog (push) or the user filters (e-mail).
+  // Sending happens in the background: the reply carries the campaign id, the console polls its progress.
   router.post('/notifications/send', wrap(async (req, res) => {
-    if (!push?.configured) throw new HttpError(503, 'push_not_configured', 'Push notifications are not configured on this server.');
     const b = req.body || {}, str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
-    const title = str(b.title, 80), body = str(b.body, 180), url = str(b.url, 300) || '/';
+    const channel = b.channel === 'email' ? 'email' : 'push';
+    if (!campaigns) throw new HttpError(503, 'not_available', 'Broadcasts are not available on this server.');
+    if (channel === 'push' && !pushConfigured()) throw new HttpError(503, 'push_not_configured', 'Push notifications are not configured on this server. See docs/ENGAGEMENT.md and docs/MOBILE.md.');
+    if (channel === 'email' && !mailConfigured()) throw new HttpError(503, 'email_not_configured', 'E-mail is not configured on this server. Set SMTP_URL and MAIL_FROM.');
+    const limit = channel === 'email' ? { title: 120, body: 4000 } : { title: 80, body: 180 };
+    const title = str(b.title, limit.title), body = str(b.body, limit.body), url = str(b.url, 300) || '/', button = str(b.button, 40);
     if (!title || !body) throw bad('A title and a message are required.');
     if (!/^\/(?!\/)/.test(url) && !/^https:\/\//.test(url)) throw bad('The link must start with / (a page on this site) or https://.');
-    const snap = await catalog.get({ all: true }), a = String(b.audience || 'news'); let audience;
-    if (a === 'news') audience = { kind: 'news' }; else if (a === 'all') audience = { kind: 'all' };
-    else if (a.startsWith('show:')) { const id = a.slice(5); if (!snap.showIds.has(id)) throw bad('Unknown show.'); audience = { kind: 'episodes', showId: id, videoIds: snap.catalog.videos.filter((v) => v.showId === id).map((v) => v.id) }; }
-    else if (a.startsWith('launch:')) { const id = a.slice(7); if (!snap.upcomingIds.has(id)) throw bad('Unknown coming-soon title.'); audience = { kind: 'launches', upcomingId: id }; }
-    else throw bad('Unknown audience.');
-    const r = await push.notify(audience, { title, body, url, tag: `admin-${Date.now()}` });
-    await log(req, 'notification.send', a, { title, sent: r.sent, failed: r.failed, removed: r.removed });
-    res.json(r);
+    const a = String(b.audience || (channel === 'email' ? 'all' : 'news'));
+    const snap = await catalog.get({ all: true });
+    // Push audiences reach followers/opt-ins; e-mail audiences reuse the Users page filters (see db-admin.js).
+    const pushAudience = (id) => {
+      if (id === 'news') return { kind: 'news' };
+      if (id === 'all') return { kind: 'all' };
+      if (id.startsWith('show:')) { const sid = id.slice(5); if (!snap.showIds.has(sid)) throw bad('Unknown show.'); return { kind: 'episodes', showId: sid, videoIds: snap.catalog.videos.filter((v) => v.showId === sid).map((v) => v.id) }; }
+      if (id.startsWith('launch:')) { const uid = id.slice(7); if (!snap.upcomingIds.has(uid)) throw bad('Unknown coming-soon title.'); return { kind: 'launches', upcomingId: uid }; }
+      throw bad('Unknown audience.');
+    };
+    if (channel === 'push') pushAudience(a);
+    else if (!EMAIL_AUDIENCES.some((x) => x.id === a)) throw bad('Unknown audience.');
+    const campaign = await campaigns.start(
+      { channel, audience: a, title, body, url, button: button || null, by: req.admin.email },
+      { resolveAudience: pushAudience, unsubscribeUrlFor, siteUrl },
+    );
+    await log(req, 'notification.send', a, { channel, title, campaign: campaign.id, status: campaign.status });
+    res.status(202).json(campaign);
+  }));
+  // Progress of one broadcast (polled by the console while it sends).
+  router.get('/notifications/:id', wrap(async (req, res) => {
+    const c = await db.campaigns.get(String(req.params.id));
+    if (!c) throw new HttpError(404, 'not_found', 'Unknown broadcast.');
+    res.json({ ...c, at: c.createdAt, done: ['sent', 'partial', 'failed', 'cancelled'].includes(c.status) });
+  }));
+  // Send one test message to the signed-in administrator (push: their own devices; e-mail: their address).
+  router.post('/notifications/test', wrap(async (req, res) => {
+    if (req.admin.via !== 'session') throw new HttpError(400, 'test_requires_session', 'Sign in with an administrator account to send a test.');
+    if (!campaigns) throw new HttpError(503, 'not_available', 'Broadcasts are not available on this server.');
+    const b = req.body || {}, str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+    const channel = b.channel === 'email' ? 'email' : 'push';
+    const title = str(b.title, 120), body = str(b.body, channel === 'push' ? 180 : 4000), url = str(b.url, 300) || '/', button = str(b.button, 40);
+    if (!title || !body) throw bad('A title and a message are required.');
+    const me = await db.users.byId(req.admin.id || req.admin.userId);
+    if (!me) throw new HttpError(404, 'not_found', 'Admin account not found.');
+    const r = await campaigns.sendTest({ channel, to: me.email, userId: me.id, name: me.name, title, body, url, button: button || null, siteUrl, unsubscribeUrlFor });
+    if (!r.ok) throw new HttpError(409, 'test_failed', r.error || 'The test could not be sent.');
+    await log(req, 'notification.test', channel, { title, to: me.email });
+    res.json({ ok: true });
   }));
 
   /* ---------- error log ---------- */

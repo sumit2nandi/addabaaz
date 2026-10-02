@@ -6,7 +6,9 @@ import { CONFIG } from '../config.js';
 import { rail, enhanceRails, showCard, videoCard, reelCard, soonCard, galleryCard, listBtn, img, heroBg, showMeta, premiumMark } from '../ui/components.js';
 import { openLightbox } from '../ui/lightbox.js';
 
-// Picks the featured shows for the carousel.
+// Picks the featured shows for the carousel. Every banner is a still image - the latest episode's
+// backdrop, with the show's poster as fallback - and the slideshow only crossfades between them:
+// the banners play no trailer or episode video.
 function heroSlides() {
   const cat = app.catalog;
   return cat.shows.filter((s) => s.featured && cat.episodes(s.id).length)
@@ -44,24 +46,32 @@ function heroHtml(slides) {
   </section>`;
 }
 
-// Carousel behaviour: auto-advance, dots, swipe; pauses on hover/focus or when the tab is hidden.
+// Carousel behaviour: crossfades between the banner images every 5 seconds; dots, swipe, and a
+// pause on hover/focus (pointer devices) or while the tab is hidden. No media is mounted on the
+// banners - they are images only.
 function mountHero(root, ctx) {
   const hero = $('.hero', root); if (!hero) return;
   const slides = $$('.hero-slide', hero), dots = $$('[data-dot]', hero);
   let i = 0, timer, paused = false;
+  const SLIDE_MS = 5000;   // a banner slide never lasts longer than 5 seconds
   const show = (n) => {
     i = (n + slides.length) % slides.length;
     slides.forEach((s, k) => s.classList.toggle('active', k === i));
     dots.forEach((d, k) => { d.classList.toggle('active', k === i); d.setAttribute('aria-selected', k === i); });
     $$('img[loading=lazy]', slides[i]).forEach((im) => (im.loading = 'eager'));
   };
-  const schedule = () => { clearInterval(timer); if (slides.length > 1) timer = setInterval(() => { if (!paused && !document.hidden) show(i + 1); }, 9000); };
+  const schedule = () => { clearInterval(timer); if (slides.length > 1) timer = setInterval(() => { if (!paused && !document.hidden) show(i + 1); }, SLIDE_MS); };
   dots.forEach((d) => d.addEventListener('click', () => { show(+d.dataset.dot); schedule(); }));
-  hero.addEventListener('mouseenter', () => (paused = true)); hero.addEventListener('mouseleave', () => (paused = false));
-  hero.addEventListener('focusin', () => (paused = true)); hero.addEventListener('focusout', () => (paused = false));
+  // Hover/focus pause is for pointer devices only: on touch, a tap fires mouseenter/focusin with no
+  // matching leave, which would freeze the slideshow forever.
+  if (window.matchMedia?.('(hover: hover) and (pointer: fine)')?.matches) {
+    hero.addEventListener('mouseenter', () => (paused = true)); hero.addEventListener('mouseleave', () => (paused = false));
+    hero.addEventListener('focusin', () => (paused = true)); hero.addEventListener('focusout', () => (paused = false));
+  }
   let x0 = null;
   hero.addEventListener('pointerdown', (e) => { x0 = e.clientX; });
   hero.addEventListener('pointerup', (e) => { if (x0 != null && Math.abs(e.clientX - x0) > 60) { show(i + (e.clientX < x0 ? 1 : -1)); schedule(); } x0 = null; });
+  hero.addEventListener('pointercancel', () => { x0 = null; });    // touch drags handed to scrolling must not leave a stale swipe
   schedule(); ctx.onCleanup(() => clearInterval(timer));
 }
 
@@ -110,22 +120,27 @@ function recentlyAddedSection(cat, N) {
   const videos = cat.latestVideos(N).map((v) => videoCard(v, { showDuration: false }));
   if (!reels.length && !videos.length) return html``;
   return html`<section class="recently-added" aria-labelledby="recentlyAddedTitle">
-    <div class="rail-head"><div><h2 id="recentlyAddedTitle">Recently Added</h2><p class="rail-sub">The latest from ADDABAAZ</p></div></div>
-    ${rail({ title: 'Reels', subtitle: 'Bite-sized ADDABAAZ', items: reels, href: '#/reels', linkLabel: 'Watch reels', cls: 'r-reel', hideHeading: true })}
-    ${rail({ title: 'Episodes & Videos', subtitle: 'Recent episodes and videos from ADDABAAZ', items: videos, cls: 'r-video', hideHeading: true })}
+    <div class="rail-head"><div><h2 id="recentlyAddedTitle">Recently Added</h2></div></div>
+    ${rail({ title: 'Reels', items: reels, href: '#/reels', linkLabel: 'Watch reels', cls: 'r-reel', hideHeading: true })}
+    ${rail({ title: 'Episodes & Videos', items: videos, cls: 'r-video', hideHeading: true })}
   </section>`;
 }
 
+// The artwork a Releasing This Month slide shows: the wide backdrop first, then the large poster, then the card poster
+// (the same order as the title's own page). Release posters are finished landscape artwork with their title and logo
+// printed on them, so the slide shows the whole picture, uncovered: no overlaid gradient, title or badge.
+const releaseArt = (item) => item.backdrop || item.posterLg || item.poster;
+
+// Landscape (16:9) slideshow. `contain` keeps the entire artwork visible; if a poster is not 16:9 (say a portrait one) it is centred
+// over a blurred copy of itself instead of being cropped. The heading above the slideshow already says "Releasing This Month".
 function releaseSlideshow(items) {
   return html`<div class="home-release-showcase">
     <div class="home-release-carousel" data-release-carousel role="region" aria-roledescription="carousel" aria-label="Releasing This Month">
       ${items.map((item, i) => {
-        const title = item.titleEn || item.title;
+        const title = item.titleEn || item.title, art = releaseArt(item);
         return html`<a class="home-release-slide ${i === 0 ? 'active' : ''}" data-release-slide="${i}" href="#/soon/${item.id}" aria-label="${title} — Releasing This Month" aria-hidden="${i !== 0}">
-          ${img(item.poster, `${title} — Releasing This Month`, { lazy: i > 0 })}
-          <span class="home-release-shade" aria-hidden="true"></span>
-          <span class="home-release-badge">Releasing This Month</span>
-          <span class="home-release-title">${title}</span>
+          ${img(art, '', { cls: 'home-release-bg', lazy: i > 0 })}
+          ${img(art, `${title} — Releasing This Month`, { cls: 'home-release-art', lazy: i > 0 })}
         </a>`;
       })}
       ${items.length > 1 ? html`<div class="home-release-arrows">
@@ -137,17 +152,17 @@ function releaseSlideshow(items) {
   </div>`;
 }
 
-// Releasing titles rotate as portrait posters; the remaining titles stay in the Coming Soon rail.
+// Releasing titles rotate as full landscape posters; the remaining titles stay in the Coming Soon rail.
 function comingSoonSection(cat) {
   const releases = cat.upcomingByCategory('releasing-this-month');
   const comingSoon = cat.upcomingByCategory('coming-soon');
   if (!releases.length && !comingSoon.length) return html``;
   return html`<div class="home-upcoming-sections">
     ${releases.length ? html`<section class="rail home-release-section" aria-label="Releasing This Month">
-      <div class="rail-head"><div><h2>Releasing This Month</h2><p class="rail-sub">New originals from ADDABAAZ</p></div><a class="see-all" href="#/upcoming">Show all ${icon('right', { size: 16 })}</a></div>
+      <div class="rail-head"><div><h2>Releasing This Month</h2></div><a class="see-all" href="#/upcoming">Show all ${icon('right', { size: 16 })}</a></div>
       ${releaseSlideshow(releases)}
     </section>` : ''}
-    ${comingSoon.length ? rail({ title: 'Coming Soon', subtitle: 'More new originals from ADDABAAZ', items: comingSoon.map(soonCard), href: '#/upcoming', linkLabel: 'Show all', cls: 'r-poster home-coming-soon' }) : ''}
+    ${comingSoon.length ? rail({ title: 'Coming Soon', items: comingSoon.map(soonCard), href: '#/upcoming', linkLabel: 'Show all', cls: 'r-poster home-coming-soon' }) : ''}
   </div>`;
 }
 
@@ -171,7 +186,7 @@ export default async function home(ctx) {
       ${rail({ title: 'My List', items: mine, href: '#/list', cls: 'r-poster' })}
       ${comingSoonSection(cat)}
       ${recentlyAddedSection(cat, N)}
-      ${rail({ title: 'Top 10 Episodes', subtitle: 'Most watched on ADDABAAZ', items: cat.trending(10, demoteMature ? { matureCap: 2 } : {}).map((v, i) => videoCard(v, { rank: i + 1, showDuration: false })), cls: 'r-top' })}
+      ${rail({ title: 'Top 10 Episodes', items: cat.trending(10, demoteMature ? { matureCap: 2 } : {}).map((v, i) => videoCard(v, { rank: i + 1, showDuration: false })), cls: 'r-top' })}
       ${rail({ title: 'Shows', items: cat.shows.map((s) => showCard(s)), href: '#/shows', linkLabel: 'Browse all', cls: 'r-poster' })}
       ${cat.shows.map((s) => rail({ title: s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title, items: cat.episodes(s.id).slice().reverse().map((v) => videoCard(v, { showName: false, showDuration: false })), href: `#/show/${s.id}`, linkLabel: 'Open show', cls: 'r-video' }))}
       ${rail({ title: 'Behind the Scenes', items: cat.gallery.slice(0, N).map(galleryCard), href: '#/gallery', cls: 'r-poster' })}

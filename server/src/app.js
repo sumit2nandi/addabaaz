@@ -20,6 +20,9 @@ import { isDuplicate } from './db.js';
 import { hashPassword, verifyPassword, signToken, signJwt, verifyToken, sessionValid } from './auth.js';
 import { createFeatures } from './features.js';
 import { pushFromEnv } from './push.js';
+import { fcmFromEnv } from './fcm.js';
+import { campaignEmail } from './emails.js';
+import { createCampaigns } from './campaigns.js';
 import { createR2 } from './r2.js';
 import { socialFromEnv, SocialError } from './social.js';
 import { PLANS, paidPlan } from './plans.js';
@@ -28,11 +31,14 @@ import { mailerFromEnv } from './mailer.js';
 import { createBilling, billingConfigFromEnv } from './billing.js';
 import { STATES } from './gst.js';
 import { HttpError, bad, wrap, rateLimit } from './http.js';
+import { normalizeEmail } from './email-address.js';
 import { createCatalogStore } from './catalog.js';
+import { FREE_KINDS } from './catalog-schema.js';
 import { createYouTubeFeed } from './youtube-feed.js';
 import { createSeo } from './seo.js';
 import compression from 'compression';
 import { createAdminRouter } from './admin.js';
+import { UPLOAD_NAME, uploadType, cacheUpload } from './uploads.js';
 
 // Repository root (two folders above server/src).
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -57,7 +63,7 @@ export function createApp({
   billing = createBilling({ db, payments, mailer, config: billingConfigFromEnv() }),   // coupons, GST invoices, refunds
   adminToken = process.env.ADMIN_TOKEN || '',                 // optional shared secret for scripts (≥24 chars); admin ACCOUNTS (users.is_admin) need no token
   sessionHours = Number(process.env.ADMIN_SESSION_HOURS) || 12, // admin sessions are shorter than viewer sessions
-  uploadDir = process.env.UPLOAD_DIR || path.join(ROOT, 'uploads'),   // admin image uploads (mount a persistent volume in production)
+  uploadDir = process.env.UPLOAD_DIR || path.join(ROOT, 'uploads'),   // local cache of admin uploads (the real copies are stored in MySQL)
   contactWebhook = process.env.CONTACT_WEBHOOK_URL || '',
   youtubeFeed = createYouTubeFeed(),                         // fetched only after an administrator explicitly previews uploads
   rate = true,
@@ -67,7 +73,7 @@ export function createApp({
   social = socialFromEnv(),                                   // { config, verifiers: { google?, facebook? } }
   publicApiUrl = process.env.PUBLIC_API_URL || '',            // absolute base for HLS URLs when behind a proxy
   streamTtl = Number(process.env.STREAM_URL_TTL) || 6 * 3600, // seconds a signed video URL stays valid
-  push = pushFromEnv(db),                                     // Web Push (VAPID keys from env; tests inject a fake sender)
+  push = pushFromEnv(db, process.env, { fcm: fcmFromEnv() }), // Web Push (VAPID) + native app push (FCM); tests inject a fake sender
   features: featureOptions = {},                              // limits: { streamLimit, refundWindowDays, reportsToHide … } (env defaults)
   seo = {},                                                    // search-engine options: { siteUrl, indexable, compress, googleVerification, bingVerification } (env defaults below)
 } = {}) {
@@ -170,14 +176,27 @@ export function createApp({
   // Optional engagement/security features (password reset, PIN, ratings, comments, push, ...) live in features.js.
   const features = createFeatures({ db, secret, mailer, push, catalog, siteUrl: billing.config.siteUrl, rate, publicUser, notDisabled, userFromRequest: (req) => userFromRequest(req), plans: PLANS, options: { supportEmail: billing.config.supportEmail, ...featureOptions } });
 
+  /* ---------- broadcast campaigns (Admin → Notifications: push / e-mail) — see server/src/campaigns.js ---------- */
+  // Signed one-click unsubscribe link put in the footer of every campaign e-mail; the audience queries skip
+  // anyone who used it. Transactional mail (receipts, resets) is unaffected.
+  const siteUrl = billing.config.siteUrl || '';
+  const unsubSig = (userId) => crypto.createHmac('sha256', secret).update(`unsub:${userId}`).digest('base64url').slice(0, 32);
+  const unsubscribeUrlFor = (u) => (siteUrl ? `${siteUrl}/api/v1/notifications/unsubscribe?u=${encodeURIComponent(u.id)}&t=${unsubSig(u.id)}` : '');
+  const campaigns = createCampaigns({ db, push, mailer, email: campaignEmail, log: console });
+
   // Create an account with e-mail + password. A verification-mail failure must be visible to the user (the account is still created so they can sign in and retry).
   api.post('/auth/signup', authLimit, wrap(async (req, res) => {
     const { name = '', email = '', password = '' } = req.body || {};
-    if (typeof email !== 'string' || !EMAIL.test(email.trim()) || email.length > 254) throw bad('Please enter a valid email address.', 'invalid_email');
+    // One address = one account: the address is normalized (case, full-width characters and invisible
+    // paste artefacts removed) before it is compared or stored — see server/src/email-address.js.
+    const norm = normalizeEmail(email);
+    // An address that only becomes usable after cleaning ("rupa @example.com", a full-width ＠) is fine:
+    // the stored address is always the normalized one.
+    if (typeof email !== 'string' || email.length > 254 || !norm.ok || (typeof email === 'string' && email.trim() === '')) throw bad('Please enter a valid email address.', 'invalid_email');
     if (typeof password !== 'string' || password.length < 8 || password.length > 128) throw bad('Password must be 8–128 characters.', 'weak_password');
     if (typeof name !== 'string' || !name.trim() || name.length > 60) throw bad('Please enter your name.', 'invalid_name');
-    // Passwords are hashed (scrypt) before they touch the database; e-mails are stored lower-case.
-    const user = { id: crypto.randomUUID(), email: email.trim().toLowerCase(), name: name.trim(), passwordHash: hashPassword(password) };
+    // Passwords are hashed (scrypt) before they touch the database.
+    const user = { id: crypto.randomUUID(), email: norm.email, emailNorm: norm.email, name: name.trim(), passwordHash: hashPassword(password) };
     const profile = { id: crypto.randomUUID(), name: user.name.split(/\s+/)[0].slice(0, 24), color: 0 };
     // The unique e-mail index is the real duplicate check (safe against two simultaneous sign-ups).
     try { await db.users.createWithProfile(user, profile); }
@@ -199,7 +218,7 @@ export function createApp({
   // Log in with e-mail + password. Returns a session token.
   api.post('/auth/login', authLimit, wrap(async (req, res) => {
     const { email = '', password = '' } = req.body || {};
-    const user = await db.users.byEmail(String(email).trim().toLowerCase());
+    const user = (await db.users.byEmailNorm(normalizeEmail(email).email)) || (await db.users.byEmail(String(email).trim().toLowerCase()));
     // Always run a hash to keep timing similar whether or not the user exists.
     const ok = user?.passwordHash ? verifyPassword(String(password), user.passwordHash) : (verifyPassword(String(password), 'scrypt$00$00'), false);   // social-only accounts have no password
     if (!ok) throw new HttpError(401, 'invalid_credentials', 'Incorrect email or password.');
@@ -213,7 +232,7 @@ export function createApp({
   const LABEL = { google: 'Google', facebook: 'Facebook', apple: 'Apple' };
   // Shared by Google, Facebook and Apple: verify the provider's token, then find or create our own account.
   // An existing account with the same *verified* e-mail is linked rather than duplicated.
-  async function socialSignIn(provider, credential) {
+  async function socialSignIn(provider, credential, opts = {}) {
     const verifier = social.verifiers?.[provider];
     if (!verifier) throw new HttpError(501, 'provider_not_configured', `${LABEL[provider]} sign-in isn’t enabled on this server.`);
     let claims;
@@ -223,18 +242,20 @@ export function createApp({
     let user = await db.identities.userFor(provider, claims.subject), isNew = false;
     // First time we see this social identity.
     if (!user) {
-      if (!claims.email) throw bad(`${LABEL[provider]} didn’t share an email address. Please sign up with email instead.`, 'email_required');
+      const norm = normalizeEmail(claims.email);
+      if (!claims.email || !norm.ok) throw bad(`${LABEL[provider]} didn’t share an email address. Please sign up with email instead.`, 'email_required');
       if (!claims.emailVerified) throw bad('Your email address isn’t verified with the provider.', 'email_unverified');
-      user = await db.users.byEmail(claims.email);
+      claims.email = norm.email;
+      user = (await db.users.byEmailNorm(norm.email)) || (await db.users.byEmail(claims.email));
       if (user) await db.identities.link(user.id, ident);              // same verified email → same person: link the provider
       else {
         const name = (claims.name || claims.email.split('@')[0]).trim().slice(0, 60);
-        const fresh = { id: crypto.randomUUID(), email: claims.email, name };
+        const fresh = { id: crypto.randomUUID(), email: norm.email, emailNorm: norm.email, name };
         const profile = { id: crypto.randomUUID(), name: name.split(/\s+/)[0].slice(0, 24), color: 0 };
         try { await db.identities.createUser(fresh, profile, ident); user = fresh; isNew = true; }
         catch (e) {
           if (!isDuplicate(e)) throw e;                                   // lost a race with a parallel request: use the winner
-          user = (await db.identities.userFor(provider, claims.subject)) || (await db.users.byEmail(claims.email));
+          user = (await db.identities.userFor(provider, claims.subject)) || (await db.users.byEmailNorm(norm.email));
           if (user) await db.identities.link(user.id, ident);
         }
       }
@@ -244,13 +265,80 @@ export function createApp({
     notDisabled(user);
     await db.identities.touch(provider, claims.subject);
     if (!user.emailVerifiedAt) await db.accounts.markVerified(user.id);           // the provider already verified this address
+    // Native apps: instead of handing the session to the (external) browser that did the OAuth
+    // dance, hand back a 2-minute single-use ticket the app exchanges for its own session.
+    if (opts.ticket) return { ticket: signJwt({ aud: 'oauth-ticket', sub: user.id, sv: user.sessionVersion, jti: crypto.randomUUID() }, secret, 120) };
     return { token: signToken(user.id, secret, undefined, user.sessionVersion), user: publicUser({ ...user, emailVerifiedAt: user.emailVerifiedAt || true }), profiles: await db.profiles.list(user.id), isNew };
   }
   // One endpoint per provider; the body carries the provider's ID token / access token.
-  api.post('/auth/google', authLimit, wrap(async (req, res) => res.json(await socialSignIn('google', req.body?.idToken))));
+  api.post('/auth/google', authLimit, wrap(async (req, res) => res.json(await socialSignIn('google', req.body?.idToken, { ticket: req.body?.ticket === true }))));
   api.post('/auth/facebook', authLimit, wrap(async (req, res) => res.json(await socialSignIn('facebook', req.body?.accessToken))));
   api.post('/auth/apple', authLimit, wrap(async (req, res) => res.json(await socialSignIn('apple', { identityToken: req.body?.identityToken, name: req.body?.name }))));
+
+  /* ---------- native Google sign-in (Custom Tab + one-time ticket deep link) ----------
+   * Google refuses sign-in inside WebViews, and the native SDK needs every build keystore's
+   * SHA-1 registered in the Google console. So the app opens a same-origin page in real Chrome
+   * (Custom Tab) that shows the very same Google Identity Services button the website uses -
+   * the site origin is already an authorized JavaScript origin, so NO console change is needed
+   * (no redirect URIs, no SHA-1, no client secret). The verified id_token is exchanged for a
+   * 2-minute single-use ticket that is deep-linked back into the app for its own session. */
+  const APP_SCHEME = 'in.addabaaz.app';   // = the Capacitor appId; AndroidManifest gets this scheme as a redirect filter
+  const usedTickets = new Map();          // jti -> expiry (ms); single-use enforcement for /auth/ticket
+  const forgetUsedTickets = () => { const now = Date.now(); for (const [k, v] of usedTickets) if (v < now) usedTickets.delete(k); };
+  // The Custom Tab lands here: a tiny same-origin page (JS in an external file - the CSP forbids inline scripts).
+  api.get('/auth/google/native-page', (_req, res) => {
+    res.type('html').set('Cache-Control', 'no-store').send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ADDABAAZ</title><body style="margin:0;background:#050505;color:#eee;font:15px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;gap:14px">
+<div style="display:grid;justify-items:center;gap:14px"><p id="out">Continue with Google to sign in to the ADDABAAZ app.</p><div id="g"></div></div>
+<script src="/api/v1/auth/google-native.js"></script>`);
+  });
+  api.get('/auth/google-native.js', (_req, res) => {
+    res.type('application/javascript').set('Cache-Control', 'no-store').send(`(function () {
+  var out = document.getElementById('out');
+  var say = function (m) { out.textContent = m; };
+  fetch('/api/v1/auth/providers').then(function (r) { return r.json(); }).then(function (p) {
+    if (!p.google) { say('Google sign-in isn’t enabled on this server.'); return; }
+    var s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.onerror = function () { say('Couldn’t reach Google — check the connection and try again.'); };
+    s.onload = function () {
+      window.google.accounts.id.initialize({ client_id: p.google.clientId, callback: onCred, use_fedcm_for_prompt: true });
+      window.google.accounts.id.renderButton(document.getElementById('g'), { type: 'standard', theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', logo_alignment: 'left' });
+      try { window.google.accounts.id.prompt(); } catch (e) { /* the button is always there */ }
+    };
+    document.head.appendChild(s);
+  }).catch(function () { say('Couldn’t reach the ADDABAAZ API — check the connection and try again.'); });
+  function onCred(r) {
+    if (!r.credential) return;
+    say('Signing you in — returning to the app…');
+    fetch('/api/v1/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: r.credential, ticket: true }) })
+      .then(function (res) { return res.json().then(function (j) { if (!res.ok) throw new Error((j.error && j.error.message) || 'Sign-in failed'); return j; }); })
+      .then(function (j) { location.replace('${APP_SCHEME}://oauth?ticket=' + encodeURIComponent(j.ticket)); })
+      .catch(function (e) { say(e.message || 'Sign-in failed — please try again in the app.'); });
+  }
+})();`);
+  });
+  // The app's WebView exchanges the single-use ticket for its own session token.
+  api.post('/auth/ticket', authLimit, wrap(async (req, res) => {
+    const claims = verifyToken(String(req.body?.ticket || ''), secret);
+    if (!claims || claims.aud !== 'oauth-ticket' || !claims.jti) throw new HttpError(401, 'invalid_ticket', 'Sign-in ticket invalid or expired.');
+    forgetUsedTickets();
+    if (usedTickets.has(claims.jti)) throw new HttpError(401, 'invalid_ticket', 'This sign-in ticket was already used.');
+    usedTickets.set(claims.jti, Date.now() + 130_000);
+    const user = notDisabled(await db.users.byId(String(claims.sub)));
+    if (!user) throw new HttpError(401, 'invalid_ticket', 'Sign-in ticket invalid or expired.');
+    res.json({ token: signToken(user.id, secret, undefined, user.sessionVersion), user: publicUser(user), profiles: await db.profiles.list(user.id), isNew: false });
+  }));
   features.public(api);           // password reset, email verification, analytics, public ratings/comments
+
+  /* ---------- one-click unsubscribe from campaign e-mails (no sign-in needed: the link is signed) ---------- */
+  // GET so it works straight from a mail client; the reply is a small page, never JSON.
+  api.get('/notifications/unsubscribe', wrap(async (req, res) => {
+    const id = String(req.query.u || ''), t = String(req.query.t || '');
+    const ok = id && t && crypto.timingSafeEqual(Buffer.from(t.padEnd(64, '\u0000').slice(0, 64)), Buffer.from(unsubSig(id).padEnd(64, '\u0000').slice(0, 64)));
+    if (ok) await db.adminUsers.setEmailOptOut(id, true).catch(() => {});
+    res.set('Cache-Control', 'no-store').type('html').send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ADDABAAZ</title><body style="margin:0;font:16px/1.6 system-ui,sans-serif;background:#0b0b0d;color:#eee;display:grid;place-items:center;min-height:100vh;text-align:center"><div style="padding:24px"><h1 style="font-size:22px;margin:0 0 8px">${ok ? 'You are unsubscribed' : 'That link didn’t work'}</h1><p style="margin:0 0 20px;color:#aaa">${ok ? 'You will no longer receive announcement e-mails. Receipts and account e-mails are not affected.' : 'Please open the unsubscribe link from the e-mail again, or contact support.'}</p><a href="/" style="color:#e50914;font-weight:600;text-decoration:none">Back to ADDABAAZ</a></div></body>`);
+  }));
 
   /* ---------- Cloudflare R2 video streaming ---------- */
   // ---- Cloudflare R2 video streaming ----
@@ -263,6 +351,7 @@ export function createApp({
   // Small helpers: catalog lookup, the public base URL for links we hand out, and mp4-vs-HLS detection.
   const findVideo = (id) => catalog.video(id);
   const isPremiumVideo = async (v) => {
+    if (FREE_KINDS.includes(v.kind)) return false;   // trailers, clips and reels are never locked, even for premium shows
     if (v.access === 'premium') return true;
     if (!v.showId) return false;
     const { catalog: snapshot } = await catalog.get();
@@ -348,7 +437,7 @@ export function createApp({
 
   /* ---------- admin console API (admin accounts, or ADMIN_TOKEN for scripts) — see server/src/admin.js ---------- */
   // Mount the admin console API. It does its own authentication (admin role or ADMIN_TOKEN).
-  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate }));
+  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, campaigns, unsubscribeUrlFor, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate }));
 
   /* ---------- authenticated ---------- */
   // AUTH MIDDLEWARE: every route registered after this line requires a valid session token whose session version still matches.
@@ -527,20 +616,42 @@ export function createApp({
     // Images belong to this site: other pages may not hot-link them (crawlers for social previews and
     // direct visits without a referrer keep working).
     const HOTLINK_BOTS = /bot|crawler|spider|slurp|preview|embed|facebookexternalhit|twitterbot|whatsapp|telegrambot|slackbot|discordbot|linkedinbot|pinterest|snapchat|skypeuripreview|vkshare|w3c_validator|applebot|metadata/i;
+    // Pages that may show these images: this server's own host(s), plus the public site (PUBLIC_SITE_URL, with and without www), any explicit
+    // CORS_ORIGINS, the native apps' WebView (capacitor.config.json server.hostname - the app loads admin-uploaded posters from this API,
+    // and without this their requests, which carry that origin as the Referer, were refused) and IMAGE_ALLOWED_HOSTS (comma-separated extras).
+    const hostOf = (url) => { try { return new URL(url).host.toLowerCase(); } catch { return ''; } };
+    const imageHosts = new Set([
+      ...[hostOf(billing?.config?.siteUrl)].flatMap((h) => (h ? [h, h.startsWith('www.') ? h.slice(4) : `www.${h}`] : [])),
+      ...(corsOrigins === '*' ? [] : String(corsOrigins).split(',').map((s) => hostOf(s.trim()))),
+      'app.addabaaz.in',
+      ...String(process.env.IMAGE_ALLOWED_HOSTS || '').split(',').map((s) => s.trim().toLowerCase()),
+    ].filter(Boolean));
     const guardImages = (req, res, next) => {
       const ref = req.get('referer');
       if (ref) {
         let same = false;
-        try { const u = new URL(ref); same = u.host === req.headers.host || u.host === (req.get('x-forwarded-host') || ''); } catch { same = false; }
+        try { const u = new URL(ref); same = u.host === req.headers.host || u.host === (req.get('x-forwarded-host') || '') || imageHosts.has(u.host.toLowerCase()); } catch { same = false; }
         if (!same && !HOTLINK_BOTS.test(req.get('user-agent') || '')) return res.status(403).type('text/plain').send('Forbidden');
       }
       next();
     };
+    // Admin uploads are stored in MySQL; the upload folder is only a cache that a restart or redeploy can empty (Render's free plan, a
+    // Hostinger redeploy, a second server). When a file is not on disk, serve it from MySQL and put a copy back on disk. The names are
+    // content hashes, so a URL never changes meaning and can be cached for a year.
+    const uploadFromDb = wrap(async (req, res, next) => {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+      const name = req.path.slice(1);
+      if (!UPLOAD_NAME.test(name)) return next();
+      const file = await db.uploads.get(name); if (!file) return next();
+      cacheUpload(uploadDir, name, file.data);
+      res.set({ 'Content-Type': uploadType(name), 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
+      res.send(file.data);
+    });
     // Static asset folders. Longer cache times for rarely-changing ones.
     app.use('/app', express.static(appRoot, { ...opts(0), etag: true }));
     app.use('/data', express.static(path.join(ROOT, 'data'), opts(60_000)));
     app.use('/media', guardImages, express.static(path.join(ROOT, 'media'), opts(7 * 86_400_000)));
-    app.use('/uploads', guardImages, express.static(uploadDir, { maxAge: '365d', immutable: true, index: false, dotfiles: 'ignore' }));   // admin-uploaded images (content-hash names)
+    app.use('/uploads', guardImages, express.static(uploadDir, { maxAge: '365d', immutable: true, index: false, dotfiles: 'ignore' }), uploadFromDb);   // admin-uploaded images and subtitles (content-hash names): disk cache first, then MySQL
     // The admin console: its own page + scripts, never cached, locked down with a strict CSP (no inline script, no framing).
     const adminHeaders = (_q, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'self'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' https://accounts.google.com https://connect.facebook.net https://appleid.cdn-apple.com; connect-src 'self' https:; frame-src 'self' https://accounts.google.com https://www.facebook.com https://appleid.apple.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" }); next(); };
     // Admin console page + its scripts.
@@ -580,6 +691,7 @@ export function createApp({
   // Expose internals for tests and for index.js (background jobs).
   app.db = db;
   app.locals.push = push;
+  app.locals.campaigns = campaigns;
   app.locals.features = features;
   app.locals.catalog = catalog;
   app.locals.billing = billing;          // exposed for jobs (expiry reminders) and tests

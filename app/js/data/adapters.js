@@ -81,7 +81,10 @@ export class RemoteAdapter {
   /** Google / Facebook: the API verifies the provider credential and returns our own session. */
   async signInSocial(provider, credential) {
     if (provider === 'apple') return this.signInApple(credential.identityToken, credential.name);
-    const r = await this.api.post(`/auth/${provider}`, provider === 'google' ? { idToken: credential } : { accessToken: credential });
+    // Native Google hands over a one-time ticket (the OAuth dance happened in a Custom Tab).
+    const r = credential?.ticket
+      ? await this.api.post('/auth/ticket', { ticket: credential.ticket })
+      : await this.api.post(`/auth/${provider}`, provider === 'google' ? { idToken: credential } : { accessToken: credential });
     this.api.setToken(r.token); return r;
   }
   async providers() { try { return this.#providers ||= await this.api.get('/auth/providers'); } catch { return { password: true }; } }
@@ -149,6 +152,10 @@ export class RemoteAdapter {
   pushStatus(endpoint) { return this.api.post('/push/status', { endpoint }); }
   pushPrefs(endpoint, prefs) { return this.api.patch('/push/prefs', { endpoint, ...prefs }); }
   pushUnsubscribe(endpoint) { return this.api.post('/push/unsubscribe', { endpoint }); }
+  // Native apps: app-push tokens (Admin → Broadcast sends to these). See app/js/push-native.js.
+  registerDevice(token, platform = 'android', label = null) { return this.api.post('/devices', { token, platform, label }); }
+  removeDevice(token) { return this.api.del('/devices', { token }); }
+  devices() { return this.api.get('/devices'); }
   requestRefund(paymentId, reason) { return this.api.post(`/payments/${encodeURIComponent(paymentId)}/refund-request`, { reason }); }
   refundRequests() { return this.api.get('/refund-requests'); }
   playEvent(videoId, event, seconds) { this.api.beacon('/events/play', { videoId, event, seconds }); }

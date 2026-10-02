@@ -288,6 +288,51 @@ test('uploads: images are sniffed, stored by content hash and served; videos get
   assert.equal((await call('POST', '/admin/uploads/video', { filename: 'a.mp4' }, viewer.token)).status, 403);
 });
 
+test('uploads live in MySQL: a Releasing This Month poster uploaded on one device shows on every other device, even after the disk is wiped', async () => {
+  // The reported bug: an admin uploads a poster, the catalog row is saved in MySQL, but the image FILE sat only on this server's disk -
+  // so after a restart or redeploy (Render's free plan wipes the disk each time) every other device got a broken image.
+  const art = Buffer.concat([PNG, crypto.randomBytes(2048)]);                 // stands in for the 16:9 poster artwork
+  const up = await A('POST', '/uploads/image', null, { raw: art, headers: { 'Content-Type': 'image/png' } });
+  assert.equal(up.status, 201);
+  const name = path.basename(up.body.path);
+  assert.deepEqual((await db.uploads.get(name)).data, art, 'the durable copy is in MySQL, not only on disk');
+  assert.equal((await db.uploads.existing([name, 'ffffffffffffffffffffffff.png'])).size, 1);
+
+  fs.rmSync(uploadDir, { recursive: true, force: true });                     // restart / redeploy: the upload folder is empty again
+  assert.equal(fs.existsSync(path.join(uploadDir, name)), false);
+
+  // The title is created after the wipe: the validator must accept an upload that exists only in MySQL - and still refuse one that exists nowhere.
+  const created = await A('POST', '/catalog/upcoming', { id: 'release-1', title: 'Release One', category: 'releasing-this-month', poster: up.body.path, backdrop: up.body.path });
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  const ghost = await A('POST', '/catalog/upcoming', { id: 'release-ghost', title: 'Ghost', poster: 'uploads/ffffffffffffffffffffffff.png' });
+  assert.equal(ghost.status, 400); assert.match(ghost.body.error.message, /does not exist/);
+
+  // Another device: no sign-in, no browser cache. It sees the title in the release category with its artwork ...
+  const seen = (await call('GET', '/catalog')).body.upcoming.find((u) => u.id === 'release-1');
+  assert.equal(seen.category, 'releasing-this-month'); assert.equal(seen.backdrop, up.body.path);
+  // ... and the artwork itself loads: served from MySQL, then copied back to the folder.
+  const img = await fetch(`${root}/${seen.backdrop}`);
+  assert.equal(img.status, 200); assert.equal(img.headers.get('content-type'), 'image/png'); assert.deepEqual(Buffer.from(await img.arrayBuffer()), art);
+  assert.equal(fs.existsSync(path.join(uploadDir, name)), true, 'the folder is only a cache');
+
+  // Later edits keep working while the file is missing from disk (they used to fail with "file ... does not exist").
+  fs.rmSync(uploadDir, { recursive: true, force: true });
+  const edited = await A('PUT', '/catalog/upcoming/release-1', { ...seen, title: 'Release One (edited)' });
+  assert.equal(edited.status, 200, JSON.stringify(edited.body));
+
+  // Subtitles take the same path.
+  const sub = await A('POST', '/uploads/subtitle', null, { raw: '1\n00:00:01,000 --> 00:00:02,000\nHello\n', headers: { 'Content-Type': 'text/plain' } });
+  assert.equal(sub.status, 201);
+  fs.rmSync(uploadDir, { recursive: true, force: true });
+  const vtt = await fetch(`${root}/${sub.body.path}`);
+  assert.equal(vtt.status, 200); assert.match(vtt.headers.get('content-type'), /^text\/vtt/); assert.match(await vtt.text(), /^WEBVTT/);
+
+  // The setup checklist reports where uploads are kept.
+  const health = (await A('GET', '/health')).body.checks.find((c) => c.id === 'uploads');
+  assert.equal(health.ok, true); assert.match(health.detail, /MySQL/);
+  await A('DELETE', '/catalog/upcoming/release-1');
+});
+
 test('messages: triage inbox', async () => {
   for (const n of ['One', 'Two']) await call('POST', '/contact', { name: n, email: `${n}@example.com`, message: `hello ${n}` });
   let m = (await A('GET', '/messages')).body; assert.equal(m.total, 2); assert.equal(m.messages[0].handledAt, null); assert.equal((await A('GET', '/stats')).body.openMessages, 2);
@@ -315,6 +360,87 @@ test('payments list + coupons: filters, delete only when never used; everything 
   assert.ok(e.every((x) => x.id && x.at)); assert.equal((await A('GET', '/audit?limit=2')).body.entries.length, 2);
   const before = (await A('GET', '/audit?limit=1')).body.entries[0].id; assert.ok((await A('GET', `/audit?before=${before}&limit=1`)).body.entries[0].id < before);
   assert.equal((await call('GET', '/admin/audit', null, viewer.token)).status, 403);
+});
+
+test('one address = one account: duplicates are reported and can be merged', async () => {
+  // Two shapes exist in the wild, and the report has to handle both.
+  const viewerEmail = 'viewer@example.com';
+  // (1) A copy-pasted address that differs by a character the eye cannot see and MySQL's utf8mb4_unicode_ci
+  //     does NOT ignore — a non-breaking space. It is a different string, so the UNIQUE index on `email`
+  //     lets it through. (A zero-width space, by contrast, is ignored by that collation and can never get
+  //     in — which is why the fixture must not use one.)
+  const nbId = 'dup-nbsp-0000-0000-0000-000000000001';
+  const nbEmail = 'viewer\u00a0@example.com';
+  await db.pool.query('INSERT INTO users (id, email, email_norm, email_dup, name, password_hash) VALUES (?,?,NULL,1,?,?)', [nbId, nbEmail, 'Viewer Nbsp', 'x']);
+  // (2) The very same address, character for character — possible in a database whose users table was
+  //     created before uq_users_email existed. The index comes off for the fixture and goes back on below.
+  const sameId = 'dup-same-0000-0000-0000-000000000002';
+  const [beforeIdx] = await db.pool.query("SHOW INDEX FROM users WHERE Key_name = 'uq_users_email'");
+  const dropped = beforeIdx.length > 0;
+  if (dropped) await db.pool.query('ALTER TABLE users DROP INDEX uq_users_email');
+  try {
+    await db.pool.query('INSERT INTO users (id, email, email_norm, email_dup, name, password_hash) VALUES (?,?,NULL,1,?,?)', [sameId, viewerEmail, 'Viewer Same', 'x']);
+    // What the duplicate accounts own and the surviving account must end up with.
+    await db.pool.query('INSERT INTO profiles (id, user_id, name, color) VALUES (?,?,?,0)', ['dup-profile-1', nbId, 'Viewer']);
+    await db.pool.query('INSERT INTO push_devices (id, user_id, platform, token_hash, token, label) VALUES (?,?,?,?,?,?)', ['dup-device-1', nbId, 'android', 'dup-hash-1', 'dup-token-'.padEnd(30, 'x'), 'Old phone']);
+    await db.pool.query("INSERT INTO comments (id, video_id, user_id, author, body, status) VALUES ('dup-comment-1', 'some-video', ?, 'Viewer', 'hello', 'visible')", [nbId]);
+
+    // The report finds every row of the address and shows WHY the first two look identical.
+    const rep = (await A('GET', '/users/duplicates')).body;
+    const group = rep.groups.find((g) => g.users.some((u) => u.id === nbId));
+    assert.ok(group, 'the duplicate rows are reported');
+    assert.equal(group.key, viewerEmail);
+    assert.equal(group.count, 3);
+    assert.equal(group.users[0].id, viewer.id, 'the oldest account is listed first — the one to keep');
+    const weird = group.users.find((u) => u.id === nbId);
+    assert.equal(weird.emailVisible, 'viewer⟨U+00A0⟩@example.com', 'the pasted character is made visible');
+    assert.equal(weird.emailPlain, false); assert.equal(weird.dup, true);
+    const same = group.users.find((u) => u.id === sameId);
+    assert.equal(same.emailVisible, viewerEmail, 'an identical row is shown exactly as it is stored');
+    assert.equal(same.dup, true);
+    assert.ok(rep.normalized.scanned >= 3);
+
+    // Merging anything that is not a duplicate is refused.
+    const third = await signup('third@example.com', 'Third Person');
+    assert.equal((await A('POST', '/users/merge', { keepId: viewer.id, removeId: third.id })).body.error.code, 'not_duplicates');
+    assert.equal((await A('POST', '/users/merge', { keepId: viewer.id, removeId: viewer.id })).status, 400);
+
+    // Merge both extra accounts into the one that stays, exactly as the console does (one call each).
+    // The pasted-address account got the LONGER plan, so merging must keep that, never the worse one.
+    await A('POST', `/users/${nbId}/grant`, { days: 400 });
+    const first = await A('POST', '/users/merge', { keepId: viewer.id, removeId: nbId });
+    assert.equal(first.status, 200, JSON.stringify(first.body));
+    assert.ok(first.body.moved.profiles >= 1); assert.ok(first.body.moved.devices >= 1);
+    assert.ok(first.body.moved.comments >= 1); assert.equal(first.body.moved.subscription, 'moved');
+    const second = await A('POST', '/users/merge', { keepId: viewer.id, removeId: sameId });
+    assert.equal(second.status, 200, JSON.stringify(second.body));
+
+    assert.equal((await A('GET', `/users/${nbId}`)).status, 404, 'the extra account is gone');
+    assert.equal((await A('GET', `/users/${sameId}`)).status, 404, 'so is the identical row');
+    const kept = (await A('GET', `/users/${viewer.id}`)).body;
+    assert.ok(kept.profiles.length >= 2, 'the other account’s profile moved over');
+    assert.equal(kept.subscription.planId, 'plus-monthly', 'the paid plan followed the person');
+    const [movedComment] = await db.pool.query('SELECT user_id FROM comments WHERE id = ?', ['dup-comment-1']);
+    assert.equal(movedComment[0].user_id, viewer.id, 'the comment moved');
+    assert.ok((await audit('user.merge')).some((e) => e.target === nbId && e.meta.keep === viewer.id));
+    // The surviving row owns the normalized address again (it sits at NULL while duplicates exist).
+    const [owner] = await db.pool.query('SELECT email_norm, email_dup FROM users WHERE id = ?', [viewer.id]);
+    assert.equal(owner[0].email_norm, viewerEmail); assert.equal(owner[0].email_dup, 0);
+
+    // A new account for that address is impossible from now on — in either spelling.
+    for (const email of [viewerEmail, nbEmail]) {
+      const again = await call('POST', '/auth/signup', { name: 'Copy Cat', email, password: 'password123' });
+      assert.equal(again.status, 409, `${email} → ${JSON.stringify(again.body)}`);
+      assert.equal(again.body.error.code, 'email_taken');
+    }
+    const after = (await A('GET', '/users/duplicates')).body.groups;
+    assert.equal(after.some((g) => g.users.some((u) => u.id === viewer.id)), false, 'nothing left to merge');
+  } finally {
+    // Put the schema back exactly as it was (also when an assertion above failed).
+    if (dropped) await db.pool.query('ALTER TABLE users ADD UNIQUE KEY uq_users_email (email)').catch(() => {});
+  }
+  const [ix] = await db.pool.query("SHOW INDEX FROM users WHERE Key_name = 'uq_users_email'");
+  assert.ok(ix.length, 'the e-mail unique index is back in place');
 });
 
 test('the admin page is served with a strict CSP and is never cached', async () => {

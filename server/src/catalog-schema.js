@@ -13,6 +13,9 @@ const ACCESS = ['free', 'premium'], SHOW_TYPES = ['series', 'standup', 'podcast'
 const RATINGS = ['U', '7+', '13+', '16+', '18+'];   // U = suitable for everyone; the Kids profile shows only U and 7+ (unrated titles stay hidden from it)
 const SUB = /^(?:(?:media|uploads)\/[\w\-./]+\.vtt|https:\/\/[^\s"'<>?#]+\.vtt(?:\?[^\s"'<>]*)?)$/i;
 const KINDS = ['episode', 'trailer', 'reel', 'clip'], STATUSES = ['ongoing', 'completed', 'paused'];
+// Trailers, clips and reels are the marketing for a title: they stream for everyone,
+// even when the video itself is flagged premium or the parent show is Plus-only.
+export const FREE_KINDS = ['trailer', 'reel', 'clip'];
 
 // A small validation toolkit for one JSON object.
 // Create a reader with the list of allowed fields, then call r.str / r.int / r.bool / r.oneOf / r.list / r.img / r.date for each field.

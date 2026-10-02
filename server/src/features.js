@@ -3,6 +3,8 @@ import { HttpError, bad, wrap, rateLimit } from './http.js';
 import { isDuplicate } from './db.js';
 import { hashPassword, verifyPassword, signToken } from './auth.js';
 import { endpointHash } from './push.js';
+import { FREE_KINDS } from './catalog-schema.js';
+import { normalizeEmail } from './email-address.js';
 import * as mail from './emails.js';
 
 // Small shared helpers for this file.
@@ -113,7 +115,9 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         requireMail();
         const email = String(req.body?.email || '').trim().toLowerCase();
         if (!EMAIL.test(email) || email.length > 254) throw bad('Please enter a valid email address.', 'invalid_email');
-        const user = await db.users.byEmail(email);
+        // Normalized lookup first; a row that still carries un-normalized characters (waiting for a merge
+        // in Admin → Users) has no `email_norm`, so fall back to the address exactly as it is stored.
+        const user = (await db.users.byEmailNorm(normalizeEmail(email).email)) || (await db.users.byEmail(email));
         if (user && !user.disabledAt) {
           const last = await db.authTokens.lastIssuedAt(user.id, 'reset');
           if (!last || Date.now() - last.getTime() > 60_000) {        // one email a minute per account
@@ -227,6 +231,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       api.post('/playback/heartbeat', limit('hb', 30, 60_000), wrap(async (req, res) => {
         const v = typeof req.body?.videoId === 'string' ? await catalog.video(req.body.videoId) : null;
         if (!v) throw new HttpError(404, 'not_found', 'Unknown video.');
+        if (FREE_KINDS.includes(v.kind)) return res.json({ ok: true });   // trailers/clips/reels never take a premium screen seat
         const d = deviceOf(req);
         const r = await db.playback.touch(req.user.id, d.id, d.label, v.id, { limit: cfg.streamLimit, windowSec: cfg.heartbeatWindowSec });
         if (!r.ok) throw new HttpError(429, 'stream_limit', `Your plan allows ${cfg.streamLimit} screens at once. Stop playback on another device to continue.`);
@@ -290,6 +295,17 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         await db.push.setPrefs(req.user.id, endpointHash(req.body.endpoint), req.body); res.sendStatus(204);
       }));
       api.post('/push/unsubscribe', wrap(async (req, res) => { if (typeof req.body?.endpoint === 'string') await db.push.remove(req.user.id, endpointHash(req.body.endpoint)); res.sendStatus(204); }));
+
+      /* --- native app push devices (Android/iOS apps: FCM tokens) — Admin → Notifications sends to these --- */
+      // The apps call this after FCM/APNs hands them a token; the same token is never shared between accounts.
+      api.post('/devices', wrap(async (req, res) => {
+        const { token, platform = null, label = null } = req.body || {};
+        if (typeof token !== 'string' || token.length < 20 || token.length > 512) throw bad('Invalid device token.');
+        await db.devices.upsert(req.user.id, { hash: endpointHash(token), token, platform, label: typeof label === 'string' && label.trim() ? label.trim() : null });
+        res.status(201).json({ ok: true });
+      }));
+      api.delete('/devices', wrap(async (req, res) => { if (typeof req.body?.token === 'string') await db.devices.remove(req.user.id, endpointHash(req.body.token)); res.sendStatus(204); }));
+      api.get('/devices', wrap(async (req, res) => res.json({ devices: await db.devices.listFor(req.user.id) })));
 
       /* --- refund requests: the customer asks, an admin decides (admin console → Payments → Refund requests) --- */
       // Viewer-initiated refund request. Only paid, unrefunded Razorpay payments inside the refund window qualify, one open request at a time. An admin decides in the console.

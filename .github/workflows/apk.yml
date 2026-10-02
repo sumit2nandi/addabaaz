@@ -1,12 +1,12 @@
 # Builds the Android APK in the cloud — no laptop required.
-# Pushes to arena/ott or this working branch, pull requests targeting arena/ott,
+# Pushes to arena/ott or a working branch, pull requests targeting arena/ott,
 # or a manual Actions run (even from a phone) produce an installable debug APK Artifact:
 #   Actions → APK run → Artifacts → addabaaz-debug-apk (zip) → app-debug.apk
 name: APK
 
 on:
   push:
-    branches: [arena/ott, arena/01a0f872-addabaaz]
+    branches: [arena/ott, arena/01a0f872-addabaaz, arena/01a0f999-addabaaz]
   pull_request:
     branches: [arena/ott]
   workflow_dispatch:                      # "Run workflow" button in the Actions tab

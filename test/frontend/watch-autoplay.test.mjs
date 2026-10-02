@@ -4,6 +4,7 @@
 // Run:  node --test test/frontend/watch-autoplay.test.mjs
 import { test, before } from 'node:test';
 import assert from 'node:assert';
+import fs from 'node:fs';
 import { register } from 'node:module';
 import { parseHTML } from 'linkedom';
 
@@ -16,6 +17,7 @@ globalThis.localStorage = window.localStorage ?? { getItem: () => null, setItem:
 globalThis.fetch = globalThis.fetch || (async () => { throw new Error('offline'); });
 window.fetch = globalThis.fetch;
 Element.prototype.scrollIntoView = () => {};
+globalThis.ResizeObserver = class { observe() {} disconnect() {} };   // rails (related videos) measure themselves; linkedom has no layout
 
 register(new URL('./watch-mock-loader.mjs', import.meta.url));
 const { Catalog } = await import('../../app/js/data/catalog.js');
@@ -23,19 +25,21 @@ const { app } = await import('../../app/js/app.js');
 const watch = (await import('../../app/js/views/watch.js')).default;
 
 const VIDEO = { id: 'v1', kind: 'episode', episode: 1, title: 'Test episode', showId: 's1', duration: 100, views: 1, publishedAt: '2026-09-01T00:00:00Z', source: { type: 'youtube', id: 'abc' } };
-app.catalog = app.fullCatalog = new Catalog({ schema: 1, updatedAt: '', shows: [{ id: 's1', title: 'Show', titleEn: 'Show', genres: [], cast: [], type: 'series' }], videos: [VIDEO], upcoming: [], gallery: [] });
+const PREMIUM_VIDEO = { ...VIDEO, id: 'vp', episode: 2, title: 'Premium episode', access: 'premium', poster: 'media/premium-vp.webp', source: { type: 'r2', key: 'premium/x.mp4' } };
+const PREMIUM_YT = { ...VIDEO, id: 'vpy', episode: 3, title: 'Premium on YouTube', access: 'premium', source: { type: 'youtube', id: 'zzz' } };
+app.catalog = app.fullCatalog = new Catalog({ schema: 1, updatedAt: '', shows: [{ id: 's1', title: 'Show', titleEn: 'Show', genres: [], cast: [], type: 'series', poster: 'media/shows/s1.webp' }], videos: [VIDEO, PREMIUM_VIDEO, PREMIUM_YT], upcoming: [], gallery: [] });
 app.user = {
   remote: null, account: null, profiles: [], profile: { id: 'p1', name: 'T' }, activeId: 'p1', supportsAuth: false, isKids: false,
   gateFor: () => 'ok', progressOf: () => null, isFinished: () => false, pref: () => true, setPref: () => {},
   saveProgress: () => {}, fraction: () => 0, inList: () => false, hasReminder: () => false, on: () => {}, needsProfileChoice: () => false,
 };
 
-async function mount() {
+async function mount(id = 'v1') {
   globalThis.__watchOpts = null; globalThis.__watchCtl = null;
   document.getElementById('view').innerHTML = '';
   const root = document.createElement('div');
   document.getElementById('view').appendChild(root);
-  const ctx = { root, params: { id: 'v1' }, query: {}, path: '/watch/v1', setTitle: () => {}, onCleanup: () => {} };
+  const ctx = { root, params: { id }, query: {}, path: `/watch/${id}`, setTitle: () => {}, onCleanup: () => {} };
   await watch(ctx);
   await new Promise((r) => setTimeout(r, 30));   // startPlayer() resolves (mock player)
   assert.ok(globalThis.__watchCtl, 'the player was created');
@@ -72,4 +76,86 @@ test('muted autostart offers a one-tap "Tap to unmute" pill', async () => {
   assert.ok(pill, 'unmute pill shown for muted autostart');
   pill.dispatchEvent(new window.Event('click', { bubbles: true }));
   assert.equal(ctl.__unmuted, true);
+});
+
+// The player mock is not given a stream URL for R2 videos, so give the premium page one.
+app.user.streamUrl = async () => ({ type: 'mp4', url: 'https://r2.test/premium/x.mp4' });
+
+test('premium crown: top-left of the player, hidden while the video plays, back on pause / end / error', async () => {
+  await mount('vp');
+  const box = document.querySelector('#playerBox');
+  assert.ok(box.classList.contains('has-premium'), 'a premium video marks its player box');
+  const mark = box.querySelector('.premium-mark.premium-mark-player');
+  assert.ok(mark, 'the crown is drawn inside the player box');
+  assert.equal(box.classList.contains('is-playing'), false, 'visible before playback starts');
+  const { opts } = { opts: globalThis.__watchOpts };
+
+  opts.onState('buffering');
+  assert.equal(box.classList.contains('is-playing'), false, 'still visible while the first frames load');
+  opts.onState('playing');
+  assert.equal(box.classList.contains('is-playing'), true, 'hidden (via .is-playing) while the video plays');
+  opts.onState('buffering');
+  assert.equal(box.classList.contains('is-playing'), true, 'a mid-play stall does not make the crown flash back in');
+  opts.onState('paused');
+  assert.equal(box.classList.contains('is-playing'), false, 'back on pause');
+  opts.onState('playing');
+  assert.equal(box.classList.contains('is-playing'), true);
+  opts.onState('ended');
+  assert.equal(box.classList.contains('is-playing'), false, 'back when the video ends');
+  opts.onState('playing');
+  opts.onState('error', 2);
+  assert.equal(box.classList.contains('is-playing'), false, 'back when playback fails');
+});
+
+test('free videos get no crown and no premium markers', async () => {
+  await mount('v1');
+  const box = document.querySelector('#playerBox');
+  assert.equal(box.querySelector('.premium-mark'), null);
+  assert.equal(box.classList.contains('has-premium'), false);
+  globalThis.__watchOpts.onState('playing');   // toggling the state class on a free video is harmless
+  assert.equal(box.querySelector('.premium-mark'), null);
+});
+
+// Renders the watch page for a locked viewer (signed in, no plan).
+async function mountLocked(id) {
+  document.getElementById('view').innerHTML = '';
+  const root = document.createElement('div');
+  document.getElementById('view').appendChild(root);
+  await watch({ root, params: { id }, setTitle() {}, onCleanup() {} });
+  return root;
+}
+
+test('locked premium shows the video artwork behind the lock wall instead of a black background', async () => {
+  const originalGate = app.user.gateFor;
+  app.user.gateFor = (v, c) => (c.isPremium(v) ? 'plan' : 'ok');   // signed-in viewer without a plan
+  try {
+    const root = await mountLocked('vp');
+    const box = root.querySelector('#playerBox');
+    assert.ok(box.classList.contains('has-wall'), 'the player box flags that artwork sits behind the wall');
+    const bg = box.querySelector('.player-wall-bg');
+    assert.ok(bg, 'the same-origin artwork is painted as a CSS background (cannot fail or be hidden)');
+    assert.match(bg.getAttribute('style'), /media\/premium-vp\.webp/);
+    assert.equal(box.querySelector('img.player-wall-art'), null, 'no separate thumbnail layer when there is no remote thumb');
+    assert.equal(root.querySelector('#playerMsg').hidden, false, 'the lock wall itself still shows');
+    assert.equal(root.querySelector('#playerMsg p'), null, 'no descriptive text under the lock icon');
+    assert.equal(root.querySelector('#playerSlot').innerHTML, '', 'no player is created while locked');
+
+    // A YouTube-sourced premium video layers its remote thumbnail over the same-origin background,
+    // so a network that blocks i.ytimg.com still sees the show artwork, never a black box.
+    const ytRoot = await mountLocked('vpy');
+    const ytBox = ytRoot.querySelector('#playerBox');
+    assert.match(ytBox.querySelector('.player-wall-bg').getAttribute('style'), /media\/shows\/s1\.webp/);
+    assert.equal(ytBox.querySelector('img.player-wall-art').getAttribute('src'), 'https://i.ytimg.com/vi/zzz/hqdefault.jpg');
+  } finally {
+    app.user.gateFor = originalGate;
+  }
+});
+
+test('lock-wall CSS: artwork covers the box and the wall stays readable over it', () => {
+  const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.player-wall-bg \{[^}]*background-size: cover/, 'the same-origin artwork fills the player box instead of a black background');
+  assert.match(css, /\.player-wall-bg \{[^}]*z-index: 1/, 'the artwork paints above the opaque black player slot');
+  assert.match(css, /img\.player-wall-art \{[^}]*object-fit: cover/, 'the remote thumbnail layer also fills the box');
+  assert.match(css, /img\.player-wall-art \{[^}]*z-index: 1/, 'the thumbnail layer also paints above the slot');
+  assert.match(css, /\.player-box\.has-wall \.player-overlay \{[^}]*linear-gradient/, 'the wall dims the artwork so its text stays readable');
 });

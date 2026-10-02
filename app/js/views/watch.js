@@ -10,7 +10,8 @@ import { createPlayer, loadYouTube } from '../players/index.js';
 import { go } from '../router.js';
 import { listBtn, videoCard, rail, enhanceRails, metaLine, toast, img, premiumMark } from '../ui/components.js';
 import { epRow } from './show.js';
-import { shareUrl, isNative } from '../platform.js';
+import { shareUrl } from '../platform.js';
+import { lockPortrait } from '../orientation.js';
 
 // mountRating, mountComments removed: like/dislike/comments disabled per requirement
 
@@ -39,7 +40,7 @@ export default async function watch(ctx) {
   ctx.root.innerHTML = html`
     <div class="watch">
       <div class="watch-main">
-        <div class="player-box" id="playerBox">
+        <div class="player-box ${cat.isPremium(v) ? 'has-premium' : ''}" id="playerBox">
           <div class="player-slot" id="playerSlot"></div>
           <div class="player-overlay" id="playerMsg" hidden></div>
           <div class="next-up" id="nextUp" hidden></div>
@@ -80,15 +81,27 @@ export default async function watch(ctx) {
   // mountComments($('#commentsBox', ctx.root), { video: v });
   // The player area shows a message instead of the player when the viewer is locked out.
   const msg = $('#playerMsg', ctx.root), slot = $('#playerSlot', ctx.root);
+  // Behind the lock wall the video's own artwork is shown instead of a black background. The same-origin
+  // artwork (poster/backdrop) is painted as a CSS background - no image element, nothing that can fail or be
+  // hidden - and when the video has a remote thumbnail (YouTube/R2) it is layered on top as a real image that
+  // simply drops out if the viewer's network can't fetch it, revealing the background underneath.
+  const thumb = v.thumbnail || cat.thumb(v);
+  const localArt = v.poster || (show || soon)?.backdrop || (show || soon)?.poster || '';
   const wall = (kind) => {
     msg.hidden = false; slot.innerHTML = '';
+    const box = $('#playerBox', ctx.root);
+    const base = localArt || thumb;
+    if (base && !box.classList.contains('has-wall')) {
+      box.classList.add('has-wall');
+      box.insertAdjacentHTML('afterbegin', html`<div class="player-wall-bg" style="background-image:url('${base}')"></div>${thumb && thumb !== base ? img(thumb, '', { cls: 'player-wall-art', lazy: false }) : ''}`.s);
+    }
     msg.innerHTML = kind === 'login'
-      ? html`${icon('lock', { size: 40 })}<h2>Sign in to watch</h2><p>This is ADDABAAZ Premium. Sign in or create a free account to watch it — everything else on ADDABAAZ stays open to everyone.</p><div class="row"><a class="btn btn-primary btn-lg" href="#/signin?next=${here}">Sign in</a><a class="btn btn-ghost btn-lg" href="#/signup?next=${here}">Create account</a></div>`.s
+      ? html`${icon('lock', { size: 40 })}<h2>Sign in to watch</h2><div class="row"><a class="btn btn-primary btn-lg" href="#/signin?next=${here}">Sign in</a><a class="btn btn-ghost btn-lg" href="#/signup?next=${here}">Create account</a></div>`.s
       : kind === 'plan'
-        ? isNative
-          ? html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><p>This title needs an active ADDABAAZ Plus plan. Plans are managed on the ADDABAAZ website — once you've subscribed with this account it unlocks here.</p><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s
-          : html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><p>You're signed in — subscribe to watch this title and get early access to every new original.</p><a class="btn btn-primary btn-lg" href="#/plans?next=${here}">${icon('crown', { size: 20 })} See plans</a>`.s
-        : html`${icon('lock', { size: 40 })}<h2>Premium video needs an account</h2><p>This copy of ADDABAAZ runs without the ADDABAAZ API, so premium titles can't be unlocked here.</p><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s;
+        // Signed in but no active plan: always offer the subscribe path (the plans page works in
+        // the app too), with the old escape hatch as the secondary action.
+        ? html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><div class="row"><a class="btn btn-primary btn-lg" href="#/plans?next=${here}">${icon('crown', { size: 20 })} See plans</a><a class="btn btn-ghost btn-lg" href="#/">Back to home</a></div>`.s
+        : html`${icon('lock', { size: 40 })}<h2>Premium video needs an account</h2><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s;
   };
   // Locked: show the wall and stop; no player is created.
   if (gate !== 'ok') { wall(gate); return; }
@@ -120,7 +133,7 @@ export default async function watch(ctx) {
     $('#retry', msg).onclick = () => { msg.hidden = true; startPlayer(); };
   };
   /* Screens-at-once seat (premium only) and first-party play statistics (plays and watch time, no personal data). */
-  const premium = cat.isPremium(v), api = u.remote;
+  const premium = cat.isPremium(v), api = u.remote;   // isPremium already excludes free kinds (trailers/clips/reels)
   let beat = null, tick = null, playedAt = 0, started = false;
   const flushWatch = () => { if (playedAt && api) { const secs = Math.round((Date.now() - playedAt) / 1000); playedAt = Date.now(); if (secs > 0) api.playEvent(v.id, 'progress', secs); } };
   const onPlaying = () => {
@@ -133,7 +146,17 @@ export default async function watch(ctx) {
       beat = setInterval(hb, 30_000);
     }
   };
+  // The Premium crown (top-left of the video) steps aside while the video plays and returns on pause, end or error.
+  // 'buffering' keeps whatever state it was in, so a mid-play stall does not make the crown flash back in.
+  const markPlaying = (on) => $('#playerBox', ctx.root)?.classList.toggle('is-playing', on);
   const onIdle = (stop) => { flushWatch(); playedAt = 0; clearInterval(tick); tick = null; clearInterval(beat); beat = null; if (stop && premium && u.account && api) api.stopPlayback().catch(() => {}); };
+
+  /* ---------- rotation ----------
+   * The app never rotates while watching: the player keeps its own native controls (the YouTube-app
+   * look) and the screen turns ONLY while a video is full screen through the player's fullscreen
+   * button (app/js/orientation.js locks the orientation there, and the native fullscreen client
+   * hides both system bars). Leaving the page always lands back in portrait. */
+
   // Autoplay: a countdown card for the next episode; tapping cancels or plays now.
   const showNextUp = () => {
     const box = $('#nextUp', ctx.root);
@@ -156,6 +179,8 @@ export default async function watch(ctx) {
       $('#unmutePill', ctx.root)?.remove(); $('#playPill', ctx.root)?.remove();
       ctl = await createPlayer(slot, media, {
         start, autoplay: true,
+        // The player keeps its own controls (like the YouTube app): their fullscreen button is the
+        // one way into full screen, where the screen may turn (see the rotation note above).
         // The player still runs muted after main's unmute lifts (rare — the browser refused sound):
         // offer one tap to turn the sound on.
         onAutoplayMuted: () => {
@@ -176,9 +201,9 @@ export default async function watch(ctx) {
         },
         // The player's first-gesture auto-unmute fired: sound is on, the pill is obsolete.
         onGestureUnmuted: () => { if (dead) return; $('#unmutePill', ctx.root)?.remove(); },
-        onProgress: (t, d) => persist(t, d),
+        onProgress: persist,
         onEnded: () => { u.saveProgress(v.id, lastD || v.duration, lastD || v.duration, { flush: true }); if (next && u.pref('autoplayNext')) showNextUp(); },
-        onState: (s, code) => { if (s === 'playing') { $('#playPill', ctx.root)?.remove(); onPlaying(); } else if (s === 'paused') onIdle(false); else if (s === 'ended') onIdle(true); else if (s === 'error') { onIdle(true); failed(code); } },
+        onState: (s, code) => { if (s === 'playing') { markPlaying(true); $('#playPill', ctx.root)?.remove(); onPlaying(); } else if (s === 'paused') { markPlaying(false); onIdle(false); } else if (s === 'ended') { markPlaying(false); onIdle(true); } else if (s === 'error') { markPlaying(false); onIdle(true); failed(code); } },
       });
       if (dead) ctl.destroy();
       if (ctl.castSupported?.()) { const cb = $('#castBtn', ctx.root); cb.hidden = false; cb.onclick = () => ctl.cast().catch((e) => { if (e?.name !== 'NotAllowedError') toast('No cast devices found nearby.'); }); }
@@ -198,6 +223,7 @@ export default async function watch(ctx) {
   window.addEventListener('pagehide', onHide);
   ctx.onCleanup(() => {
     dead = true; clearInterval(countdown); onIdle(true);
+    lockPortrait();   // even if a fullscreen video was open, leaving the page lands back in portrait
     document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', onHide);
     if (ctl) { const t = ctl.time(); if (t > 0) u.saveProgress(v.id, t, ctl.duration() || v.duration, { flush: true }); ctl.destroy(); }
   });

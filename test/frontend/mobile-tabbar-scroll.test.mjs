@@ -1,8 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { parseHTML } from 'linkedom';
 
-test('floating mobile tabs hide on downward scroll and return on upward scroll, including the nested Reels feed', async () => {
+// The floating mobile tab bar is pinned: it must not slide up, down, fade or hide while the page - or the
+// Reels feed, which scrolls inside its own element - scrolls in either direction.
+test('floating mobile tabs stay pinned while scrolling, including the nested Reels feed', async () => {
   const { document, window } = parseHTML('<!doctype html><html><body><header id="topbar"></header><nav id="tabbar" class="tabbar"></nav><main id="view"></main></body></html>');
   globalThis.document = document;
   globalThis.window = window;
@@ -21,6 +24,10 @@ test('floating mobile tabs hide on downward scroll and return on upward scroll, 
   };
   renderShell();
   const bar = document.querySelector('#tabbar');
+  assert.ok(bar.querySelector('a'), 'the tab bar is drawn');
+  const snapshot = () => JSON.stringify({ cls: bar.getAttribute('class'), style: bar.getAttribute('style') });
+  const before = snapshot();
+
   const reels = document.createElement('div');
   reels.className = 'reels-feed';
   document.body.appendChild(reels);
@@ -29,23 +36,33 @@ test('floating mobile tabs hide on downward scroll and return on upward scroll, 
     clientHeight: { configurable: true, value: 700 },
     scrollTop: { configurable: true, writable: true, value: 0 },
   });
-  const scroll = (element, position) => {
-    element.scrollTop = position;
-    element.dispatchEvent(new window.Event('scroll', { bubbles: true }));
+  const scrollFeed = (position) => {
+    reels.scrollTop = position;
+    reels.dispatchEvent(new window.Event('scroll', { bubbles: true }));
+  };
+  const scrollPage = (position) => {
+    pageY = position;
+    window.dispatchEvent(new window.Event('scroll'));
   };
 
-  scroll(reels, 0); // seed this nested scroll source
-  scroll(reels, 20);
-  assert.equal(bar.classList.contains('scroll-hidden'), true, 'scrolling down in Reels tucks the bar away');
-  scroll(reels, 12);
-  assert.equal(bar.classList.contains('scroll-hidden'), false, 'scrolling up in Reels brings the bar back');
+  // Nested Reels feed: down, further down, back up, back to the top.
+  for (const y of [0, 20, 120, 300, 180, 40, 0]) {
+    scrollFeed(y);
+    assert.equal(bar.classList.contains('scroll-hidden'), false, `Reels feed at ${y}px does not hide the bar`);
+    assert.equal(snapshot(), before, `Reels feed at ${y}px leaves the bar untouched`);
+  }
+  // Whole page: the same sweep.
+  for (const y of [0, 20, 200, 900, 500, 12, 0]) {
+    scrollPage(y);
+    assert.equal(bar.classList.contains('scroll-hidden'), false, `page at ${y}px does not hide the bar`);
+    assert.equal(snapshot(), before, `page at ${y}px leaves the bar untouched`);
+  }
+});
 
-  pageY = 0;
-  window.dispatchEvent(new window.Event('scroll'));
-  pageY = 20;
-  window.dispatchEvent(new window.Event('scroll'));
-  assert.equal(bar.classList.contains('scroll-hidden'), true, 'page scrolling down also hides the bar');
-  pageY = 12;
-  window.dispatchEvent(new window.Event('scroll'));
-  assert.equal(bar.classList.contains('scroll-hidden'), false, 'page scrolling up restores the bar');
+test('the stylesheet has no scroll-driven hide state for the tab bar', () => {
+  const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
+  assert.equal(/scroll-hidden/.test(css), false, 'no .scroll-hidden rule remains');
+  const rule = css.split('\n').find((line) => line.startsWith('.tabbar {')) || '';
+  assert.match(rule, /position:\s*fixed/, 'the tab bar is a fixed (floating) element');
+  assert.equal(/transition:/.test(rule), false, 'the tab bar never animates its position');
 });

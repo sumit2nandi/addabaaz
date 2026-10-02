@@ -77,7 +77,9 @@ const config = { ...cfg0, database: `addabaaz_test_sp_${process.pid}_${Date.now(
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-cat-'));
 const catalog = JSON.parse(fs.readFileSync(new URL('../../data/catalog.json', import.meta.url), 'utf8'));
 const base = catalog.videos.find((v) => v.kind === 'episode');
-const mk = (id, extra) => ({ ...base, id, title: id, showId: base.showId, kind: 'clip', episode: null, ...extra });
+// Locked test videos are episodes: since "trailers, clips and reels are never locked", those
+// kinds stream for everyone even with access:'premium' (pinned in billing.test.js).
+const mk = (id, extra) => ({ ...base, id, title: id, showId: base.showId, ...extra });
 const premiumShowId = 'premium-parent-test';
 catalog.shows.push({ ...catalog.shows[0], id: premiumShowId, title: 'Premium parent', titleEn: 'Premium parent', access: 'premium', featured: false });
 catalog.videos.push(

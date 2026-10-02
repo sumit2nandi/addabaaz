@@ -10,7 +10,7 @@ const day = (iso) => new Date(iso).toLocaleDateString('en-IN', { timeZone: 'Asia
 const inr = (paise) => `Rs. ${rupees(paise)}`;
 
 /** Every email is { subject, text, html }. Plain-text first; the HTML is the same content in a simple, client-safe layout. */
-export function layout({ subject, paragraphs, button, footer }) {
+export function layout({ subject, paragraphs, button, footer, footerHtml = null }) {
   const text = [...paragraphs, button ? `${button.label}: ${button.url}` : null, footer].filter(Boolean).join('\n\n');
   const html = `<!doctype html><html><body style="margin:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#111">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
@@ -20,7 +20,7 @@ export function layout({ subject, paragraphs, button, footer }) {
 <h1 style="font-size:20px;margin:0 0 14px">${esc(subject)}</h1>
 ${paragraphs.map((p) => `<p style="margin:0 0 14px">${esc(p).replace(/\n/g, '<br>')}</p>`).join('')}
 ${button ? `<p style="margin:22px 0"><a href="${esc(button.url)}" style="background:#e50914;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;display:inline-block">${esc(button.label)}</a></p>` : ''}
-${footer ? `<p style="margin:18px 0 0;color:#666;font-size:12.5px">${esc(footer)}</p>` : ''}
+${footerHtml || footer ? `<p style="margin:18px 0 0;color:#666;font-size:12.5px">${footerHtml || esc(footer)}</p>` : ''}
 </td></tr></table></td></tr></table></body></html>`;
   return { subject, text, html };
 }
@@ -136,4 +136,17 @@ export function refundRequestReceivedEmail(o) {
     subject: 'We received your refund request',
     paragraphs: [hello(o.name), `We have your refund request for ${o.planName} (${inr(o.amountPaise)}). We’ll review it and email you the outcome, usually within 2 working days.`], footer: help(o),
   });
+}
+
+// ---- Admin broadcast campaign (Admin → Notifications → Email) ----
+// The subject and body come from the admin composer; `body` is plain text where blank lines start
+// new paragraphs. Every campaign email carries an unsubscribe link (required for bulk mail and
+// honoured by the audience queries), while transactional mail above never does.
+export function campaignEmail(o) {
+  const paragraphs = [hello(o.name), ...String(o.body || '').split(/\n{2,}/).map((p) => p.trim()).filter(Boolean)];
+  const line = 'You are receiving this because you have an ADDABAAZ account.';
+  const footer = [o.unsubscribeUrl ? `${line} Unsubscribe from announcement emails: ${o.unsubscribeUrl}` : line, help(o)].filter(Boolean).join(' ');
+  // The HTML version gets a clickable one-click unsubscribe link; the text version the bare URL (mail clients linkify it).
+  const footerHtml = esc([line, help(o)].filter(Boolean).join(' ')) + (o.unsubscribeUrl ? ` <a href="${esc(o.unsubscribeUrl)}" style="color:#666">Unsubscribe</a>` : '');
+  return layout({ subject: o.subject, paragraphs, footer, footerHtml, button: o.button?.url ? { label: o.button.label || 'Open ADDABAAZ', url: o.button.url } : (o.siteUrl ? { label: 'Open ADDABAAZ', url: o.siteUrl } : null) });
 }

@@ -42,6 +42,8 @@ The manual toolchain above stays useful for day-to-day native debugging (`open:a
 3. **Google / Facebook sign-in** — uses the native `@capgo/capacitor-social-login` plugin (already in `mobile/package.json`). Finish the native configuration described in [AUTH.md](AUTH.md#native-apps-android--ios) (Facebook Info.plist/strings.xml + AppDelegate, Google SHA-1 / URL scheme). Apple requires **Sign in with Apple** alongside third-party logins on iOS (guideline 4.8) — not implemented yet.
 4. **Deep links** (optional) — custom scheme `addabaaz://show/shahid` is handled in `platform.js`. For universal/app links, host `apple-app-site-association` and `assetlinks.json` on your domain and add the associated domain in Xcode / intent-filter in `AndroidManifest.xml`.
 5. **Push notifications** (for "Remind me") — add `@capacitor/push-notifications`, register the device token to a new `POST /api/v1/devices` endpoint, and have the server send a push when a title moves from `upcoming` to `shows` for every profile with a reminder (`library.reminders`). The reminder data is already collected.
+6. **Orientation (Android)** — the app is locked to portrait: turning the phone never switches it to landscape, and playback does not unlock anything. `mobile/scripts/patch-android.mjs` (run by `npm run add:android` and `npm run sync`, so every CI build gets it) adds `android:screenOrientation="portrait"` to `MainActivity` in the generated `AndroidManifest.xml`. To allow rotation again, remove the `patch('app/src/main/AndroidManifest.xml', …)` call at the end of that script. Platform note: apps targeting API 36 can be rotated by Android 16 itself on tablets and foldables (screens ≥ 600 dp wide) regardless of this setting; phones always honour it. iOS is not affected by this setting.
+7. **Full screen (Android, YouTube-app behaviour)** — the video's own fullscreen button is the only way into full screen and the only place the screen turns. `mobile/scripts/patch-android.mjs` installs `FullscreenClient` (see `mobile/scripts/android-fullscreen.mjs`) in the generated `MainActivity`: Capacitor's own `WebChromeClient` cancels Android's custom-view fullscreen, which left the video growing inside the page with the white system-bar/window strips around it. The client accepts that view — video alone on black, edge to edge, status **and** navigation bars hidden. While it is up the screen **follows the phone**: the client switches the activity to `SCREEN_ORIENTATION_FULL_SENSOR`, so the video is portrait while the phone is held upright, turns landscape when the phone is turned and back again — in both directions, and even when the device's own auto-rotate switch is off. The page (`app/js/orientation.js`) deliberately sets no orientation on the way in (Capacitor's `unlock()` maps to `UNSPECIFIED`, which obeys the auto-rotate switch, and any `lock()` would pin the screen again); it only locks the app back to portrait when full screen ends. Back leaves full screen instead of the app. The running theme (`AppTheme.NoActionBar`, which does not inherit from `AppTheme`) is patched to the brand dark with light system-bar icons, so no white bar can show in the app either.
 
 ## Store-readiness
 
@@ -64,3 +66,70 @@ The data contract is the REST API + `catalog.json` (see `openapi.yaml`), so a Sw
 | White screen after update | `npm run build:www` before `cap sync` (the apps embed `../www`) |
 | Can't reach API from Android emulator | Use `https://` and a real hostname (cleartext is blocked); for local dev use `adb reverse` or a tunnel |
 | Status bar overlaps header | Safe-area insets are handled in CSS; make sure `viewport-fit=cover` is in `index.html` (it is) |
+
+## Native Google sign-in (Custom Tab + one-time ticket, zero console setup)
+
+Google refuses sign-in inside WebViews, and the native Google SDK needs every
+build keystore's SHA-1 registered in the Google Cloud console - impossible for
+cloud CI debug builds. Instead the app opens
+`<API>/api/v1/auth/google/native-page` in a real Chrome Custom Tab
+(@capacitor/browser). That same-origin page shows the very same Google
+Identity Services button the website uses - the site origin is already an
+authorized JavaScript origin, so **no Google console change is needed** (no
+redirect URIs, no SHA-1, no client secret). The verified id_token goes through
+the existing `POST /auth/google`, which mints a 2-minute single-use ticket;
+the page deep-links `in.addabaaz.app://oauth?ticket=…` into the app
+(MainActivity gets the scheme filter from `patch-android.mjs`), and the app
+exchanges it at `POST /auth/ticket` for its own session.
+
+## App identity
+
+- The installed app is named **Addabaaz** (`capacitor.config.json` appName,
+  re-asserted on `strings.xml` by `patch-android.mjs`).
+- Launcher/install icons are the website logo (`mobile/android-icons/`,
+  stamped over the stock Capacitor icons on every sync; regenerate with
+  `bash mobile/scripts/gen-launcher-icons.sh`).
+- The Android 12+ system splash shows the dark logo artwork
+  (`windowSplashScreenAnimatedIcon` = the splash drawable), so launching never
+  shows white squares around the logo.
+
+## Stable debug signing (APK updates install over old ones)
+
+Every CI runner used to generate its own throwaway debug keystore, so Android
+treated each new APK as a different developer and refused the update
+("Something went wrong. App not installed."). `mobile/keystores/ci-debug.p12`
+is one shared DEBUG key (public by design - it signs nothing sensitive);
+`patch-android.mjs` copies it into the app module and points the `debug`
+build type at it (`android-gradle.mjs`). New APKs now install as ordinary
+updates. Users who installed an APK from BEFORE this change must uninstall
+once.
+
+## Push notifications (app push, FCM)
+
+Admin → **Broadcast** sends app notifications to the phones and tablets the app is installed
+on, next to the browser notifications (Web Push) and e-mail campaigns. The server side only
+needs one secret:
+
+1. Create a **Firebase project** (console.firebase.google.com) and add an **Android app** with the
+   package name `com.addabaaz.app` (and, for iOS, the bundle id from `capacitor.config.json`).
+2. Project settings → **Service accounts** → *Generate new private key*. Put the JSON on the server as
+   `FCM_SERVICE_ACCOUNT` (the whole JSON, e.g. on Render as a secret file/one-line value) **or**
+   `FCM_SERVICE_ACCOUNT_FILE=/path/to/service-account.json`. Restart; `/admin → Dashboard → System
+   status` then shows *App push: the Firebase service account is set*.
+3. Android build: download **google-services.json** into `mobile/android/app/` and make sure the
+   Google Services Gradle plugin is applied (the Firebase console's own instructions do this). Without
+   it the app still builds and runs — it simply never receives a token, and the app logs
+   `[push] app notifications are off: …` instead of failing.
+4. iOS build: enable the **Push Notifications** capability for the app target and upload an **APNs
+   key** (or the APNs key from Firebase) so FCM can deliver to iOS.
+
+The app itself does the rest: after sign-in `app/js/push-native.js` asks for permission once, gets the
+FCM/APNs token (`Capacitor.registerPlugin('PushNotifications')`, so the web bundle needs no bundler),
+registers it with `POST /api/v1/devices` and refreshes it on every sign-in. Signing out removes the
+device from the account, so a shared phone stops receiving the previous account's notifications.
+Tapping a notification opens the link the broadcast was sent with (a page path or an https URL).
+Tokens FCM reports as `UNREGISTERED` are deleted on the next send; tokens idle for 180 days are purged
+by the housekeeping job.
+
+*Send a test to me* on the Broadcast page is the fastest way to verify the whole chain: it goes to the
+administrator's own devices/address only.

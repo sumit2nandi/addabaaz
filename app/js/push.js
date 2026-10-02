@@ -1,6 +1,7 @@
 /* Web Push (browser notifications) for signed-in viewers. The server decides who to notify (new episodes of shows you follow,
  * launches you set reminders for, optional announcements); this file only manages the browser side of the subscription. */
 import { app } from './app.js';
+import { nativePushSupported, nativePushState, attachNativePush, detachNativePush, initNativePush } from './push-native.js';
 
 // Helpers: convert the server's public VAPID key to bytes, and detect browser support.
 const b64ToBytes = (s) => { const p = '='.repeat((4 - (s.length % 4)) % 4), raw = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); };
@@ -16,9 +17,11 @@ async function currentSubscription() {
   try { return await (await registration()).pushManager.getSubscription(); } catch { return null; }
 }
 
-/** → { supported, enabled (server has VAPID keys), permission, subscribed, prefs } */
+/** → { supported, enabled (server has VAPID keys), permission, subscribed, prefs } — or the native equivalent. */
 export async function pushState() {
   const u = app.user;
+  // The phone app: the token comes from FCM, not from a browser push subscription.
+  if (nativePushSupported()) return nativePushState();
   if (!pushSupported() || !u?.remote || !u.account) return { supported: false };
   const cfg = await u.remote.pushConfig(); if (!cfg.enabled) return { supported: true, enabled: false };
   const sub = await currentSubscription();
@@ -28,6 +31,7 @@ export async function pushState() {
 
 // Ask permission, subscribe this browser to push, and send the subscription to the server.
 export async function enablePush(prefs = {}) {
+  if (nativePushSupported()) { await attachNativePush({ force: true }); return 'device'; }
   const u = app.user, cfg = await u.remote.pushConfig();
   if (!cfg.enabled || !cfg.publicKey) throw Object.assign(new Error('Notifications aren’t available right now.'), { friendly: true });
   const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
@@ -37,19 +41,24 @@ export async function enablePush(prefs = {}) {
   await u.remote.pushSubscribe(sub.toJSON(), prefs);
   return sub.endpoint;
 }
-// Unsubscribe on the server and in the browser.
+// Unsubscribe on the server and in the browser (or drop the device token in the app).
 export async function disablePush() {
+  if (nativePushSupported()) { await detachNativePush(); return; }
   const sub = await currentSubscription(); if (!sub) return;
   await app.user.remote?.pushUnsubscribe(sub.endpoint).catch(() => {});
   await sub.unsubscribe().catch(() => {});
 }
-export async function setPushPrefs(prefs) { const sub = await currentSubscription(); if (sub) await app.user.remote.pushPrefs(sub.endpoint, prefs); }
+export async function setPushPrefs(prefs) { if (nativePushSupported()) return; const sub = await currentSubscription(); if (sub) await app.user.remote.pushPrefs(sub.endpoint, prefs); }
 /** On sign-out this device stops receiving the account's notifications (shared devices!) — the browser permission stays. */
-export async function detachPush() { const sub = await currentSubscription(); if (sub) await app.user.remote?.pushUnsubscribe(sub.endpoint).catch(() => {}); }
+export async function detachPush() {
+  if (nativePushSupported()) { await detachNativePush(); return; }     // a shared phone must not keep notifying the previous account
+  const sub = await currentSubscription(); if (sub) await app.user.remote?.pushUnsubscribe(sub.endpoint).catch(() => {});
+}
 
 /** After sign-in: if this browser already allowed notifications, attach its subscription to the account that just signed in. */
 // Runs on sign-in so a returning user's browser is linked to their account again.
 export function initPush() {
+  if (nativePushSupported()) { initNativePush(); return; }             // phones: register the FCM token after each sign-in
   if (!pushSupported()) return;
   const relink = async () => {
     const u = app.user; if (!u?.account || !u.remote || Notification.permission !== 'granted') return;

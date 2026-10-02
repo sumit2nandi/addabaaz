@@ -16,8 +16,11 @@
 /* ---------- reset & base elements ---------- */
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
-body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; overflow-x: clip; -webkit-tap-highlight-color: transparent; padding-bottom: calc(var(--tabbar-h) + var(--sab) + 32px); }
+/* overscroll-behavior-y: contain turns OFF the browser's own pull-to-refresh (the page would
+   reload and replay the boot logo splash): the app's custom pull-to-refresh (ui/ptr.js) soft
+   refreshes in place instead. On both html and body - browsers differ on which one they check. */
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; overscroll-behavior-y: contain; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; overflow-x: clip; overscroll-behavior-y: contain; -webkit-tap-highlight-color: transparent; padding-bottom: calc(var(--tabbar-h) + var(--sab) + 32px); }
 body.no-scroll { overflow: hidden; }
 img { max-width: 100%; display: block; -webkit-user-select: none; user-select: none; -webkit-user-drag: none; -webkit-touch-callout: none; }   /* images are for looking at: no drag-off, no long-press save menu */
 a { color: inherit; text-decoration: none; }
@@ -47,7 +50,13 @@ ul { margin: 0; padding: 0; list-style: none; }
 .boot { gap: 0; }
 .boot-mark { position: relative; width: 116px; height: 116px; display: grid; place-items: center; }
 .boot-mark img { position: relative; z-index: 1; width: 88px; height: 88px; border-radius: 50%; object-fit: cover; box-shadow: 0 6px 24px rgba(0,0,0,.45); }
-.boot-ring { position: absolute; inset: 0; border: 3px solid rgba(255,255,255,.14); border-top-color: var(--accent); border-right-color: rgba(229,9,20,.55); border-radius: 50%; animation: spin .9s linear infinite; }
+/* The ring spins exactly around the logo's edge: the mark box is 116px, the logo 88px, so an inset of
+   (116 - 88) / 2 = 14px puts the circle right on the logo's rim instead of floating outside it. */
+.boot-ring { position: absolute; inset: 14px; border-radius: 50%; animation: spin 1.6s linear infinite; }
+.boot-ring svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.boot-ring circle { fill: none; stroke-width: 8; stroke-linecap: round; }
+.boot-ring .tr { stroke: rgba(255,255,255,.14); }
+.boot-ring .arc { stroke: var(--accent); stroke-dasharray: 1 339; stroke-dashoffset: 0; animation: bootarc 1.4s cubic-bezier(.4,0,.2,1) infinite; }
 /* The boot splash is an in-flow block, not a full-screen overlay — without this the footer/tab bar
    show a stray "ADDABAAZ" line at the bottom of the screen while the app loads. Hidden until the
    first page replaces #boot (JS marks the body .booted; the :has() rule covers a stalled boot). */
@@ -58,6 +67,8 @@ main:has(#boot) ~ .footer, main:has(#boot) ~ .tabbar { display: none; }
 .ptr.on { opacity: 1; }
 .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,.15); border-top-color: var(--accent); animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* Material-style indeterminate arc: sweep grows and shrinks while the ring rotates. 339 = the arc circle's circumference (2*PI*54); r=54 puts the stroke's inner edge exactly on the logo rim so the logo never covers it. */
+@keyframes bootarc { 0% { stroke-dasharray: 1 339; stroke-dashoffset: 0; } 50% { stroke-dasharray: 235 339; stroke-dashoffset: -52; } 100% { stroke-dasharray: 235 339; stroke-dashoffset: -339; } }
 .offline-bar { position: fixed; z-index: 250; left: 0; right: 0; top: 0; padding: calc(6px + var(--sat)) 12px 6px; background: #3b2a00; color: var(--gold); text-align: center; font-size: 13px; font-weight: 600; }
 
 /* ---------- top bar ---------- */
@@ -96,8 +107,8 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .nav-drop .menu a::after { display: none; }
 
 /* ---------- bottom tab bar (mobile) ---------- */
-.tabbar { position: fixed; z-index: 100; left: 50%; right: auto; bottom: calc(12px + var(--sab)); transform: translate(-50%, 0); width: min(680px, calc(100vw - 32px - var(--sal) - var(--sar))); height: var(--tabbar-h); padding: 0 7px; display: grid; grid-template-columns: repeat(var(--tabs, 5), minmax(0, 1fr)); background: rgba(5,5,7,.82); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,.12); border-radius: 999px; box-shadow: 0 10px 30px rgba(0,0,0,.48); opacity: 1; visibility: visible; pointer-events: auto; transition: transform .32s var(--ease), opacity .22s ease, visibility 0s linear 0s; }
-.tabbar.scroll-hidden { transform: translate(-50%, calc(100% + 24px + var(--sab))); opacity: 0; visibility: hidden; pointer-events: none; transition: transform .32s var(--ease), opacity .22s ease, visibility 0s linear .32s; }
+/* Pinned on purpose: the floating bar never slides, fades or hides while the page (or the Reels feed) scrolls. */
+.tabbar { position: fixed; z-index: 100; left: 50%; right: auto; bottom: calc(12px + var(--sab)); transform: translate(-50%, 0); width: min(680px, calc(100vw - 32px - var(--sal) - var(--sar))); height: var(--tabbar-h); padding: 0 7px; display: grid; grid-template-columns: repeat(var(--tabs, 5), minmax(0, 1fr)); background: rgba(5,5,7,.82); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,.12); border-radius: 999px; box-shadow: 0 10px 30px rgba(0,0,0,.48); }
 .tabbar a { display: grid; place-items: center; align-content: center; gap: 3px; color: var(--muted); font-size: 11px; font-weight: 600; }
 .tabbar a.active { color: var(--accent-2); }
 .tabbar a.active svg { color: var(--accent-2); }
@@ -132,6 +143,9 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 /* ---------- hero ---------- */
 .hero, .detail-hero { position: relative; overflow: hidden; background: #000; isolation: isolate; }
 .hero { min-height: min(84vh, 780px); display: grid; }
+/* pan-y: vertical scrolling stays native while horizontal finger drags reach the carousel's
+   pointer handlers - without this, touch WebViews (the Android app) cancel the swipe. */
+.hero { touch-action: pan-y; }
 .hero-slide { grid-area: 1 / 1; position: relative; display: flex; align-items: flex-end; opacity: 0; visibility: hidden; transition: opacity .8s var(--ease), visibility .8s; }
 .hero-slide.active { opacity: 1; visibility: visible; }
 .hero-bg { position: absolute; inset: 0; z-index: -2; }
@@ -186,22 +200,28 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 
 /* ---------- grids ---------- */
 .grid { display: grid; gap: 22px 16px; }
-.grid-shows, .grid-upcoming { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.grid-shows { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .grid-videos { grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); }
 .grid-reels { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 .grid-gallery { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+/* Coming Soon page: portrait artwork tiles two per row, landscape (or square) artwork gets a full-width row;
+   every tile crops its image to fill, so mixed shapes always line up cleanly. */
+.grid-upcoming { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-upcoming .show-tile.is-wide { grid-column: 1 / -1; }
+.grid-upcoming .upcoming-page-poster { aspect-ratio: 2/3; }
+.grid-upcoming .show-tile.is-wide .upcoming-page-poster { aspect-ratio: 16/9; }
+.grid-upcoming .upcoming-page-poster img { object-fit: cover; }
 .show-tile { display: grid; gap: 10px; align-content: start; } .show-tile-info { display: grid; gap: 6px; justify-items: start; } .show-tile-info > a { font-size: 17px; font-weight: 600; }
-@media (min-width: 700px) { .grid-shows, .grid-gallery, .grid-upcoming { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); } .grid-reels { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); } }
+@media (min-width: 700px) { .grid-shows, .grid-gallery { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); } .grid-reels { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); } }
 
 /* ---------- cards ---------- */
 .card { position: relative; display: block; border-radius: var(--radius); transition: transform .3s var(--ease), box-shadow .3s; text-align: left; background: none; border: 0; padding: 0; width: 100%; }
 .poster, .thumb { position: relative; overflow: hidden; border-radius: var(--radius); background: var(--panel-2); }
 .poster { aspect-ratio: 2/3; } .thumb { aspect-ratio: 16/9; }
 .poster img, .thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s var(--ease); }
-.poster-adaptive { aspect-ratio: 2/3; }
-.poster-adaptive img, .poster-soon img { object-fit: contain; }
+.poster-soon img { object-fit: contain; }
 .home-coming-soon .poster-soon img { object-fit: cover; }
-.card-soon:hover .poster-adaptive-image, .card-soon:hover .poster-soon-image { transform: none; }
+.card-soon:hover .poster-soon-image { transform: none; }
 img.img-failed { opacity: 0; }
 .card-gallery .poster { aspect-ratio: 2/3; cursor: zoom-in; }
 @media (hover: hover) {
@@ -219,7 +239,6 @@ img.img-failed { opacity: 0; }
 .progress { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,.25); } .progress i { display: block; height: 100%; background: var(--accent); }
 .card-body { padding: 10px 2px 0; display: grid; gap: 4px; }
 .card-title { font-weight: 600; font-size: 14.5px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.show-card-tagline { padding: 9px 2px 0; color: var(--text-2); font-size: 12.5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .card-meta { display: flex; flex-wrap: wrap; gap: 2px 8px; color: var(--muted); font-size: 12.5px; } .card-meta span + span::before { content: '·'; margin-right: 8px; }
 .card-reel .thumb { aspect-ratio: 9/16; }
 .card-reel .card-title { font-size: 13px; }
@@ -231,25 +250,26 @@ img.img-failed { opacity: 0; }
 .rail { margin: 0 0 30px; } .rail-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 0 var(--pad); margin-bottom: 12px; }
 .rail-head-minimal { justify-content: flex-end; margin-bottom: 0; }
 .rail-head h2 { font-size: clamp(18px, 2.4vw, 23px); font-weight: 700; } .rail-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
-.home-release-showcase { display: grid; justify-items: center; margin: 0 var(--pad) 20px; }
-.home-release-carousel { position: relative; width: clamp(190px, 38vw, 350px); aspect-ratio: 2 / 3; overflow: hidden; border: 1px solid var(--border-2); border-radius: 18px; background: var(--panel); box-shadow: 0 18px 48px rgba(0,0,0,.4); }
+.home-release-showcase { display: block; margin: 0 var(--pad) 20px; }
+/* Full landscape (16:9) banner: the width of the page content (capped on very wide screens so it never fills a whole monitor). */
+.home-release-carousel { position: relative; width: 100%; max-width: 1240px; margin: 0 auto; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--border-2); border-radius: 18px; background: var(--panel); box-shadow: 0 18px 48px rgba(0,0,0,.4); }
 .home-release-slide { position: absolute; inset: 0; display: block; opacity: 0; visibility: hidden; transform: scale(1.025); transition: opacity .45s ease, transform .6s var(--ease), visibility .45s; }
 .home-release-slide.active { opacity: 1; visibility: visible; transform: scale(1); }
-.home-release-slide > img { width: 100%; height: 100%; object-fit: cover; }
-.home-release-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.15), transparent 30%, rgba(0,0,0,.08) 52%, rgba(0,0,0,.78)); pointer-events: none; }
-.home-release-badge { position: absolute; top: 14px; left: 14px; z-index: 1; padding: 7px 11px; border-radius: 7px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; box-shadow: 0 4px 14px #0007; }
-.home-release-title { position: absolute; z-index: 1; left: 18px; right: 18px; bottom: 20px; color: #fff; font-size: clamp(18px, 2.2vw, 24px); line-height: 1.25; font-weight: 800; text-shadow: 0 2px 12px #000; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* The whole artwork is always visible. `contain` shows 16:9 art edge to edge; any other shape (e.g. a portrait poster) sits centred over a
+   blurred copy of itself, so nothing is ever cropped. Nothing is drawn over the art: release posters carry their own title and logo. */
+.home-release-slide > img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.home-release-art { object-fit: contain; }
+.home-release-bg { object-fit: cover; filter: blur(24px) brightness(.55); transform: scale(1.12); }
 .home-release-arrows { position: absolute; z-index: 2; inset: 0; padding: 0 10px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
-.home-release-arrow { pointer-events: auto; display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--border-2); border-radius: 50%; background: rgba(0,0,0,.62); color: #fff; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: background .2s, transform .2s; }
+.home-release-arrow { pointer-events: auto; display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--border-2); border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: background .2s, transform .2s; }
 .home-release-arrow:hover { background: var(--accent); transform: scale(1.06); }
 .home-release-dots { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 14px 12px 0; }
 .home-release-dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 999px; background: rgba(255,255,255,.38); transition: width .2s, background .2s; }
 .home-release-dots button.active { width: 22px; background: var(--accent); }
 @media (max-width: 639px) {
-  .home-release-carousel { width: clamp(190px, 76vw, 330px); border-radius: 14px; }
-  .home-release-badge { top: 10px; left: 10px; padding: 6px 9px; font-size: 9px; letter-spacing: .45px; border-radius: 6px; }
-  .home-release-title { left: 14px; right: 14px; bottom: 15px; font-size: 19px; }
-  .home-release-arrow { width: 36px; height: 36px; }
+  .home-release-carousel { border-radius: 14px; }
+  .home-release-arrows { padding: 0 6px; }
+  .home-release-arrow { width: 32px; height: 32px; background: rgba(0,0,0,.5); }
 }
 .see-all { display: inline-flex; align-items: center; gap: 2px; color: var(--text-2); font-weight: 700; font-size: 13.5px; white-space: nowrap; } .see-all:hover { color: var(--gold); }
 .page .rail-head, .page-tight .rail-head { padding: 0; } .page-tight .rail-track { padding-left: 0; padding-right: 0; }
@@ -299,17 +319,30 @@ img.img-failed { opacity: 0; }
 @media (min-width: 720px) { .ep-row { grid-template-columns: 44px 200px 1fr; gap: 20px; padding: 12px 16px; } .ep-list.compact .ep-row { grid-template-columns: 26px 104px 1fr; padding: 8px; gap: 10px; } }
 
 /* ---------- watch ---------- */
-.watch { display: grid; gap: 20px; padding-top: calc(var(--topbar-h) + var(--sat)); }
+/* No top padding here: the space below the fixed topbar already comes from `#view` (see the topbar
+   rules above). Adding it in both places pushed the player down a second topbar height, which showed
+   up as a blank black band between the topbar and the video. */
+.watch { display: grid; gap: 20px; }
 /* Grid items size to their min-content by default: a card rail's min-content is its whole row of cards
  * (~1700px), which forced the whole watch page wide on phones (Chrome then zooms out = "desktop look").
  * Every item must be allowed to shrink to the available width. */
 .watch > * { min-width: 0; }
 .watch-main { min-width: 0; } .watch-side { padding: 0 var(--pad) 24px; }
 .player-box { position: relative; background: #000; aspect-ratio: 16/9; width: 100%; max-height: 82vh; }
+/* Full screen is handled natively (mobile/scripts/android-fullscreen.mjs): the player's fullscreen
+   button hands the video to the OS, which hides both system bars and shows only the video. The page
+   behind stays as it is - the app itself never rotates. */
 .player-slot, .player-slot iframe, .player-slot video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
 .player-slot > div { width: 100%; height: 100%; }
 .player-overlay { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; text-align: center; padding: 20px; background: radial-gradient(circle, rgba(30,30,36,.95), rgba(0,0,0,.98)); z-index: 3; } .player-overlay[hidden], .next-up[hidden] { display: none; }
-.player-overlay h2 { font-size: 22px; } .player-overlay p { color: var(--text-2); max-width: 44ch; } .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; } .row.end { justify-content: flex-end; }
+.player-overlay h2 { font-size: 22px; } .player-overlay p { color: var(--text-2); max-width: 44ch; }
+/* Locked premium: the video's own artwork fills the player box behind the wall instead of a black background.
+   The same-origin artwork is a CSS background; the remote video thumbnail, when there is one, paints on top and
+   simply drops out (img-failed) if the network can't fetch it. Both layers must sit ABOVE the empty player slot
+   (which is itself an opaque black absolute-positioned box) and BELOW the z-3 overlay. */
+.player-wall-bg { position: absolute; inset: 0; z-index: 1; background-size: cover; background-position: center; filter: brightness(.55) saturate(.9); }
+img.player-wall-art { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; filter: brightness(.55) saturate(.9); }
+.player-box.has-wall .player-overlay { background: linear-gradient(180deg, rgba(10, 10, 14, .55), rgba(0, 0, 0, .88)); } .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; } .row.end { justify-content: flex-end; }
 .next-up { position: absolute; right: 14px; bottom: 14px; z-index: 4; max-width: calc(100% - 28px); }
 .next-card { display: flex; gap: 14px; align-items: center; background: rgba(12,12,14,.94); border: 1px solid var(--border-2); border-radius: var(--radius); padding: 10px; backdrop-filter: blur(10px); } .next-card img { width: 120px; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; } .next-card > div { display: grid; gap: 6px; font-size: 13px; }
 .watch-info { padding: 18px var(--pad) 8px; display: grid; gap: 12px; }
@@ -439,14 +472,21 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .btn-social.btn-facebook { background: #1877f2; border-color: #1877f2; }
 .or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; letter-spacing: .6px; text-transform: uppercase; }
 .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--border-2); }
-.premium-mark { position: absolute; z-index: 6; top: 8px; right: 8px; width: 38px; height: 38px; display: grid; place-items: center; color: #f5d993; border: 1px solid rgba(245,217,147,.58); border-radius: 50%; background: linear-gradient(145deg, rgba(255,255,255,.19), rgba(15,12,6,.62)); box-shadow: 0 4px 16px rgba(0,0,0,.52), inset 0 0 10px rgba(245,197,24,.16); backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px); pointer-events: none; }
+.premium-mark { position: absolute; z-index: 6; top: 8px; left: 8px; width: 38px; height: 38px; display: grid; place-items: center; color: #f5d993; border: 1px solid rgba(245,217,147,.58); border-radius: 50%; background: linear-gradient(145deg, rgba(255,255,255,.19), rgba(15,12,6,.62)); box-shadow: 0 4px 16px rgba(0,0,0,.52), inset 0 0 10px rgba(245,197,24,.16); backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px); pointer-events: none; transition: opacity .25s ease, transform .25s ease, visibility 0s linear 0s; }
 .premium-mark::after { content: ''; position: absolute; inset: 3px; border: 1px solid rgba(245,217,147,.24); border-radius: 50%; }
 .premium-mark svg { width: 22px; height: 22px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
-.premium-mark-compact { top: 4px; right: 4px; width: 30px; height: 30px; }
+.premium-mark-compact { top: 4px; left: 4px; width: 30px; height: 30px; }
 .premium-mark-compact svg { width: 17px; height: 17px; }
-.premium-mark-hero { top: calc(var(--topbar-h) + var(--sat) + 16px); right: var(--pad); width: 46px; height: 46px; }
+.premium-mark-hero { top: calc(var(--topbar-h) + var(--sat) + 16px); left: var(--pad); width: 46px; height: 46px; }
 .premium-mark-hero svg { width: 26px; height: 26px; }
-.premium-mark-player { top: 12px; right: 12px; width: 44px; height: 44px; }
+.premium-mark-player { top: 12px; left: 12px; width: 44px; height: 44px; }
+/* The crown marks premium video but never covers it while it plays: hidden during playback (watch page: .is-playing set from the player's
+   state; Reels: the active reel that is not paused) and back whenever the video is paused, ended or failed. */
+.player-box.is-playing .premium-mark, .reel.playing:not(.paused) .premium-mark { opacity: 0; transform: scale(.85); visibility: hidden; transition: opacity .25s ease, transform .25s ease, visibility 0s linear .25s; }
+/* Other things that live in the top-left corner make room for the crown. */
+.chip-label.chip-after-mark { left: 54px; top: 17px; }
+.player-box.has-premium .unmute-pill { left: 68px; }
+.reel-frame.has-premium .unmute-pill { left: 58px; }
 .player-overlay .row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 6px; }
 
 /* ---------- checkout dialog & billing history ---------- */
