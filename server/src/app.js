@@ -258,44 +258,45 @@ export function createApp({
 
   /* ---------- native Google sign-in (Custom Tab + one-time ticket deep link) ----------
    * Google refuses sign-in inside WebViews, and the native SDK needs every build keystore's
-   * SHA-1 registered in the Google console. So the app opens this start URL in real Chrome
-   * (Custom Tab); Google redirects back (implicit id_token flow - no client secret needed);
-   * the return page verifies the id_token through the very same /auth/google endpoint and
-   * deep-links a 2-minute single-use ticket into the app, which exchanges it for a session.
-   * Only the Web OAuth client id is required (plus the native-return URI listed as an
-   * authorized redirect URI in the Google console). */
+   * SHA-1 registered in the Google console. So the app opens a same-origin page in real Chrome
+   * (Custom Tab) that shows the very same Google Identity Services button the website uses -
+   * the site origin is already an authorized JavaScript origin, so NO console change is needed
+   * (no redirect URIs, no SHA-1, no client secret). The verified id_token is exchanged for a
+   * 2-minute single-use ticket that is deep-linked back into the app for its own session. */
   const APP_SCHEME = 'in.addabaaz.app';   // = the Capacitor appId; AndroidManifest gets this scheme as a redirect filter
   const usedTickets = new Map();          // jti -> expiry (ms); single-use enforcement for /auth/ticket
   const forgetUsedTickets = () => { const now = Date.now(); for (const [k, v] of usedTickets) if (v < now) usedTickets.delete(k); };
-  api.get('/auth/google/native-start', (req, res) => {
-    const clientId = social.config.google?.clientId;
-    if (!clientId) throw new HttpError(501, 'provider_not_configured', 'Google sign-in isn’t enabled on this server.');
-    const q = new URLSearchParams({
-      client_id: clientId,
-      redirect_uri: `${originOf(req)}/api/v1/auth/google/native-return`,
-      response_type: 'id_token',                       // implicit flow: the return page receives the id_token in the URL fragment
-      scope: 'openid email profile',
-      nonce: crypto.randomBytes(16).toString('hex'),
-      prompt: 'select_account',                        // always show the account chooser, like the web flow
-    });
-    res.redirect(302, `https://accounts.google.com/o/oauth2/v2/auth?${q}`);
-  });
-  // The redirect target: a tiny same-origin page (JS lives in an external file - the site CSP
-  // forbids inline scripts) that turns the id_token fragment into a ticket and deep-links home.
-  api.get('/auth/google/native-return', (_req, res) => {
+  // The Custom Tab lands here: a tiny same-origin page (JS in an external file - the CSP forbids inline scripts).
+  api.get('/auth/google/native-page', (_req, res) => {
     res.type('html').set('Cache-Control', 'no-store').send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ADDABAAZ</title><body style="margin:0;background:#050505;color:#eee;font:15px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh">
-<p id="out">Signing you in — returning to the ADDABAAZ app…</p><script src="/api/v1/auth/google-return.js"></script>`);
+<title>ADDABAAZ</title><body style="margin:0;background:#050505;color:#eee;font:15px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;gap:14px">
+<div style="display:grid;justify-items:center;gap:14px"><p id="out">Continue with Google to sign in to the ADDABAAZ app.</p><div id="g"></div></div>
+<script src="/api/v1/auth/google-native.js"></script>`);
   });
-  api.get('/auth/google-return.js', (_req, res) => {
+  api.get('/auth/google-native.js', (_req, res) => {
     res.type('application/javascript').set('Cache-Control', 'no-store').send(`(function () {
   var out = document.getElementById('out');
-  var m = /[#&]id_token=([^&]+)/.exec(location.hash);
-  if (!m) { out.textContent = 'Google sign-in didn’t finish — please try again in the app.'; return; }
-  fetch('/api/v1/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: decodeURIComponent(m[1]), ticket: true }) })
-    .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error((j.error && j.error.message) || 'Sign-in failed'); return j; }); })
-    .then(function (j) { out.textContent = 'Returning to the app…'; location.replace('${APP_SCHEME}://oauth?ticket=' + encodeURIComponent(j.ticket)); })
-    .catch(function (e) { out.textContent = e.message || 'Sign-in failed — please try again in the app.'; });
+  var say = function (m) { out.textContent = m; };
+  fetch('/api/v1/auth/providers').then(function (r) { return r.json(); }).then(function (p) {
+    if (!p.google) { say('Google sign-in isn’t enabled on this server.'); return; }
+    var s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.onerror = function () { say('Couldn’t reach Google — check the connection and try again.'); };
+    s.onload = function () {
+      window.google.accounts.id.initialize({ client_id: p.google.clientId, callback: onCred, use_fedcm_for_prompt: true });
+      window.google.accounts.id.renderButton(document.getElementById('g'), { type: 'standard', theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', logo_alignment: 'left' });
+      try { window.google.accounts.id.prompt(); } catch (e) { /* the button is always there */ }
+    };
+    document.head.appendChild(s);
+  }).catch(function () { say('Couldn’t reach the ADDABAAZ API — check the connection and try again.'); });
+  function onCred(r) {
+    if (!r.credential) return;
+    say('Signing you in — returning to the app…');
+    fetch('/api/v1/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: r.credential, ticket: true }) })
+      .then(function (res) { return res.json().then(function (j) { if (!res.ok) throw new Error((j.error && j.error.message) || 'Sign-in failed'); return j; }); })
+      .then(function (j) { location.replace('${APP_SCHEME}://oauth?ticket=' + encodeURIComponent(j.ticket)); })
+      .catch(function (e) { say(e.message || 'Sign-in failed — please try again in the app.'); });
+  }
 })();`);
   });
   // The app's WebView exchanges the single-use ticket for its own session token.

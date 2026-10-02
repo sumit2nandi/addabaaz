@@ -66,23 +66,20 @@ The data contract is the REST API + `catalog.json` (see `openapi.yaml`), so a Sw
 | Can't reach API from Android emulator | Use `https://` and a real hostname (cleartext is blocked); for local dev use `adb reverse` or a tunnel |
 | Status bar overlaps header | Safe-area insets are handled in CSS; make sure `viewport-fit=cover` is in `index.html` (it is) |
 
-## Native Google sign-in (why a Custom Tab, not the WebView)
+## Native Google sign-in (Custom Tab + one-time ticket, zero console setup)
 
 Google refuses sign-in inside WebViews, and the native Google SDK needs every
 build keystore's SHA-1 registered in the Google Cloud console - impossible for
-cloud CI debug builds. The app therefore opens
-`<API>/api/v1/auth/google/native-start` in a Chrome Custom Tab
-(@capacitor/browser). Google redirects back (implicit `id_token` flow - no
-client secret anywhere) to `/api/v1/auth/google/native-return`; that page
-verifies the token through the same `POST /auth/google` endpoint, mints a
-2-minute single-use ticket and deep-links `in.addabaaz.app://oauth?ticket=…`
-into the app (MainActivity gets the scheme filter from
-`patch-android.mjs`), which exchanges it at `POST /auth/ticket` for its own
-session.
-
-One-time Google Console setup: add
-`https://<your-api-host>/api/v1/auth/google/native-return` to the Web OAuth
-client's **Authorized redirect URIs**. No Android OAuth client / SHA-1 needed.
+cloud CI debug builds. Instead the app opens
+`<API>/api/v1/auth/google/native-page` in a real Chrome Custom Tab
+(@capacitor/browser). That same-origin page shows the very same Google
+Identity Services button the website uses - the site origin is already an
+authorized JavaScript origin, so **no Google console change is needed** (no
+redirect URIs, no SHA-1, no client secret). The verified id_token goes through
+the existing `POST /auth/google`, which mints a 2-minute single-use ticket;
+the page deep-links `in.addabaaz.app://oauth?ticket=…` into the app
+(MainActivity gets the scheme filter from `patch-android.mjs`), and the app
+exchanges it at `POST /auth/ticket` for its own session.
 
 ## App identity
 

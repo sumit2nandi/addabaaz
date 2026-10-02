@@ -32,27 +32,16 @@ const call = async (method, p, body, token) => {
   return { status: r.status, body: text ? JSON.parse(text) : null };
 };
 
-test('native-start 302s to Google with the API origin as the redirect_uri', async () => {
-  const r = await fetch(`${base}/auth/google/native-start`, { redirect: 'manual' });
-  assert.equal(r.status, 302);
-  const loc = r.headers.get('location');
-  assert.match(loc, /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth\?/);
-  const q = new URL(loc).searchParams;
-  assert.equal(q.get('client_id'), process.env.GOOGLE_CLIENT_ID);
-  assert.equal(q.get('response_type'), 'id_token', 'implicit flow - no client secret needed anywhere');
-  assert.match(q.get('redirect_uri'), /\/api\/v1\/auth\/google\/native-return$/);
-  assert.match(q.get('scope'), /openid/);
-});
-
-test('native-return is a CSP-safe page whose external script deep-links the ticket', async () => {
-  const page = await fetch(`${base}/auth/google/native-return`);
+test('native-page is a CSP-safe page that shows the website\'s own Google button in the Custom Tab', async () => {
+  const page = await fetch(`${base}/auth/google/native-page`);
   assert.equal(page.status, 200);
   const html = await page.text();
-  assert.match(html, /src="\/api\/v1\/auth\/google-return\.js"/, 'no inline script (the site CSP forbids it)');
-  const js = await fetch(`${base}/auth/google-return.js`);
+  assert.match(html, /src="\/api\/v1\/auth\/google-native\.js"/, 'no inline script (the site CSP forbids it)');
+  const js = await fetch(`${base}/auth/google-native.js`);
   assert.equal(js.status, 200);
   const src = await js.text();
-  assert.match(src, /id_token=/, 'reads the id_token from the URL fragment');
+  assert.match(src, /accounts\.google\.com\/gsi\/client/, 'same Google Identity Services SDK as the website (origin already authorized)');
+  assert.match(src, /renderButton/, 'a real Google button, no redirect URIs involved');
   assert.match(src, /in\.addabaaz\.app:\/\/oauth\?ticket=/, 'deep-links the ticket back into the app');
 });
 

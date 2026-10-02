@@ -34,7 +34,7 @@ const fire = (name, ev) => listeners[name].forEach((cb) => cb(ev));
 test('native Google opens the OAuth start URL in a Custom Tab and resolves the deep-linked ticket', async () => {
   const p = nativeGoogleTicket();
   await tick();
-  assert.equal(openedUrl, 'https://api.test/api/v1/auth/google/native-start', 'the sign-in happens in real Chrome, never in the WebView');
+  assert.equal(openedUrl, 'https://api.test/api/v1/auth/google/native-page', 'the sign-in happens in real Chrome, never in the WebView');
   assert.ok(listeners.appUrlOpen.length, 'the app listens for its own deep link');
 
   fire('appUrlOpen', { url: 'in.addabaaz.app://oauth?ticket=tkt-123' });

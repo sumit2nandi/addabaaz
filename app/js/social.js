@@ -122,7 +122,7 @@ export function nativeGoogleTicket() {
     // Closing the tab without finishing = the user changed their mind: a quiet cancel, not an error.
     closeHandle = Browser.addListener?.('browserFinished', () => settle(() => reject(Object.assign(new Error('cancelled'), { cancelled: true }))));
     const base = CONFIG.apiBase && CONFIG.apiBase !== 'off' ? CONFIG.apiBase : '';
-    Browser.open({ url: `${base}/api/v1/auth/google/native-start` })
+    Browser.open({ url: `${base}/api/v1/auth/google/native-page` })
       .catch(() => settle(() => reject(soft('Couldn’t open Google — check your connection.'))));
   });
 }
