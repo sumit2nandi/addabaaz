@@ -1,8 +1,10 @@
 /* Pull-to-refresh: dragging the page down while already at the top refreshes the current screen.
- * On the web that is a plain reload (the service worker serves navigations network-first, so a
- * reload always shows the latest content and refreshes the offline copies). In the native app a
- * reload would flash the website's boot logo splash, so main.js passes a soft `refresh` callback
- * instead: re-fetch data and re-render in place, no page load, no boot logo. */
+ * The refresh happens IN PLACE through the `refresh` callback main.js hands in (re-fetch data and
+ * re-render the current screen) - in the app and in mobile browsers alike: a page reload would
+ * replay the website's boot logo splash, and a refresh must never show that. The browser's own
+ * pull-to-refresh (which does reload) is turned off in styles.css (`overscroll-behavior-y:
+ * contain`), so this custom gesture is the only one. Without a callback it falls back to a plain
+ * reload (kept for safety; main.js always passes the soft refresh). */
 const THRESHOLD = 88;   // px of pull required to trigger a refresh
 const MAX = 96;         // px the indicator may travel
 let startY = null, pulled = 0, el = null;

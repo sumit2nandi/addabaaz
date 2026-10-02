@@ -14,7 +14,7 @@ import { Router, parseLocation, currentPath, replaceUrl, go } from './router.js'
 import { HISTORY } from './mode.js';
 import { renderShell, renderProfileMenu, markActive } from './ui/shell.js';
 import { syncButtons, scrollRail, toast } from './ui/components.js';
-import { initPlatform, isNative } from './platform.js';
+import { initPlatform } from './platform.js';
 import { initConsent, trackPage } from './consent.js';
 import { initErrorReporting, friendly } from './errors.js';
 import { initPush } from './push.js';
@@ -58,7 +58,7 @@ async function boot() {
   }
   router.start();
   networkStatus();
-  initPullToRefresh(isNative ? softRefresh : null);
+  initPullToRefresh(softRefresh);   // app AND mobile browsers: never a reload, so never the boot logo
   initFullscreenRotation();   // the app is portrait-only; the screen turns only in video fullscreen
   initConsent(); initErrorReporting(); initPush();
   window.addEventListener('ab:ready', trackPage);
@@ -68,9 +68,10 @@ async function boot() {
   registerServiceWorker();
 }
 
-/** Pull-to-refresh inside the app: re-fetch catalog + account and re-render the current screen in
- * place. A full location.reload() would replay the website's boot logo splash - the app must not
- * show that on a refresh; the native splash + a small spinner cover the update instead. */
+/** Pull-to-refresh EVERYWHERE (the app and mobile browsers): re-fetch catalog + account and
+ * re-render the current screen in place. A full location.reload() would replay the website's boot
+ * logo splash, and a refresh must never show that - the small pull indicator covers the update
+ * instead (the browser's own pull-to-refresh, which reloads, is turned off in styles.css). */
 async function softRefresh() {
   try {
     const base = CONFIG.apiBase, useApi = !!app.api;
