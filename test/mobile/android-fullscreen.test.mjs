@@ -57,13 +57,16 @@ test('the client accepts the custom view: video alone, black, edge to edge, both
   assert.match(java, /LayoutParams\.MATCH_PARENT, ViewGroup\.LayoutParams\.MATCH_PARENT/, 'the video fills the whole display');
   assert.match(java, /webView\.setVisibility\(View\.INVISIBLE\)/, 'the page behind it is hidden');
   assert.match(java, /FLAG_KEEP_SCREEN_ON/);
-  assert.match(java, /SCREEN_ORIENTATION_SENSOR/, 'the screen may turn - but only here');
+  assert.match(java, /SCREEN_ORIENTATION_FULL_SENSOR/, 'the screen follows the phone while full screen - but only here');
+  assert.doesNotMatch(java, /SCREEN_ORIENTATION_SENSOR[^_]/, 'FULL_SENSOR (all four orientations, ignores the phone\'s rotation lock), not plain SENSOR');
+  assert.doesNotMatch(java, /SCREEN_ORIENTATION_LANDSCAPE/, 'full screen must never be forced landscape-only');
 
   assert.match(java, /public void onHideCustomView\(\)/);
   assert.match(java, /decor\.removeView\(fullscreenView\)/, 'the fullscreen view is taken down again');
   assert.match(java, /bars\.show\(WindowInsetsCompat\.Type\.systemBars\(\)\)/, 'the bars come back');
   assert.match(java, /webView\.setVisibility\(View\.VISIBLE\)/);
   assert.match(java, /SCREEN_ORIENTATION_PORTRAIT/, 'outside full screen the app is portrait-only again');
+  assert.doesNotMatch(java, /SCREEN_ORIENTATION_UNSPECIFIED/, 'never UNSPECIFIED (it obeys the auto-rotate switch, so a locked phone would never turn)');
   assert.match(java, new RegExp(PAGE_EVENT), 'the page is told when full screen starts and ends');
   assert.match(java, /notifyPage\(true\)/); assert.match(java, /notifyPage\(false\)/);
   assert.match(java, /public boolean exitFullscreen\(\)/);

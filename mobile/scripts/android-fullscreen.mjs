@@ -49,9 +49,10 @@ import com.getcapacitor.BridgeWebChromeClient;
  * Full-screen video, the YouTube-app way: the video alone on a black screen.
  *
  * The player's own fullscreen button hands the video view here (${MAIN_ACTIVITY_MARKER}); we show it
- * on top of the whole window with both system bars hidden, and hide the WebView behind it. On the
- * way out everything is restored and the app goes back to portrait - outside this fullscreen the
- * app never rotates.
+ * on top of the whole window with both system bars hidden, and hide the WebView behind it. While it
+ * is up the screen follows the phone (FULL_SENSOR: portrait upright, landscape turned - both ways);
+ * on the way out everything is restored and the app goes back to portrait - outside this fullscreen
+ * the app never rotates.
  */
 public class FullscreenClient extends BridgeWebChromeClient {
 
@@ -105,9 +106,11 @@ public class FullscreenClient extends BridgeWebChromeClient {
         if (webView != null) {
             webView.setVisibility(View.INVISIBLE);
         }
-        // Sensor rotation is allowed here - and only here. The page locks it to the video's own
-        // aspect right after (see app/js/orientation.js).
-        activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR);
+        // The screen FOLLOWS THE PHONE here - and only here: FULL_SENSOR turns the video with the
+        // device in both directions (portrait while upright, landscape when turned) and ignores the
+        // phone's own auto-rotate switch, so a phone with rotation locked still turns in full
+        // screen. The page leaves the orientation to this (see app/js/orientation.js).
+        activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR);
         notifyPage(true);
     }
 

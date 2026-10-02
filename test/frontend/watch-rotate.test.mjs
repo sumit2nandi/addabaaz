@@ -3,8 +3,10 @@
 //     changes nothing, and the watch page has no fullscreen CSS of its own;
 //   - the player keeps its OWN (native, YouTube-style) controls: their fullscreen button is the one
 //     way into full screen;
-//   - the screen turns ONLY while a video is full screen (app/js/orientation.js locks the
-//     orientation to match the video) and goes back to portrait when full screen ends.
+//   - full screen FOLLOWS THE PHONE: the native client switches the activity to FULL_SENSOR (the
+//     video is portrait upright, landscape turned, in both directions, even with the device's own
+//     auto-rotate switch off) and the page does NOT pin a fixed orientation on the way in - it only
+//     locks the app back to portrait when full screen ends.
 // Run: node --test test/frontend/watch-rotate.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -95,28 +97,25 @@ test('the player keeps its own (YouTube-style) controls with their fullscreen bu
   assert.equal(document.querySelector('.vctl'), null, 'no custom bar in the page');
 });
 
-test('while a video is full screen the screen turns to match it; leaving full screen locks portrait', async () => {
+test('entering full screen pins NO orientation (the screen follows the phone); leaving locks portrait', async () => {
   await mount('vm');
   setFullscreen(videoEl(1920, 1080));
-  assert.deepEqual(calls.lock, ['landscape'], 'a landscape video turns the screen landscape');
-  calls.lock.length = 0;
+  assert.deepEqual(calls.lock, [], 'no fixed lock on the way in - the native FULL_SENSOR (the phone\'s direction) decides');
+  setFullscreen(videoEl(1080, 1920));
+  assert.deepEqual(calls.lock, [], 'not for a vertical video either');
   setFullscreen(null);
   assert.deepEqual(calls.lock, ['portrait'], 'leaving full screen locks the app back to portrait');
 
-  calls.lock.length = 0;
-  setFullscreen(videoEl(1080, 1920));
-  assert.deepEqual(calls.lock, ['portrait'], 'a vertical video stays portrait');
-  calls.lock.length = 0;
-  setFullscreen(videoEl(0, 0));
-  assert.deepEqual(calls.lock, ['landscape'], 'unknown dimensions fall back to landscape (the watch page default)');
+  const src = fs.readFileSync(new URL('../../app/js/orientation.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /lock\('landscape'\)|orientation: 'landscape'/, 'the page must never force landscape (that was the landscape-only full screen)');
+  assert.equal(calls.unlock, 0, 'nor unlock() through the plugin: it maps to UNSPECIFIED, which obeys the phone\'s auto-rotate switch');
 });
 
 test('the native fullscreen client drives the same rule even without a fullscreenchange event', async () => {
   await mount('vy');
   calls.lock.length = 0;
   window.dispatchEvent(new window.CustomEvent('ab-video-fullscreen', { detail: { active: true } }));
-  assert.deepEqual(calls.lock, ['landscape'], 'the native "full screen started" event turns the screen');
-  calls.lock.length = 0;
+  assert.deepEqual(calls.lock, [], 'the native "full screen started" event leaves the orientation to the sensor');
   window.dispatchEvent(new window.CustomEvent('ab-video-fullscreen', { detail: { active: false } }));
   assert.deepEqual(calls.lock, ['portrait'], 'and the "full screen ended" event locks portrait');
 });
