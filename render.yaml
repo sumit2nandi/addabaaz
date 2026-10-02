@@ -6,7 +6,7 @@ services:
     name: addabaaz
     runtime: node
     region: singapore            # pick the region closest to your Aiven database (Aiven: AWS ap-southeast-1 / Singapore)
-    plan: free                   # free sleeps after 15 min idle and loses uploaded files on every deploy; use `starter` (+ a disk) for real use
+    plan: free                   # free sleeps after 15 min idle (admin uploads are kept in MySQL, so they survive deploys); `starter` is always on and can send mail
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /api/v1/health/ready
