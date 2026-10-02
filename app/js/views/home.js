@@ -6,19 +6,13 @@ import { CONFIG } from '../config.js';
 import { rail, enhanceRails, showCard, videoCard, reelCard, soonCard, galleryCard, listBtn, img, heroBg, showMeta, premiumMark } from '../ui/components.js';
 import { openLightbox } from '../ui/lightbox.js';
 
-// Picks the featured shows for the carousel. Every show slide carries a muted preview that starts
-// when the slide activates - the show's trailer, or its first episode when there is no trailer
-// (the episode only plays when the viewer's gate allows it; otherwise the poster stays). Like the
-// main-branch hero, playback starts muted with an unmute switch on the banner; each slide's preview
-// never plays longer than 5 seconds and the carousel moves on every 5 seconds.
+// Picks the featured shows for the carousel. Every banner is a still image - the latest episode's
+// backdrop, with the show's poster as fallback - and the slideshow only crossfades between them:
+// the banners play no trailer or episode video.
 function heroSlides() {
   const cat = app.catalog;
   return cat.shows.filter((s) => s.featured && cat.episodes(s.id).length)
-    .map((s) => {
-      const trailer = cat.videos.find((v) => v.showId === s.id && v.kind === 'trailer' && v.source?.type === 'youtube');
-      const first = !trailer ? [...cat.episodes(s.id)].sort((a, b) => (a.episode || 0) - (b.episode || 0) || a.publishedAt.localeCompare(b.publishedAt))[0] : null;
-      return { show: s, latest: cat.latestEpisode(s.id), preview: trailer || first };
-    })
+    .map((s) => ({ show: s, latest: cat.latestEpisode(s.id) }))
     .sort((a, b) => b.latest.publishedAt.localeCompare(a.latest.publishedAt));
 }
 
@@ -26,14 +20,12 @@ function heroSlides() {
 function heroHtml(slides) {
   const cat = app.catalog, u = app.user;
   return html`<section class="hero" aria-roledescription="carousel" aria-label="Featured shows">
-    ${slides.map(({ show, latest, preview }, i) => {
+    ${slides.map(({ show, latest }, i) => {
       const t = u.resumeTarget(cat, show.id);
       return html`<article class="hero-slide ${i === 0 ? 'active' : ''}" data-i="${i}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
         <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault') })}</div>
-        <div class="hero-video" data-prev-id="${preview ? preview.id : ''}" data-prev-type="${preview ? (preview.source.type === 'youtube' ? 'yt' : 'file') : ''}" aria-hidden="true"></div>
         <div class="hero-shade"></div>
         ${show.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
-        ${preview ? html`<button type="button" class="hero-sound" data-sound aria-pressed="false" aria-label="Unmute preview">${icon('mute', { size: 18 })}</button>` : ''}
         <div class="hero-inner">
           <div class="hero-copy">
             <div class="eyebrow">${icon('play', { size: 12 })} ${show.type === 'series' ? 'Original Series' : show.type === 'podcast' ? 'Fake Podcast' : 'Stand-up Comedy'}</div>
@@ -54,82 +46,33 @@ function heroHtml(slides) {
   </section>`;
 }
 
-// Carousel behaviour: auto-advance, dots, swipe; pauses on hover/focus or when the tab is hidden.
-// The active slide plays the show's YouTube trailer muted (autoplay policy) behind the shade, with
-// an unmute switch on the banner - the same behaviour the main branch's hero had.
-// The youtube.com (not -nocookie) embed is used on purpose: the privacy-enhanced player ignores
-// postMessage commands, and the banner needs pauseVideo/unMute/mute for the 5 s cap and the switch.
-export const heroTrailerSrc = (id) => `https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1&mute=1&controls=0&loop=1&playlist=${encodeURIComponent(id)}&playsinline=1&enablejsapi=1&rel=0&modestbranding=1`;
+// Carousel behaviour: crossfades between the banner images every 5 seconds; dots, swipe, and a
+// pause on hover/focus (pointer devices) or while the tab is hidden. No media is mounted on the
+// banners - they are images only.
 function mountHero(root, ctx) {
   const hero = $('.hero', root); if (!hero) return;
   const slides = $$('.hero-slide', hero), dots = $$('[data-dot]', hero);
-  let i = 0, timer, vTimer, capT, paused = false;
-  const SLIDE_MS = 5000;   // a banner slide never lasts longer than 5 seconds…
-  const CAP_MS = 5000;     // …and its preview never plays longer than 5 s — the slideshow keeps
-                           // rotating regardless of mute/unmute (sound never pauses the banners)
-  let unmuted = false;
-  const setSound = (btn, on) => { btn.setAttribute('aria-pressed', String(on)); btn.setAttribute('aria-label', on ? 'Mute preview' : 'Unmute preview'); btn.innerHTML = icon(on ? 'volume' : 'mute', { size: 18 }).s; };
-  const pausePreview = (slide) => {
-    const f = $('iframe', slide);
-    if (f) { try { f.contentWindow?.postMessage?.(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*'); } catch { /* iframe gone */ } }
-    $('video', slide)?.pause?.();
-  };
-  const stopVideo = () => { clearTimeout(vTimer); clearTimeout(capT); $$('.hero-video', hero).forEach((b) => (b.innerHTML = '')); };
-  const startVideo = (slide) => {
-    clearTimeout(vTimer); clearTimeout(capT);
-    const box = $('.hero-video', slide), id = box?.dataset.prevId, type = box?.dataset.prevType;
-    if (!id || document.hidden || window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
-    // Let the slide's crossfade start first; the poster underneath covers the first frame.
-    vTimer = setTimeout(async () => {
-      if (!slide.classList.contains('active') || document.hidden) return;
-      if (type === 'yt') box.innerHTML = `<iframe src="${heroTrailerSrc(id)}" title="" allow="autoplay" tabindex="-1"></iframe>`;
-      else {
-        // First-episode fallback: needs a signed URL, which the API refuses for locked content -
-        // in that case the poster simply stays. Never block the carousel on a slow answer.
-        try {
-          const s = await app.user.streamUrl(app.catalog.video(id));
-          if (!slide.classList.contains('active')) return;
-          box.innerHTML = `<video src="${s.url}" muted autoplay playsinline></video>`;
-        } catch { /* locked or offline: poster only */ }
-      }
-      capT = setTimeout(() => pausePreview(slide), CAP_MS);
-    }, 900);
-  };
+  let i = 0, timer, paused = false;
+  const SLIDE_MS = 5000;   // a banner slide never lasts longer than 5 seconds
   const show = (n) => {
     i = (n + slides.length) % slides.length;
     slides.forEach((s, k) => s.classList.toggle('active', k === i));
     dots.forEach((d, k) => { d.classList.toggle('active', k === i); d.setAttribute('aria-selected', k === i); });
     $$('img[loading=lazy]', slides[i]).forEach((im) => (im.loading = 'eager'));
-    unmuted = false;
-    $$('[data-sound]', hero).forEach((b) => setSound(b, false));   // every slide (re)starts muted
-    stopVideo(); startVideo(slides[i]);
   };
   const schedule = () => { clearInterval(timer); if (slides.length > 1) timer = setInterval(() => { if (!paused && !document.hidden) show(i + 1); }, SLIDE_MS); };
   dots.forEach((d) => d.addEventListener('click', () => { show(+d.dataset.dot); schedule(); }));
   // Hover/focus pause is for pointer devices only: on touch, a tap fires mouseenter/focusin with no
-  // matching leave, which would freeze the slideshow forever and let the preview play past 5 s.
+  // matching leave, which would freeze the slideshow forever.
   if (window.matchMedia?.('(hover: hover) and (pointer: fine)')?.matches) {
     hero.addEventListener('mouseenter', () => (paused = true)); hero.addEventListener('mouseleave', () => (paused = false));
     hero.addEventListener('focusin', () => (paused = true)); hero.addEventListener('focusout', () => (paused = false));
   }
-  hero.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-sound]'); if (!b) return;
-    const slide = b.closest('.hero-slide');
-    const on = b.getAttribute('aria-pressed') !== 'true';
-    const f = $('iframe', slide), vid = $('video', slide);
-    if (f) { try { f.contentWindow?.postMessage?.(JSON.stringify({ event: 'command', func: on ? 'unMute' : 'mute', args: [] }), '*'); } catch { /* iframe not ready */ } }
-    if (vid) vid.muted = !on;
-    unmuted = on;   // sound only: the slideshow keeps rotating whether the preview is muted or not
-    setSound(b, on);
-  });
   let x0 = null;
   hero.addEventListener('pointerdown', (e) => { x0 = e.clientX; });
   hero.addEventListener('pointerup', (e) => { if (x0 != null && Math.abs(e.clientX - x0) > 60) { show(i + (e.clientX < x0 ? 1 : -1)); schedule(); } x0 = null; });
   hero.addEventListener('pointercancel', () => { x0 = null; });    // touch drags handed to scrolling must not leave a stale swipe
-  const onVis = () => { if (document.hidden) stopVideo(); else startVideo(slides[i]); };
-  document.addEventListener('visibilitychange', onVis);
-  startVideo(slides[0]);
-  schedule(); ctx.onCleanup(() => { clearInterval(timer); stopVideo(); document.removeEventListener('visibilitychange', onVis); });
+  schedule(); ctx.onCleanup(() => clearInterval(timer));
 }
 
 // Homepage poster slideshow: pauses while hovered/focused and does not auto-advance for reduced-motion users.
