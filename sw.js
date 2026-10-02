@@ -5,7 +5,7 @@
  * - YouTube thumbnails: stale-while-revalidate (opaque responses allowed)
  * - /api/*, /admin/*, YouTube player, analytics: never intercepted
  * Bump VERSION (or run `npm run build:www`, which stamps it) to force a refresh. */
-const VERSION = 'v2.8.9';
+const VERSION = 'v2.9.0';
 // One cache per kind of content, all tagged with the version so old caches are deleted when the version changes.
 const SHELL = `ab-shell-${VERSION}`, DATA = `ab-data-${VERSION}`, MEDIA = `ab-media-${VERSION}`, THUMBS = `ab-thumbs-${VERSION}`;
 // Files downloaded at install so the app shell opens offline. A missing file is skipped rather than failing the install.

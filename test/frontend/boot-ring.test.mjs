@@ -36,6 +36,12 @@ test('the ring is a thick Material-style indeterminate spinner (round caps, trac
   assert.match(arc, /stroke:\s*var\(--accent\)/, 'the sweep is the brand red');
   assert.match(arc, /animation:\s*bootarc/, 'the arc grows and shrinks (indeterminate)');
   assert.match(css, /@keyframes bootarc/, 'with its own keyframes');
+  // The logo image paints above the ring, so the stroke must sit entirely OUTSIDE the logo rim:
+  // inner stroke edge (r - stroke-width/2 in the 100-unit viewBox) exactly at 50 = the rim.
+  const html = fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  const r = Number((html.match(/boot-ring[\s\S]*?class="arc"[^>]*r="([\d.]+)"/) || [])[1]);
+  assert.ok(r > 0, 'the arc circle radius is declared');
+  assert.equal(r - sw / 2, 50, 'the stroke hugs the rim from the outside - the logo can never cover it');
 });
 
 test('the splash markup is logo image plus the ring', () => {
