@@ -59,7 +59,11 @@ test('slide 1 autoplays its trailer muted; the preview is capped at 5 s; the sli
     const active = root.querySelector('.hero-slide.active');
     const frame = active.querySelector('.hero-video iframe');
     assert.ok(frame, 'the trailer slide mounts its muted preview');
-    for (const p of ['autoplay=1', 'mute=1', 'playsinline=1']) assert.ok(frame.src.includes(p), `embeds with ${p}`);
+    assert.match(frame.src, /^https:\/\/www\.youtube\.com\/embed\//, 'the controllable player (not nocookie) so pauseVideo works');
+    for (const p of ['autoplay=1', 'mute=1', 'playsinline=1', 'enablejsapi=1']) assert.ok(frame.src.includes(p), `embeds with ${p}`);
+    const homeSrc = fs.readFileSync(new URL('../../app/js/views/home.js', import.meta.url), 'utf8');
+    assert.match(homeSrc, /\(hover: hover\)/, 'the hover pause is pointer-devices-only (touch must not freeze the slideshow)');
+    assert.match(homeSrc, /pausePreview\(slide\), CAP_MS/, 'the preview is capped at 5 s');
     assert.ok(intervals.includes(5000), 'the slideshow advances every 5 seconds');
 
     const btn = active.querySelector('[data-sound]');

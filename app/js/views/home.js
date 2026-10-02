@@ -57,7 +57,9 @@ function heroHtml(slides) {
 // Carousel behaviour: auto-advance, dots, swipe; pauses on hover/focus or when the tab is hidden.
 // The active slide plays the show's YouTube trailer muted (autoplay policy) behind the shade, with
 // an unmute switch on the banner - the same behaviour the main branch's hero had.
-export const heroTrailerSrc = (id) => `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=1&mute=1&controls=0&loop=1&playlist=${encodeURIComponent(id)}&playsinline=1&enablejsapi=1&rel=0&modestbranding=1`;
+// The youtube.com (not -nocookie) embed is used on purpose: the privacy-enhanced player ignores
+// postMessage commands, and the banner needs pauseVideo/unMute/mute for the 5 s cap and the switch.
+export const heroTrailerSrc = (id) => `https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1&mute=1&controls=0&loop=1&playlist=${encodeURIComponent(id)}&playsinline=1&enablejsapi=1&rel=0&modestbranding=1`;
 function mountHero(root, ctx) {
   const hero = $('.hero', root); if (!hero) return;
   const slides = $$('.hero-slide', hero), dots = $$('[data-dot]', hero);
@@ -103,8 +105,12 @@ function mountHero(root, ctx) {
   };
   const schedule = () => { clearInterval(timer); if (slides.length > 1 && !unmuted) timer = setInterval(() => { if (!paused && !document.hidden) show(i + 1); }, SLIDE_MS); };
   dots.forEach((d) => d.addEventListener('click', () => { show(+d.dataset.dot); schedule(); }));
-  hero.addEventListener('mouseenter', () => (paused = true)); hero.addEventListener('mouseleave', () => (paused = false));
-  hero.addEventListener('focusin', () => (paused = true)); hero.addEventListener('focusout', () => (paused = false));
+  // Hover/focus pause is for pointer devices only: on touch, a tap fires mouseenter/focusin with no
+  // matching leave, which would freeze the slideshow forever and let the preview play past 5 s.
+  if (window.matchMedia?.('(hover: hover) and (pointer: fine)')?.matches) {
+    hero.addEventListener('mouseenter', () => (paused = true)); hero.addEventListener('mouseleave', () => (paused = false));
+    hero.addEventListener('focusin', () => (paused = true)); hero.addEventListener('focusout', () => (paused = false));
+  }
   hero.addEventListener('click', (e) => {
     const b = e.target.closest('[data-sound]'); if (!b) return;
     const slide = b.closest('.hero-slide');
