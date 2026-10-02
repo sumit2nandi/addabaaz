@@ -65,7 +65,8 @@ function mountHero(root, ctx) {
   const slides = $$('.hero-slide', hero), dots = $$('[data-dot]', hero);
   let i = 0, timer, vTimer, capT, paused = false;
   const SLIDE_MS = 5000;   // a banner slide never lasts longer than 5 seconds…
-  const CAP_MS = 5000;     // …and a slide's preview never plays longer than 5 seconds (unless unmuted)
+  const CAP_MS = 5000;     // …and its preview never plays longer than 5 s — the slideshow keeps
+                           // rotating regardless of mute/unmute (sound never pauses the banners)
   let unmuted = false;
   const setSound = (btn, on) => { btn.setAttribute('aria-pressed', String(on)); btn.setAttribute('aria-label', on ? 'Mute preview' : 'Unmute preview'); btn.innerHTML = icon(on ? 'volume' : 'mute', { size: 18 }).s; };
   const pausePreview = (slide) => {
@@ -91,7 +92,7 @@ function mountHero(root, ctx) {
           box.innerHTML = `<video src="${s.url}" muted autoplay playsinline></video>`;
         } catch { /* locked or offline: poster only */ }
       }
-      if (!unmuted) capT = setTimeout(() => pausePreview(slide), CAP_MS);
+      capT = setTimeout(() => pausePreview(slide), CAP_MS);
     }, 900);
   };
   const show = (n) => {
@@ -103,7 +104,7 @@ function mountHero(root, ctx) {
     $$('[data-sound]', hero).forEach((b) => setSound(b, false));   // every slide (re)starts muted
     stopVideo(); startVideo(slides[i]);
   };
-  const schedule = () => { clearInterval(timer); if (slides.length > 1 && !unmuted) timer = setInterval(() => { if (!paused && !document.hidden) show(i + 1); }, SLIDE_MS); };
+  const schedule = () => { clearInterval(timer); if (slides.length > 1) timer = setInterval(() => { if (!paused && !document.hidden) show(i + 1); }, SLIDE_MS); };
   dots.forEach((d) => d.addEventListener('click', () => { show(+d.dataset.dot); schedule(); }));
   // Hover/focus pause is for pointer devices only: on touch, a tap fires mouseenter/focusin with no
   // matching leave, which would freeze the slideshow forever and let the preview play past 5 s.
@@ -118,9 +119,7 @@ function mountHero(root, ctx) {
     const f = $('iframe', slide), vid = $('video', slide);
     if (f) { try { f.contentWindow?.postMessage?.(JSON.stringify({ event: 'command', func: on ? 'unMute' : 'mute', args: [] }), '*'); } catch { /* iframe not ready */ } }
     if (vid) vid.muted = !on;
-    unmuted = on;
-    if (on) { clearInterval(timer); clearTimeout(capT); }   // chose to listen: stop the rotation and the 5 s cap
-    else schedule();                                       // muted again: the 5 s slideshow resumes
+    unmuted = on;   // sound only: the slideshow keeps rotating whether the preview is muted or not
     setSound(b, on);
   });
   let x0 = null;

@@ -1,7 +1,8 @@
 // Every show banner plays a muted preview when it activates: the trailer, or the 1st episode when
 // there is no trailer (only when the viewer's gate allows it). No preview plays longer than 5 s and
-// the slideshow advances every 5 s; the unmute switch on the banner pauses the rotation. The
-// carousel must stay swipeable on touch (the Android app).
+// the slideshow advances every 5 s — regardless of mute/unmute (the sound switch never pauses the
+// rotation). The carousel must stay swipeable on touch (the Android app) and the preview video must
+// never be cropped from the sides.
 // Run: node --test test/frontend/hero-trailer.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -73,6 +74,9 @@ test('slide 1 autoplays its trailer muted; the preview is capped at 5 s; the sli
     assert.equal(btn.getAttribute('aria-pressed'), 'true', 'the switch unmutes');
     btn.dispatchEvent(new window.Event('click', { bubbles: true }));
     assert.equal(btn.getAttribute('aria-pressed'), 'false', 'and mutes again');
+    assert.doesNotMatch(homeSrc, /slides\.length > 1 && !unmuted/, 'the slideshow timer never depends on the mute state');
+    assert.doesNotMatch(homeSrc, /if \(on\) \{ clearInterval\(timer\)/, 'unmuting must not stop the rotation');
+    assert.match(homeSrc, /capT = setTimeout\(\(\) => pausePreview\(slide\), CAP_MS\);/, 'the 5 s cap is unconditional');
   });
 });
 
@@ -90,9 +94,11 @@ test('a show without a trailer falls back to its 1st episode, capped at 5 second
     assert.ok(vid, 'the 1st episode preview mounts when there is no trailer');
     assert.match(vid.getAttribute('src') || vid.src, /r2\.test/, 'via the signed stream URL');
     assert.equal(vid.hasAttribute('muted'), true, 'muted');
+    // Unmute first: the slideshow and its 5 s cap must keep going regardless of sound.
+    active.querySelector('[data-sound]').dispatchEvent(new window.Event('click', { bubbles: true }));
     let pausedCalls = 0; vid.pause = () => { pausedCalls++; };
     await sleep(5200);
-    assert.ok(pausedCalls >= 1, 'the preview stops after 5 seconds');
+    assert.ok(pausedCalls >= 1, 'the preview stops after 5 seconds even while unmuted');
     assert.ok(!root.querySelector('.hero-slide:not(.active) video'), 'inactive slides carry no media');
   });
 });
@@ -107,5 +113,8 @@ test('the banner is swipeable with touch pointer events (the Android app)', asyn
     assert.notEqual(root.querySelector('.hero-slide.active').dataset.i, first, 'a horizontal swipe moves to the next banner');
     const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
     assert.match(css, /\.hero \{ touch-action: pan-y; \}/, 'touch-action lets touch WebViews deliver the swipe');
+    assert.doesNotMatch(css, /\.hero-video [^{]*\{[^}]*object-fit: cover/, 'the banner video must never be cropped to fill');
+    assert.match(css, /\.hero-video iframe \{[^}]*width: 100%; height: auto;[^}]*aspect-ratio: 16 \/ 9/, 'YouTube previews scale to the banner width, never cut from the sides');
+    assert.match(css, /\.hero-video video \{[^}]*width: 100%; height: auto;[^}]*aspect-ratio: 16 \/ 9/, 'file previews scale to the banner width, never cut from the sides');
   });
 });
