@@ -400,8 +400,8 @@ test('admin: app push reaches registered devices through FCM and drops dead toke
     const mailUser = await signup();
     const mail = await broadcast({ channel: 'email', title: 'New this week', body: 'Hello!\n\nSeason 2 is streaming.', url: '/plans', button: 'Watch now', audience: 'all' });
     assert.equal(mail.status, 'sent'); assert.ok(mail.sent >= 1); assert.equal(mail.total >= mail.sent, true);
-    const got = mails.find((m) => m.to === mailUser.email);
-    assert.ok(got, 'the announcement reached a normal account');
+    const got = mails.find((m) => m.to === mailUser.email && /New this week/.test(m.subject));
+    assert.ok(got, 'the announcement reached a normal account (the account’s own verification mail is not it)');
     assert.match(got.subject, /New this week/);
     assert.match(got.html, /Season 2 is streaming/); assert.match(got.html, /Watch now/);
     const unsub = String(got.text).match(/https:\/\/addabaaz\.in\/api\/v1\/notifications\/unsubscribe\?u=[^&\s]+&t=[\w-]+/)[0];
@@ -412,7 +412,7 @@ test('admin: app push reaches registered devices through FCM and drops dead toke
     mails.length = 0;
     const again = await broadcast({ channel: 'email', title: 'Second announcement', body: 'More news', audience: 'all' });
     assert.equal(again.status, 'sent');
-    assert.equal(mails.some((m) => m.to === mailUser.email), false, 'unsubscribed accounts are skipped');
+    assert.equal(mails.some((m) => m.to === mailUser.email && /Second announcement/.test(m.subject)), false, 'unsubscribed accounts are skipped');
     const evicted = (await adm('GET', '/notifications')).body.email.audiences.find((a) => a.id === 'all');
     assert.ok(evicted.count >= 1);
 
