@@ -80,8 +80,16 @@ export default async function watch(ctx) {
   // mountComments($('#commentsBox', ctx.root), { video: v });
   // The player area shows a message instead of the player when the viewer is locked out.
   const msg = $('#playerMsg', ctx.root), slot = $('#playerSlot', ctx.root);
+  // Behind the lock wall the video's own artwork is shown instead of a black background: the video's thumbnail
+  // (YouTube/R2 artwork) first, then its poster, then the parent show/soon artwork.
+  const wallArt = v.thumbnail || cat.thumb(v) || v.poster || (show || soon)?.backdrop || (show || soon)?.poster || '';
   const wall = (kind) => {
     msg.hidden = false; slot.innerHTML = '';
+    const box = $('#playerBox', ctx.root);
+    if (wallArt && !box.classList.contains('has-wall')) {
+      box.classList.add('has-wall');
+      box.insertAdjacentHTML('afterbegin', img(wallArt, '', { cls: 'player-wall-art', lazy: false }).s);
+    }
     msg.innerHTML = kind === 'login'
       ? html`${icon('lock', { size: 40 })}<h2>Sign in to watch</h2><p>This is ADDABAAZ Premium. Sign in or create a free account to watch it — everything else on ADDABAAZ stays open to everyone.</p><div class="row"><a class="btn btn-primary btn-lg" href="#/signin?next=${here}">Sign in</a><a class="btn btn-ghost btn-lg" href="#/signup?next=${here}">Create account</a></div>`.s
       : kind === 'plan'

@@ -4,6 +4,7 @@
 // Run:  node --test test/frontend/watch-autoplay.test.mjs
 import { test, before } from 'node:test';
 import assert from 'node:assert';
+import fs from 'node:fs';
 import { register } from 'node:module';
 import { parseHTML } from 'linkedom';
 
@@ -24,7 +25,7 @@ const { app } = await import('../../app/js/app.js');
 const watch = (await import('../../app/js/views/watch.js')).default;
 
 const VIDEO = { id: 'v1', kind: 'episode', episode: 1, title: 'Test episode', showId: 's1', duration: 100, views: 1, publishedAt: '2026-09-01T00:00:00Z', source: { type: 'youtube', id: 'abc' } };
-const PREMIUM_VIDEO = { ...VIDEO, id: 'vp', episode: 2, title: 'Premium episode', access: 'premium', source: { type: 'r2', key: 'premium/x.mp4' } };
+const PREMIUM_VIDEO = { ...VIDEO, id: 'vp', episode: 2, title: 'Premium episode', access: 'premium', poster: 'media/premium-vp.webp', source: { type: 'r2', key: 'premium/x.mp4' } };
 app.catalog = app.fullCatalog = new Catalog({ schema: 1, updatedAt: '', shows: [{ id: 's1', title: 'Show', titleEn: 'Show', genres: [], cast: [], type: 'series' }], videos: [VIDEO, PREMIUM_VIDEO], upcoming: [], gallery: [] });
 app.user = {
   remote: null, account: null, profiles: [], profile: { id: 'p1', name: 'T' }, activeId: 'p1', supportsAuth: false, isKids: false,
@@ -112,4 +113,30 @@ test('free videos get no crown and no premium markers', async () => {
   assert.equal(box.classList.contains('has-premium'), false);
   globalThis.__watchOpts.onState('playing');   // toggling the state class on a free video is harmless
   assert.equal(box.querySelector('.premium-mark'), null);
+});
+
+test('locked premium shows the video artwork behind the lock wall instead of a black background', async () => {
+  const originalGate = app.user.gateFor;
+  app.user.gateFor = (v, c) => (c.isPremium(v) ? 'plan' : 'ok');   // signed-in viewer without a plan
+  try {
+    document.getElementById('view').innerHTML = '';
+    const root = document.createElement('div');
+    document.getElementById('view').appendChild(root);
+    await watch({ root, params: { id: 'vp' }, setTitle() {}, onCleanup() {} });
+    const box = root.querySelector('#playerBox');
+    assert.ok(box.classList.contains('has-wall'), 'the player box flags that artwork sits behind the wall');
+    const art = box.querySelector('img.player-wall-art');
+    assert.ok(art, 'the video thumbnail/poster is drawn behind the lock wall');
+    assert.equal(art.getAttribute('src'), 'media/premium-vp.webp');
+    assert.equal(root.querySelector('#playerMsg').hidden, false, 'the lock wall itself still shows');
+    assert.equal(root.querySelector('#playerSlot').innerHTML, '', 'no player is created while locked');
+  } finally {
+    app.user.gateFor = originalGate;
+  }
+});
+
+test('lock-wall CSS: artwork covers the box and the wall stays readable over it', () => {
+  const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /img\.player-wall-art \{[^}]*object-fit: cover/, 'the artwork fills the player box instead of a black background');
+  assert.match(css, /\.player-box\.has-wall \.player-overlay \{[^}]*linear-gradient/, 'the wall dims the artwork so its text stays readable');
 });

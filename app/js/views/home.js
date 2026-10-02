@@ -110,9 +110,9 @@ function recentlyAddedSection(cat, N) {
   const videos = cat.latestVideos(N).map((v) => videoCard(v, { showDuration: false }));
   if (!reels.length && !videos.length) return html``;
   return html`<section class="recently-added" aria-labelledby="recentlyAddedTitle">
-    <div class="rail-head"><div><h2 id="recentlyAddedTitle">Recently Added</h2><p class="rail-sub">The latest from ADDABAAZ</p></div></div>
-    ${rail({ title: 'Reels', subtitle: 'Bite-sized ADDABAAZ', items: reels, href: '#/reels', linkLabel: 'Watch reels', cls: 'r-reel', hideHeading: true })}
-    ${rail({ title: 'Episodes & Videos', subtitle: 'Recent episodes and videos from ADDABAAZ', items: videos, cls: 'r-video', hideHeading: true })}
+    <div class="rail-head"><div><h2 id="recentlyAddedTitle">Recently Added</h2></div></div>
+    ${rail({ title: 'Reels', items: reels, href: '#/reels', linkLabel: 'Watch reels', cls: 'r-reel', hideHeading: true })}
+    ${rail({ title: 'Episodes & Videos', items: videos, cls: 'r-video', hideHeading: true })}
   </section>`;
 }
 
@@ -149,10 +149,10 @@ function comingSoonSection(cat) {
   if (!releases.length && !comingSoon.length) return html``;
   return html`<div class="home-upcoming-sections">
     ${releases.length ? html`<section class="rail home-release-section" aria-label="Releasing This Month">
-      <div class="rail-head"><div><h2>Releasing This Month</h2><p class="rail-sub">New originals from ADDABAAZ</p></div><a class="see-all" href="#/upcoming">Show all ${icon('right', { size: 16 })}</a></div>
+      <div class="rail-head"><div><h2>Releasing This Month</h2></div><a class="see-all" href="#/upcoming">Show all ${icon('right', { size: 16 })}</a></div>
       ${releaseSlideshow(releases)}
     </section>` : ''}
-    ${comingSoon.length ? rail({ title: 'Coming Soon', subtitle: 'More new originals from ADDABAAZ', items: comingSoon.map(soonCard), href: '#/upcoming', linkLabel: 'Show all', cls: 'r-poster home-coming-soon' }) : ''}
+    ${comingSoon.length ? rail({ title: 'Coming Soon', items: comingSoon.map(soonCard), href: '#/upcoming', linkLabel: 'Show all', cls: 'r-poster home-coming-soon' }) : ''}
   </div>`;
 }
 
@@ -176,7 +176,7 @@ export default async function home(ctx) {
       ${rail({ title: 'My List', items: mine, href: '#/list', cls: 'r-poster' })}
       ${comingSoonSection(cat)}
       ${recentlyAddedSection(cat, N)}
-      ${rail({ title: 'Top 10 Episodes', subtitle: 'Most watched on ADDABAAZ', items: cat.trending(10, demoteMature ? { matureCap: 2 } : {}).map((v, i) => videoCard(v, { rank: i + 1, showDuration: false })), cls: 'r-top' })}
+      ${rail({ title: 'Top 10 Episodes', items: cat.trending(10, demoteMature ? { matureCap: 2 } : {}).map((v, i) => videoCard(v, { rank: i + 1, showDuration: false })), cls: 'r-top' })}
       ${rail({ title: 'Shows', items: cat.shows.map((s) => showCard(s)), href: '#/shows', linkLabel: 'Browse all', cls: 'r-poster' })}
       ${cat.shows.map((s) => rail({ title: s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title, items: cat.episodes(s.id).slice().reverse().map((v) => videoCard(v, { showName: false, showDuration: false })), href: `#/show/${s.id}`, linkLabel: 'Open show', cls: 'r-video' }))}
       ${rail({ title: 'Behind the Scenes', items: cat.gallery.slice(0, N).map(galleryCard), href: '#/gallery', cls: 'r-poster' })}

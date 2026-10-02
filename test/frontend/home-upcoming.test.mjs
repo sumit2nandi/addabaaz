@@ -57,6 +57,7 @@ test('homepage releases rotate as detail-linked slides and Recently Added keeps 
     assert.ok(recent.querySelector('.r-reel .rail-track'));
     assert.ok(recent.querySelector('.r-video .rail-track'));
     assert.deepEqual([...recent.querySelectorAll('h2, h3')].map((heading) => heading.textContent.trim()), ['Recently Added']);
+    assert.equal(root.querySelectorAll('.rail-sub').length, 0, 'home sections carry no detail text under their headings');
 
     root.querySelector('[data-release-next]').dispatchEvent(new window.Event('click'));
     assert.equal(slides[1].classList.contains('active'), true, 'the next control advances the slideshow');

@@ -186,22 +186,28 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 
 /* ---------- grids ---------- */
 .grid { display: grid; gap: 22px 16px; }
-.grid-shows, .grid-upcoming { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.grid-shows { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .grid-videos { grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); }
 .grid-reels { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 .grid-gallery { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+/* Coming Soon page: portrait artwork tiles two per row, landscape (or square) artwork gets a full-width row;
+   every tile crops its image to fill, so mixed shapes always line up cleanly. */
+.grid-upcoming { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-upcoming .show-tile.is-wide { grid-column: 1 / -1; }
+.grid-upcoming .upcoming-page-poster { aspect-ratio: 2/3; }
+.grid-upcoming .show-tile.is-wide .upcoming-page-poster { aspect-ratio: 16/9; }
+.grid-upcoming .upcoming-page-poster img { object-fit: cover; }
 .show-tile { display: grid; gap: 10px; align-content: start; } .show-tile-info { display: grid; gap: 6px; justify-items: start; } .show-tile-info > a { font-size: 17px; font-weight: 600; }
-@media (min-width: 700px) { .grid-shows, .grid-gallery, .grid-upcoming { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); } .grid-reels { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); } }
+@media (min-width: 700px) { .grid-shows, .grid-gallery { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); } .grid-reels { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); } }
 
 /* ---------- cards ---------- */
 .card { position: relative; display: block; border-radius: var(--radius); transition: transform .3s var(--ease), box-shadow .3s; text-align: left; background: none; border: 0; padding: 0; width: 100%; }
 .poster, .thumb { position: relative; overflow: hidden; border-radius: var(--radius); background: var(--panel-2); }
 .poster { aspect-ratio: 2/3; } .thumb { aspect-ratio: 16/9; }
 .poster img, .thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s var(--ease); }
-.poster-adaptive { aspect-ratio: 2/3; }
-.poster-adaptive img, .poster-soon img { object-fit: contain; }
+.poster-soon img { object-fit: contain; }
 .home-coming-soon .poster-soon img { object-fit: cover; }
-.card-soon:hover .poster-adaptive-image, .card-soon:hover .poster-soon-image { transform: none; }
+.card-soon:hover .poster-soon-image { transform: none; }
 img.img-failed { opacity: 0; }
 .card-gallery .poster { aspect-ratio: 2/3; cursor: zoom-in; }
 @media (hover: hover) {
@@ -310,7 +316,10 @@ img.img-failed { opacity: 0; }
 .player-slot, .player-slot iframe, .player-slot video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
 .player-slot > div { width: 100%; height: 100%; }
 .player-overlay { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; text-align: center; padding: 20px; background: radial-gradient(circle, rgba(30,30,36,.95), rgba(0,0,0,.98)); z-index: 3; } .player-overlay[hidden], .next-up[hidden] { display: none; }
-.player-overlay h2 { font-size: 22px; } .player-overlay p { color: var(--text-2); max-width: 44ch; } .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; } .row.end { justify-content: flex-end; }
+.player-overlay h2 { font-size: 22px; } .player-overlay p { color: var(--text-2); max-width: 44ch; }
+/* Locked premium: the video's own artwork fills the player box behind the wall instead of a black background. */
+img.player-wall-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: brightness(.55) saturate(.9); }
+.player-box.has-wall .player-overlay { background: linear-gradient(180deg, rgba(10, 10, 14, .55), rgba(0, 0, 0, .88)); } .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; } .row.end { justify-content: flex-end; }
 .next-up { position: absolute; right: 14px; bottom: 14px; z-index: 4; max-width: calc(100% - 28px); }
 .next-card { display: flex; gap: 14px; align-items: center; background: rgba(12,12,14,.94); border: 1px solid var(--border-2); border-radius: var(--radius); padding: 10px; backdrop-filter: blur(10px); } .next-card img { width: 120px; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; } .next-card > div { display: grid; gap: 6px; font-size: 13px; }
 .watch-info { padding: 18px var(--pad) 8px; display: grid; gap: 12px; }
