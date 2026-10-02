@@ -18,6 +18,7 @@ import zlib from 'node:zlib';
 import crypto from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
 import { Readable, PassThrough } from 'node:stream';
+import { StringDecoder } from 'node:string_decoder';
 import mysql from 'mysql2/promise';
 import { dbConfigFromEnv } from './config.js';
 import { createR2 } from './r2.js';
@@ -28,10 +29,21 @@ const MAGIC = Buffer.from('ABBK1');
 const SKIP = new Set(['schema_migrations']);
 /** Async line iterator over a stream (errors on the stream surface as exceptions from the for-await). */
 // Reads a stream and yields one text line at a time (each line is one JSON record).
-async function* lines(stream) {
+export async function* lines(stream) {
   let rest = '';
-  try { for await (const chunk of stream) { rest += chunk.toString('utf8'); let i; while ((i = rest.indexOf('\n')) >= 0) { yield rest.slice(0, i); rest = rest.slice(i + 1); } } }
-  catch (e) { throw e instanceof SyntaxError ? e : new Error(stream.friendly || e.message); }
+  // A chunk can end in the middle of a multi-byte character (gunzip emits fixed-size blocks), so the
+  // bytes are decoded through one StringDecoder that carries the partial character over to the next
+  // chunk. Decoding each chunk on its own would turn such a character into U+FFFD and quietly corrupt
+  // the restored row (only for some titles, depending on where the boundaries fall).
+  const decoder = new StringDecoder('utf8');
+  try {
+    for await (const chunk of stream) {
+      rest += decoder.write(chunk);
+      let i;
+      while ((i = rest.indexOf('\n')) >= 0) { yield rest.slice(0, i); rest = rest.slice(i + 1); }
+    }
+    rest += decoder.end();
+  } catch (e) { throw e instanceof SyntaxError ? e : new Error(stream.friendly || e.message); }
   if (rest) yield rest;
 }
 // Quotes a table name for SQL (table names come from the database itself, never from users).
