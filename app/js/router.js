@@ -65,12 +65,35 @@ function installHistoryLinks() {
   });
 }
 
+/* Navigation must land on the new page at the top (or back at a saved offset) INSTANTLY. The site
+ * sets `html { scroll-behavior: smooth }` for in-page anchors, and a plain
+ * `scrollTo({ behavior: 'auto' })` resolves `auto` to that CSS value - so tapping a tab after
+ * scrolling deep into a long page played a slow, visible scroll-up on the freshly drawn page. The
+ * inline override forces `auto` for this one jump (inline beats the stylesheet), and `instant` says
+ * it outright for engines that support it; the inline value is put back right after. */
+export function jumpScroll(top) {
+  const root = document.documentElement;
+  const prev = root.style.scrollBehavior;
+  root.style.scrollBehavior = 'auto';
+  try {
+    window.scrollTo({ top, behavior: 'instant' });
+  } catch {
+    // An engine that does not know 'instant' throws on the enum: plain (now non-smooth) jump instead.
+    try { window.scrollTo({ top, behavior: 'auto' }); } catch { window.scrollTo(0, top); }
+  } finally {
+    root.style.scrollBehavior = prev;
+  }
+}
+
 // Draws pages. Each navigation: save scroll position, run the old page's cleanups, load the view module for the route, insert its DOM, update the <head> (SEO) and restore scroll.
 // A counter (`#token`) makes sure a slow page never overwrites a newer one.
 export class Router {
   #cleanups = []; #token = 0; #scroll = new Map(); #lastKey = null; #fresh = true; #depth = 0;
   constructor(root, { onRoute } = {}) {
     this.root = root; this.onRoute = onRoute;
+    // The router restores scroll positions itself (the #scroll map below): the browser's own
+    // restoration would fight it and re-scroll the freshly drawn page.
+    try { history.scrollRestoration = 'manual'; } catch { /* older engine: the jumps still work */ }
     if (HISTORY) {
       window.addEventListener('popstate', () => { if (this.#keyNow() !== this.#lastKey) this.resolve(); });      // (lightbox pushes same-URL states)
       window.addEventListener('ab:navigate', (e) => { if (!e.detail?.replace) this.#fresh = true; this.resolve(); });
@@ -126,7 +149,7 @@ export class Router {
     const meta = app.catalog ? pageMeta({ path, query, cat: app.catalog, studio: app.studio, origin: siteOrigin() }) : null;
     if (meta && match) applyHead(meta, { canonical: HISTORY });
     else document.title = ctx.title ? `${ctx.title} — ADDABAAZ` : 'ADDABAAZ — Bengali Originals, Comedy & Web Series';
-    window.scrollTo({ top: restore ? this.#scroll.get(key) || 0 : 0, behavior: 'auto' });
+    jumpScroll(restore ? this.#scroll.get(key) || 0 : 0);
     this.onRoute?.({ path, query, params, view: match?.view });
     document.getElementById('announcer').textContent = ctx.title || meta?.title || 'ADDABAAZ';
   }
