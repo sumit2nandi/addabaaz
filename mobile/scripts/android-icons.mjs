@@ -26,6 +26,17 @@ export function stampLauncherIcons(androidRoot) {
   fs.mkdirSync(path.join(res, 'drawable'), { recursive: true });
   fs.copyFileSync(path.join(ICON_SOURCE, 'ic_launcher_playstore.png'), path.join(res, 'drawable', 'ic_launcher_playstore.png'));
   done.push('drawable/ic_launcher_playstore.png');
+  // The stock Capacitor splash (white tile + blue bot) flashes for a moment on every launch; the
+  // branded dark splash replaces it in every density bucket AND as the drawable/splash.png the
+  // template's styles reference (system splash icon + the SplashScreen plugin both use it).
+  for (const d of DENSITIES) {
+    const target = path.join(res, `drawable-${d}`);
+    fs.mkdirSync(target, { recursive: true });
+    fs.copyFileSync(path.join(ICON_SOURCE, 'splash', `${d}.png`), path.join(target, 'splash.png'));
+    done.push(`drawable-${d}/splash.png`);
+  }
+  fs.copyFileSync(path.join(ICON_SOURCE, 'splash', 'mdpi.png'), path.join(res, 'drawable', 'splash.png'));
+  done.push('drawable/splash.png');
   const adaptive = path.join(res, 'mipmap-anydpi-v26');
   if (fs.existsSync(adaptive)) { fs.rmSync(adaptive, { recursive: true, force: true }); done.push('removed mipmap-anydpi-v26 (adaptive XML would override the logo)'); }
   return done;

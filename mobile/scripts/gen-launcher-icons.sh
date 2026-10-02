@@ -16,4 +16,12 @@ for spec in "mdpi 48" "hdpi 72" "xhdpi 96" "xxhdpi 144" "xxxhdpi 192"; do
 done
 convert -size 512x512 xc:none -fill white -draw "circle 256,256 256,0" /tmp/round-mask.png
 convert -size 512x512 xc:"#050505" \( "$SRC" -resize 512x512 /tmp/round-mask.png -compose DstIn -composite \) -compose Over -composite -depth 8 "$OUT/ic_launcher_playstore.png"
-identify "$OUT"/*/ic_launcher.png "$OUT"/*/ic_launcher_round.png "$OUT/ic_launcher_playstore.png" | cut -c1-130
+# Branded splash (dark bg + centred round logo): replaces the stock white Capacitor tile that
+# flashes on launch; stamped over res/drawable*/splash.png by patch-android.mjs.
+mkdir -p "$OUT/splash"
+for spec in "mdpi 320" "hdpi 480" "xhdpi 640" "xxhdpi 960" "xxxhdpi 1280"; do
+  set -- $spec; d=$1; s=$2; l=$((s * 40 / 100)); c=$((l / 2))
+  convert -size "${l}x${l}" xc:none -fill white -draw "circle $c,$c $c,0" "/tmp/round-mask-$l.png"
+  convert -size "${s}x${s}" xc:"#050505" \( "$SRC" -resize "${l}x${l}" "/tmp/round-mask-$l.png" -compose DstIn -composite \) -compose Over -gravity center -composite -depth 8 "$OUT/splash/$d.png"
+done
+identify "$OUT"/*/ic_launcher.png "$OUT"/*/ic_launcher_round.png "$OUT/ic_launcher_playstore.png" "$OUT"/splash/*.png | cut -c1-130

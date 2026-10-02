@@ -125,6 +125,8 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     const first = run();
     assert.match(first, /AndroidManifest\.xml: main activity locked to portrait/);
     assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'src', 'main', 'res', 'mipmap-mdpi', 'ic_launcher.png')), 'the patch also stamps the logo launcher icons');
+    assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'src', 'main', 'res', 'drawable-xxxhdpi', 'splash.png')), 'the branded dark splash replaces the stock white Capacitor tile');
+    assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'src', 'main', 'res', 'drawable', 'splash.png')), 'the template splash.png itself is overwritten');
     const patched = fs.readFileSync(manifest, 'utf8');
     assert.equal(isPortraitLocked(patched), true);
     assert.equal(patched, addOAuthRedirect(lockPortrait(generated), 'in.addabaaz.app'), 'portrait lock plus the Google sign-in deep-link filter');
