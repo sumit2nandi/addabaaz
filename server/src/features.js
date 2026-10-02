@@ -296,9 +296,9 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       /* --- native app push devices (Android/iOS apps: FCM tokens) — Admin → Notifications sends to these --- */
       // The apps call this after FCM/APNs hands them a token; the same token is never shared between accounts.
       api.post('/devices', wrap(async (req, res) => {
-        const { token, platform = 'android', label = null } = req.body || {};
+        const { token, platform = null, label = null } = req.body || {};
         if (typeof token !== 'string' || token.length < 20 || token.length > 512) throw bad('Invalid device token.');
-        await db.devices.upsert(req.user.id, { hash: endpointHash(token), token, platform, label });
+        await db.devices.upsert(req.user.id, { hash: endpointHash(token), token, platform, label: typeof label === 'string' && label.trim() ? label.trim() : null });
         res.status(201).json({ ok: true });
       }));
       api.delete('/devices', wrap(async (req, res) => { if (typeof req.body?.token === 'string') await db.devices.remove(req.user.id, endpointHash(req.body.token)); res.sendStatus(204); }));

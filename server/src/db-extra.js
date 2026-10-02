@@ -139,11 +139,17 @@ export function extraDb({ q, tx, iso }) {
 
   // ---- Native app push devices (FCM/APNs tokens; the Capacitor apps POST these to /api/v1/devices) ----
   const devices = {
-    /** Registers (or refreshes) a token for a user; the same token on another account moves to it. */
-    async upsert(userId, { hash, token, platform = 'android', label = null }) {
-      await q(`INSERT INTO push_devices (id, user_id, platform, token_hash, token, label) VALUES (UUID(),?,?,?,?,?)
-        ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), platform = VALUES(platform), token = VALUES(token), label = VALUES(label), fail_count = 0, last_seen = UTC_TIMESTAMP(3)`,
-      [userId, ['android', 'ios', 'web'].includes(platform) ? platform : 'android', hash, String(token).slice(0, 512), label ? String(label).slice(0, 120) : null]);
+    /**
+     * Registers (or refreshes) a token for a user; the same token on another account moves to it.
+     * A re-registration that only carries the token (the apps usually just send that) keeps the stored
+     * platform and label instead of wiping them.
+     */
+    async upsert(userId, { hash, token, platform = null, label = null }) {
+      const plat = ['android', 'ios', 'web'].includes(platform) ? platform : null;
+      const lab = label ? String(label).slice(0, 120) : null;
+      await q(`INSERT INTO push_devices (id, user_id, platform, token_hash, token, label) VALUES (UUID(),?,COALESCE(?,'android'),?,?,?)
+        ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), token = VALUES(token), platform = COALESCE(?, platform), label = COALESCE(?, label), fail_count = 0, last_seen = UTC_TIMESTAMP(3)`,
+      [userId, plat, hash, String(token).slice(0, 512), lab, plat, lab]);
     },
     /** Removes one token (sign-out, permission revoked). Returns the number of rows deleted. */
     async remove(userId, hash) { return (await q('DELETE FROM push_devices WHERE user_id = ? AND token_hash = ?', [userId, hash])).affectedRows; },
