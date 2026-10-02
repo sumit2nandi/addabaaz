@@ -45,6 +45,7 @@ export class Catalog {
   upcomingByCategory(category) { return this.upcoming.filter((item) => this.upcomingCategory(item) === category); }
   /** Premium access is inherited from the parent series so every episode is gated consistently. */
   isPremium(video) {
+    if (this.isFreeKind(video)) return false;   // trailers, clips and reels play for everyone - no crown, no lock
     return video?.access === 'premium' || (video?.showId && this._show.get(video.showId)?.access === 'premium') || false;
   }
   // Trailers, clips and reels are the marketing for a title: they always play for everyone,

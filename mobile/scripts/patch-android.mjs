@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lockPortrait, isPortraitLocked } from './android-manifest.mjs';
+import { stampLauncherIcons } from './android-icons.mjs';
 
 const MIN_AGP = '8.9.1';           // Android Gradle Plugin
 const SDK = 36;                    // compileSdk and targetSdk (Android 16)
@@ -43,5 +44,9 @@ patch('app/src/main/AndroidManifest.xml', 'main activity locked to portrait', (t
   if (!isPortraitLocked(out)) throw new Error('[android:patch] could not lock MainActivity to portrait - AndroidManifest.xml changed shape; update mobile/scripts/android-manifest.mjs.');
   return out;
 });
+
+// The APK installs with the website logo as its launcher icon (not the stock Capacitor bot):
+// the pre-rendered logo PNGs replace every mipmap density and the adaptive-icon XML is dropped.
+for (const line of stampLauncherIcons(root)) console.log(`[android:patch] res: ${line}`);
 
 console.log('[android:patch] done. In Android Studio: SDK Manager -> install "Android 16 (API 36)" if asked, then File -> Sync Project with Gradle Files.');

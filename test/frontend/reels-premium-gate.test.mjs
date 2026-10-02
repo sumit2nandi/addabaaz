@@ -1,6 +1,6 @@
-// Trailers, clips and reels are NEVER locked: even flagged premium themselves, or belonging to a
-// Plus-only show, the gate says 'ok' and the Reels feed plays them like any other reel. The crown
-// still marks them as belonging to a premium show - the preview is free, the show is not.
+// Trailers, clips and reels are NEVER locked and never carry the crown: even flagged premium
+// themselves, or belonging to a Plus-only show, the gate says 'ok', the Reels feed plays them like
+// any other reel and no premium badge is drawn - the preview is free, only the show is Plus.
 // Run:  node --test test/frontend/reels-premium-gate.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -63,7 +63,7 @@ test('gateFor: trailers, clips and reels always play; the premium episode stays 
   assert.notEqual(u.gateFor(cat.video('premium-ep'), cat), 'ok', 'the episode of the same show still requires a plan');
 });
 
-test('the Reels feed plays a premium-show reel with no lock wall (crown still shown)', async () => {
+test('the Reels feed plays a premium-show reel with no lock wall and no crown', async () => {
   app.user = await guestUser();
   app.user.streamUrl = async () => { throw new Error('A YouTube reel must not request an R2 stream URL'); };
   const { default: reels } = await import('../../app/js/views/reels.js');
@@ -73,7 +73,8 @@ test('the Reels feed plays a premium-show reel with no lock wall (crown still sh
   await reels({ root, params: {}, setTitle() {}, onCleanup(fn) { cleanup = fn; } });
 
   const section = root.querySelector('.reel');
-  assert.ok(section.querySelector('.reel-frame.has-premium .premium-mark'), 'the crown still marks the premium show');
+  assert.equal(section.querySelector('.premium-mark'), null, 'free previews wear no crown, even on a premium show');
+  assert.equal(section.querySelector('.reel-frame.has-premium'), null, 'no premium framing on a free preview');
   observerCb([{ target: section, isIntersecting: true, intersectionRatio: 1 }]);   // scroll the reel into view
   await new Promise((r) => setTimeout(r, 20));
   assert.equal(section.querySelector('.reel-gate'), null, 'no lock wall is ever drawn on a reel');

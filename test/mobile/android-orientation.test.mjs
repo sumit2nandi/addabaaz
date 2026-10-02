@@ -51,7 +51,8 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-android-'));
   try {
     fs.mkdirSync(path.join(dir, 'scripts'));
-    for (const f of ['patch-android.mjs', 'android-manifest.mjs']) fs.copyFileSync(new URL(f, SCRIPTS), path.join(dir, 'scripts', f));
+    for (const f of ['patch-android.mjs', 'android-manifest.mjs', 'android-icons.mjs']) fs.copyFileSync(new URL(f, SCRIPTS), path.join(dir, 'scripts', f));
+    fs.cpSync(new URL('../../mobile/android-icons', import.meta.url), path.join(dir, 'android-icons'), { recursive: true });
     const manifest = path.join(dir, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
     fs.mkdirSync(path.dirname(manifest), { recursive: true });
     fs.writeFileSync(manifest, generated);
@@ -59,6 +60,7 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
 
     const first = run();
     assert.match(first, /AndroidManifest\.xml: main activity locked to portrait/);
+    assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'src', 'main', 'res', 'mipmap-mdpi', 'ic_launcher.png')), 'the patch also stamps the logo launcher icons');
     const patched = fs.readFileSync(manifest, 'utf8');
     assert.equal(isPortraitLocked(patched), true);
     assert.equal(patched, lockPortrait(generated));

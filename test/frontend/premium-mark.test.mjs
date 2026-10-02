@@ -73,6 +73,7 @@ test('premium cards carry the crown (and the label chip steps aside); free cards
 
   assert.ok(dom(showCard(app.catalog.show('pro-show'))).querySelector('.poster .premium-mark'), 'premium show poster has the crown');
   assert.equal(dom(showCard(app.catalog.show('free-show'))).querySelector('.premium-mark'), null);
-  assert.ok(dom(reelCard(app.catalog.video('pro-reel'))).querySelector('.thumb .premium-mark'), 'premium reel card has the crown');
+  // Reels (like trailers and clips) are free previews: they never wear the crown, even on a premium show.
+  assert.equal(dom(reelCard(app.catalog.video('pro-reel'))).querySelector('.premium-mark'), null, 'a premium-flagged reel is free content: no crown');
   assert.equal(dom(reelCard(app.catalog.video('free-reel'))).querySelector('.premium-mark'), null);
 });

@@ -47,7 +47,9 @@ ul { margin: 0; padding: 0; list-style: none; }
 .boot { gap: 0; }
 .boot-mark { position: relative; width: 116px; height: 116px; display: grid; place-items: center; }
 .boot-mark img { position: relative; z-index: 1; width: 88px; height: 88px; border-radius: 50%; object-fit: cover; box-shadow: 0 6px 24px rgba(0,0,0,.45); }
-.boot-ring { position: absolute; inset: 0; border: 3px solid rgba(255,255,255,.14); border-top-color: var(--accent); border-right-color: rgba(229,9,20,.55); border-radius: 50%; animation: spin .9s linear infinite; }
+/* The ring spins exactly around the logo's edge: the mark box is 116px, the logo 88px, so an inset of
+   (116 - 88) / 2 = 14px puts the circle right on the logo's rim instead of floating outside it. */
+.boot-ring { position: absolute; inset: 14px; border: 3px solid rgba(255,255,255,.14); border-top-color: var(--accent); border-right-color: rgba(229,9,20,.55); border-radius: 50%; animation: spin .9s linear infinite; }
 /* The boot splash is an in-flow block, not a full-screen overlay — without this the footer/tab bar
    show a stray "ADDABAAZ" line at the bottom of the screen while the app loads. Hidden until the
    first page replaces #boot (JS marks the body .booted; the :has() rule covers a stalled boot). */
