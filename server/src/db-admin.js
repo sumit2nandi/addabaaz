@@ -11,6 +11,7 @@ const PLURAL = Object.fromEntries(Object.entries(DB_TYPE).map(([k, v]) => [v, k]
 const istDay = (d) => new Date(d.getTime() + 330 * 60_000).toISOString().slice(0, 10);
 
 /** Admin-console queries: database-backed catalog, audit log, user/message management, dashboard numbers. Mixed into createDb(). */
+import { HttpError, bad } from './http.js';
 import { normalizeEmail, emailKey } from './email-address.js';
 
 export function adminDb({ q, tx, self, iso }) {
