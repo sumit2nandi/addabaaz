@@ -11,7 +11,7 @@ import { go } from '../router.js';
 import { listBtn, videoCard, rail, enhanceRails, metaLine, toast, img, premiumMark } from '../ui/components.js';
 import { epRow } from './show.js';
 import { shareUrl } from '../platform.js';
-import { unlockRotation, lockPortrait, landscapeNow } from '../orientation.js';
+import { unlockRotation, lockPortrait, landscapeNow, enterImmersive, exitImmersive } from '../orientation.js';
 
 // mountRating, mountComments removed: like/dislike/comments disabled per requirement
 
@@ -157,13 +157,19 @@ export default async function watch(ctx) {
    * player goes full-screen (body.rot-fs). Pause/end/leave re-locks portrait. Reels stay portrait. */
   const isReel = v.kind === 'reel';
   let landscape = isReel ? false : v.source.type === 'youtube' ? true : null;   // html5: learned from metadata
-  let playingNow = false;
-  const applyFs = () => document.body.classList.toggle('rot-fs', playingNow && landscape === true && landscapeNow());
+  let playingNow = false, fsOn = false;
+  const setFs = (on) => {
+    if (on === fsOn) return;
+    fsOn = on;
+    document.body.classList.toggle('rot-fs', on);
+    if (on) enterImmersive(); else exitImmersive();      // immersive: no status/nav bars, no white strips
+  };
+  const applyFs = () => setFs(playingNow && landscape === true && landscapeNow());
   const onOrient = () => applyFs();
   window.addEventListener('orientationchange', onOrient);
   window.addEventListener('resize', onOrient);
   const rotPlay = () => { playingNow = true; if (landscape === true) unlockRotation(); applyFs(); };
-  const rotStop = () => { playingNow = false; document.body.classList.remove('rot-fs'); if (!isReel) lockPortrait(); };
+  const rotStop = () => { playingNow = false; setFs(false); if (!isReel) lockPortrait(); };
   const rotDims = (w, h) => { if (isReel || !(w > 0 && h > 0)) return; landscape = w > h; if (playingNow) (landscape ? unlockRotation() : lockPortrait()); applyFs(); };
   // Autoplay: a countdown card for the next episode; tapping cancels or plays now.
   const showNextUp = () => {
@@ -231,7 +237,7 @@ export default async function watch(ctx) {
   ctx.onCleanup(() => {
     dead = true; clearInterval(countdown); onIdle(true);
     window.removeEventListener('orientationchange', onOrient); window.removeEventListener('resize', onOrient);
-    document.body.classList.remove('rot-fs'); lockPortrait();
+    setFs(false); lockPortrait();
     document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', onHide);
     if (ctl) { const t = ctl.time(); if (t > 0) u.saveProgress(v.id, t, ctl.duration() || v.duration, { flush: true }); ctl.destroy(); }
   });

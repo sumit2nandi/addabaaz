@@ -120,6 +120,9 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     fs.writeFileSync(manifest, generated);
     const buildGradle = path.join(dir, 'android', 'app', 'build.gradle');
     fs.writeFileSync(buildGradle, GRADLE);
+    const styles = path.join(dir, 'android', 'app', 'src', 'main', 'res', 'values', 'styles.xml');
+    fs.mkdirSync(path.dirname(styles), { recursive: true });
+    fs.writeFileSync(styles, `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">\n    </style>\n    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">\n        <item name="android:background">@drawable/splash</item>\n    </style>\n</resources>\n`);
     const run = () => execFileSync(process.execPath, [path.join(dir, 'scripts', 'patch-android.mjs')], { cwd: dir, encoding: 'utf8', stdio: 'pipe' });
 
     const first = run();
@@ -132,6 +135,11 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     assert.equal(patched, addOAuthRedirect(lockPortrait(generated), 'in.addabaaz.app'), 'portrait lock plus the Google sign-in deep-link filter');
     assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'ci-debug.p12')), 'the shared CI key was copied into the app module');
     assert.ok(hasStableSigning(fs.readFileSync(buildGradle, 'utf8')), 'debug builds are signed with the shared key, so new APKs install over old ones');
+    const patchedStyles = fs.readFileSync(styles, 'utf8');
+    assert.match(patchedStyles, /windowSplashScreenAnimatedIcon/, 'the system splash uses the dark logo artwork');
+    assert.match(patchedStyles, /ab-dark-window/, 'the window theme patch was applied');
+    assert.match(patchedStyles, /<item name="android:navigationBarColor">#050505<\/item>/, 'nav bar is dark - no white strips around full-screen video');
+    assert.match(patchedStyles, /<item name="android:windowBackground">#050505<\/item>/, 'the activity window itself is dark');
 
     const second = run();
     assert.equal(/locked to portrait/.test(second), false, 'a second run has nothing to change');

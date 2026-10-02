@@ -18,12 +18,18 @@ Element.prototype.scrollIntoView = () => {};
 globalThis.ResizeObserver = class { observe() {} disconnect() {} };
 globalThis.screen = { orientation: { angle: 0 } };   // the test turns the phone by editing this
 
-const calls = { lock: 0, unlock: 0 };
+const calls = { lock: 0, unlock: 0, fsEnter: 0, fsExit: 0, sbHide: 0, sbShow: 0 };
 window.Capacitor = {
   isNativePlatform: () => true,
   getPlatform: () => 'android',
-  Plugins: { ScreenOrientation: { unlock: async () => { calls.unlock++; }, lock: async () => { calls.lock++; } } },
+  Plugins: {
+    ScreenOrientation: { unlock: async () => { calls.unlock++; }, lock: async () => { calls.lock++; } },
+    StatusBar: { hide: async () => { calls.sbHide++; }, show: async () => { calls.sbShow++; } },
+  },
 };
+document.fullscreenElement = null;
+document.documentElement.requestFullscreen = async () => { calls.fsEnter++; document.fullscreenElement = document.documentElement; };
+document.exitFullscreen = async () => { calls.fsExit++; document.fullscreenElement = null; };
 
 register(new URL('./watch-mock-loader.mjs', import.meta.url));
 const { Catalog } = await import('../../app/js/data/catalog.js');
@@ -41,14 +47,18 @@ app.user = {
   saveProgress: () => {}, fraction: () => 0, inList: () => false, hasReminder: () => false, on: () => {}, needsProfileChoice: () => false,
 };
 
+let prevCleanup = null;
 const mount = async (id) => {
+  prevCleanup?.(); prevCleanup = null;          // the previous page must release its listeners first
   globalThis.__watchOpts = null; globalThis.__watchCtl = null;
   document.getElementById('view').innerHTML = '';
   document.body.className = '';
   globalThis.screen.orientation.angle = 0;
   const root = document.createElement('div');
   document.getElementById('view').appendChild(root);
-  await watch({ root, params: { id }, query: {}, path: `/watch/${id}`, setTitle: () => {}, onCleanup: () => {} });
+  let cleanupFn = null;
+  await watch({ root, params: { id }, query: {}, path: `/watch/${id}`, setTitle: () => {}, onCleanup: (fn) => (cleanupFn = fn) });
+  prevCleanup = () => cleanupFn?.();
   await new Promise((r) => setTimeout(r, 20));
   return globalThis.__watchOpts;
 };
@@ -60,10 +70,13 @@ test('playing a landscape video unlocks rotation; turning the phone full-screens
   assert.equal(calls.unlock, u0, 'nothing unlocks before playback');
   opts.onState('playing');
   assert.equal(calls.unlock, u0 + 1, 'playback of a landscape video unlocks the sensor');
+  const [f0, h0, x0, s0] = [calls.fsEnter, calls.sbHide, calls.fsExit, calls.sbShow];
   turn(90);
   assert.ok(document.body.classList.contains('rot-fs'), 'landscape while playing full-screens the player');
+  assert.ok(calls.fsEnter > f0 && calls.sbHide > h0, 'full screen is immersive: WebView fullscreen + status bar hidden');
   turn(0);
   assert.ok(!document.body.classList.contains('rot-fs'), 'portrait returns to the normal layout');
+  assert.ok(calls.fsExit > x0 && calls.sbShow > s0, 'leaving full screen restores the bars');
   opts.onState('paused');
   assert.equal(calls.lock, l0 + 1, 'pausing locks the app back to portrait');
   turn(90);

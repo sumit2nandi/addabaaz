@@ -22,3 +22,15 @@ export async function lockPortrait() {
 
 export const angleNow = () => ((globalThis.screen ?? globalThis.window?.screen)?.orientation?.angle ?? globalThis.window?.orientation ?? 0);
 export const landscapeNow = () => Math.abs(angleNow() % 180) === 90;
+
+/** Proper full screen, YouTube-app style: the WebView goes immersive (status + navigation bars
+ * disappear) and the status bar plugin hides as a belt-and-braces measure. */
+export async function enterImmersive() {
+  try { window.Capacitor?.Plugins?.StatusBar?.hide?.()?.catch?.(() => {}); } catch { /* no plugin */ }
+  try { await document.documentElement.requestFullscreen?.(); } catch { /* refused - CSS fallback stays */ }
+}
+
+export async function exitImmersive() {
+  try { window.Capacitor?.Plugins?.StatusBar?.show?.()?.catch?.(() => {}); } catch { /* no plugin */ }
+  try { await document.exitFullscreen?.(); } catch { /* not in fullscreen - nothing to leave */ }
+}

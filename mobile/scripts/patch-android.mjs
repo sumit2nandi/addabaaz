@@ -62,6 +62,13 @@ patch('app/src/main/res/values/styles.xml', 'system splash shows the dark logo a
     /(<style name="AppTheme\.NoActionBarLaunch"[^>]*>\s*<item name="android:background">@drawable\/splash<\/item>)/,
     '$1\n        <item name="android:windowSplashScreenBackground">#050505</item>\n        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash</item>'));
 
+// The activity window and both system bars are the brand dark: white strips must never show
+// around full-screen video (or anywhere else - overscroll, rotation, immersive transitions).
+patch('app/src/main/res/values/styles.xml', 'window + status/nav bars are dark, no white strips', (t) =>
+  t.includes('ab-dark-window') ? t : t.replace(
+    /(<style name="AppTheme" parent="Theme\.AppCompat\.NoActionBar">)/,
+    '$1\n        <!-- ab-dark-window -->\n        <item name="android:windowBackground">#050505</item>\n        <item name="android:statusBarColor">#050505</item>\n        <item name="android:navigationBarColor">#050505</item>'));
+
 // Every CI APK is signed with the same shared debug key, so a fresh build installs as an
 // UPDATE over an older one (Android refuses "App not installed" signature-mismatch updates
 // when each runner used its own throwaway keystore). The key is a DEBUG key checked into the
