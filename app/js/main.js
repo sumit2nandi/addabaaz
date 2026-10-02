@@ -14,7 +14,7 @@ import { Router, parseLocation, currentPath, replaceUrl, go } from './router.js'
 import { HISTORY } from './mode.js';
 import { renderShell, renderProfileMenu, markActive } from './ui/shell.js';
 import { syncButtons, scrollRail, toast } from './ui/components.js';
-import { initPlatform } from './platform.js';
+import { initPlatform, isNative } from './platform.js';
 import { initConsent, trackPage } from './consent.js';
 import { initErrorReporting, friendly } from './errors.js';
 import { initPush } from './push.js';
@@ -57,13 +57,26 @@ async function boot() {
   }
   router.start();
   networkStatus();
-  initPullToRefresh();
+  initPullToRefresh(isNative ? softRefresh : null);
   initConsent(); initErrorReporting(); initPush();
   window.addEventListener('ab:ready', trackPage);
   installPrompt();
   wireImageFallbacks();
   lockMedia();
   registerServiceWorker();
+}
+
+/** Pull-to-refresh inside the app: re-fetch catalog + account and re-render the current screen in
+ * place. A full location.reload() would replay the website's boot logo splash - the app must not
+ * show that on a refresh; the native splash + a small spinner cover the update instead. */
+async function softRefresh() {
+  try {
+    const base = CONFIG.apiBase, useApi = !!app.api;
+    const catalog = await loadCatalog(useApi ? `${base}/api/v1/catalog` : 'data/catalog.json', undefined, { mediaBase: useApi ? base : '' });
+    app.fullCatalog = catalog; app.catalog = catalog; applyKids();
+    await app.user.init();
+  } catch { /* offline or API hiccup: re-render with the data we already have */ }
+  app.router?.resolve();
 }
 
 /** A Kids profile browses a filtered catalog (only titles rated U or 7+). */

@@ -1,6 +1,8 @@
-/* Pull-to-refresh: dragging the page down while already at the top reloads the current screen.
- * The service worker serves navigations and catalog data network-first, so a reload always shows
- * the latest content (and refreshes the offline copies). Wired up from main.js at start-up. */
+/* Pull-to-refresh: dragging the page down while already at the top refreshes the current screen.
+ * On the web that is a plain reload (the service worker serves navigations network-first, so a
+ * reload always shows the latest content and refreshes the offline copies). In the native app a
+ * reload would flash the website's boot logo splash, so main.js passes a soft `refresh` callback
+ * instead: re-fetch data and re-render in place, no page load, no boot logo. */
 const THRESHOLD = 88;   // px of pull required to trigger a refresh
 const MAX = 96;         // px the indicator may travel
 let startY = null, pulled = 0, el = null;
@@ -24,7 +26,7 @@ const ensure = () => {
 const move = (dy) => { const e = ensure(); e.style.transform = `translateY(${-80 + Math.min(dy, MAX)}px)`; e.classList.add('on'); };
 const rest = () => { if (el) { el.classList.remove('on'); el.style.transform = ''; } };
 
-export function initPullToRefresh() {
+export function initPullToRefresh(refresh = null) {
   if (typeof document === 'undefined' || document.__ptrInit) return;
   document.__ptrInit = true;
 
@@ -49,7 +51,11 @@ export function initPullToRefresh() {
     if (startY == null) return;
     const fire = pulled >= THRESHOLD;
     startY = null; pulled = 0;
-    if (fire) { const e = ensure(); e.classList.add('on'); e.style.transform = 'translateY(0px)'; setTimeout(() => location.reload(), 220); }
+    if (fire) {
+      const e = ensure(); e.classList.add('on'); e.style.transform = 'translateY(0px)';
+      if (refresh) Promise.resolve(refresh()).catch(() => {}).finally(rest);   // native: re-render in place, never the boot logo
+      else setTimeout(() => location.reload(), 220);                          // web: full reload
+    }
     else rest();
   };
   document.addEventListener('touchend', end, { passive: true });
