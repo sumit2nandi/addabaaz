@@ -4,7 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { HttpError, bad, wrap, rateLimit } from './http.js';
 import { isDuplicate } from './db.js';
-import { visibleEmail } from './email-address.js';
+import { visibleEmail, plainEmail } from './email-address.js';
 import { verifyToken, sessionValid } from './auth.js';
 import { PLANS, paidPlan } from './plans.js';
 import { validate, TYPES } from './catalog-schema.js';
@@ -125,7 +125,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     const normalized = await db.adminUsers.renormalizeEmails();      // legacy rows first, so the report is exact
     const groups = await db.adminUsers.duplicateGroups();
     res.json({
-      groups: groups.map((g) => ({ ...g, users: g.users.map((u) => ({ ...u, emailVisible: visibleEmail(u.email), emailPlain: /^[\x20-\x7E]*$/.test(u.email) })) })),
+      groups: groups.map((g) => ({ ...g, users: g.users.map((u) => ({ ...u, emailVisible: visibleEmail(u.email), emailPlain: plainEmail(u.email) })) })),
       normalized,
     });
   }));

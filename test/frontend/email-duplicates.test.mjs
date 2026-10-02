@@ -42,6 +42,20 @@ test('one normalizer is the only definition of "the same address"', () => {
   assert.match(index, /renormalizeEmails\(\)/, 'stored addresses are normalized once per boot');
 });
 
+test('the migration survives duplicates that are IDENTICAL, not just look-alikes', () => {
+  // A users table created before uq_users_email existed can hold the same address twice, so the
+  // migration must let those rows step aside BEFORE it creates the unique index — otherwise the
+  // deploy fails with ER_DUP_ENTRY.
+  const norm = read('server/migrations/012_email_norm.sql');
+  assert.match(norm, /CREATE UNIQUE INDEX uq_users_email_norm ON users \(email_norm\)/);
+  assert.match(norm, /SET u\.email_dup = 1, u\.email_norm = NULL/, 'the later rows step aside');
+  assert.match(norm, /first_key/, 'the OLDEST row of an address keeps it (the same rule as the app)');
+  assert.ok(norm.indexOf('SET u.email_dup = 1, u.email_norm = NULL') < norm.indexOf('CREATE UNIQUE INDEX'),
+    'the clean-up runs before the index is created');
+  // And the application never trusts SQL alone for this: it groups by the shared key on every boot.
+  assert.match(dbAdmin, /const k = emailKey\(r\.email\)/, 'grouping uses the normalizer, not a SQL LIKE');
+});
+
 test('the admin console reports look-alike duplicates and merges them into one account', () => {
   assert.match(admin, /router\.get\('\/users\/duplicates'/, 'the report endpoint');
   assert.match(admin, /router\.post\('\/users\/merge'/, 'the merge endpoint');
@@ -62,6 +76,11 @@ test('the admin console reports look-alike duplicates and merges them into one a
   assert.match(usersView, /api\.post\('\/users\/merge', \{ keepId: keep\.id, removeId: other\.id \}\)/);
   assert.match(usersView, /accounts share one e-mail address/);
   assert.match(usersView, /data-keep="\$\{u\.id\}"/, 'the admin picks which account survives');
+  assert.match(usersView, /All \$\{g\.count\} rows carry exactly the same address/, 'identical rows are explained too');
+  assert.match(admin, /plainEmail\(u\.email\)/, 'the console uses the shared helper, not a second copy of the rule');
+  // The marked form must make a pasted space visible as well — it is the most common artefact.
+  assert.match(read('server/src/email-address.js'), /'⟨space⟩'/, 'a pasted space is marked');
+  assert.match(read('server/src/email-address.js'), /export const plainEmail = \(raw\) => \/\^\[\\x21-\\x7E\]\*\$\//, 'plain = printable ASCII with no stray space');
 });
 
 test('a broadcast sends one message per address (duplicates cannot receive it twice)', () => {

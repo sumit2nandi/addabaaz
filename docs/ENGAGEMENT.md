@@ -46,15 +46,17 @@ receive the announcement once.
 ### One address = one account
 
 `users.email_norm` carries a UNIQUE index and every entry point (signup, sign-in, Google/Facebook/Apple
-sign-in, password reset, `npm run admin`) normalizes the address the same way: NFKC first (full-width
-`＠` and letters fold), then characters that render as nothing (zero-width space, soft hyphen, BOM,
-non-breaking space, line separators) are removed. So a pasted look-alike cannot create a second account.
+sign-in, password reset, `npm run admin`) normalizes the address the same way: NFKC first (full-width `＠`
+and letters fold), then every kind of space and every invisible character is removed, then lower-case. So a
+copy-pasted look-alike cannot create a second account.
 
 Rows that already collided are listed in **Admin → Users** with the offending characters marked
-(`rupa⟨U+200B⟩@example.com`) and can be **merged** — the extra account's profiles, watch history, devices,
-subscriptions, payments, invoices, refund requests, comments and push subscriptions move to the account you
-keep, then the extra account is deleted (audited as `user.merge`). Take a backup (`npm run backup`) before
-merging a lot of accounts.
+(`rupa⟨U+00A0⟩@example.com`, `rupa⟨space⟩@example.com`) and can be **merged** — the extra account's profiles,
+watch history, devices, subscriptions, payments, invoices, refund requests, comments and push subscriptions
+move to the account you keep, then the extra account is deleted (audited as `user.merge`). A database
+created before the unique e-mail index existed may hold two rows with an *identical* address; the console
+says so in the card and the same merge applies. Take a backup (`npm run backup`) before merging a lot of
+accounts.
 
 iOS note: Web Push works only for the site **installed to the Home Screen** (iOS 16.4+); app push needs the
 iOS app built with the push plugin and an APNs key (or Firebase Cloud Messaging) — see `docs/MOBILE.md`.

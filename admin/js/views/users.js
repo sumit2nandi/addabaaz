@@ -28,10 +28,11 @@ export default async function users(root, _p, ctx) {
   $('#f').addEventListener('change', (e) => { st.filter = e.target.value; st.offset = 0; load(); });
 
   /* ---------- accounts that share one e-mail address ----------
-   * One address must be one account. Rows that still collide differ by characters that look like
-   * nothing (zero-width space, soft hyphen, full-width @, …) — the card shows them made visible and
-   * merges the two accounts into one: profiles, devices, payments and comments move to the account
-   * that stays, the other is deleted. */
+   * One address must be one account. Rows that still collide differ by characters MySQL's collation does
+   * not ignore (a pasted non-breaking space, an ideographic space, a full-width ＠ …) or are identical
+   * rows from a database that predates the unique e-mail index. The card shows the offending characters
+   * made visible and merges the accounts into one: profiles, devices, payments and comments move to the
+   * account that stays, the others are deleted. */
   const box = $('#dupes', root);
   const loadDupes = async () => {
     let r;
@@ -41,7 +42,8 @@ export default async function users(root, _p, ctx) {
     if (!groups.length) { box.innerHTML = ''; return; }
     box.innerHTML = html`${groups.map((g) => html`<section class="card setup" data-group="${g.key}">
       <h2>${icon('alert', 20)} ${g.count} accounts share one e-mail address</h2>
-      <p>${g.count} rows in the database are the same address to a person but different strings to MySQL — usually a pasted zero-width character, a soft hyphen or a full-width <b>＠</b>. Pick the account to keep: the other one’s profiles, watch history, devices, payments, comments and push subscriptions move to it, then it is deleted. Nobody can create a second account for an address again (new sign-ups are refused).</p>
+      <p>These rows are the same address to a person but different strings to MySQL — usually a copy-pasted non-breaking space, an ideographic space or a full-width <b>＠</b>, and sometimes an account created before the unique e-mail index existed (in that case the rows are identical character for character). New sign-ups for the address are already refused; pick the account to keep here: the others’ profiles, watch history, devices, payments, comments and push subscriptions move to it, then they are deleted.</p>
+      ${new Set(g.users.map((u) => u.email)).size === 1 ? html`<p class="muted small">${icon('alert', 14)} All ${g.count} rows carry exactly the same address — typical of a database created before the unique e-mail index existed. Keep the account the person uses.</p>` : ''}
       <table class="tbl compact"><thead><tr><th>Account</th><th>Address as stored</th><th>Plan</th><th>Joined</th><th class="end">Keep this one</th></tr></thead><tbody>
         ${g.users.map((u) => html`<tr><td><strong>${u.name}</strong>${u.isAdmin ? html` ${badge('admin', 'ok')}` : ''}${u.disabled ? html` ${badge('disabled', 'bad')}` : ''}<br><small class="muted">${[u.providers.join(', '), u.profiles ? `${u.profiles} profile${u.profiles === 1 ? '' : 's'}` : '', u.devices ? `${u.devices} device${u.devices === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ') || '—'}</small></td>
           <td><code>${u.emailVisible}</code>${u.emailPlain ? '' : html`<br><small class="muted">shown with invisible/look-alike characters marked</small>`}</td>

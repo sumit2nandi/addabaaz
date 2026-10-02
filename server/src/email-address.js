@@ -1,9 +1,11 @@
 // E-mail address hygiene: one address = one account, whatever it looks like on screen.
 //
-// `users.email` already has a UNIQUE index, but that index cannot see through characters that look like
-// nothing. A pasted zero-width space, a soft hyphen, a full-width ＠, a non-breaking space or a stray
-// line separator all produce a DIFFERENT string — and therefore a second account for what a person (and
-// the admin Users list) sees as one address. That is how "two users with the same email" happen.
+// `users.email` has a UNIQUE index, but that index only refuses a string MySQL considers equal: the
+// collation ignores characters such as a zero-width space, yet gives a NON-BREAKING space, an ideographic
+// space or a full-width ＠ a weight of their own. Copy-pasting an address from a web page or a document
+// therefore produces a DIFFERENT string that buys a second account for what a person — and the admin
+// Users list — sees as one address. A database whose users table predates the unique key can even hold
+// two identical addresses. That is how "two users with the same email" happen.
 //
 // `normalizeEmail` is the single definition of "the same address": signup, sign-in, social sign-in,
 // password reset, the admin duplicate report and the broadcast audience all use it. Normalized addresses
@@ -43,17 +45,20 @@ export const emailKey = (raw) => normalizeEmail(raw).email;
 
 /**
  * The same address with invisible/look-alike characters made visible, for the admin duplicate report:
- * `rupa@example.com` stays as it is, while `rupa\u200b@example.com` reads `rupa⟨U+200B⟩@example.com`.
- * That is the answer to "why do these two look identical?".
+ * `rupa@example.com` stays as it is, while `rupa\u200b@example.com` reads `rupa⟨U+200B⟩@example.com` and
+ * `rupa\u00a0@example.com` reads `rupa⟨U+00A0⟩@example.com`. That is the answer to "why do these two look
+ * identical?".
  */
 export function visibleEmail(raw) {
   let out = '';
   for (const ch of String(raw ?? '')) {
     const cp = ch.codePointAt(0);
-    out += cp < 0x20 || cp === 0x7F || cp > 0x7E ? `⟨U+${cp.toString(16).toUpperCase().padStart(4, '0')}⟩` : ch;
+    if (ch === ' ') out += '⟨space⟩';
+    else if (ch === '\t') out += '⟨tab⟩';
+    else out += cp < 0x20 || cp === 0x7F || cp > 0x7E ? `⟨U+${cp.toString(16).toUpperCase().padStart(4, '0')}⟩` : ch;
   }
   return out;
 }
 
-/** True when an address only uses plain ASCII (nothing to show markers for). */
-export const plainEmail = (raw) => /^[\x20-\x7E]*$/.test(String(raw ?? ''));
+/** True when an address is plain printable ASCII with no stray space (nothing to show markers for). */
+export const plainEmail = (raw) => /^[\x21-\x7E]*$/.test(String(raw ?? ''));

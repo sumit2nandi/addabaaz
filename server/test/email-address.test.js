@@ -42,11 +42,16 @@ test('addresses that are not usable are reported as such (ok = false)', () => {
   assert.equal(normalizeEmail('x'.repeat(250) + '@example.com').ok, false, 'longer than 254 characters');
 });
 
-test('visibleEmail marks exactly the characters a person cannot see', () => {
+test('visibleEmail marks the characters that make two identical-looking rows differ', () => {
   assert.equal(visibleEmail('rupa@example.com'), 'rupa@example.com');
   assert.equal(visibleEmail('rupa\u200b@example.com'), 'rupa⟨U+200B⟩@example.com');
-  assert.equal(visibleEmail('rupa＠example.com'), 'rupa⟨U+FF20⟩example.com');
+  assert.equal(visibleEmail('rupa\u00a0@example.com'), 'rupa⟨U+00A0⟩@example.com');   // non-breaking space
+  assert.equal(visibleEmail('rupa＠example.com'), 'rupa⟨U+FF20⟩example.com');           // full-width @
+  assert.equal(visibleEmail('rupa @example.com'), 'rupa⟨space⟩@example.com');           // a pasted plain space
+  assert.equal(visibleEmail('rupa\t@example.com'), 'rupa⟨tab⟩@example.com');
   assert.equal(plainEmail('rupa@example.com'), true);
   assert.equal(plainEmail('rupa\u200b@example.com'), false);
+  assert.equal(plainEmail('rupa\u00a0@example.com'), false);
   assert.equal(plainEmail('rupa＠example.com'), false);
+  assert.equal(plainEmail('rupa @example.com'), false, 'a stray space is worth showing');
 });

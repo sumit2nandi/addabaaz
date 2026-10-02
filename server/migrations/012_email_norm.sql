@@ -1,17 +1,20 @@
 -- One address = one account.
 --
--- `users.email` is UNIQUE, but that index cannot see characters that look like nothing: a zero-width
--- space, soft hyphen, full-width ＠ or non-breaking space make a different string and therefore a second
--- account for what everyone sees as the same address (reported: two accounts in Admin → Users).
+-- `users.email` has a UNIQUE index, but that index only refuses a string MySQL considers equal. A
+-- copy-pasted address often carries a character the eye cannot see and the collation does not ignore — a
+-- non-breaking space, an ideographic space, a full-width ＠, a soft hyphen — so `rupa\u00a0@example.com`
+-- is a DIFFERENT string from `rupa@example.com` and buys a second account (reported: two accounts in
+-- Admin → Users). A database whose users table predates the unique key can even hold two identical
+-- addresses.
 --
 -- This migration adds `email_norm` — the normalized address the application compares and stores — with
--- its own UNIQUE index, plus `email_dup` to flag rows that already collide (they are listed in
--- Admin → Users → "accounts sharing one e-mail" and merged from there).
+-- its own UNIQUE index, plus `email_dup` to flag the rows that already collide (they are listed in
+-- Admin → Users and merged from there).
 --
--- Existing colliding rows keep their e-mail but get `email_norm = NULL` (MySQL allows several NULLs in a
--- unique index) so the index can be created and no NEW account can be added for that address.
--- The application re-normalizes every stored address on boot (db.adminUsers.renormalizeEmails), which
--- also catches the invisible-character cases SQL cannot strip.
+-- Existing colliding rows keep their e-mail but only the OLDEST of an address keeps `email_norm`; the
+-- later ones get `email_dup = 1, email_norm = NULL` (NULL never collides), so the unique index below can
+-- always be created. The application re-normalizes every stored address on boot
+-- (db.adminUsers.renormalizeEmails), which also catches the characters SQL alone cannot strip.
 
 ALTER TABLE users ADD COLUMN email_norm VARCHAR(254) NULL AFTER email;
 ALTER TABLE users ADD COLUMN email_dup TINYINT(1) NOT NULL DEFAULT 0 AFTER email_norm;
@@ -20,14 +23,15 @@ ALTER TABLE users ADD COLUMN email_dup TINYINT(1) NOT NULL DEFAULT 0 AFTER email
 -- application's normalizer (5-character minimum, exactly like signup validation) flags them instead.
 UPDATE users SET email_norm = LOWER(TRIM(email)) WHERE CHAR_LENGTH(TRIM(email)) >= 5;
 
--- Flag every row that collides with an older one, keeping the first row per address.
+-- Only the oldest row of an address keeps its normalized address (the same rule the application uses);
+-- every later row steps aside and is flagged for the admin to merge. This must survive rows that are
+-- IDENTICAL — a users table created before `uq_users_email` existed can hold them.
 UPDATE users u
-  JOIN (SELECT LOWER(TRIM(email)) AS k, MIN(id) AS keep_id FROM users GROUP BY k HAVING COUNT(*) > 1) d
-    ON d.k = LOWER(TRIM(u.email))
-   SET u.email_dup = 1
- WHERE u.id <> d.keep_id;
-
--- The flagged rows step aside so the unique index can be created.
-UPDATE users SET email_norm = NULL WHERE email_dup = 1;
+  JOIN (
+    SELECT email_norm AS k, MIN(CONCAT(DATE_FORMAT(created_at, '%Y%m%d%H%i%s'), id)) AS first_key
+      FROM users WHERE email_norm IS NOT NULL GROUP BY email_norm HAVING COUNT(*) > 1
+  ) d ON d.k = u.email_norm
+   SET u.email_dup = 1, u.email_norm = NULL
+ WHERE CONCAT(DATE_FORMAT(u.created_at, '%Y%m%d%H%i%s'), u.id) <> d.first_key;
 
 CREATE UNIQUE INDEX uq_users_email_norm ON users (email_norm);

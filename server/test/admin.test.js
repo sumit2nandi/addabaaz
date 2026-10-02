@@ -362,54 +362,85 @@ test('payments list + coupons: filters, delete only when never used; everything 
   assert.equal((await call('GET', '/admin/audit', null, viewer.token)).status, 403);
 });
 
-test('one address = one account: look-alike duplicates are reported and can be merged', async () => {
-  // A second account for the same address, exactly as it happens in practice: the person pasted an
-  // invisible character (U+200B), so MySQL saw a different string (this is the legacy row shape).
+test('one address = one account: duplicates are reported and can be merged', async () => {
+  // Two shapes exist in the wild, and the report has to handle both.
   const viewerEmail = 'viewer@example.com';
-  const dupId = 'dup-user-0000-0000-0000-000000000001';
-  const zwsp = 'viewer\u200b@example.com';
-  await db.pool.query('INSERT INTO users (id, email, email_norm, email_dup, name, password_hash) VALUES (?,?,NULL,1,?,?)', [dupId, zwsp, 'Viewer Two', 'x']);
-  await db.pool.query('INSERT INTO profiles (id, user_id, name, color) VALUES (?,?,?,0)', ['dup-profile-1', dupId, 'Viewer']);
-  await db.pool.query('INSERT INTO push_devices (id, user_id, platform, token_hash, token, label) VALUES (?,?,?,?,?,?)', ['dup-device-1', dupId, 'android', 'dup-hash-1', 'dup-token-'.padEnd(30, 'x'), 'Old phone']);
-  await db.pool.query("INSERT INTO comments (id, video_id, user_id, author, body, status) VALUES ('dup-comment-1', 'some-video', ?, 'Viewer', 'hello', 'visible')", [dupId]);
-  await db.pool.query('UPDATE users SET email_dup = 1, email_norm = NULL WHERE id = ?', [dupId]);
+  // (1) A copy-pasted address that differs by a character the eye cannot see and MySQL's utf8mb4_unicode_ci
+  //     does NOT ignore — a non-breaking space. It is a different string, so the UNIQUE index on `email`
+  //     lets it through. (A zero-width space, by contrast, is ignored by that collation and can never get
+  //     in — which is why the fixture must not use one.)
+  const nbId = 'dup-nbsp-0000-0000-0000-000000000001';
+  const nbEmail = 'viewer\u00a0@example.com';
+  await db.pool.query('INSERT INTO users (id, email, email_norm, email_dup, name, password_hash) VALUES (?,?,NULL,1,?,?)', [nbId, nbEmail, 'Viewer Nbsp', 'x']);
+  // (2) The very same address, character for character — possible in a database whose users table was
+  //     created before uq_users_email existed. The index comes off for the fixture and goes back on below.
+  const sameId = 'dup-same-0000-0000-0000-000000000002';
+  const [beforeIdx] = await db.pool.query("SHOW INDEX FROM users WHERE Key_name = 'uq_users_email'");
+  const dropped = beforeIdx.length > 0;
+  if (dropped) await db.pool.query('ALTER TABLE users DROP INDEX uq_users_email');
+  try {
+    await db.pool.query('INSERT INTO users (id, email, email_norm, email_dup, name, password_hash) VALUES (?,?,NULL,1,?,?)', [sameId, viewerEmail, 'Viewer Same', 'x']);
+    // What the duplicate accounts own and the surviving account must end up with.
+    await db.pool.query('INSERT INTO profiles (id, user_id, name, color) VALUES (?,?,?,0)', ['dup-profile-1', nbId, 'Viewer']);
+    await db.pool.query('INSERT INTO push_devices (id, user_id, platform, token_hash, token, label) VALUES (?,?,?,?,?,?)', ['dup-device-1', nbId, 'android', 'dup-hash-1', 'dup-token-'.padEnd(30, 'x'), 'Old phone']);
+    await db.pool.query("INSERT INTO comments (id, video_id, user_id, author, body, status) VALUES ('dup-comment-1', 'some-video', ?, 'Viewer', 'hello', 'visible')", [nbId]);
 
-  // The report finds the pair, and shows WHY they look identical.
-  const rep = (await A('GET', '/users/duplicates')).body;
-  const group = rep.groups.find((g) => g.users.some((u) => u.id === dupId));
-  assert.ok(group, 'the duplicate pair is reported');
-  assert.equal(group.count, 2);
-  const weird = group.users.find((u) => u.id === dupId), normal = group.users.find((u) => u.id === viewer.id);
-  assert.equal(weird.emailPlain, false); assert.match(weird.emailVisible, /⟨U+200B⟩/);
-  assert.equal(normal.emailPlain, true); assert.equal(normal.emailVisible, viewerEmail);
-  assert.equal(weird.dup, true);
+    // The report finds every row of the address and shows WHY the first two look identical.
+    const rep = (await A('GET', '/users/duplicates')).body;
+    const group = rep.groups.find((g) => g.users.some((u) => u.id === nbId));
+    assert.ok(group, 'the duplicate rows are reported');
+    assert.equal(group.key, viewerEmail);
+    assert.equal(group.count, 3);
+    assert.equal(group.users[0].id, viewer.id, 'the oldest account is listed first — the one to keep');
+    const weird = group.users.find((u) => u.id === nbId);
+    assert.equal(weird.emailVisible, 'viewer⟨U+00A0⟩@example.com', 'the pasted character is made visible');
+    assert.equal(weird.emailPlain, false); assert.equal(weird.dup, true);
+    const same = group.users.find((u) => u.id === sameId);
+    assert.equal(same.emailVisible, viewerEmail, 'an identical row is shown exactly as it is stored');
+    assert.equal(same.dup, true);
+    assert.ok(rep.normalized.scanned >= 3);
 
-  // Merging anything that is not a duplicate is refused.
-  const third = await signup('third@example.com', 'Third Person');
-  assert.equal((await A('POST', '/users/merge', { keepId: viewer.id, removeId: third.id })).body.error.code, 'not_duplicates');
-  assert.equal((await A('POST', '/users/merge', { keepId: viewer.id, removeId: viewer.id })).status, 400);
+    // Merging anything that is not a duplicate is refused.
+    const third = await signup('third@example.com', 'Third Person');
+    assert.equal((await A('POST', '/users/merge', { keepId: viewer.id, removeId: third.id })).body.error.code, 'not_duplicates');
+    assert.equal((await A('POST', '/users/merge', { keepId: viewer.id, removeId: viewer.id })).status, 400);
 
-  // Merge the duplicate into the account that stays: profiles, device, comment and the subscription follow.
-  // The duplicate got the LONGER plan, so merging must keep that (the better access wins, never the worse).
-  await A('POST', `/users/${dupId}/grant`, { days: 400 });
-  const merged = await A('POST', '/users/merge', { keepId: viewer.id, removeId: dupId });
-  assert.equal(merged.status, 200, JSON.stringify(merged.body));
-  assert.ok(merged.body.moved.profiles >= 1); assert.ok(merged.body.moved.devices >= 1);
-  assert.ok(merged.body.moved.comments >= 1); assert.equal(merged.body.moved.subscription, 'moved');
-  assert.equal((await A('GET', `/users/${dupId}`)).status, 404, 'the extra account is gone');
-  const kept = (await A('GET', `/users/${viewer.id}`)).body;
-  assert.ok(kept.profiles.length >= 2, 'the other account’s profile moved over');
-  assert.equal(kept.subscription.planId, 'plus-monthly', 'the paid plan followed the person');
-  const [movedComment] = await db.pool.query('SELECT user_id FROM comments WHERE id = ?', ['dup-comment-1']);
-  assert.equal(movedComment[0].user_id, viewer.id, 'the comment moved');
-  assert.ok((await audit('user.merge')).some((e) => e.target === dupId && e.meta.keep === viewer.id));
+    // Merge both extra accounts into the one that stays, exactly as the console does (one call each).
+    // The pasted-address account got the LONGER plan, so merging must keep that, never the worse one.
+    await A('POST', `/users/${nbId}/grant`, { days: 400 });
+    const first = await A('POST', '/users/merge', { keepId: viewer.id, removeId: nbId });
+    assert.equal(first.status, 200, JSON.stringify(first.body));
+    assert.ok(first.body.moved.profiles >= 1); assert.ok(first.body.moved.devices >= 1);
+    assert.ok(first.body.moved.comments >= 1); assert.equal(first.body.moved.subscription, 'moved');
+    const second = await A('POST', '/users/merge', { keepId: viewer.id, removeId: sameId });
+    assert.equal(second.status, 200, JSON.stringify(second.body));
 
-  // The surviving row now owns the normalized address, so a new account for it is impossible.
-  const again = await call('POST', '/auth/signup', { name: 'Copy Cat', email: zwsp, password: 'password123' });
-  assert.equal(again.status, 409); assert.equal(again.body.error.code, 'email_taken');
-  assert.equal((await call('POST', '/auth/signup', { name: 'Copy Cat', email: viewerEmail, password: 'password123' })).status, 409);
-  const after = (await A('GET', '/users/duplicates')).body.groups;
-  assert.equal(after.some((g) => g.users.some((u) => u.id === viewer.id || u.id === dupId)), false, 'nothing left to merge');
+    assert.equal((await A('GET', `/users/${nbId}`)).status, 404, 'the extra account is gone');
+    assert.equal((await A('GET', `/users/${sameId}`)).status, 404, 'so is the identical row');
+    const kept = (await A('GET', `/users/${viewer.id}`)).body;
+    assert.ok(kept.profiles.length >= 2, 'the other account’s profile moved over');
+    assert.equal(kept.subscription.planId, 'plus-monthly', 'the paid plan followed the person');
+    const [movedComment] = await db.pool.query('SELECT user_id FROM comments WHERE id = ?', ['dup-comment-1']);
+    assert.equal(movedComment[0].user_id, viewer.id, 'the comment moved');
+    assert.ok((await audit('user.merge')).some((e) => e.target === nbId && e.meta.keep === viewer.id));
+    // The surviving row owns the normalized address again (it sits at NULL while duplicates exist).
+    const [owner] = await db.pool.query('SELECT email_norm, email_dup FROM users WHERE id = ?', [viewer.id]);
+    assert.equal(owner[0].email_norm, viewerEmail); assert.equal(owner[0].email_dup, 0);
+
+    // A new account for that address is impossible from now on — in either spelling.
+    for (const email of [viewerEmail, nbEmail]) {
+      const again = await call('POST', '/auth/signup', { name: 'Copy Cat', email, password: 'password123' });
+      assert.equal(again.status, 409, `${email} → ${JSON.stringify(again.body)}`);
+      assert.equal(again.body.error.code, 'email_taken');
+    }
+    const after = (await A('GET', '/users/duplicates')).body.groups;
+    assert.equal(after.some((g) => g.users.some((u) => u.id === viewer.id)), false, 'nothing left to merge');
+  } finally {
+    // Put the schema back exactly as it was (also when an assertion above failed).
+    if (dropped) await db.pool.query('ALTER TABLE users ADD UNIQUE KEY uq_users_email (email)').catch(() => {});
+  }
+  const [ix] = await db.pool.query("SHOW INDEX FROM users WHERE Key_name = 'uq_users_email'");
+  assert.ok(ix.length, 'the e-mail unique index is back in place');
 });
 
 test('the admin page is served with a strict CSP and is never cached', async () => {
