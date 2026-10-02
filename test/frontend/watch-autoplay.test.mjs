@@ -26,7 +26,8 @@ const watch = (await import('../../app/js/views/watch.js')).default;
 
 const VIDEO = { id: 'v1', kind: 'episode', episode: 1, title: 'Test episode', showId: 's1', duration: 100, views: 1, publishedAt: '2026-09-01T00:00:00Z', source: { type: 'youtube', id: 'abc' } };
 const PREMIUM_VIDEO = { ...VIDEO, id: 'vp', episode: 2, title: 'Premium episode', access: 'premium', poster: 'media/premium-vp.webp', source: { type: 'r2', key: 'premium/x.mp4' } };
-app.catalog = app.fullCatalog = new Catalog({ schema: 1, updatedAt: '', shows: [{ id: 's1', title: 'Show', titleEn: 'Show', genres: [], cast: [], type: 'series' }], videos: [VIDEO, PREMIUM_VIDEO], upcoming: [], gallery: [] });
+const PREMIUM_YT = { ...VIDEO, id: 'vpy', episode: 3, title: 'Premium on YouTube', access: 'premium', source: { type: 'youtube', id: 'zzz' } };
+app.catalog = app.fullCatalog = new Catalog({ schema: 1, updatedAt: '', shows: [{ id: 's1', title: 'Show', titleEn: 'Show', genres: [], cast: [], type: 'series', poster: 'media/shows/s1.webp' }], videos: [VIDEO, PREMIUM_VIDEO, PREMIUM_YT], upcoming: [], gallery: [] });
 app.user = {
   remote: null, account: null, profiles: [], profile: { id: 'p1', name: 'T' }, activeId: 'p1', supportsAuth: false, isKids: false,
   gateFor: () => 'ok', progressOf: () => null, isFinished: () => false, pref: () => true, setPref: () => {},
@@ -115,14 +116,20 @@ test('free videos get no crown and no premium markers', async () => {
   assert.equal(box.querySelector('.premium-mark'), null);
 });
 
+// Renders the watch page for a locked viewer (signed in, no plan).
+async function mountLocked(id) {
+  document.getElementById('view').innerHTML = '';
+  const root = document.createElement('div');
+  document.getElementById('view').appendChild(root);
+  await watch({ root, params: { id }, setTitle() {}, onCleanup() {} });
+  return root;
+}
+
 test('locked premium shows the video artwork behind the lock wall instead of a black background', async () => {
   const originalGate = app.user.gateFor;
   app.user.gateFor = (v, c) => (c.isPremium(v) ? 'plan' : 'ok');   // signed-in viewer without a plan
   try {
-    document.getElementById('view').innerHTML = '';
-    const root = document.createElement('div');
-    document.getElementById('view').appendChild(root);
-    await watch({ root, params: { id: 'vp' }, setTitle() {}, onCleanup() {} });
+    const root = await mountLocked('vp');
     const box = root.querySelector('#playerBox');
     assert.ok(box.classList.contains('has-wall'), 'the player box flags that artwork sits behind the wall');
     const art = box.querySelector('img.player-wall-art');
@@ -130,6 +137,13 @@ test('locked premium shows the video artwork behind the lock wall instead of a b
     assert.equal(art.getAttribute('src'), 'media/premium-vp.webp');
     assert.equal(root.querySelector('#playerMsg').hidden, false, 'the lock wall itself still shows');
     assert.equal(root.querySelector('#playerSlot').innerHTML, '', 'no player is created while locked');
+
+    // A YouTube-sourced premium video uses its thumbnail, with the show's own artwork as the
+    // on-error fallback, so a network that blocks i.ytimg.com still sees artwork, not black.
+    const ytRoot = await mountLocked('vpy');
+    const ytArt = ytRoot.querySelector('img.player-wall-art');
+    assert.equal(ytArt.getAttribute('src'), 'https://i.ytimg.com/vi/zzz/hqdefault.jpg');
+    assert.equal(ytArt.getAttribute('data-fb'), 'media/shows/s1.webp', 'same-origin artwork takes over if the thumbnail fails');
   } finally {
     app.user.gateFor = originalGate;
   }
