@@ -20,6 +20,9 @@ import { isDuplicate } from './db.js';
 import { hashPassword, verifyPassword, signToken, signJwt, verifyToken, sessionValid } from './auth.js';
 import { createFeatures } from './features.js';
 import { pushFromEnv } from './push.js';
+import { fcmFromEnv } from './fcm.js';
+import { campaignEmail } from './emails.js';
+import { createCampaigns } from './campaigns.js';
 import { createR2 } from './r2.js';
 import { socialFromEnv, SocialError } from './social.js';
 import { PLANS, paidPlan } from './plans.js';
@@ -69,7 +72,7 @@ export function createApp({
   social = socialFromEnv(),                                   // { config, verifiers: { google?, facebook? } }
   publicApiUrl = process.env.PUBLIC_API_URL || '',            // absolute base for HLS URLs when behind a proxy
   streamTtl = Number(process.env.STREAM_URL_TTL) || 6 * 3600, // seconds a signed video URL stays valid
-  push = pushFromEnv(db),                                     // Web Push (VAPID keys from env; tests inject a fake sender)
+  push = pushFromEnv(db, process.env, { fcm: fcmFromEnv() }), // Web Push (VAPID) + native app push (FCM); tests inject a fake sender
   features: featureOptions = {},                              // limits: { streamLimit, refundWindowDays, reportsToHide … } (env defaults)
   seo = {},                                                    // search-engine options: { siteUrl, indexable, compress, googleVerification, bingVerification } (env defaults below)
 } = {}) {
@@ -171,6 +174,14 @@ export function createApp({
   const notDisabled = (u) => { if (u.disabledAt) throw new HttpError(403, 'account_disabled', 'This account has been disabled. Please contact support.'); return u; };
   // Optional engagement/security features (password reset, PIN, ratings, comments, push, ...) live in features.js.
   const features = createFeatures({ db, secret, mailer, push, catalog, siteUrl: billing.config.siteUrl, rate, publicUser, notDisabled, userFromRequest: (req) => userFromRequest(req), plans: PLANS, options: { supportEmail: billing.config.supportEmail, ...featureOptions } });
+
+  /* ---------- broadcast campaigns (Admin → Notifications: push / e-mail) — see server/src/campaigns.js ---------- */
+  // Signed one-click unsubscribe link put in the footer of every campaign e-mail; the audience queries skip
+  // anyone who used it. Transactional mail (receipts, resets) is unaffected.
+  const siteUrl = billing.config.siteUrl || '';
+  const unsubSig = (userId) => crypto.createHmac('sha256', secret).update(`unsub:${userId}`).digest('base64url').slice(0, 32);
+  const unsubscribeUrlFor = (u) => (siteUrl ? `${siteUrl}/api/v1/notifications/unsubscribe?u=${encodeURIComponent(u.id)}&t=${unsubSig(u.id)}` : '');
+  const campaigns = createCampaigns({ db, push, mailer, email: campaignEmail, log: console });
 
   // Create an account with e-mail + password. A verification-mail failure must be visible to the user (the account is still created so they can sign in and retry).
   api.post('/auth/signup', authLimit, wrap(async (req, res) => {
@@ -312,6 +323,15 @@ export function createApp({
   }));
   features.public(api);           // password reset, email verification, analytics, public ratings/comments
 
+  /* ---------- one-click unsubscribe from campaign e-mails (no sign-in needed: the link is signed) ---------- */
+  // GET so it works straight from a mail client; the reply is a small page, never JSON.
+  api.get('/notifications/unsubscribe', wrap(async (req, res) => {
+    const id = String(req.query.u || ''), t = String(req.query.t || '');
+    const ok = id && t && crypto.timingSafeEqual(Buffer.from(t.padEnd(64, '\u0000').slice(0, 64)), Buffer.from(unsubSig(id).padEnd(64, '\u0000').slice(0, 64)));
+    if (ok) await db.adminUsers.setEmailOptOut(id, true).catch(() => {});
+    res.set('Cache-Control', 'no-store').type('html').send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ADDABAAZ</title><body style="margin:0;font:16px/1.6 system-ui,sans-serif;background:#0b0b0d;color:#eee;display:grid;place-items:center;min-height:100vh;text-align:center"><div style="padding:24px"><h1 style="font-size:22px;margin:0 0 8px">${ok ? 'You are unsubscribed' : 'That link didn’t work'}</h1><p style="margin:0 0 20px;color:#aaa">${ok ? 'You will no longer receive announcement e-mails. Receipts and account e-mails are not affected.' : 'Please open the unsubscribe link from the e-mail again, or contact support.'}</p><a href="/" style="color:#e50914;font-weight:600;text-decoration:none">Back to ADDABAAZ</a></div></body>`);
+  }));
+
   /* ---------- Cloudflare R2 video streaming ---------- */
   // ---- Cloudflare R2 video streaming ----
   // Reads the optional `Authorization: Bearer` token without failing when it is missing (free videos need no login).
@@ -409,7 +429,7 @@ export function createApp({
 
   /* ---------- admin console API (admin accounts, or ADMIN_TOKEN for scripts) — see server/src/admin.js ---------- */
   // Mount the admin console API. It does its own authentication (admin role or ADMIN_TOKEN).
-  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate }));
+  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, campaigns, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate }));
 
   /* ---------- authenticated ---------- */
   // AUTH MIDDLEWARE: every route registered after this line requires a valid session token whose session version still matches.
@@ -663,6 +683,7 @@ export function createApp({
   // Expose internals for tests and for index.js (background jobs).
   app.db = db;
   app.locals.push = push;
+  app.locals.campaigns = campaigns;
   app.locals.features = features;
   app.locals.catalog = catalog;
   app.locals.billing = billing;          // exposed for jobs (expiry reminders) and tests

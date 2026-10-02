@@ -9,7 +9,7 @@ const NAV = [
   ['Overview', [['dashboard', 'Dashboard', 'dashboard']]],
   ['Content', [['shows', 'Shows', 'film'], ['videos', 'Videos & reels', 'tv'], ['upcoming', 'Coming soon', 'clock'], ['gallery', 'Gallery', 'image'], ['studio', 'Studio & team', 'building']]],
   ['Customers', [['users', 'Users', 'users'], ['payments', 'Payments & refunds', 'card'], ['refunds', 'Refund requests', 'refund'], ['coupons', 'Coupons', 'ticket'], ['messages', 'Messages', 'inbox'], ['comments', 'Comments', 'chat']]],
-  ['Growth', [['analytics', 'Analytics', 'chart'], ['notifications', 'Notifications', 'bell']]],
+  ['Growth', [['analytics', 'Analytics', 'chart'], ['notifications', 'Broadcast', 'bell']]],
   ['System', [['errors', 'Errors', 'bug'], ['audit', 'Audit log', 'log']]],
 ];
 // URL pattern -> page module. Each module's default export is `render(root, params, ctx)`.

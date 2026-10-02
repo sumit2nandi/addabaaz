@@ -33,7 +33,7 @@ const page = (req, dflt = 25, max = 100) => ({ limit: Math.min(Math.max(Number(r
  */
 // Every route below runs after the authentication middleware, so `req.admin` is always set.
 // Write actions call `log(...)` so the audit log records who did what.
-export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2, payments, mailer, push = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', env = process.env }) {
+export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2, payments, mailer, push = null, campaigns = null, unsubscribeUrlFor = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', env = process.env }) {
   // The shared ADMIN_TOKEN (for scripts) only counts when it is long enough to be unguessable.
   const tokenOn = adminToken.length >= 24;
   if (adminToken && !tokenOn) console.warn('[admin] ADMIN_TOKEN is shorter than 24 characters — the token is ignored (admin accounts still work).');
@@ -101,7 +101,8 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
       item('gst', 'GST invoicing', billing.config.gstEnabled, billing.config.gstEnabled ? `Invoices are issued under GSTIN ${billing.config.gstin}.` : 'GSTIN is not set — purchases get plain receipts without GST.'),
       item('mail', 'Email', mailer.provider === 'smtp', mailer.provider === 'smtp' ? 'SMTP is configured. Use Send test email below to check actual delivery.' : 'SMTP_URL is not set — verification, password-reset and billing emails are not sent.'),
       item('r2', 'Private video storage (R2)', !!r2.configured, r2.configured ? `Bucket “${r2.bucket}” is configured.` : 'R2 is not configured — R2-hosted videos cannot play (optional for other sources).'),
-      item('push', 'Web push', !!push?.configured, push?.configured ? 'VAPID keys are set; notifications can be sent.' : 'VAPID keys are not set — push notifications are off (optional).', 'info'),
+      item('push', 'Web push', !!push?.configured, push?.configured ? 'VAPID keys are set; broadcasts reach browsers and installed web apps.' : 'VAPID keys are not set — browser notifications are off (optional).', 'info'),
+      item('apppush', 'App push', !!push?.nativeConfigured, push?.nativeConfigured ? 'The Firebase service account is set; the Android/iOS apps receive broadcasts.' : 'FCM_SERVICE_ACCOUNT is not set — the phone apps cannot receive broadcasts (optional; see docs/MOBILE.md).', 'info'),
       item('apple', 'Apple sign-in', !!social.verifiers?.apple, social.verifiers?.apple ? 'Enabled.' : 'Not configured (optional; required only for iOS apps that offer other social logins).', 'info'),
       item('google', 'Google sign-in', !!social.verifiers?.google, social.verifiers?.google ? 'Enabled.' : 'Not configured (optional).', 'info'),
       item('facebook', 'Facebook sign-in', !!social.verifiers?.facebook, social.verifiers?.facebook ? 'Enabled.' : 'Not configured (optional).', 'info'),
@@ -498,6 +499,6 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   }));
 
   // More admin endpoints (analytics, comments moderation, refund requests, notifications, errors ...) live in admin-extra.js.
-  adminExtraRoutes({ router, db, billing, catalog, push, mailer, log, siteUrl: billing.config.siteUrl });
+  adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns, unsubscribeUrlFor, log, siteUrl: billing.config.siteUrl });
   return router;
 }

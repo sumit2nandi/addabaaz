@@ -95,7 +95,7 @@ export function accountExtras() {
       const draw = (s) => {
         slot.innerHTML = html`<h2 class="sub-h">Notifications</h2><div class="card-panel list">
           <label class="row-switch"><span><b>Notify me on this device</b><small>${s.permission === 'denied' ? 'Blocked in your browser settings.' : 'New episodes, launches and announcements.'}</small></span><span class="switch"><input type="checkbox" id="pushOn" ${s.subscribed ? 'checked' : ''} ${s.permission === 'denied' ? 'disabled' : ''}><span class="track"></span></span></label>
-          ${s.subscribed ? html`<label class="row-switch"><span><b>New episodes of shows I follow</b></span><span class="switch"><input type="checkbox" data-pp="episodes" ${s.prefs.episodes ? 'checked' : ''}><span class="track"></span></span></label>
+          ${s.subscribed && !s.native ? html`<label class="row-switch"><span><b>New episodes of shows I follow</b></span><span class="switch"><input type="checkbox" data-pp="episodes" ${s.prefs.episodes ? 'checked' : ''}><span class="track"></span></span></label>
             <label class="row-switch"><span><b>When a Coming Soon title launches</b></span><span class="switch"><input type="checkbox" data-pp="launches" ${s.prefs.launches ? 'checked' : ''}><span class="track"></span></span></label>
             <label class="row-switch"><span><b>Announcements &amp; offers</b></span><span class="switch"><input type="checkbox" data-pp="news" ${s.prefs.news ? 'checked' : ''}><span class="track"></span></span></label>` : ''}</div>`.s;
       };

@@ -254,6 +254,23 @@ export function adminDb({ q, tx, self, iso }) {
       if (sets.length) await q(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, [...vals, id]);
     },
     async countAdmins() { return (await q('SELECT COUNT(*) AS n FROM users WHERE is_admin = 1 AND disabled_at IS NULL'))[0].n; },
+    /* ---- Broadcast e-mail audiences (Admin → Notifications → Email) ----
+     * Same filters as the Users page (`filter` is one of USER_FILTERS). Disabled accounts are never
+     * mailed, and neither is anyone who clicked the unsubscribe link in an earlier campaign. */
+    async emailAudienceCount(filter = 'all') {
+      const f = USER_FILTERS[filter] ? filter : 'all';
+      const [{ n }] = await q(`SELECT COUNT(*) AS n FROM users u LEFT JOIN subscriptions s ON s.user_id = u.id WHERE (${USER_FILTERS[f]}) AND u.disabled_at IS NULL AND u.email_opt_out_at IS NULL`);
+      return Number(n);
+    },
+    async emailAudience(filter = 'all', { limit = 200, offset = 0 } = {}) {
+      const f = USER_FILTERS[filter] ? filter : 'all';
+      return (await q(`SELECT u.id, u.email, u.name FROM users u LEFT JOIN subscriptions s ON s.user_id = u.id
+        WHERE (${USER_FILTERS[f]}) AND u.disabled_at IS NULL AND u.email_opt_out_at IS NULL
+        ORDER BY u.created_at, u.id LIMIT ? OFFSET ?`, [limit, offset])).map((r) => ({ id: r.id, email: r.email, name: r.name }));
+    },
+    async emailOptOutCount() { return Number((await q('SELECT COUNT(*) AS n FROM users WHERE email_opt_out_at IS NOT NULL'))[0].n); },
+    async setEmailOptOut(userId, on = true) { return (await q('UPDATE users SET email_opt_out_at = ? WHERE id = ?', [on ? new Date() : null, userId])).affectedRows === 1; },
+    async emailOptOut(userId) { const r = (await q('SELECT email_opt_out_at FROM users WHERE id = ?', [userId]))[0]; return !!(r && r.email_opt_out_at); },
     // Used by the `npm run admin` command line to grant/revoke admin rights.
     async setAdminByEmail(email, isAdmin) { return (await q('UPDATE users SET is_admin = ? WHERE email = ?', [isAdmin ? 1 : 0, email])).affectedRows === 1; },
     async admins() { return (await q('SELECT id, email, name FROM users WHERE is_admin = 1 ORDER BY created_at')).map((r) => ({ id: r.id, email: r.email, name: r.name })); },

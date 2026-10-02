@@ -57,7 +57,7 @@ const remind = () => billing.sendExpiryReminders().catch((e) => console.error('[
 setTimeout(remind, 30_000).unref();
 setInterval(remind, 3600_000).unref();
 // Every minute: announce newly published episodes / launches (Web Push), and purge expired tokens, idle playback seats, old errors.
-const jobs = () => runScheduledJobs({ db, catalog: app.locals.catalog, push: app.locals.push, log: console });
+const jobs = () => runScheduledJobs({ db, catalog: app.locals.catalog, push: app.locals.push, campaigns: app.locals.campaigns, log: console });
 setTimeout(jobs, 10_000).unref();
 setInterval(jobs, 60_000).unref();
 if (process.env.NODE_ENV === 'production') {

@@ -103,3 +103,33 @@ is one shared DEBUG key (public by design - it signs nothing sensitive);
 build type at it (`android-gradle.mjs`). New APKs now install as ordinary
 updates. Users who installed an APK from BEFORE this change must uninstall
 once.
+
+## Push notifications (app push, FCM)
+
+Admin → **Broadcast** sends app notifications to the phones and tablets the app is installed
+on, next to the browser notifications (Web Push) and e-mail campaigns. The server side only
+needs one secret:
+
+1. Create a **Firebase project** (console.firebase.google.com) and add an **Android app** with the
+   package name `com.addabaaz.app` (and, for iOS, the bundle id from `capacitor.config.json`).
+2. Project settings → **Service accounts** → *Generate new private key*. Put the JSON on the server as
+   `FCM_SERVICE_ACCOUNT` (the whole JSON, e.g. on Render as a secret file/one-line value) **or**
+   `FCM_SERVICE_ACCOUNT_FILE=/path/to/service-account.json`. Restart; `/admin → Dashboard → System
+   status` then shows *App push: the Firebase service account is set*.
+3. Android build: download **google-services.json** into `mobile/android/app/` and make sure the
+   Google Services Gradle plugin is applied (the Firebase console's own instructions do this). Without
+   it the app still builds and runs — it simply never receives a token, and the app logs
+   `[push] app notifications are off: …` instead of failing.
+4. iOS build: enable the **Push Notifications** capability for the app target and upload an **APNs
+   key** (or the APNs key from Firebase) so FCM can deliver to iOS.
+
+The app itself does the rest: after sign-in `app/js/push-native.js` asks for permission once, gets the
+FCM/APNs token (`Capacitor.registerPlugin('PushNotifications')`, so the web bundle needs no bundler),
+registers it with `POST /api/v1/devices` and refreshes it on every sign-in. Signing out removes the
+device from the account, so a shared phone stops receiving the previous account's notifications.
+Tapping a notification opens the link the broadcast was sent with (a page path or an https URL).
+Tokens FCM reports as `UNREGISTERED` are deleted on the next send; tokens idle for 180 days are purged
+by the housekeeping job.
+
+*Send a test to me* on the Broadcast page is the fastest way to verify the whole chain: it goes to the
+administrator's own devices/address only.

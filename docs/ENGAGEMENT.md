@@ -21,12 +21,28 @@ Everything here degrades gracefully: the static site (no API) simply doesn't sho
 | **Ratings** | 👍/👎 on shows and videos, one per profile, public counts. Feeds *Because you watched …* on the home page (computed on the device from history, list and thumbs: same-genre shows you haven't started, minus ones you disliked). |
 | **Comments** | On videos, moderated: 1–1000 chars, at most one link, 5 per 10 minutes per account, report button; **3 reports auto-hide** a comment until an admin restores or deletes it (Admin → Comments). Deleting an account deletes its comments. |
 
-## Notifications (Web Push)
-1. `npx web-push generate-vapid-keys`, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:you@addabaaz.in`.
-2. Viewers switch it on in Account → Notifications (per browser; choose new episodes / launches / announcements). Signing out removes that device's subscription. Dead subscriptions (404/410) are cleaned up automatically.
-3. **Automatic:** a new episode of a show someone follows (My List) and the launch of a Coming Soon title they set a reminder for. A `notify_sent` ledger makes every notification at-most-once even across restarts or several server instances. Scheduled videos notify when they go live.
-4. **Manual:** Admin → Notifications → audience (announcements, everyone, followers of a show, reminder-holders of a launch).
-5. iOS: Web Push works only for the site **installed to the Home Screen** (iOS 16.4+). Native FCM/APNs push for the store apps is **not** included (it needs your Firebase/Apple credentials).
+## Notifications & Broadcasts
+Everything is sent from **Admin → Broadcast** (`#/notifications`): pick a channel (app push or e-mail), an
+audience, write the message, send yourself a test, then send. Sending runs in the background and the page
+shows live progress (sent / total / failed / skipped per broadcast, kept in the `campaigns` table).
+
+**App push** reaches phones and tablets (Android/iOS apps) and browsers.
+1. Browsers & installed web apps: `npx web-push generate-vapid-keys`, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:you@addabaaz.in`. Viewers switch it on in Account → Notifications (per browser; choose new episodes / launches / announcements). Signing out removes that device's subscription; dead subscriptions (404/410) are cleaned up automatically.
+2. Phone apps: create a Firebase project, add the service account as `FCM_SERVICE_ACCOUNT` (see `docs/MOBILE.md` → *Push notifications*). The apps register their FCM token on sign-in (`POST /devices`), and the same broadcast goes to those tokens through Firebase Cloud Messaging. Tokens FCM reports as unregistered are deleted automatically. Note the difference: a browser subscription follows the viewer's own preferences (*Account → Notifications*), while every app installation receives the broadcast — notification permission is the opt-in there.
+3. **Audiences:** everyone who turned notifications on, people who opted in to announcements, followers of a show, reminder-holders of a Coming Soon launch.
+4. **Automatic:** a new episode of a show someone follows (My List) and the launch of a Coming Soon title they set a reminder for. A `notify_sent` ledger makes every automatic notification at-most-once even across restarts or several server instances. Scheduled videos notify when they go live.
+
+**E-mail** reaches accounts by e-mail, using the same filters as the Users page (all / active subscribers /
+free / expiring within 7 days / expired). Requires `SMTP_URL` + `MAIL_FROM`. Every campaign e-mail carries a
+one-click unsubscribe link (`/api/v1/notifications/unsubscribe`, signed — no sign-in needed); people who
+unsubscribe are skipped from then on (`users.email_opt_out_at`), while receipts, password resets and billing
+mail are never affected. Sending is paged (25 at a time) and resumes at boot if a deploy interrupts it.
+
+**Test first:** *Send a test to me* sends exactly one message to the signed-in administrator — their own
+devices for push, their own address for e-mail. Nothing is recorded as a broadcast.
+
+iOS note: Web Push works only for the site **installed to the Home Screen** (iOS 16.4+); app push needs the
+iOS app built with the push plugin and an APNs key (or Firebase Cloud Messaging) — see `docs/MOBILE.md`.
 
 ## Analytics
 - **First-party**: the player reports plays and watch time (`POST /events/play`, no cookies, no personal data, capped per request). Admin → Analytics shows plays/watch time per day, top shows and videos, revenue. Counted only when a video really starts playing here (ad-blockers may hide some). YouTube's own view counts are separate.
@@ -51,4 +67,4 @@ The browser reports uncaught errors and failed route renders (max 5 per page, de
 | `npm run encode:hls -- episode.mov --name shahid-ep6 --upload` | ffmpeg → adaptive HLS ladder (1080/720/480/360p, never upscaling, 6 s segments) → uploads to `premium/<name>/` in R2 and prints the key. **Needs ffmpeg/ffprobe on your machine; the command builder is unit-tested but the script has not been run against real ffmpeg/R2 here** — try a short clip first. |
 
 ## Environment
-`STREAM_LIMIT`, `REFUND_WINDOW_DAYS`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `APPLE_CLIENT_ID`, `APPLE_SERVICE_ID`, `GA4_MEASUREMENT_ID`, `SENTRY_DSN`, `BACKUP_*`, `DISABLE_RATE_LIMIT` — see `.env.example`.
+`STREAM_LIMIT`, `REFUND_WINDOW_DAYS`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `FCM_SERVICE_ACCOUNT`, `FCM_SERVICE_ACCOUNT_FILE`, `APPLE_CLIENT_ID`, `APPLE_SERVICE_ID`, `GA4_MEASUREMENT_ID`, `SENTRY_DSN`, `BACKUP_*`, `DISABLE_RATE_LIMIT` — see `.env.example`.

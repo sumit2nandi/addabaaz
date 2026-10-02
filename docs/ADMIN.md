@@ -43,7 +43,7 @@ Security notes
 | **Messages** | contact-form inbox: reply by email, mark handled, delete; unread count in the sidebar |
 | **Comments** | moderation queue: comments auto-hidden after 3 reports or reported once; restore, hide, delete, search |
 | **Analytics** | plays and watch time per day, top shows/videos (7/30/90 days), revenue |
-| **Notifications** | send a Web Push announcement to everyone / news subscribers / followers of a show / reminder-holders of a launch |
+| **Broadcast** | send an announcement as an **app push notification** (Android/iOS apps and browsers) or an **e-mail** (all accounts, active subscribers, free/expiring/expired plans) — live progress, per-channel test send, recent broadcasts with results |
 | **Errors** | grouped browser and server errors of the last 7 days with stack traces |
 | **Audit log** | who did what, when, to what (`catalog.show.update`, `payment.refund`, `user.grant`, `coupon.create`, …). Append-only from the UI |
 

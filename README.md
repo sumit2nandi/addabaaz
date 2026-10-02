@@ -58,7 +58,7 @@ BTS/, UpcomingReleases/, images/, resources/   original artwork (untouched) & na
 
 - [Architecture & roadmap](docs/ARCHITECTURE.md) — how the pieces fit, how to go to production, what to add next
 - [Sign-in: email, Google, Facebook](docs/AUTH.md) — who must log in, provider setup, native apps
-- [Viewing & engagement](docs/ENGAGEMENT.md) — password reset, kids profiles & PIN, subtitles, ratings, comments, push, analytics, scheduled publishing, backup/restore, load test, HLS encoder
+- [Viewing & engagement](docs/ENGAGEMENT.md) — password reset, kids profiles & PIN, subtitles, ratings, comments, app-push/e-mail broadcasts, analytics, scheduled publishing, backup/restore, load test, HLS encoder
 - [Compliance notes (India)](docs/COMPLIANCE.md) — privacy/terms are templates; GST, DPDP, app-store rules
 - [Google search (SEO)](docs/SEO.md) — crawlable URLs, sitemap, structured data, go-live checklist
 - [Admin console](docs/ADMIN.md) — `/admin`: content, users, payments, refunds, coupons, audit log

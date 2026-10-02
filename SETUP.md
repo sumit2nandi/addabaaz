@@ -305,7 +305,8 @@ All settings are environment variables (see `.env.example`, which has the same l
 
 | Variable | Meaning |
 |---|---|
-| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push. Generate with `npx web-push generate-vapid-keys`; subject like `mailto:support@addabaaz.in`. |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push (browsers). Generate with `npx web-push generate-vapid-keys`; subject like `mailto:support@addabaaz.in`. |
+| `FCM_SERVICE_ACCOUNT` or `FCM_SERVICE_ACCOUNT_FILE` | App push to the Android/iOS apps: the Firebase service-account JSON itself, or a path to it. See `docs/MOBILE.md`. |
 | `GA4_MEASUREMENT_ID` | `G-XXXXXXX` — optional Google Analytics 4; loads only after the visitor accepts. |
 | `SENTRY_DSN` | Optional server error alerts (also `npm i @sentry/node`). |
 | `CONTACT_WEBHOOK_URL` | Optional: POST every contact-form message to Slack/Zapier/etc. |
@@ -418,12 +419,24 @@ Not included: GST e-invoice/IRN and return filing (they need a GST Suvidha Provi
 
 Set `SMTP_URL`, `MAIL_FROM`, `SUPPORT_EMAIL` and `PUBLIC_SITE_URL` (links in emails use it). Any SMTP provider works (Amazon SES, Brevo, Mailgun, Zoho, Gmail app password…). Once SMTP is set, viewers must confirm their email before buying or commenting. Set up SPF/DKIM for your sending domain so mail doesn't land in spam. After deploy, use `/admin` → Dashboard → System status → **Send test email** to verify the actual SMTP connection and delivery. On Render Free, ports 25/465/587 are blocked: use a provider with port 2525 (`SMTP_URL=smtp://username:password@smtp-host:2525`, STARTTLS) or a paid Render instance; URL-encode special characters in the username/password.
 
-### 8.8 Push notifications
+### 8.8 Notifications & broadcasts (app push + e-mail)
 
-1. `npx web-push generate-vapid-keys`
-2. Set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:support@addabaaz.in`, restart.
-3. Viewers switch it on under *Account → Notifications*. New episodes and launch reminders are sent automatically; send announcements from `/admin → Notifications`.
-4. iPhones receive web push only when the site is added to the Home Screen (iOS 16.4+).
+Everything is sent from `/admin → Broadcast`: choose *App push* or *E-mail*, pick an audience, write the
+message, send a test to yourself, then send. Progress (sent / total / failed / skipped) is shown live and
+kept in the Campaigns list.
+
+1. **Browsers (Web Push):** `npx web-push generate-vapid-keys`, then set `VAPID_PUBLIC_KEY`,
+   `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:support@addabaaz.in`, restart. Viewers switch it on under
+   *Account → Notifications*. iPhones receive web push only when the site is added to the Home Screen
+   (iOS 16.4+).
+2. **Phone apps (FCM):** create a Firebase project, add the service-account JSON as
+   `FCM_SERVICE_ACCOUNT` (or `FCM_SERVICE_ACCOUNT_FILE`) and rebuild the app with
+   `google-services.json` — full steps in `docs/MOBILE.md` → *Push notifications*. The apps register
+   their device token on sign-in; nothing else to do.
+3. **E-mail:** needs `SMTP_URL` + `MAIL_FROM`. Every campaign mail has a one-click unsubscribe link;
+   people who unsubscribe are skipped afterwards (receipts and account mail are unaffected).
+4. New episodes and launch reminders are sent automatically to the people who follow a show or set a
+   reminder (web push + app push).
 
 ### 8.9 Analytics and error monitoring
 

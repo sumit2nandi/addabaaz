@@ -293,6 +293,17 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       }));
       api.post('/push/unsubscribe', wrap(async (req, res) => { if (typeof req.body?.endpoint === 'string') await db.push.remove(req.user.id, endpointHash(req.body.endpoint)); res.sendStatus(204); }));
 
+      /* --- native app push devices (Android/iOS apps: FCM tokens) — Admin → Notifications sends to these --- */
+      // The apps call this after FCM/APNs hands them a token; the same token is never shared between accounts.
+      api.post('/devices', wrap(async (req, res) => {
+        const { token, platform = 'android', label = null } = req.body || {};
+        if (typeof token !== 'string' || token.length < 20 || token.length > 512) throw bad('Invalid device token.');
+        await db.devices.upsert(req.user.id, { hash: endpointHash(token), token, platform, label });
+        res.status(201).json({ ok: true });
+      }));
+      api.delete('/devices', wrap(async (req, res) => { if (typeof req.body?.token === 'string') await db.devices.remove(req.user.id, endpointHash(req.body.token)); res.sendStatus(204); }));
+      api.get('/devices', wrap(async (req, res) => res.json({ devices: await db.devices.listFor(req.user.id) })));
+
       /* --- refund requests: the customer asks, an admin decides (admin console → Payments → Refund requests) --- */
       // Viewer-initiated refund request. Only paid, unrefunded Razorpay payments inside the refund window qualify, one open request at a time. An admin decides in the console.
       api.post('/payments/:id/refund-request', limit('refreq', 10, 60 * 60_000), wrap(async (req, res) => {

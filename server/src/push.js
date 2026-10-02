@@ -1,16 +1,22 @@
 import crypto from 'node:crypto';
 
 /**
- * Web Push (browsers & installed PWAs). Native Android/iOS push (FCM/APNs) is a separate integration — see docs/ENGAGEMENT.md.
+ * Push delivery to every device a viewer has:
+ *   - Web Push (browsers & installed PWAs) with VAPID keys — push_subscriptions,
+ *   - native app push (Android/iOS apps, FCM) — push_devices, sent through fcm.js.
+ * Either channel can be missing; the service reports which ones are configured and sends through
+ * whichever are.
  *   VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY   generate once:  npx web-push generate-vapid-keys
  *   VAPID_SUBJECT=mailto:office@addabaaz.in
- * Tests inject `sender` (async (subscription, payloadString) => void, throws {statusCode} like web-push does).
+ *   FCM_SERVICE_ACCOUNT[_FILE]             Firebase service account (see fcm.js)
+ * Tests inject `sender` (async (subscription, payloadString) => void, throws {statusCode} like web-push does)
+ * and `fcm` (anything with { configured, send(tokens, message) }).
  */
 // A stable id for a browser push subscription (its endpoint URL is long and secret, so store a hash to look it up).
 export const endpointHash = (endpoint) => crypto.createHash('sha256').update(String(endpoint)).digest('hex');
 
 // `sender` can be injected in tests; otherwise the `web-push` package is loaded lazily on first use.
-export function createPush({ db, vapid = {}, sender = null, log = console }) {
+export function createPush({ db, vapid = {}, sender = null, fcm = null, log = console }) {
   // Push works only when VAPID keys (or a test sender) exist.
   const configured = !!(sender || (vapid.publicKey && vapid.privateKey));
   let wp = null;
@@ -18,19 +24,36 @@ export function createPush({ db, vapid = {}, sender = null, log = console }) {
     wp ||= (await import('web-push')).default;
     await wp.sendNotification(sub, payload, { vapidDetails: { subject: vapid.subject || 'mailto:admin@localhost', publicKey: vapid.publicKey, privateKey: vapid.privateKey }, TTL: 24 * 3600, urgency: 'normal' });
   });
+  // Native app push (FCM). Absent in tests that only exercise Web Push, and when FCM_SERVICE_ACCOUNT is not set.
+  const nativeConfigured = !!fcm?.configured;
+  /** Sends `message` to the given native device tokens (the caller has already applied any send-once claim). */
+  async function notifyNative(tokens, message) {
+    if (!nativeConfigured || !tokens.length) return { sent: 0, failed: 0, removed: 0 };
+    const r = await fcm.send(tokens, { title: message.title, body: message.body, url: message.url, image: message.image, tag: message.tag });
+    if (r.dead?.length) for (const t of r.dead) await db.devices.removeHash(endpointHash(t)).catch(() => {});
+    return { sent: r.sent, failed: r.failed, removed: r.dead?.length || 0 };
+  }
+
   const svc = {
-    configured, publicKey: vapid.publicKey || '',
-    /** Sends `message` ({title, body, url, image?, tag?}) to an audience (see db.push.audience). Returns { sent, failed, removed }. */
+    configured, nativeConfigured, publicKey: vapid.publicKey || '',
+    /** Sends `message` ({title, body, url, image?, tag?}) to an audience (see db.push.audience). Returns { sent, failed, removed, native }. */
     async notify(audience, message, { claim = null } = {}) {
-      if (!configured) return { sent: 0, failed: 0, removed: 0, skipped: 'not_configured' };
-      const subs = await db.push.audience(audience);
+      // Both channels are looked up first: a send-once claim (automatic notifications) must be decided
+      // ONCE per user and then applied to their browser subscriptions AND their app devices together.
+      const subs = configured ? await db.push.audience(audience) : [];
+      const rows = nativeConfigured ? await db.devices.audienceFor(audience).catch((e) => { log.warn?.(`[push] app audience failed: ${e.message}`); return []; }) : [];
+      let allowedNative = rows.map((r) => r.token), keptSubs = subs;
+      if (claim) {
+        const decided = new Map();
+        for (const userId of new Set([...subs.map((s) => s.userId), ...rows.map((r) => r.userId)])) decided.set(userId, await db.push.claim(claim.kind, claim.ref, userId));
+        allowedNative = rows.filter((r) => decided.get(r.userId)).map((r) => r.token);
+        keptSubs = subs.filter((s) => decided.get(s.userId));
+      }
+      const native = await notifyNative(allowedNative, message).catch((e) => { log.warn?.(`[push] native send failed: ${e.message}`); return { sent: 0, failed: 0, removed: 0 }; });
+      if (!configured) return { sent: native.sent, failed: native.failed, removed: native.removed, native, skipped: 'not_configured' };
       const payload = JSON.stringify({ title: String(message.title || 'ADDABAAZ').slice(0, 80), body: String(message.body || '').slice(0, 180), url: message.url || '/', image: message.image || undefined, tag: message.tag || undefined });
-      // With `claim`, each user is notified at most once per (kind, ref); this map avoids repeating the database check per device.
-      const decided = new Map();                                    // userId → true if this send is theirs to make (send-once per user, all their devices)
       let sent = 0, failed = 0, removed = 0;
-      for (const s of subs) {
-        // Skip devices whose user was already notified. On success mark the subscription healthy.
-        if (claim) { if (!decided.has(s.userId)) decided.set(s.userId, await db.push.claim(claim.kind, claim.ref, s.userId)); if (!decided.get(s.userId)) continue; }
+      for (const s of keptSubs) {
         try { await send({ endpoint: s.endpoint, keys: s.keys }, payload); sent++; await db.push.ok(s.id); }
         catch (e) {
           // 404/410 mean the browser unsubscribed: delete it. Other errors are counted so dead subscriptions can be found.
@@ -38,11 +61,11 @@ export function createPush({ db, vapid = {}, sender = null, log = console }) {
           else { failed++; await db.push.failed(s.id); log.warn?.(`[push] send failed (${e?.statusCode || e?.message})`); }
         }
       }
-      return { sent, failed, removed };
+      return { sent: sent + native.sent, failed: failed + native.failed, removed: removed + native.removed, native };
     },
     /** Run periodically: tell people about new episodes of shows they follow and about launched "Coming soon" titles. Idempotent. */
     async runAutomatic(catalog, { now = Date.now(), lookbackMs = 24 * 3600_000 } = {}) {
-      if (!configured) return { episodes: 0, launches: 0 };
+      if (!configured && !nativeConfigured) return { episodes: 0, launches: 0 };
       const shows = new Map((catalog.shows || []).map((x) => [x.id, x]));   // `catalog` = the public snapshot's { shows, videos, upcoming }
       // Small helper view over the catalog for the loops below.
       const cat = {
@@ -71,5 +94,8 @@ export function createPush({ db, vapid = {}, sender = null, log = console }) {
   return svc;
 }
 
-// Builds the service from VAPID_* environment variables.
-export const pushFromEnv = (db, env = process.env) => createPush({ db, vapid: { publicKey: env.VAPID_PUBLIC_KEY || '', privateKey: env.VAPID_PRIVATE_KEY || '', subject: env.VAPID_SUBJECT || (env.SUPPORT_EMAIL ? `mailto:${env.SUPPORT_EMAIL}` : '') } });
+// Builds the service from the VAPID_* and FCM_SERVICE_ACCOUNT* environment variables.
+export const pushFromEnv = (db, env = process.env, { fcm = null } = {}) => createPush({
+  db, fcm,
+  vapid: { publicKey: env.VAPID_PUBLIC_KEY || '', privateKey: env.VAPID_PRIVATE_KEY || '', subject: env.VAPID_SUBJECT || (env.SUPPORT_EMAIL ? `mailto:${env.SUPPORT_EMAIL}` : '') },
+});
