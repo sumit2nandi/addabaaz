@@ -11,18 +11,33 @@ export function sniffImage(buf) {
   return null;
 }
 
-/** Stores an uploaded image under a content-hash name (so re-uploads dedupe and URLs can be cached forever). Returns the site-relative path. */
-export function saveImage(buf, dir) {
+/** What a stored upload is called: 24 hex characters of its content hash + an extension (webp png jpg gif for images, vtt for subtitles). */
+export const UPLOAD_NAME = /^[0-9a-f]{24}\.(?:webp|png|jpg|gif|vtt)$/;
+const UPLOAD_TYPES = { webp: 'image/webp', png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif', vtt: 'text/vtt; charset=utf-8' };
+/** The Content-Type a stored upload is served with, from its file name. */
+export const uploadType = (name) => UPLOAD_TYPES[String(name).split('.').pop()] || 'application/octet-stream';
+// File name = hash of the content, so identical uploads share one file and URLs never change meaning (and can be cached for a year).
+const hashName = (content, ext) => `${crypto.createHash('sha256').update(content).digest('hex').slice(0, 24)}.${ext}`;
+
+/** Checks an uploaded image (by its bytes) and names it by content hash. Nothing is written. -> { name, path, bytes, type, data } or null if it is not an accepted image. */
+export function describeImage(buf) {
   // Detect the real image type from its bytes; reject anything that is not WebP/PNG/JPEG/GIF.
   const kind = sniffImage(buf);
   if (!kind) return null;
-  // File name = hash of the content, so identical uploads share one file and URLs never change.
-  const name = `${crypto.createHash('sha256').update(buf).digest('hex').slice(0, 24)}.${kind.ext}`;
-  fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, name);
-  // Write to a temp file then rename, so a half-written file is never served.
-  if (!fs.existsSync(file)) { const tmp = `${file}.${process.pid}.tmp`; fs.writeFileSync(tmp, buf); fs.renameSync(tmp, file); }
-  return { path: `uploads/${name}`, bytes: buf.length, type: kind.type };
+  const name = hashName(buf, kind.ext);
+  return { name, path: `uploads/${name}`, bytes: buf.length, type: kind.type, data: buf };
+}
+
+/** Writes a copy of an upload into the local upload folder. Best effort: MySQL holds the real copy and the folder is only a cache
+ *  (a restart or redeploy may empty it, or the disk may be read-only), so a failure here is not an error. Returns whether the file is there. */
+export function cacheUpload(dir, name, data) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, name);
+    // Write to a temp file then rename, so a half-written file is never served.
+    if (!fs.existsSync(file)) { const tmp = `${file}.${process.pid}.${crypto.randomBytes(3).toString('hex')}.tmp`; fs.writeFileSync(tmp, data); fs.renameSync(tmp, file); }
+    return true;
+  } catch { return false; }
 }
 
 // Video types accepted for upload to R2.
@@ -47,12 +62,9 @@ export function toVtt(input) {
   const cues = (body.match(/\d{1,2}:\d{2}:\d{2}\.\d{3}\s+-->\s+\d{1,2}:\d{2}:\d{2}\.\d{3}/g) || []).length;
   return cues ? { vtt: `WEBVTT\n\n${body}\n`, cues } : null;
 }
-// Stores a subtitle file (converted to WebVTT) under a content-hash name.
-export function saveSubtitle(buf, dir) {
+/** Checks a subtitle file and names the WebVTT it converts to by content hash. Nothing is written. -> { name, path, bytes, cues, type, data } or null. */
+export function describeSubtitle(buf) {
   const v = toVtt(buf); if (!v) return null;
-  const name = `${crypto.createHash('sha256').update(v.vtt).digest('hex').slice(0, 24)}.vtt`;
-  fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, name);
-  if (!fs.existsSync(file)) { const tmp = `${file}.${process.pid}.tmp`; fs.writeFileSync(tmp, v.vtt); fs.renameSync(tmp, file); }
-  return { path: `uploads/${name}`, cues: v.cues, bytes: Buffer.byteLength(v.vtt) };
+  const data = Buffer.from(v.vtt, 'utf8'), name = hashName(data, 'vtt');
+  return { name, path: `uploads/${name}`, bytes: data.length, cues: v.cues, type: uploadType(name), data };
 }

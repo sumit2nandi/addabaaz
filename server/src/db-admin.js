@@ -169,6 +169,20 @@ export function adminDb({ q, tx, self, iso }) {
     async countVideosOf(showId) { return (await q("SELECT COUNT(*) AS n FROM catalog_items WHERE type = 'video' AND JSON_UNQUOTE(JSON_EXTRACT(doc, '$.showId')) = ?", [showId]))[0].n; },
   };
 
+  // ---- Uploaded files: admin-uploaded images and subtitles live in MySQL (the upload folder is only a cache of them) ----
+  const uploads = {
+    /** Stores a file under its content-hash name; identical bytes have the same name, so a repeat upload is a no-op. */
+    async put(name, type, data) { await q('INSERT IGNORE INTO uploaded_files (name, content_type, bytes, data) VALUES (?,?,?,?)', [name, type, data.length, data]); },
+    /** { type, data } for a stored file, or null. */
+    async get(name) { const r = (await q('SELECT content_type, data FROM uploaded_files WHERE name = ?', [name]))[0]; return r ? { type: r.content_type, data: r.data } : null; },
+    /** The subset of `names` that is stored, as a Set (used to validate catalog references without touching the disk). */
+    async existing(names) {
+      if (!names.length) return new Set();
+      const rows = await q(`SELECT name FROM uploaded_files WHERE name IN (${names.map(() => '?').join(',')})`, names);
+      return new Set(rows.map((r) => r.name));
+    },
+  };
+
   // ---- Audit log: who did what in the admin console ----
   const audit = {
     async add({ actorId = null, actor, action, target = null, meta = null, ip = null }) {
@@ -291,5 +305,5 @@ export function adminDb({ q, tx, self, iso }) {
   };
 
   // Merged into the main `db` object by db.js.
-  return { catalog, audit, youtubeImports, adminUsers, messages, stats };
+  return { catalog, uploads, audit, youtubeImports, adminUsers, messages, stats };
 }

@@ -7,7 +7,7 @@ import { isDuplicate } from './db.js';
 import { verifyToken, sessionValid } from './auth.js';
 import { PLANS, paidPlan } from './plans.js';
 import { validate, TYPES } from './catalog-schema.js';
-import { saveImage, saveSubtitle, videoKey } from './uploads.js';
+import { describeImage, describeSubtitle, cacheUpload, UPLOAD_NAME, videoKey } from './uploads.js';
 import { adminExtraRoutes } from './admin-extra.js';
 import { suggestYouTubeKind } from './youtube-feed.js';
 
@@ -105,7 +105,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
       item('apple', 'Apple sign-in', !!social.verifiers?.apple, social.verifiers?.apple ? 'Enabled.' : 'Not configured (optional; required only for iOS apps that offer other social logins).', 'info'),
       item('google', 'Google sign-in', !!social.verifiers?.google, social.verifiers?.google ? 'Enabled.' : 'Not configured (optional).', 'info'),
       item('facebook', 'Facebook sign-in', !!social.verifiers?.facebook, social.verifiers?.facebook ? 'Enabled.' : 'Not configured (optional).', 'info'),
-      item('uploads', 'Image uploads', uploads, uploads ? `Saved to ${uploadDir}${prod ? ' — make sure this folder is on a persistent volume.' : ''}` : `Cannot write to ${uploadDir}.`),
+      item('uploads', 'Image uploads', dbUp, dbUp ? `Stored in MySQL, so they survive restarts and redeploys. ${uploads ? `A local copy is kept in ${uploadDir} to serve them faster.` : `The local cache folder ${uploadDir} is not writable, so files are served straight from MySQL.`}` : 'MySQL is not reachable, so images and subtitles cannot be saved.', 'error'),
       item('site', 'Public site URL', !!env.PUBLIC_SITE_URL, env.PUBLIC_SITE_URL ? env.PUBLIC_SITE_URL : 'PUBLIC_SITE_URL is not set — links in emails, canonical URLs and the sitemap fall back to the address of each request. Set it to your https address (no trailing slash).', prod ? 'warn' : 'info'),
       item('indexing', 'Google indexing', indexing, indexing ? 'Search engines may index the site: robots.txt and /sitemap.xml are live.' : 'Search engines are told NOT to index this site (robots.txt disallows all). That is right for staging; on the live site set NODE_ENV=production or ALLOW_INDEXING=true.', prod ? 'warn' : 'info'),
       item('admins', 'Administrators', (await db.adminUsers.countAdmins()) > 0, `${await db.adminUsers.countAdmins()} admin account(s).`, 'warn'),
@@ -254,6 +254,20 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   };
   // Extra context the catalog validator needs to check existing references and media files.
   const ctxOf = (snap) => ({ fileExists, showIds: snap.showIds, upcomingIds: snap.upcomingIds });
+  // Uploaded images and subtitles live in MySQL; the upload folder is only a cache that a restart or redeploy can empty. So a document may
+  // legitimately refer to an upload that is not on this server's disk. The validator is synchronous, so first look up the stored uploads
+  // that the document mentions, then let `fileExists` accept those too.
+  const uploadNamesIn = (value, found = new Set()) => {
+    if (found.size >= 200) return found;
+    if (typeof value === 'string') { const m = /^uploads\/([^/]+)$/.exec(value.trim()); if (m && UPLOAD_NAME.test(m[1])) found.add(m[1]); }
+    else if (Array.isArray(value)) value.forEach((v) => uploadNamesIn(v, found));
+    else if (value && typeof value === 'object') Object.values(value).forEach((v) => uploadNamesIn(v, found));
+    return found;
+  };
+  const ctxFor = async (snap, doc) => {
+    const stored = await db.uploads.existing([...uploadNamesIn(doc)]);
+    return { ...ctxOf(snap), fileExists: (rel) => fileExists(rel) || (rel.startsWith('uploads/') && stored.has(rel.slice('uploads/'.length))) };
+  };
   // Maps the `:type` URL segment (show, video, upcoming, gallery) to the collection; unknown types -> 404.
   const kindOf = (req) => { if (!TYPES[req.params.type]) throw new HttpError(404, 'not_found', 'Unknown catalog section.'); return { key: req.params.type, type: TYPES[req.params.type] }; };
   const invalid = (errors) => new HttpError(400, 'invalid_item', errors.join(' '));
@@ -417,7 +431,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   // Create an item: validated by catalog-schema.js, stored in MySQL, then the cache is cleared so the site updates.
   router.post('/catalog/:type', wrap(async (req, res) => {
     const { key, type } = kindOf(req), snap = await catalog.get({ all: true });
-    const { doc, errors } = validate(type, req.body, ctxOf(snap)); if (errors.length) throw invalid(errors);
+    const { doc, errors } = validate(type, req.body, await ctxFor(snap, req.body)); if (errors.length) throw invalid(errors);
     try { await db.catalog.put(key, doc.id, doc, { create: true }); } catch (e) { if (isDuplicate(e)) throw new HttpError(409, 'exists', `A ${type} with the id “${doc.id}” already exists.`); throw e; }
     catalog.invalidate(); await log(req, `catalog.${type}.create`, doc.id, { title: doc.title || doc.caption || doc.id });
     res.status(201).json({ item: doc });
@@ -434,7 +448,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     const { key, type } = kindOf(req), snap = await catalog.get({ all: true });
     const body = { ...(req.body || {}) }; if (body.id === undefined) body.id = req.params.id;
     if (body.id !== req.params.id) throw bad('An id can’t be changed — create a new item instead.');
-    const { doc, errors } = validate(type, body, ctxOf(snap)); if (errors.length) throw invalid(errors);
+    const { doc, errors } = validate(type, body, await ctxFor(snap, body)); if (errors.length) throw invalid(errors);
     if (!(await db.catalog.put(key, doc.id, doc))) throw new HttpError(404, 'not_found', `Unknown ${type}.`);
     catalog.invalidate(); await log(req, `catalog.${type}.update`, doc.id, { title: doc.title || doc.caption || doc.id });
     res.json({ item: doc });
@@ -450,24 +464,28 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   // The About/studio page content.
   router.put('/studio', wrap(async (req, res) => {
     const snap = await catalog.get({ all: true });
-    const { doc, errors } = validate('studio', req.body, ctxOf(snap)); if (errors.length) throw invalid(errors);
+    const { doc, errors } = validate('studio', req.body, await ctxFor(snap, req.body)); if (errors.length) throw invalid(errors);
     await db.catalog.putStudio(doc); catalog.invalidate(); await log(req, 'catalog.studio.update'); res.json({ studio: doc });
   }));
 
   /* ---------- uploads ---------- */
   // Image upload: the raw file is the request body; the type is detected from its bytes (not the file name).
+  // The file is saved in MySQL (durable, and shared by every server instance), then copied into the upload folder as a local cache.
+  const keepUpload = async (file) => { await db.uploads.put(file.name, file.type, file.data); cacheUpload(uploadDir, file.name, file.data); };
   router.post('/uploads/image', express.raw({ type: () => true, limit: '10mb' }), wrap(async (req, res) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the image file as the request body.');
-    const saved = saveImage(req.body, uploadDir); if (!saved) throw bad('Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
+    const saved = describeImage(req.body); if (!saved) throw bad('Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
+    await keepUpload(saved);
     await log(req, 'upload.image', saved.path, { bytes: saved.bytes });
     res.status(201).json({ path: saved.path, bytes: saved.bytes, type: saved.type });
   }));
   // Subtitle upload (.vtt or .srt; converted to WebVTT).
   router.post('/uploads/subtitle', express.raw({ type: () => true, limit: '2mb' }), wrap(async (req, res) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the .vtt or .srt file as the request body.');
-    const saved = saveSubtitle(req.body, uploadDir); if (!saved) throw bad('That does not look like a WebVTT (.vtt) or SubRip (.srt) subtitle file.', 'unsupported_subtitle');
+    const saved = describeSubtitle(req.body); if (!saved) throw bad('That does not look like a WebVTT (.vtt) or SubRip (.srt) subtitle file.', 'unsupported_subtitle');
+    await keepUpload(saved);
     await log(req, 'upload.subtitle', saved.path, { cues: saved.cues });
-    res.status(201).json(saved);
+    res.status(201).json({ path: saved.path, cues: saved.cues, bytes: saved.bytes });
   }));
   /** Presigned PUT so the browser sends a big video straight to the private R2 bucket (never through this server). */
   // Returns a presigned URL so the browser uploads the big video file straight to R2 (it never passes through this server).

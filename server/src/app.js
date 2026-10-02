@@ -33,6 +33,7 @@ import { createYouTubeFeed } from './youtube-feed.js';
 import { createSeo } from './seo.js';
 import compression from 'compression';
 import { createAdminRouter } from './admin.js';
+import { UPLOAD_NAME, uploadType, cacheUpload } from './uploads.js';
 
 // Repository root (two folders above server/src).
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -57,7 +58,7 @@ export function createApp({
   billing = createBilling({ db, payments, mailer, config: billingConfigFromEnv() }),   // coupons, GST invoices, refunds
   adminToken = process.env.ADMIN_TOKEN || '',                 // optional shared secret for scripts (≥24 chars); admin ACCOUNTS (users.is_admin) need no token
   sessionHours = Number(process.env.ADMIN_SESSION_HOURS) || 12, // admin sessions are shorter than viewer sessions
-  uploadDir = process.env.UPLOAD_DIR || path.join(ROOT, 'uploads'),   // admin image uploads (mount a persistent volume in production)
+  uploadDir = process.env.UPLOAD_DIR || path.join(ROOT, 'uploads'),   // local cache of admin uploads (the real copies are stored in MySQL)
   contactWebhook = process.env.CONTACT_WEBHOOK_URL || '',
   youtubeFeed = createYouTubeFeed(),                         // fetched only after an administrator explicitly previews uploads
   rate = true,
@@ -527,20 +528,42 @@ export function createApp({
     // Images belong to this site: other pages may not hot-link them (crawlers for social previews and
     // direct visits without a referrer keep working).
     const HOTLINK_BOTS = /bot|crawler|spider|slurp|preview|embed|facebookexternalhit|twitterbot|whatsapp|telegrambot|slackbot|discordbot|linkedinbot|pinterest|snapchat|skypeuripreview|vkshare|w3c_validator|applebot|metadata/i;
+    // Pages that may show these images: this server's own host(s), plus the public site (PUBLIC_SITE_URL, with and without www), any explicit
+    // CORS_ORIGINS, the native apps' WebView (capacitor.config.json server.hostname - the app loads admin-uploaded posters from this API,
+    // and without this their requests, which carry that origin as the Referer, were refused) and IMAGE_ALLOWED_HOSTS (comma-separated extras).
+    const hostOf = (url) => { try { return new URL(url).host.toLowerCase(); } catch { return ''; } };
+    const imageHosts = new Set([
+      ...[hostOf(billing?.config?.siteUrl)].flatMap((h) => (h ? [h, h.startsWith('www.') ? h.slice(4) : `www.${h}`] : [])),
+      ...(corsOrigins === '*' ? [] : String(corsOrigins).split(',').map((s) => hostOf(s.trim()))),
+      'app.addabaaz.in',
+      ...String(process.env.IMAGE_ALLOWED_HOSTS || '').split(',').map((s) => s.trim().toLowerCase()),
+    ].filter(Boolean));
     const guardImages = (req, res, next) => {
       const ref = req.get('referer');
       if (ref) {
         let same = false;
-        try { const u = new URL(ref); same = u.host === req.headers.host || u.host === (req.get('x-forwarded-host') || ''); } catch { same = false; }
+        try { const u = new URL(ref); same = u.host === req.headers.host || u.host === (req.get('x-forwarded-host') || '') || imageHosts.has(u.host.toLowerCase()); } catch { same = false; }
         if (!same && !HOTLINK_BOTS.test(req.get('user-agent') || '')) return res.status(403).type('text/plain').send('Forbidden');
       }
       next();
     };
+    // Admin uploads are stored in MySQL; the upload folder is only a cache that a restart or redeploy can empty (Render's free plan, a
+    // Hostinger redeploy, a second server). When a file is not on disk, serve it from MySQL and put a copy back on disk. The names are
+    // content hashes, so a URL never changes meaning and can be cached for a year.
+    const uploadFromDb = wrap(async (req, res, next) => {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+      const name = req.path.slice(1);
+      if (!UPLOAD_NAME.test(name)) return next();
+      const file = await db.uploads.get(name); if (!file) return next();
+      cacheUpload(uploadDir, name, file.data);
+      res.set({ 'Content-Type': uploadType(name), 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
+      res.send(file.data);
+    });
     // Static asset folders. Longer cache times for rarely-changing ones.
     app.use('/app', express.static(appRoot, { ...opts(0), etag: true }));
     app.use('/data', express.static(path.join(ROOT, 'data'), opts(60_000)));
     app.use('/media', guardImages, express.static(path.join(ROOT, 'media'), opts(7 * 86_400_000)));
-    app.use('/uploads', guardImages, express.static(uploadDir, { maxAge: '365d', immutable: true, index: false, dotfiles: 'ignore' }));   // admin-uploaded images (content-hash names)
+    app.use('/uploads', guardImages, express.static(uploadDir, { maxAge: '365d', immutable: true, index: false, dotfiles: 'ignore' }), uploadFromDb);   // admin-uploaded images and subtitles (content-hash names): disk cache first, then MySQL
     // The admin console: its own page + scripts, never cached, locked down with a strict CSP (no inline script, no framing).
     const adminHeaders = (_q, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'self'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' https://accounts.google.com https://connect.facebook.net https://appleid.cdn-apple.com; connect-src 'self' https:; frame-src 'self' https://accounts.google.com https://www.facebook.com https://appleid.apple.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" }); next(); };
     // Admin console page + its scripts.
