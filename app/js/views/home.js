@@ -6,11 +6,12 @@ import { CONFIG } from '../config.js';
 import { rail, enhanceRails, showCard, videoCard, reelCard, soonCard, galleryCard, listBtn, img, heroBg, showMeta, premiumMark } from '../ui/components.js';
 import { openLightbox } from '../ui/lightbox.js';
 
-// Picks the featured shows for the carousel.
+// Picks the featured shows for the carousel. Each slide also carries the show's YouTube trailer
+// (when it has one): the active slide plays it muted with an unmute switch, like the main-branch hero.
 function heroSlides() {
   const cat = app.catalog;
   return cat.shows.filter((s) => s.featured && cat.episodes(s.id).length)
-    .map((s) => ({ show: s, latest: cat.latestEpisode(s.id) }))
+    .map((s) => ({ show: s, latest: cat.latestEpisode(s.id), trailer: cat.videos.find((v) => v.showId === s.id && v.kind === 'trailer' && v.source?.type === 'youtube') }))
     .sort((a, b) => b.latest.publishedAt.localeCompare(a.latest.publishedAt));
 }
 
@@ -18,12 +19,14 @@ function heroSlides() {
 function heroHtml(slides) {
   const cat = app.catalog, u = app.user;
   return html`<section class="hero" aria-roledescription="carousel" aria-label="Featured shows">
-    ${slides.map(({ show, latest }, i) => {
+    ${slides.map(({ show, latest, trailer }, i) => {
       const t = u.resumeTarget(cat, show.id);
       return html`<article class="hero-slide ${i === 0 ? 'active' : ''}" data-i="${i}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
         <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault') })}</div>
+        <div class="hero-video" data-trailer="${trailer ? trailer.source.id : ''}" aria-hidden="true"></div>
         <div class="hero-shade"></div>
         ${show.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
+        ${trailer ? html`<button type="button" class="hero-sound" data-sound aria-pressed="false" aria-label="Unmute trailer">${icon('mute', { size: 18 })}</button>` : ''}
         <div class="hero-inner">
           <div class="hero-copy">
             <div class="eyebrow">${icon('play', { size: 12 })} ${show.type === 'series' ? 'Original Series' : show.type === 'podcast' ? 'Fake Podcast' : 'Stand-up Comedy'}</div>
@@ -45,24 +48,51 @@ function heroHtml(slides) {
 }
 
 // Carousel behaviour: auto-advance, dots, swipe; pauses on hover/focus or when the tab is hidden.
+// The active slide plays the show's YouTube trailer muted (autoplay policy) behind the shade, with
+// an unmute switch on the banner - the same behaviour the main branch's hero had.
+export const heroTrailerSrc = (id) => `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=1&mute=1&controls=0&loop=1&playlist=${encodeURIComponent(id)}&playsinline=1&enablejsapi=1&rel=0&modestbranding=1`;
 function mountHero(root, ctx) {
   const hero = $('.hero', root); if (!hero) return;
   const slides = $$('.hero-slide', hero), dots = $$('[data-dot]', hero);
-  let i = 0, timer, paused = false;
+  let i = 0, timer, vTimer, paused = false;
+  const setSound = (btn, unmuted) => { btn.setAttribute('aria-pressed', String(unmuted)); btn.setAttribute('aria-label', unmuted ? 'Mute trailer' : 'Unmute trailer'); btn.innerHTML = icon(unmuted ? 'volume' : 'mute', { size: 18 }).s; };
+  const stopVideo = () => { clearTimeout(vTimer); $$('.hero-video', hero).forEach((b) => (b.innerHTML = '')); };
+  const startVideo = (slide) => {
+    clearTimeout(vTimer);
+    const box = $('.hero-video', slide), id = box?.dataset.trailer;
+    if (!id || document.hidden || window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+    // Let the slide's crossfade start first; the poster underneath covers the iframe's first frame.
+    vTimer = setTimeout(() => {
+      if (!slide.classList.contains('active') || document.hidden) return;
+      box.innerHTML = `<iframe src="${heroTrailerSrc(id)}" title="" allow="autoplay" tabindex="-1"></iframe>`;
+    }, 900);
+  };
   const show = (n) => {
     i = (n + slides.length) % slides.length;
     slides.forEach((s, k) => s.classList.toggle('active', k === i));
     dots.forEach((d, k) => { d.classList.toggle('active', k === i); d.setAttribute('aria-selected', k === i); });
     $$('img[loading=lazy]', slides[i]).forEach((im) => (im.loading = 'eager'));
+    $$('[data-sound]', hero).forEach((b) => setSound(b, false));   // every slide (re)starts muted
+    stopVideo(); startVideo(slides[i]);
   };
   const schedule = () => { clearInterval(timer); if (slides.length > 1) timer = setInterval(() => { if (!paused && !document.hidden) show(i + 1); }, 9000); };
   dots.forEach((d) => d.addEventListener('click', () => { show(+d.dataset.dot); schedule(); }));
   hero.addEventListener('mouseenter', () => (paused = true)); hero.addEventListener('mouseleave', () => (paused = false));
   hero.addEventListener('focusin', () => (paused = true)); hero.addEventListener('focusout', () => (paused = false));
+  hero.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sound]'); if (!b) return;
+    const unmuted = b.getAttribute('aria-pressed') !== 'true';
+    try { $('iframe', b.closest('.hero-slide'))?.contentWindow?.postMessage?.(JSON.stringify({ event: 'command', func: unmuted ? 'unMute' : 'mute', args: [] }), '*'); } catch { /* iframe not ready */ }
+    setSound(b, unmuted);
+  });
   let x0 = null;
   hero.addEventListener('pointerdown', (e) => { x0 = e.clientX; });
   hero.addEventListener('pointerup', (e) => { if (x0 != null && Math.abs(e.clientX - x0) > 60) { show(i + (e.clientX < x0 ? 1 : -1)); schedule(); } x0 = null; });
-  schedule(); ctx.onCleanup(() => clearInterval(timer));
+  hero.addEventListener('pointercancel', () => { x0 = null; });    // touch drags handed to scrolling must not leave a stale swipe
+  const onVis = () => { if (document.hidden) stopVideo(); else startVideo(slides[i]); };
+  document.addEventListener('visibilitychange', onVis);
+  startVideo(slides[0]);
+  schedule(); ctx.onCleanup(() => { clearInterval(timer); stopVideo(); document.removeEventListener('visibilitychange', onVis); });
 }
 
 // Homepage poster slideshow: pauses while hovered/focused and does not auto-advance for reduced-motion users.
