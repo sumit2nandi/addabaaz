@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { lockPortrait, isPortraitLocked, addOAuthRedirect, hasOAuthRedirect } from './android-manifest.mjs';
 import { stampLauncherIcons } from './android-icons.mjs';
 import { stableSigning, hasStableSigning } from './android-gradle.mjs';
+import { patchMainActivity, mainActivityInstallsFullscreen, writeFullscreenClient, addCoreDependency, javaSourceDir } from './android-fullscreen.mjs';
 
 // Deep-link scheme for the Google sign-in redirect back into the app (= the Capacitor appId;
 // the API's google-return.js deep-links to the same scheme, keep them in step).
@@ -68,6 +69,40 @@ patch('app/src/main/res/values/styles.xml', 'window + status/nav bars are dark, 
   t.includes('ab-dark-window') ? t : t.replace(
     /(<style name="AppTheme" parent="Theme\.AppCompat\.NoActionBar">)/,
     '$1\n        <!-- ab-dark-window -->\n        <item name="android:windowBackground">#050505</item>\n        <item name="android:statusBarColor">#050505</item>\n        <item name="android:navigationBarColor">#050505</item>'));
+
+// ...and the same on AppTheme.NoActionBar - the theme the activity actually runs in (Capacitor
+// switches to it in onCreate), which does not inherit from AppTheme. Without this the running
+// window falls back to the DayNight defaults, which is where the white status/navigation strips
+// around full-screen video came from: light bars in the system's light mode.
+const stylesXml = 'app/src/main/res/values/styles.xml';
+patch(stylesXml, 'running theme (AppTheme.NoActionBar) is dark, bars use light icons', (t) =>
+  t.includes('ab-dark-window-activity') ? t : t.replace(
+    /(<style name="AppTheme\.NoActionBar" parent="Theme\.AppCompat\.DayNight\.NoActionBar">)/,
+    '$1\n        <!-- ab-dark-window-activity -->\n        <item name="android:windowBackground">#050505</item>\n        <item name="android:statusBarColor">#050505</item>\n        <item name="android:navigationBarColor">#050505</item>\n        <item name="android:windowLightStatusBar">false</item>\n        <item name="android:windowLightNavigationBar">false</item>\n        <item name="android:enforceStatusBarContrast">false</item>\n        <item name="android:enforceNavigationBarContrast">false</item>'));
+// That theme is where the white strips came from, so a build whose styles.xml no longer has the
+// shape above must stop instead of shipping light system bars.
+const stylesPath = path.join(root, stylesXml);
+if (fs.existsSync(stylesPath) && !fs.readFileSync(stylesPath, 'utf8').includes('ab-dark-window-activity')) {
+  throw new Error('[android:patch] could not darken AppTheme.NoActionBar - styles.xml changed shape; update mobile/scripts/patch-android.mjs.');
+}
+
+// Full-screen video the YouTube-app way: the player's fullscreen button hands the video to the OS
+// view, and the client MainActivity installs shows it alone on a black screen with both system bars
+// hidden. Capacitor's own WebChromeClient refuses that path (immediately cancels the custom view),
+// which is why fullscreen used to grow inside the page and leave the white strips.
+const mainActivity = path.join(javaSourceDir(root, APP_SCHEME), 'MainActivity.java');
+if (fs.existsSync(mainActivity)) {
+  const before = fs.readFileSync(mainActivity, 'utf8');
+  const after = patchMainActivity(before);
+  if (after !== before) fs.writeFileSync(mainActivity, after);
+  if (!mainActivityInstallsFullscreen(fs.readFileSync(mainActivity, 'utf8'))) {
+    throw new Error('[android:patch] could not install the fullscreen client in MainActivity.java - the generated file changed shape; update mobile/scripts/android-fullscreen.mjs.');
+  }
+  console.log(`[android:patch] ${path.relative(root, mainActivity)}: fullscreen video client installed`);
+  const { file, changed } = writeFullscreenClient(root, APP_SCHEME);
+  if (file) console.log(`[android:patch] ${path.relative(root, file)}${changed ? '' : ' (already current)'}: the video alone on a black screen in fullscreen`);
+}
+patch('app/build.gradle', 'androidx.core on the app classpath (fullscreen video insets)', (t) => addCoreDependency(t));
 
 // Every CI APK is signed with the same shared debug key, so a fresh build installs as an
 // UPDATE over an older one (Android refuses "App not installed" signature-mismatch updates

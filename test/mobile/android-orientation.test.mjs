@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { lockPortrait, isPortraitLocked, addOAuthRedirect, hasOAuthRedirect } from '../../mobile/scripts/android-manifest.mjs';
 import { stableSigning, hasStableSigning } from '../../mobile/scripts/android-gradle.mjs';
+import { mainActivityInstallsFullscreen, hasCoreDependency } from '../../mobile/scripts/android-fullscreen.mjs';
 
 // The Android app must not rotate to landscape when the phone is turned: the main activity is locked to portrait in the
 // generated AndroidManifest.xml. mobile/android is generated in CI (`cap add android`) and git-ignored, so the lock is applied by
@@ -91,6 +92,10 @@ dependencies {
 }
 `;
 
+// The two template snippets are separate on purpose: GRADLE (above) mirrors Capacitor 7's
+// app/build.gradle for the signing patch; the integration test also checks the androidx.core line
+// the fullscreen client needs is added to its dependencies block.
+
 test('stableSigning points debug builds at the shared CI key, idempotently', () => {
   const signed = stableSigning(GRADLE);
   assert.ok(hasStableSigning(signed), 'the ciDebug signing config is present');
@@ -110,7 +115,7 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-android-'));
   try {
     fs.mkdirSync(path.join(dir, 'scripts'));
-    for (const f of ['patch-android.mjs', 'android-manifest.mjs', 'android-icons.mjs', 'android-gradle.mjs']) fs.copyFileSync(new URL(f, SCRIPTS), path.join(dir, 'scripts', f));
+    for (const f of ['patch-android.mjs', 'android-manifest.mjs', 'android-icons.mjs', 'android-gradle.mjs', 'android-fullscreen.mjs']) fs.copyFileSync(new URL(f, SCRIPTS), path.join(dir, 'scripts', f));
     fs.cpSync(new URL('../../mobile/android-icons', import.meta.url), path.join(dir, 'android-icons'), { recursive: true });
     fs.copyFileSync(new URL('../../mobile/capacitor.config.json', import.meta.url), path.join(dir, 'capacitor.config.json'));
     fs.mkdirSync(path.join(dir, 'keystores'));
@@ -122,7 +127,11 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     fs.writeFileSync(buildGradle, GRADLE);
     const styles = path.join(dir, 'android', 'app', 'src', 'main', 'res', 'values', 'styles.xml');
     fs.mkdirSync(path.dirname(styles), { recursive: true });
-    fs.writeFileSync(styles, `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">\n    </style>\n    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">\n        <item name="android:background">@drawable/splash</item>\n    </style>\n</resources>\n`);
+    fs.writeFileSync(styles, `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">\n    </style>\n    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">\n        <item name="windowActionBar">false</item>\n    </style>\n    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">\n        <item name="android:background">@drawable/splash</item>\n    </style>\n</resources>\n`);
+    // Capacitor's stock MainActivity (package rewritten to the appId), for the fullscreen patch.
+    const mainActivity = path.join(dir, 'android', 'app', 'src', 'main', 'java', 'in', 'addabaaz', 'app', 'MainActivity.java');
+    fs.mkdirSync(path.dirname(mainActivity), { recursive: true });
+    fs.writeFileSync(mainActivity, 'package in.addabaaz.app;\n\nimport com.getcapacitor.BridgeActivity;\n\npublic class MainActivity extends BridgeActivity {}\n');
     const run = () => execFileSync(process.execPath, [path.join(dir, 'scripts', 'patch-android.mjs')], { cwd: dir, encoding: 'utf8', stdio: 'pipe' });
 
     const first = run();
@@ -135,14 +144,25 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     assert.equal(patched, addOAuthRedirect(lockPortrait(generated), 'in.addabaaz.app'), 'portrait lock plus the Google sign-in deep-link filter');
     assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'ci-debug.p12')), 'the shared CI key was copied into the app module');
     assert.ok(hasStableSigning(fs.readFileSync(buildGradle, 'utf8')), 'debug builds are signed with the shared key, so new APKs install over old ones');
+    assert.ok(hasCoreDependency(fs.readFileSync(buildGradle, 'utf8')), 'androidx.core is on the app classpath for the fullscreen insets');
     const patchedStyles = fs.readFileSync(styles, 'utf8');
     assert.match(patchedStyles, /windowSplashScreenAnimatedIcon/, 'the system splash uses the dark logo artwork');
     assert.match(patchedStyles, /ab-dark-window/, 'the window theme patch was applied');
     assert.match(patchedStyles, /<item name="android:navigationBarColor">#050505<\/item>/, 'nav bar is dark - no white strips around full-screen video');
     assert.match(patchedStyles, /<item name="android:windowBackground">#050505<\/item>/, 'the activity window itself is dark');
+    assert.match(patchedStyles, /ab-dark-window-activity/, 'the theme the activity really runs in (AppTheme.NoActionBar) was patched too');
+    assert.match(patchedStyles, /<item name="android:windowLightNavigationBar">false<\/item>/, 'dark nav bar with light icons (no white bar in the system light mode)');
+    assert.match(patchedStyles, /<item name="android:windowLightStatusBar">false<\/item>/);
+
+    // Full-screen video: MainActivity installs the client that shows the video alone on black.
+    const patchedActivity = fs.readFileSync(mainActivity, 'utf8');
+    assert.ok(mainActivityInstallsFullscreen(patchedActivity), 'the fullscreen client is installed');
+    assert.ok(fs.existsSync(path.join(path.dirname(mainActivity), 'FullscreenClient.java')), 'the client class is written next to MainActivity');
+    assert.match(first, /fullscreen video client installed/);
 
     const second = run();
     assert.equal(/locked to portrait/.test(second), false, 'a second run has nothing to change');
+    assert.equal(fs.readFileSync(mainActivity, 'utf8'), patchedActivity, 'a second run leaves MainActivity alone');
     assert.equal(fs.readFileSync(manifest, 'utf8'), patched);
 
     fs.writeFileSync(manifest, '<manifest><application><activity android:name=".SomethingElse"/></application></manifest>');

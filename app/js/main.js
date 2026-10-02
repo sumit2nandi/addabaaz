@@ -19,6 +19,7 @@ import { initConsent, trackPage } from './consent.js';
 import { initErrorReporting, friendly } from './errors.js';
 import { initPush } from './push.js';
 import { initPullToRefresh } from './ui/ptr.js';
+import { initFullscreenRotation } from './orientation.js';
 
 // Native-shell hooks must run before anything else.
 initPlatform();
@@ -58,6 +59,7 @@ async function boot() {
   router.start();
   networkStatus();
   initPullToRefresh(isNative ? softRefresh : null);
+  initFullscreenRotation();   // the app is portrait-only; the screen turns only in video fullscreen
   initConsent(); initErrorReporting(); initPush();
   window.addEventListener('ab:ready', trackPage);
   installPrompt();
