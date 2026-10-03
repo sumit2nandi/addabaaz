@@ -141,7 +141,7 @@ input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
 .imgf-in { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; } .imgf-in > input { flex: 1 1 180px; } .imgf-st { flex-basis: 100%; }
 .seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--panel-2); border: 1px solid var(--border-2); border-radius: var(--r-sm); } .seg label, .seg button { padding: 5px 12px; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--muted); border: 0; background: none; }
 .seg input { position: absolute; opacity: 0; width: 0; } .seg label:has(input:checked), .seg .on { background: var(--panel-3); color: #fff; }
-.src { display: grid; gap: 8px; } .r2-st { font-size: 12.5px; }
+.src { display: grid; gap: 8px; } .r2-st { font-size: 12.5px; } .r2-st.err, .imgf-st.err { color: var(--danger); font-weight: 500; } .r2-st.ok, .imgf-st.ok { color: var(--ok); }
 .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
 .photo { position: relative; border-radius: var(--r); overflow: hidden; background: var(--panel-2); border: 1px solid var(--border); }
 .photo img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; } .photo-actions { display: flex; justify-content: space-between; padding: 6px 8px; align-items: center; }
@@ -173,7 +173,7 @@ dialog.modal > header { display: flex; align-items: center; justify-content: spa
 .modal-body .form > p.muted { margin-bottom: 14px; }
 
 /* toasts */
-#toasts { position: fixed; z-index: 100; right: 16px; bottom: 16px; display: grid; gap: 8px; max-width: min(380px, calc(100vw - 32px)); }
+#toasts, .modal-toasts { position: fixed; z-index: 100; right: 16px; bottom: 16px; display: grid; gap: 8px; max-width: min(380px, calc(100vw - 32px)); }
 .toast { background: var(--panel-3); border: 1px solid var(--border-2); border-left: 4px solid var(--ok); border-radius: var(--r-sm); padding: 10px 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: rise .2s ease-out; transition: opacity .35s, transform .35s; }
 .toast.err { border-left-color: var(--danger); } .toast.out { opacity: 0; transform: translateY(6px); }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } }

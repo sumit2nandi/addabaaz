@@ -11,6 +11,6 @@ export const CONFIG = {
   maxProfiles: 5,
   homeRailSize: 12,
   autoplayCountdown: 8,      // seconds before the next episode starts
-  resumeMinSeconds: 8,       // don't bother resuming before this
+  resumeMinSeconds: 1,       // include any started video in Continue Watching
   watchedThreshold: 0.94,    // >94% watched = finished
 };

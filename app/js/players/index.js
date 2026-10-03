@@ -47,12 +47,16 @@ export async function createPlayer(container, video, opts = {}) {
   const autoplay = opts.autoplay !== false;
   const iosBrowser = isIOSBrowser();
   const wantSound = !opts.muted;   // the page did not force mute (e.g. the reels viewer chose silence)
-  const wrapped = { ...opts, onState: (s, code) => {
-    if (s === 'playing') { playing = true; playbackStarted = true; startSoundLifts(); }
-    else if (s === 'buffering') playing = true; // accepted by the engine; wait for actual PLAYING before any unmute attempt
-    else if (s === 'error') errored = true;
-    opts.onState?.(s, code);
-  } };
+  const wrapped = {
+    ...opts,
+    onUserMute: () => cancelLifts(),
+    onState: (s, code) => {
+      if (s === 'playing') { playing = true; playbackStarted = true; startSoundLifts(); }
+      else if (s === 'buffering') playing = true; // accepted by the engine; wait for actual PLAYING before any unmute attempt
+      else if (s === 'error') errored = true;
+      opts.onState?.(s, code);
+    },
+  };
 
   /* Prefer the sound-first attempt on iOS when the viewer has not chosen silence; all other autoplay
    * starts muted. The adapters retry muted playback if that unmuted attempt is refused. */
@@ -75,7 +79,7 @@ export async function createPlayer(container, video, opts = {}) {
     let heard = false;
     const onGesture = (event) => {               // one physical tap fires SEVERAL of these in a row — react once
       if (heard || gone) return;
-      if (event.target?.closest?.('.unmute-pill, [data-reel-sound]')) return;
+      if (event?.target?.closest?.('.unmute-pill, .ytp-vol-btn, .ytp-vol-slider, [data-reel-sound]')) return;
       heard = true;
       disarm();
       if (errored) return;                                  // a dead player gains nothing from unmuting

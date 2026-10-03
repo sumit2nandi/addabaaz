@@ -40,16 +40,50 @@ export function cacheUpload(dir, name, data) {
   } catch { return false; }
 }
 
-// Video types accepted for upload to R2.
-const VIDEO_EXT = { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm' };
+// Video types accepted for upload to R2 — any standard video container/codec or browser-reported video/* MIME type.
+const VIDEO_EXT = {
+  mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', qt: 'video/quicktime',
+  webm: 'video/webm', mkv: 'video/x-matroska', avi: 'video/x-msvideo',
+  wmv: 'video/x-ms-wmv', asf: 'video/x-ms-asf', flv: 'video/x-flv', f4v: 'video/mp4',
+  ts: 'video/mp2t', mts: 'video/mp2t', m2ts: 'video/mp2t',
+  mpg: 'video/mpeg', mpeg: 'video/mpeg', mpe: 'video/mpeg', mpv: 'video/mpeg', m2v: 'video/mpeg',
+  '3gp': 'video/3gpp', '3g2': 'video/3gpp2', ogv: 'video/ogg', ogg: 'video/ogg',
+  vob: 'video/dvd', divx: 'video/divx', xvid: 'video/x-xvid', rm: 'application/vnd.rn-realmedia', rmvb: 'application/vnd.rn-realmedia-vbr',
+  mxf: 'application/mxf', hevc: 'video/hevc', h264: 'video/h264',
+};
+const VIDEO_MIME = {
+  'video/mp4': 'mp4', 'video/x-m4v': 'm4v', 'video/quicktime': 'mov', 'video/webm': 'webm',
+  'video/x-matroska': 'mkv', 'video/avi': 'avi', 'video/msvideo': 'avi', 'video/x-msvideo': 'avi',
+  'video/x-ms-wmv': 'wmv', 'video/x-ms-asf': 'asf', 'video/x-flv': 'flv', 'video/mp2t': 'ts',
+  'video/mpeg': 'mpg', 'video/3gpp': '3gp', 'video/3gpp2': '3g2', 'video/ogg': 'ogv',
+};
+// Non-video / executable / script / document extensions that must never be accepted even if a client sends a video/* MIME type.
+const NON_VIDEO_EXT = new Set([
+  'exe', 'msi', 'bat', 'cmd', 'com', 'scr', 'ps1', 'vbs', 'sh', 'bash', 'zsh', 'csh', 'ksh',
+  'html', 'htm', 'xhtml', 'svg', 'xml', 'js', 'mjs', 'cjs', 'ts.js', 'jsx', 'tsx', 'css', 'json', 'wasm',
+  'php', 'phtml', 'asp', 'aspx', 'jsp', 'py', 'rb', 'pl', 'cgi', 'jar', 'war', 'class', 'dll', 'so', 'dylib',
+  'apk', 'ipa', 'deb', 'rpm', 'dmg', 'iso', 'img', 'zip', 'tar', 'gz', 'tgz', 'bz2', 'xz', '7z', 'rar',
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md', 'csv', 'rtf', 'ini', 'env', 'sql',
+  'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'ico', 'tiff', 'mp3', 'wav', 'flac', 'aac', 'm4a', 'srt', 'vtt',
+]);
 /** Object key for a browser upload to the private R2 bucket: premium/<slug>/<random>-<clean-name>.<ext>. */
-export function videoKey(filename, slug = '') {
-  const m = /\.([a-z0-9]{2,4})$/i.exec(String(filename || ''));
-  const ext = m && VIDEO_EXT[m[1].toLowerCase()] ? m[1].toLowerCase() : null;
-  if (!ext) return null;
+export function videoKey(filename, slug = '', mimeType = '') {
+  const raw = String(filename || '').trim();
+  const mime = String(mimeType || '').split(';')[0].trim().toLowerCase();
+  const isVideoMime = /^video\/[a-z0-9.+-]+$/.test(mime);
+  const m = /\.([a-z0-9]{1,10})$/i.exec(raw);
+  const rawExt = m ? m[1].toLowerCase() : '';
+  if (rawExt && NON_VIDEO_EXT.has(rawExt)) return null;
+  let ext = rawExt && VIDEO_EXT[rawExt] ? rawExt : null;
+  let contentType = ext ? VIDEO_EXT[ext] : null;
+  if (!ext && isVideoMime) {
+    ext = rawExt || VIDEO_MIME[mime] || 'mp4';
+    contentType = VIDEO_EXT[ext] || mime;
+  }
+  if (!ext || !contentType) return null;
   const clean = (s) => String(s).normalize('NFKD').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 60);
-  const base = clean(String(filename).replace(/\.[^.]+$/, '')) || 'video';
-  return { key: `premium/${clean(slug) || 'uploads'}/${crypto.randomBytes(4).toString('hex')}-${base}.${ext}`, contentType: VIDEO_EXT[ext], format: 'mp4' };
+  const base = clean(raw.replace(/\.[^.]+$/, '')) || 'video';
+  return { key: `premium/${clean(slug) || 'uploads'}/${crypto.randomBytes(4).toString('hex')}-${base}.${ext}`, contentType, format: 'mp4' };
 }
 
 /** Subtitles: WebVTT as-is, or SubRip (.srt) converted on the way in. Returns { vtt, cues } or null when it isn't a subtitle file. */

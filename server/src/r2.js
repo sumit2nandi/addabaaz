@@ -44,10 +44,14 @@ export function createR2(env = process.env) {
     configured: true,
     bucket,
     /** Time-limited GET URL for an object key (path-style: /<bucket>/<key>). */
-    presignGet(key, { ttl = 3600, now } = {}) {
+    presignGet(key, { ttl = 3600, now, method = 'GET' } = {}) {
       const path = `${base.pathname.replace(/\/$/, '')}/${enc(bucket)}/${encPath(key)}`;
-      const { queryString } = presign({ host: base.host, path, accessKeyId, secretAccessKey, expires: Math.min(Math.max(ttl, 1), 604800), now });
+      const { queryString } = presign({ method, host: base.host, path, accessKeyId, secretAccessKey, expires: Math.min(Math.max(ttl, 1), 604800), now });
       return `${base.origin}${path}?${queryString}`;
+    },
+    /** Time-limited HEAD URL for checking object metadata without downloading the body. */
+    presignHead(key, { ttl = 60, now } = {}) {
+      return r2.presignGet(key, { ttl, now, method: 'HEAD' });
     },
     /** Time-limited PUT URL — lets the admin console upload a video straight from the browser to the bucket (needs a read/write token + bucket CORS, see docs/ADMIN.md). */
     presignPut(key, { ttl = 3600, now } = {}) {
@@ -62,8 +66,21 @@ export function createR2(env = process.env) {
       if (!res.ok) throw new Error(`R2 responded ${res.status}`);
       return res.text();
     },
-    /** For `npm run r2:check` — HEAD request through a presigned URL. */
-    async head(key) { const res = await fetch(r2.presignGet(key, { ttl: 60 }), { method: 'HEAD' }); return { status: res.status, size: Number(res.headers.get('content-length')) || null, type: res.headers.get('content-type') }; },
+    /** For `npm run r2:check` and server verification — HEAD request through a HEAD-presigned URL (with 1-byte Range GET fallback). */
+    async head(key) {
+      let res = await fetch(r2.presignHead(key, { ttl: 60 }), { method: 'HEAD' });
+      if (res.status === 403 || res.status === 405 || res.status === 501) {
+        const getRes = await fetch(r2.presignGet(key, { ttl: 60 }), { method: 'GET', headers: { Range: 'bytes=0-0' } });
+        getRes.body?.cancel?.().catch(() => {});
+        if (getRes.status === 206 || getRes.status === 200) {
+          const cr = getRes.headers.get('content-range') || '';
+          const total = Number(cr.split('/')[1]) || Number(getRes.headers.get('content-length')) || null;
+          return { status: 200, size: total, type: getRes.headers.get('content-type') };
+        }
+        res = getRes;
+      }
+      return { status: res.status, size: Number(res.headers.get('content-length')) || null, type: res.headers.get('content-type') };
+    },
   };
   return r2;
 }

@@ -31,8 +31,16 @@ export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, 
       if (!seat.ok) throw new HttpError(429, 'stream_limit', `Your plan allows ${features.cfg.streamLimit} screens at once. Stop playback on another device to continue.`);
       req.user = user;
     }
-    // Only after the access checks: is storage set up at all?
-    if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video playback isn’t available right now — please try again later.');
+    // Only after the access checks: is storage set up at all, and does the video object exist in R2?
+    // Public viewer messages stay non-technical; detailed storage diagnostics are only shown in the Admin console.
+    if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'This video isn’t available right now — please try again later.');
+    if (typeof r2.head === 'function') {
+      const h = await r2.head(v.source.key).catch((e) => ({ status: 0, error: e?.message }));
+      if (h.status === 404) throw new HttpError(404, 'video_file_missing', 'This video isn’t available right now — please try again later.');
+      if (h.status === 403) throw new HttpError(502, 'storage_access_denied', 'This video isn’t available right now — please try again later.');
+      if (h.status === 0) throw new HttpError(502, 'storage_unreachable', 'This video isn’t available right now — please try again later.');
+      if (h.status !== 200) throw new HttpError(502, 'storage_error', 'This video isn’t available right now — please try again later.');
+    }
     const format = r2Format(v.source), expiresAt = new Date(Date.now() + streamTtl * 1000).toISOString();
     res.set('Cache-Control', 'no-store');
     // HLS: return a short-lived token URL that points at our own gateway (below).

@@ -68,14 +68,30 @@ export const api = {
 };
 
 /** PUT a big file straight to R2 with progress (XHR: fetch has no upload progress). */
-export function putFile(url, file, onProgress) {
+export function putFile(url, file, onProgress, contentType) {
   return new Promise((resolve, reject) => {
     const x = new XMLHttpRequest();
     x.open('PUT', url);
-    x.setRequestHeader('Content-Type', file.type || 'video/mp4');
+    x.setRequestHeader('Content-Type', contentType || file.type || 'video/mp4');
     x.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
-    x.onload = () => (x.status >= 200 && x.status < 300 ? resolve() : reject(new ApiError(x.status, `Storage refused the upload (${x.status}). Check the R2 token allows writes and the bucket CORS allows PUT from this site.`, 'r2_upload')));
-    x.onerror = () => reject(new ApiError(0, 'Upload failed — most likely the R2 bucket CORS policy doesn’t allow PUT from this site (see docs/ADMIN.md).', 'r2_cors'));
+    x.onload = () => {
+      if (x.status >= 200 && x.status < 300) return resolve();
+      const xml = String(x.responseText || '');
+      const code = xml.match(/<Code>([^<]+)<\/Code>/i)?.[1] || '';
+      const msg = xml.match(/<Message>([^<]+)<\/Message>/i)?.[1] || '';
+      const detail = code === 'NoSuchBucket' || x.status === 404
+        ? `Cloudflare R2 bucket not found (HTTP ${x.status}${code ? ` ${code}` : ''}). Check that R2_BUCKET matches your exact bucket name in Cloudflare.`
+        : code === 'SignatureDoesNotMatch'
+          ? 'Cloudflare R2 rejected the upload signature (403 SignatureDoesNotMatch). Check R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY on the server.'
+          : x.status === 403
+            ? `Cloudflare R2 refused the upload (403${code ? ` ${code}` : ''}). Make sure your R2 API token has “Object Read & Write” permission for this bucket.`
+            : `Storage refused the upload (HTTP ${x.status}${code ? ` ${code}` : ''}${msg ? `: ${msg}` : ''}). Check the R2 token allows writes and the bucket CORS allows PUT from this site.`;
+      reject(new ApiError(x.status, detail, 'r2_upload'));
+    };
+    const origin = typeof location !== 'undefined' && location.origin ? location.origin : 'this site';
+    x.onerror = () => reject(new ApiError(0, `Upload to Cloudflare R2 was blocked by the browser (CORS or network error). In Cloudflare R2 → Bucket → Settings → CORS Policy, allow origin “${origin}” with AllowedMethods ["GET", "HEAD", "PUT"] and AllowedHeaders ["*"].`, 'r2_cors'));
+    x.onabort = () => reject(new ApiError(0, 'The video upload was cancelled before it finished.', 'r2_abort'));
+    x.ontimeout = () => reject(new ApiError(0, 'The video upload timed out. Check your connection and try again.', 'r2_timeout'));
     x.send(file);
   });
 }

@@ -1,6 +1,6 @@
 // Catalog management: shows, videos (free or premium), upcoming titles and the gallery. One page module handles all four sections; `section` comes from the URL.
 import { api, putFile } from '../api.js';
-import { html, raw, $, $$, icon, badge, empty, pager, pageHead, openModal, formModal, confirmBox, guard, toast, errMsg, imgSrc, fmtDur, parseDur, fmtDT, fmtD, slug, ytId, plural, esc } from '../ui.js';
+import { html, raw, $, $$, icon, badge, empty, pager, pageHead, openModal, formModal, confirmBox, guard, toast, errMsg, imgSrc, fmtDur, parseDur, probeVideoDuration, fmtDT, fmtD, slug, ytId, plural, esc } from '../ui.js';
 
 // Option lists for the forms.
 const SHOW_TYPES = [['series', 'Series'], ['standup', 'Stand-up'], ['podcast', 'Podcast'], ['film', 'Film']].map(([v, l]) => ({ v, l }));
@@ -128,8 +128,8 @@ export default async function content(root, [section], ctx) {
       return html`<div class="field wide src"><label>Video source <em>*</em></label>
         <select name="srcType"><option value="youtube" ${s.type === 'youtube' ? 'selected' : ''}>YouTube</option><option value="r2" ${s.type === 'r2' ? 'selected' : ''}>Private Cloudflare R2</option><option value="mp4" ${s.type === 'mp4' ? 'selected' : ''}>MP4 link</option><option value="hls" ${s.type === 'hls' ? 'selected' : ''}>HLS link (.m3u8)</option></select>
         <div data-for="youtube"><input name="ytUrl" placeholder="YouTube link or the 11-character id" value="${s.type === 'youtube' ? s.id : ''}"></div>
-        <div data-for="r2"><div class="row wrap"><input name="r2Key" class="grow" placeholder="premium/show-name/episode-6.mp4" value="${s.type === 'r2' ? s.key : ''}"><label class="btn sm">${icon('upload', 16)} Upload video<input type="file" name="r2File" accept="video/mp4,video/webm,.mp4,.m4v,.webm" hidden></label></div>
-          <progress max="1" value="0" hidden></progress><small class="muted r2-st">Pick a file to upload it straight to your private bucket, or type the key of a file (or an HLS <code>.m3u8</code>) you uploaded another way.</small>
+        <div data-for="r2"><div class="row wrap"><input name="r2Key" class="grow" placeholder="premium/show-name/episode-6.mp4" value="${s.type === 'r2' ? s.key : ''}"><label class="btn sm">${icon('upload', 16)} Upload video<input type="file" name="r2File" accept="video/*,.mp4,.mov,.m4v,.webm,.mkv,.avi,.wmv,.flv,.f4v,.ts,.mts,.m2ts,.mpg,.mpeg,.3gp,.3g2,.ogv,.vob,.mxf" hidden></label></div>
+          <progress max="1" value="0" hidden></progress><small class="muted r2-st">Pick any video file to upload straight to your private bucket, or type the key of a file (or an HLS <code>.m3u8</code>) you uploaded another way.</small>
           <select name="r2Format"><option value="" ${!s.format ? 'selected' : ''}>Format: detect from the file name</option><option value="mp4" ${s.format === 'mp4' ? 'selected' : ''}>Force MP4</option><option value="hls" ${s.format === 'hls' ? 'selected' : ''}>Force HLS</option></select></div>
         <div data-for="url"><input name="srcUrl" placeholder="https://…" value="${s.type === 'mp4' || s.type === 'hls' ? s.url : ''}"></div></div>`;
     },
@@ -149,7 +149,7 @@ export default async function content(root, [section], ctx) {
     { k: 'access', label: 'Access', type: 'select', options: ACCESS, dflt: 'free', help: 'Premium access is independent of media source; viewers need an active paid plan to play it in the app.' },
     sourceField(),
     { k: 'thumbnail', label: 'Thumbnail', type: 'image', maxWidth: 1000, wide: true, help: 'Required for R2 videos; YouTube videos use their own thumbnail.' },
-    { k: 'duration', label: 'Duration (mm:ss)', req: true, placeholder: '12:34', help: 'The public YouTube feed has no duration. Imported videos show — until you enter the real runtime here.' }, { k: 'publishedAt', label: 'Published', type: 'datetime', req: true },
+    { k: 'duration', label: 'Duration (mm:ss)', placeholder: 'Auto-detected on upload (or e.g. 12:34)', help: 'Automatically derived when you upload a video file. For YouTube or external links, enter the runtime as mm:ss.' }, { k: 'publishedAt', label: 'Published', type: 'datetime', req: true },
     { k: 'publishAt', label: 'Publish at (optional)', type: 'datetime', help: 'Leave empty to publish now. A future time hides the video from viewers, Google and the API until then — admins still see it, and followers get a notification when it goes live.' },
     { k: 'hidden', label: 'Hide from the public website', type: 'bool', wide: true, help: 'Hidden videos stay in the admin catalog and can be restored later.' },
     ratingField, subtitlesField(),
@@ -158,26 +158,62 @@ export default async function content(root, [section], ctx) {
   ];
   const editVideo = (v) => {
     const create = !v;
-    const base = v ? { ...v, duration: fmtDur(v.duration) } : { kind: 'episode', access: 'free', source: { type: 'youtube' }, publishedAt: new Date().toISOString(), views: 0, showId: F.show || '' };
+    const base = v ? { ...v, duration: v.duration > 0 ? fmtDur(v.duration) : '' } : { kind: 'episode', access: 'free', source: { type: 'youtube' }, publishedAt: new Date().toISOString(), views: 0, showId: F.show || '' };
+    let uploading = false, pendingDurPromise = null, lastUploadError = '';
     formModal({ title: create ? 'New video' : 'Edit video', wide: true, fields: videoFields(create), values: base, note,
-      extra: (form, m) => {
+      extra: (form) => {
         const sync = () => { const t = form.srcType.value; $$('[data-for]', form).forEach((d) => { d.hidden = d.dataset.for !== (t === 'mp4' || t === 'hls' ? 'url' : t); }); if (t === 'r2' && form.access.value === 'free' && create) form.access.value = 'premium'; };
         form.srcType.addEventListener('change', sync); sync(); wireSubtitles(form);
         let touched = !create; form.id.addEventListener('input', () => { touched = true; });
         const autoId = () => { if (touched) return; const y = form.srcType.value === 'youtube' ? ytId(form.ytUrl.value) : ''; form.id.value = y || slug(`${showTitle(form.showId.value)} ${form.title.value} ${form.episode.value}`) || ''; };
         for (const n of ['ytUrl', 'title', 'episode', 'showId', 'srcType']) form.elements[n].addEventListener('input', autoId);
+        form.r2Key.addEventListener('input', () => { lastUploadError = ''; const st = $('.r2-st', form); st?.classList.remove('err'); });
+        form.srcUrl.addEventListener('change', () => {
+          const u = form.srcUrl.value.trim();
+          if (form.srcType.value === 'mp4' && /^https?:\/\//i.test(u) && !parseDur(form.duration.value)) {
+            probeVideoDuration(u, { timeoutMs: 5000 }).then((secs) => { if (secs > 0 && !parseDur(form.duration.value)) form.duration.value = fmtDur(secs); });
+          }
+        });
         form.r2File.addEventListener('change', async () => {
-          const f = form.r2File.files[0]; if (!f) return; const bar = $('progress', form), st = $('.r2-st', form); bar.hidden = false; bar.value = 0; st.textContent = 'Preparing upload…';
+          const f = form.r2File.files[0]; if (!f) return;
+          const bar = $('progress', form), st = $('.r2-st', form), errBox = $('.form-err', form), saveBtn = $('button[type=submit]', form);
+          uploading = true; lastUploadError = '';
+          if (errBox) errBox.hidden = true;
+          if (saveBtn) saveBtn.disabled = true;
+          bar.hidden = false; bar.value = 0; st.classList.remove('err', 'ok'); st.textContent = 'Preparing upload…';
+          // Derive video duration immediately from the local file in parallel with the R2 upload.
+          pendingDurPromise = probeVideoDuration(f).then((secs) => {
+            if (secs > 0) form.duration.value = fmtDur(secs);
+            return secs;
+          });
           try {
-            const j = await api.post('/uploads/video', { filename: f.name, size: f.size, slug: showTitle(form.showId.value) || form.title.value });
-            st.textContent = 'Uploading… keep this window open.'; await putFile(j.uploadUrl, f, (p) => { bar.value = p; st.textContent = `Uploading… ${Math.round(p * 100)}%`; });
-            form.r2Key.value = j.key; st.textContent = `Uploaded ✓ (${(f.size / 1048576).toFixed(0)} MB) — key ${j.key}`; form.access.value = 'premium'; autoId();
-            if (!parseDur(form.duration.value)) { const vid = document.createElement('video'); vid.preload = 'metadata'; vid.onloadedmetadata = () => { if (!form.duration.value.trim() || form.duration.value === '0:00') form.duration.value = fmtDur(vid.duration); URL.revokeObjectURL(vid.src); }; vid.src = URL.createObjectURL(f); }
-          } catch (e) { st.textContent = ''; bar.hidden = true; toast(errMsg(e), 'err'); } finally { form.r2File.value = ''; }
+            const j = await api.post('/uploads/video', { filename: f.name, contentType: f.type, size: f.size, slug: showTitle(form.showId.value) || form.title.value });
+            st.textContent = 'Uploading… keep this window open.';
+            await putFile(j.uploadUrl, f, (p) => { bar.value = p; st.textContent = `Uploading… ${Math.round(p * 100)}%`; }, j.contentType);
+            const secs = await pendingDurPromise;
+            if (secs > 0) form.duration.value = fmtDur(secs);
+            form.r2Key.value = j.key; bar.hidden = true; st.classList.add('ok');
+            st.textContent = `Uploaded ✓ (${(f.size / 1048576).toFixed(1)} MB${secs > 0 ? ` · ${fmtDur(secs)}` : ''}) — key ${j.key}`;
+            form.access.value = 'premium'; autoId();
+          } catch (e) {
+            const msg = errMsg(e);
+            lastUploadError = msg; bar.hidden = true; st.classList.add('err');
+            st.textContent = `✖ Upload failed: ${msg}`;
+            toast(msg, 'err');
+          } finally {
+            uploading = false;
+            if (saveBtn) saveBtn.disabled = false;
+            form.r2File.value = '';
+          }
         });
       },
       onSubmit: async (val) => {
-        const d = parseDur(val.duration); if (Number.isNaN(d)) throw new Error('Duration must look like 12:34 (or a number of seconds).');
+        if (uploading) throw new Error('Please wait for the video upload to finish before saving.');
+        if (val.source.type === 'r2' && lastUploadError) throw new Error(`Cannot save because the video upload failed: ${lastUploadError}`);
+        if (val.source.type === 'r2' && !val.source.key) throw new Error('Upload a video file or enter an R2 object key.');
+        let d = parseDur(val.duration); if (Number.isNaN(d)) throw new Error('Duration must look like 12:34 (or a number of seconds).');
+        if (!d && pendingDurPromise) { const probed = await pendingDurPromise; if (probed > 0) d = probed; }
+        if (!d && val.source.type === 'mp4' && val.source.url) { const probed = await probeVideoDuration(val.source.url, { timeoutMs: 4000 }); if (probed > 0) d = probed; }
         const body = { ...val, duration: d, episode: val.kind === 'episode' ? val.episode : '', showId: val.showId || '' };
         if (create) await api.post('/catalog/videos', body); else await api.put(`/catalog/videos/${encodeURIComponent(v.id)}`, body);
         toast(create ? 'Video added' : 'Video saved'); await reload();
