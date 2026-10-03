@@ -28,11 +28,24 @@ async function attachSubtitles(v, tracks = []) {
 export async function createHtml5Player(container, video, { start = 0, autoplay = true, muted = false, controls = true, onProgress, onEnded, onState, onDimensions } = {}) {
   container.innerHTML = '';
   const v = document.createElement('video');
-  v.controls = controls; v.muted = muted; v.playsInline = true; v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', ''); v.autoplay = autoplay; v.preload = 'metadata';
+  v.controls = controls;
+  // iOS WebKit checks muted + inline at the element level before allowing autoplay. Set both the
+  // reflected attributes and live properties before inserting the element or assigning its source.
+  const setMuted = (value) => {
+    v.defaultMuted = value; v.muted = value;
+    if (value) v.setAttribute('muted', ''); else v.removeAttribute('muted');
+  };
+  setMuted(muted);
+  v.playsInline = true; v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', '');
+  v.autoplay = autoplay; if (autoplay) v.setAttribute('autoplay', ''); else v.removeAttribute('autoplay');
+  // This element is the active player, not a background thumbnail: ask the browser for media bytes now.
+  v.preload = autoplay ? 'auto' : 'metadata';
   v.setAttribute('controlsList', 'nodownload');
   if (video.poster) v.poster = video.poster;
   container.appendChild(v);
+  // Subtitle fetch/parse is optional and must never hold up the first video frame.
   const subs = attachSubtitles(v, video.subtitles);
+  subs.catch(() => {});
 
   let hls, lastEmit = 0;
   const { type, url } = video.source;
@@ -57,16 +70,27 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
     navigator.mediaSession.setActionHandler('seekbackward', () => { v.currentTime = Math.max(0, v.currentTime - 10); });
     navigator.mediaSession.setActionHandler('seekforward', () => { v.currentTime += 10; });
   }
-  // The play() promise is the definitive signal for an autoplay-with-sound block: it rejects with
-  // NotAllowedError when the browser refuses, and only rejects (media error) when the file itself is broken.
+  // Try the requested sound mode first. If the browser rejects unmuted autoplay, immediately retry muted:
+  // iOS commonly blocks the first attempt but permits muted inline playback without another gesture.
   let playPromise = null;
-  if (autoplay) { playPromise = v.play(); playPromise.catch(() => { /* needs a tap – native controls are visible */ }); }
-  await Promise.race([subs, new Promise((r) => setTimeout(r, 1500))]);   // give small subtitle files a moment so the first cue isn't missed
+  if (autoplay) {
+    try { playPromise = Promise.resolve(v.play()); }
+    catch (err) { playPromise = Promise.reject(err); }
+    if (!muted) {
+      playPromise = playPromise.catch((err) => {
+        if (err?.name !== 'NotAllowedError' && err?.name !== 'AbortError') throw err; // broken media is not an autoplay-policy fallback
+        setMuted(true);
+        try { return v.play(); }
+        catch (retryErr) { return Promise.reject(retryErr); }
+      });
+    }
+    playPromise.catch(() => { /* a final refusal is reported through the normal blocked/error path */ });
+  }
   // Casting support: Remote Playback API where available, AirPlay on Safari.
   const remote = v.remote, airplay = typeof v.webkitShowPlaybackTargetPicker === 'function';
   return {
     engine: type,
-    playPromise, // initial play() attempt: rejects with NotAllowedError if autoplay-with-sound was blocked
+    playPromise, // resolves on requested-mode autoplay or its muted retry; rejects if the final attempt fails
     /** Chromecast/Android/Edge via the Remote Playback API, AirPlay on Safari. false when neither exists. */
     castSupported: () => !!(remote?.prompt || airplay),
     cast: async () => { if (remote?.prompt) await remote.prompt(); else if (airplay) v.webkitShowPlaybackTargetPicker(); },

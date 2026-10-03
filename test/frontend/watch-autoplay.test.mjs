@@ -38,10 +38,12 @@ async function mount(id = 'v1') {
   globalThis.__watchOpts = null; globalThis.__watchCtl = null;
   document.getElementById('view').innerHTML = '';
   const root = document.createElement('div');
-  document.getElementById('view').appendChild(root);
   const ctx = { root, params: { id }, query: {}, path: `/watch/${id}`, setTitle: () => {}, onCleanup: () => {} };
   await watch(ctx);
-  await new Promise((r) => setTimeout(r, 30));   // startPlayer() resolves (mock player)
+  if (id === 'vp') assert.equal(streamUrlRequests, 1, 'the signed R2 URL is fetched before the deferred player starts');
+  assert.equal(globalThis.__watchCtl, null, 'player startup is deferred while the router still has a detached view');
+  document.getElementById('view').appendChild(root); // Router commits the view after the renderer returns.
+  await new Promise((r) => setTimeout(r, 30));   // requestAnimationFrame/setTimeout starts the player after the view commit
   assert.ok(globalThis.__watchCtl, 'the player was created');
   return { ctx, ctl: globalThis.__watchCtl, opts: globalThis.__watchOpts };
 }
@@ -79,10 +81,13 @@ test('muted autostart offers a one-tap "Tap to unmute" pill', async () => {
 });
 
 // The player mock is not given a stream URL for R2 videos, so give the premium page one.
-app.user.streamUrl = async () => ({ type: 'mp4', url: 'https://r2.test/premium/x.mp4' });
+let streamUrlRequests = 0;
+app.user.streamUrl = async () => { streamUrlRequests++; return { type: 'mp4', url: 'https://r2.test/premium/x.mp4' }; };
 
 test('premium crown: top-left of the player, hidden while the video plays, back on pause / end / error', async () => {
+  streamUrlRequests = 0;
   await mount('vp');
+  assert.equal(streamUrlRequests, 1, 'the R2 signing request starts during render and is reused by player startup');
   const box = document.querySelector('#playerBox');
   assert.ok(box.classList.contains('has-premium'), 'a premium video marks its player box');
   const mark = box.querySelector('.premium-mark.premium-mark-player');

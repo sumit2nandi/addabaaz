@@ -45,6 +45,32 @@ function rewriteLinks(root) {
   if (root.matches?.('a[href^="#/"]')) fix(root);
   root.querySelectorAll?.('a[href^="#/"]').forEach(fix);
 }
+
+// Warm the lazy page module and YouTube API as soon as a viewer points at or focuses a video link.
+// On touch devices this begins at touchstart, before the click changes routes.
+const warmedVideoAnchors = new WeakSet();
+function prewarmVideoAnchor(event) {
+  const a = event.target?.closest?.('a[href]');
+  if (!a || warmedVideoAnchors.has(a) || a.target || a.hasAttribute('download')) return;
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const href = a.getAttribute('href') || '';
+  const path = (href.startsWith('#/') ? href.slice(1) : href).split(/[?#]/)[0];
+  if (!path.startsWith('/') || path.startsWith('//')) return;
+  const route = matchRoute(path);
+  if (!route || (route.view !== 'watch' && route.view !== 'reels')) return;
+  warmedVideoAnchors.add(a);
+  if (route.view === 'watch') import('./views/watch.js').catch(() => {});
+  else import('./views/reels.js').catch(() => {});
+
+  const cat = app.catalog, user = app.user;
+  if (!cat) return;
+  const allowed = (v) => v && (!user?.gateFor || user.gateFor(v, cat) === 'ok');
+  const mayNeedYouTube = route.view === 'watch'
+    ? (() => { const v = cat.video?.(route.params.id); return allowed(v) && v.source?.type === 'youtube'; })()
+    : (() => { const v = route.params.id ? cat.video?.(route.params.id) : cat.reels?.()[0]; return allowed(v) && v.source?.type === 'youtube'; })();
+  if (mayNeedYouTube) import('./players/index.js').then(({ loadYouTube }) => loadYouTube()).catch(() => {});
+}
+
 // Makes normal link clicks navigate inside the app (no page reload); modified clicks (ctrl/cmd/shift, middle button) keep their default browser behaviour.
 function installHistoryLinks() {
   rewriteLinks(document.body);
@@ -94,6 +120,9 @@ export class Router {
     // The router restores scroll positions itself (the #scroll map below): the browser's own
     // restoration would fight it and re-scroll the freshly drawn page.
     try { history.scrollRestoration = 'manual'; } catch { /* older engine: the jumps still work */ }
+    document.addEventListener('pointerover', prewarmVideoAnchor, { passive: true });
+    document.addEventListener('touchstart', prewarmVideoAnchor, { passive: true, capture: true });
+    document.addEventListener('focusin', prewarmVideoAnchor);
     if (HISTORY) {
       window.addEventListener('popstate', () => { if (this.#keyNow() !== this.#lastKey) this.resolve(); });      // (lightbox pushes same-URL states)
       window.addEventListener('ab:navigate', (e) => { if (!e.detail?.replace) this.#fresh = true; this.resolve(); });
