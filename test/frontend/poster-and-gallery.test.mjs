@@ -27,19 +27,72 @@ test('the details poster keeps its own shape, cropped only a little', () => {
   assert.match(components, /Math\.min\(1\.55, Math\.max\(0\.68, w \/ h\)\)/, 'clamped: a wide image is trimmed at the sides, never halved');
 });
 
-test('clicking the poster opens the full artwork', () => {
-  for (const [file, srcVar] of [['app/js/views/soon.js', 'u'], ['app/js/views/show.js', 's']]) {
+test('the poster box, the expand button and the banner all open the full artwork', () => {
+  for (const file of ['app/js/views/soon.js', 'app/js/views/show.js']) {
     const view = read(file);
     assert.match(view, /<button type="button" class="detail-poster" id="detailPoster" aria-label="Open the full poster">/, `${file}: the poster is a button`);
     assert.match(view, /fitPoster\(ctx\.root\)/, `${file}: the box adapts to the image`);
-    assert.match(view, /openPoster\(posterSrc/, `${file}: tapping it opens the poster`);
-    assert.match(view, new RegExp(`const posterSrc = ${srcVar}\\.posterLg \\|\\| ${srcVar}\\.poster`), `${file}: the largest version is used`);
+    assert.match(view, /id="detailPoster"|#detailPoster'/, `${file}: wired`);
+    assert.match(view, /#detailPoster'[^\n]*openArtwork\(art, 'poster'\)/, `${file}: the poster box opens the poster`);
+    assert.match(view, /<section class="detail-hero" id="detailHero">/, `${file}: the banner has an id to hang the tap handler on`);
+    assert.match(view, /tapArtwork\(.{0,40}art\);/, `${file}: and tapping the banner opens the artwork`);
+    assert.match(view, /id="artBtn" aria-label="View the full artwork"/, `${file}: an expand button sits with Share (the only visible way in on a phone)`);
+    assert.match(view, /#artBtn'[^\n]*openArtwork\(art, 'poster'\)/, `${file}: the expand button opens the poster`);
   }
+  // On a phone the poster box is display:none, so the banner tap is the way in — but it must never steal
+  // clicks from the buttons in the hero, and it must not fire when the viewer was selecting text.
   const lightbox = read('app/js/ui/lightbox.js');
-  assert.match(lightbox, /export function openPoster\(src, title = ''\)/, 'openPoster exists');
-  assert.match(lightbox, /if \(!src\) return;/, 'and does nothing when a title has no artwork');
+  assert.match(lightbox, /export function tapArtwork\(hero, art\)/, 'tapArtwork exists');
+  assert.match(lightbox, /if \(e\.target\.closest\('a, button, input, select, textarea, label'\)\) return;/, 'buttons and links keep their own job');
+  assert.match(lightbox, /window\.getSelection\?\.\(\)/, 'a text selection is not a tap');
+  assert.match(lightbox, /openArtwork\(art, 'backdrop'\)/, 'and it opens what the banner is showing');
+  // The popup itself: a single image has no arrows and no counter; tapping the dark background closes it.
   assert.match(lightbox, /const many = items\.length > 1;/, 'a single image has no arrows');
   assert.match(lightbox, /cap\.textContent = many \?/, 'and no "1 / 1" counter');
+  assert.match(lightbox, /e\.target\.closest\('\.lb-close'\) \|\| e\.target === root/, 'the X and the backdrop close it');
+  // And the phone layout itself is untouched: the poster box stays hidden, the banner carries the feature.
+  assert.match(read('app/css/styles.css'), /@media \(min-width: 760px\) \{ \.hero-poster, \.detail-poster \{ display: block; \} \}/, 'the poster box is still desktop-only');
+});
+
+test('the artwork popup shows the banner and the poster, each once', async () => {
+  const { artworkItems, openArtwork } = await import('../../app/js/ui/lightbox.js');
+  assert.deepEqual(artworkItems({ poster: 'p.jpg', backdrop: 'b.jpg' }).map((x) => [x.id, x.image, x.caption]),
+    [['backdrop', 'b.jpg', 'Artwork'], ['poster', 'p.jpg', 'Poster']], 'banner first, then the poster');
+  assert.deepEqual(artworkItems({ poster: 'same.jpg', backdrop: 'same.jpg' }).map((x) => x.id), ['backdrop'], 'the same file is not shown twice');
+  assert.deepEqual(artworkItems({ backdrop: 'b.jpg' }).map((x) => x.id), ['backdrop'], 'a title with no poster still opens');
+  assert.equal(artworkItems({}).length, 0);
+  assert.equal(openArtwork({}), undefined, 'and nothing opens when there is no artwork at all');
+});
+
+test('a tap on the banner really opens the popup (the reported bug)', async () => {
+  // Reported from a phone: "No full image popup opening on click of the banner poster". On a phone the
+  // poster box is display:none, so the banner is what a viewer taps — and that tap did nothing.
+  const { parseHTML } = await import('linkedom');
+  const { document, window } = parseHTML(`<!doctype html><html><body>
+    <section class="detail-hero" id="detailHero">
+      <div class="hero-bg"><img src="b.jpg"></div>
+      <div class="hero-inner"><div class="hero-copy"><p id="txt">A coming soon title</p>
+        <button id="remind">Remind me</button></div></div>
+    </section></body></html>`);
+  globalThis.window = window; globalThis.document = document;
+  window.location = globalThis.location = { href: 'http://x/soon/y' };
+  globalThis.history = { pushState() {}, back() {} };
+  globalThis.Image = class { set src(_v) {} };                 // the popup preloads the next image
+  const { tapArtwork } = await import('../../app/js/ui/lightbox.js');
+  const click = (el) => el.dispatchEvent(new window.Event('click', { bubbles: true }));
+  const hero = document.getElementById('detailHero');
+  tapArtwork(hero, { title: 'T', poster: 'p.jpg', backdrop: 'b.jpg' });
+
+  click(document.getElementById('remind'));
+  assert.equal(document.querySelector('.lightbox'), null, 'a button in the hero keeps its own job');
+
+  click(document.getElementById('txt'));
+  const lb = document.querySelector('.lightbox');
+  assert.ok(lb, 'tapping the banner artwork opens the popup');
+  assert.equal(lb.querySelector('img').getAttribute('src'), 'b.jpg', 'and shows the banner full size first');
+  assert.equal(lb.querySelectorAll('.lb-nav').length, 2, 'the poster is one swipe away');
+  assert.equal(lb.querySelector('figcaption').textContent, 'Artwork · 1 / 2');
+  assert.equal(lb.querySelector('.lb-close') !== null, true, 'with a close button');
 });
 
 /* ---------------------------------------------------------------- the gallery */

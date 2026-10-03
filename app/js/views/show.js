@@ -4,7 +4,7 @@ import { go } from '../router.js';
 import { html, $, fmtDuration, fmtViews, fmtDate, timeAgo, fmtRuntime } from '../util.js';
 import { icon } from '../icons.js';
 import { rail, enhanceRails, showCard, videoCard, reelCard, listBtn, img, heroBg, showMeta, premiumMark, toast, fitPoster } from '../ui/components.js';
-import { openPoster } from '../ui/lightbox.js';
+import { openArtwork, tapArtwork } from '../ui/lightbox.js';
 import { shareOrCopy } from '../util.js';
 import { shareUrl } from '../platform.js';
 // mountRating removed: like/dislike removed from the show page per requirement
@@ -33,7 +33,7 @@ export default async function showView(ctx) {
   ctx.setTitle(s.titleEn || s.title);
 
   ctx.root.innerHTML = html`
-    <section class="detail-hero">
+    <section class="detail-hero" id="detailHero">
       <div class="hero-bg">${latest ? heroBg(cat.thumb(latest, 'maxresdefault'), s.posterLg || s.poster, { fallback: cat.thumb(latest, 'hqdefault') }) : heroBg(s.posterLg || s.poster, '')}</div>
       <div class="hero-shade"></div>
       ${s.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
@@ -48,6 +48,7 @@ export default async function showView(ctx) {
             ${t ? html`<a class="btn btn-primary btn-lg" href="#/watch/${t.video.id}">${icon('play', { size: 20 })} ${label}</a>` : ''}
             ${trailer ? html`<a class="btn btn-glass btn-lg" href="#/watch/${trailer.id}">${icon('film', { size: 20 })} Trailer</a>` : ''}
             ${listBtn('show', s.id, { cls: 'btn btn-glass btn-lg' })}
+            <button type="button" class="btn btn-glass btn-lg icon-only" id="artBtn" aria-label="View the full artwork" title="View the full artwork">${icon('expand', { size: 20 })}</button>
             <button type="button" class="btn btn-glass btn-lg icon-only" id="shareBtn" aria-label="Share">${icon('share', { size: 20 })}</button>
           </div>
           <dl class="facts">
@@ -73,8 +74,12 @@ export default async function showView(ctx) {
 
   enhanceRails(ctx.root);
   fitPoster(ctx.root);                                   // whatever shape the artwork is, crop it only a little
-  const posterSrc = s.posterLg || s.poster;
-  $('#detailPoster', ctx.root)?.addEventListener('click', () => openPoster(posterSrc, s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title));
+  // The full artwork popup: the poster box, the expand button, or the banner (the latest episode's still,
+  // or the poster when there are no episodes yet) — on a phone the banner is the only one of the three.
+  const art = { title: s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title, poster: s.posterLg || s.poster, backdrop: latest ? cat.thumb(latest, 'maxresdefault') : (s.posterLg || s.poster) };
+  $('#detailPoster', ctx.root)?.addEventListener('click', () => openArtwork(art, 'poster'));
+  $('#artBtn', ctx.root)?.addEventListener('click', () => openArtwork(art, 'poster'));
+  tapArtwork($('#detailHero', ctx.root), art);
   let order = 'asc';
   $('#sortEps', ctx.root)?.addEventListener('click', (e) => {
     order = order === 'asc' ? 'desc' : 'asc';

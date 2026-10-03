@@ -48,10 +48,38 @@ export function openLightbox(items, startId, { label = 'Image viewer' } = {}) {
 }
 
 /**
- * Show ONE image full-size — the whole poster, never cropped and never letterboxed into the page's own
- * poster box. `src` is the largest version we have; `title` becomes the caption.
+ * The images a title's artwork popup shows, each once: the banner still the page displays ("Artwork") and
+ * the poster ("Poster"). Used by the banner tap, the poster box and the expand button.
  */
-export function openPoster(src, title = '') {
-  if (!src) return;
-  openLightbox([{ id: 'poster', image: src, imageLg: src, caption: title }], 'poster', { label: title ? `${title} — poster` : 'Poster' });
+export function artworkItems({ poster = '', backdrop = '' } = {}) {
+  const items = [];
+  if (backdrop) items.push({ id: 'backdrop', image: backdrop, imageLg: backdrop, caption: 'Artwork' });
+  if (poster && poster !== backdrop) items.push({ id: 'poster', image: poster, imageLg: poster, caption: 'Poster' });
+  return items;
+}
+
+/**
+ * Show a title's artwork full-size on a dark backdrop — never cropped and never squeezed into the page's
+ * own poster box. `start` is 'backdrop' (what the banner shows) or 'poster'; when there is only one image
+ * the popup has no arrows. A title with no artwork at all opens nothing.
+ */
+export function openArtwork({ title = '', poster = '', backdrop = '' } = {}, start = 'backdrop') {
+  const items = artworkItems({ poster, backdrop });
+  if (!items.length) return;
+  const at = items.some((x) => x.id === start) ? start : items[0].id;
+  openLightbox(items, at, { label: title ? `${title} — artwork` : 'Artwork' });
+}
+
+/**
+ * The details page's banner is a tap target for the same popup. On a phone the poster box is hidden, so the
+ * still the page is showing IS the poster the viewer wants to see whole; on a desktop this simply adds a
+ * second, larger way in. Clicks on buttons, links and form fields belong to those controls, and a click that
+ * ends a text selection is ignored.
+ */
+export function tapArtwork(hero, art) {
+  hero?.addEventListener('click', (e) => {
+    if (e.target.closest('a, button, input, select, textarea, label')) return;
+    if (String(window.getSelection?.() || '').trim()) return;
+    openArtwork(art, 'backdrop');
+  });
 }

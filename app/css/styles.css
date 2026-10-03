@@ -170,7 +170,7 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .hero-dots button { width: 26px; height: 5px; border-radius: 3px; border: 0; background: rgba(255,255,255,.3); padding: 0; transition: .3s; }
 .hero-dots button.active { background: #fff; width: 44px; }
 .detail-hero .hero-inner { align-items: flex-end; justify-content: flex-start; padding-bottom: 48px; }
-.detail-hero { min-height: min(78vh, 700px); display: flex; }
+.detail-hero { min-height: min(78vh, 700px); display: flex; cursor: zoom-in; }   /* the banner opens the artwork popup */
 /* The details-page poster: a button, so it opens the full artwork (lightbox). Its box follows the image's
  * own aspect ratio — set by fitPoster() and clamped to a poster-like range — so a 4:5 or 16:9 upload is
  * cropped only a little instead of losing half the picture. Without JS it falls back to 4:5. */
