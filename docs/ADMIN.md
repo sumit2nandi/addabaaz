@@ -61,6 +61,7 @@ Security notes
 | **Promotions** | the welcome/referral offer (₹100 for a new account, ₹100 each side for an invite) — change the amounts, when the inviter is paid, the caps and the expiry with no redeploy; headline numbers (outstanding, granted, spent, expired, referrals); the credit ledger with a *Remove* action for untouched grants; **Give credit** (goodwill, e-mailed and audited); the referral list with *Cancel*. See [docs/PROMOS.md](PROMOS.md) |
 | **Broadcast** | send an announcement as an **app push notification** (Android/iOS apps and browsers) or an **e-mail** (all accounts, active subscribers, free/expiring/expired plans) — a **live preview** of what will be sent (the notification as it appears on a phone, or the real e-mail), an optional **image** (large-picture notification + e-mail banner), a test send to yourself, live progress and the recent broadcasts with results |
 | **Content studio → Top 10** | what the homepage “Top 10 Episodes” rail shows, in order: pick episodes, move them up or down, take them out, or leave slots to most-watched. An episode's position can also be set while editing it (*Top 10 position*, 1–10). **Rank by views** clears every pick. |
+| **Dashboard → System status** | what is configured and what is not: database, session secret, Razorpay, GST, e-mail (with a test send), **SMS sign-in (MSG91)** (with a test send once connected), R2, web/app push, social sign-in, uploads, public URL and indexing. Missing items are listed under **Finish setting up**. |
 | **Client cache** | invalidate what browsers and installed apps have cached: *Clear app files* (the site's HTML/JS/CSS/catalog) or *Clear everything* (also offline artwork). Everybody re-downloads on their next launch; nobody is signed out and no preference changes |
 | **Maintenance** | take the viewer side of the site offline while you work: a message, an optional “Back by” (the site reopens on its own), a live preview, and a switch. The console, sign-in, health checks, payment webhooks and unsubscribe links keep working. See [docs/MAINTENANCE.md](MAINTENANCE.md) |
 | **Errors** | grouped browser and server errors of the last 7 days with stack traces |
@@ -121,3 +122,11 @@ The Videos & reels list has filters for show, kind, access, source, maturity rat
 - No role granularity: every admin can do everything (the audit log tells you who did what).
 - No two-factor sign-in; use a strong password and HTTPS.
 - Refund buttons only work for real Razorpay payments (demo checkouts have nothing to refund).
+
+## Loading states
+
+Every console page fetches its data in the background, so the console shows a spinner naming the page until
+it has painted, and pages that paint their frame first (Users, Audit log, Comments) put shimmering
+placeholders inside the frame that the real rows replace. `admin/js/ui.js` has the three pieces —
+`loadingPage`, `loadingLines` and `loadingTable` — and `admin/admin.css` styles them (with a
+`prefers-reduced-motion` fallback).

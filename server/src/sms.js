@@ -176,6 +176,39 @@ export function smsFromEnv(env = process.env, { log = console, fetchImpl = null 
   return { provider: 'none', configured: false, channel: 'sms', countryCode, async send() { throw new SmsError(503, 'sms_not_configured', 'SMS sign-in isn’t set up yet — please use email.'); } };
 }
 
+/**
+ * What Admin → Dashboard → System status says about SMS sign-in. Pure and secret-free: it looks at which
+ * variables are present and which provider the server picked — never at their values.
+ * @param {object} env       process.env (or an equivalent)
+ * @param {string} provider  the running provider: 'msg91' | 'console' | 'none'
+ * @returns {{ok: boolean, level: 'ok'|'warn'|'info', detail: string}}
+ */
+export function smsHealthCheck(env = process.env, provider = '') {
+  const authKey = !!String(env.MSG91_AUTH_KEY || '').trim();
+  const templateId = !!String(env.MSG91_OTP_TEMPLATE_ID || '').trim();
+  if (provider === 'msg91' || (authKey && templateId)) {
+    return {
+      ok: true,
+      level: 'ok',
+      detail: 'MSG91 is connected: phone sign-in sends a real 6-digit code through your approved template. Use “Send test SMS” below to check delivery to a number.',
+    };
+  }
+  if (provider === 'console' || env.NODE_ENV !== 'production') {
+    return {
+      ok: false,
+      level: 'info',
+      detail: 'Not set up for real SMS: on this server the code is only printed in the server log (development stand-in). Add MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID to send real texts — see docs/MSG91.md.',
+    };
+  }
+  return {
+    ok: false,
+    level: 'warn',
+    detail: !authKey && !templateId
+      ? 'Phone sign-in is off: MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID are not set, so viewers sign in with e-mail or a social provider. The whole setup — including the DLT template India requires — is in docs/MSG91.md.'
+      : `Phone sign-in is off: only MSG91_${authKey ? 'AUTH_KEY' : 'OTP_TEMPLATE_ID'} is set — both are needed. See docs/MSG91.md.`,
+  };
+}
+
 /* ---------- one-time codes ---------- */
 // The digits a viewer types. crypto.randomInt is unbiased (Math.random would be fine for a 6-digit code,
 // but the code guards account access, so the cheap correct call is used).

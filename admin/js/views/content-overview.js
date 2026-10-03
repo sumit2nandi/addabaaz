@@ -4,13 +4,13 @@
 // before they can be published, and the most recently published titles. Every card links into the page
 // where the work happens (Shows, Videos & reels, Coming soon, Top 10).
 import { api } from '../api.js';
-import { html, icon, empty, pageHead, errMsg, imgSrc, ago } from '../ui.js';
+import { html, icon, empty, pageHead, errMsg, imgSrc, ago, loadingPage } from '../ui.js';
 
 // Same thumbnail rule as the Videos page: the uploaded thumbnail, else YouTube's.
 const thumbOf = (v) => v.thumbnail ? imgSrc(v.thumbnail) : v.source?.type === 'youtube' ? `https://i.ytimg.com/vi/${v.source.id}/default.jpg` : '';
 
 export default async function contentOverview(root, _p, ctx) {
-  root.innerHTML = html`<div class="loading"><span class="spin"></span> Loading…</div>`.s;
+  root.innerHTML = loadingPage('the content overview').s;
   let cat;
   try { cat = await api.get('/catalog'); }
   catch (e) { root.innerHTML = html`${pageHead('Content overview')}<div class="card error-card"><h2>Couldn’t load the catalog</h2><p>${errMsg(e)}</p></div>`.s; return; }

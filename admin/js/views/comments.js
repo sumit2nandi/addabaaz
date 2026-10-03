@@ -1,12 +1,12 @@
 // Comment moderation: search and filter comments; approve, hide (3 viewer reports hide automatically) or delete.
 import { api } from '../api.js';
-import { html, $, $$, icon, badge, empty, pager, pageHead, confirmBox, toast, errMsg, ago, fmtDT, debounce } from '../ui.js';
+import { html, $, $$, icon, badge, empty, pager, pageHead, confirmBox, toast, errMsg, ago, fmtDT, debounce, loadingLines } from '../ui.js';
 
 const LIMIT = 30;
 export default async function comments(root, _p, ctx) {
   const st = { filter: 'review', q: '', offset: 0 };
   root.innerHTML = html`${pageHead('Comments', 'Viewer comments on videos. Comments reported by 3 people are hidden automatically and wait here for you.')}
-    <div class="toolbar"><div class="tabs" id="tabs">${[['review', 'Needs review'], ['hidden', 'Hidden'], ['all', 'All']].map(([v, l]) => html`<button class="tab" data-tab="${v}">${l}</button>`)}</div><div class="search">${icon('search', 16)}<input id="q" type="search" placeholder="Search text or name"></div></div><div id="list"></div>`.s;
+    <div class="toolbar"><div class="tabs" id="tabs">${[['review', 'Needs review'], ['hidden', 'Hidden'], ['all', 'All']].map(([v, l]) => html`<button class="tab" data-tab="${v}">${l}</button>`)}</div><div class="search">${icon('search', 16)}<input id="q" type="search" placeholder="Search text or name"></div></div><div id="list">${loadingLines(4)}</div>`.s;
   const load = async () => {
     const r = await api.get(`/comments?filter=${st.filter}&q=${encodeURIComponent(st.q)}&limit=${LIMIT}&offset=${st.offset}`); if (ctx.stale()) return;
     $$('[data-tab]', root).forEach((b) => b.classList.toggle('on', b.dataset.tab === st.filter));

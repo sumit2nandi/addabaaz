@@ -144,6 +144,19 @@ export const empty = (msg) => html`<div class="empty">${msg}</div>`;
 export const pager = ({ total, offset, limit }) => total <= limit ? '' : html`<div class="pager"><button class="btn sm" data-page="${Math.max(0, offset - limit)}" ${offset <= 0 ? 'disabled' : ''}>${icon('left', 16)} Prev</button><span class="muted">${offset + 1}–${Math.min(total, offset + limit)} of ${total.toLocaleString('en-IN')}</span><button class="btn sm" data-page="${offset + limit}" ${offset + limit >= total ? 'disabled' : ''}>Next ${icon('right', 16)}</button></div>`;
 export const pageHead = (title, sub = '', actions = '') => html`<div class="page-head"><div><h1>${title}</h1>${sub ? html`<p class="muted">${sub}</p>` : ''}</div><div class="row">${actions}</div></div>`;
 
+/* ---------- loading placeholders ----------
+ * Every admin page fetches its data in the background. These are the pieces the shell and the pages use
+ * while that is happening, so a page never looks empty or broken: a spinner for a whole page, shimmering
+ * lines for content inside a card, and placeholder rows for a table that is still loading. */
+export const loadingPage = (what = '') => html`<div class="loading" role="status" aria-live="polite"><span class="spin"></span> Loading${what ? ` ${what}` : ''}…</div>`;
+/** Shimmering lines that stand in for text/cards while their data arrives. */
+export const loadingLines = (n = 4, { card = true } = {}) => {
+  const sk = html`<div class="sk" role="status" aria-label="Loading">${Array.from({ length: n }, (_, i) => html`<i class="sk-line" style="width:${[92, 74, 86, 62, 78][i % 5]}%"></i>`)}</div>`;
+  return card ? html`<div class="card">${sk}</div>` : sk;
+};
+/** Placeholder rows for a list/table that is still loading (the real rows replace them). */
+export const loadingTable = (rows = 6, cols = 4) => html`<div class="card flush" role="status" aria-label="Loading"><table class="tbl"><tbody>${Array.from({ length: rows }, () => html`<tr class="sk-row">${Array.from({ length: cols }, () => html`<td><i class="sk-line"></i></td>`)}</tr>`)}</tbody></table></div>`;
+
 /* ---------- schema-driven forms ----------
  * field: { k, label, type: text|number|textarea|lines|tags|select|bool|datetime|image|custom, req, help, options:[{v,l}], max, placeholder, readonly,
  *          maxWidth (image), render(values)/read(form)/wire(form) (custom) }                                                                */

@@ -2,6 +2,7 @@ import { HttpError, bad, wrap } from './http.js';
 import * as mail from './emails.js';
 import { TICKET_CATEGORIES, emailTemplates } from './routes/support.js';
 import { notificationPayload } from './push.js';
+import { normalizePhone, generateOtp, maskPhone } from './sms.js';
 
 // Reads `limit` / `offset` from the query string.
 const asPage = (req, dflt = 50, max = 200) => ({ limit: Math.min(Math.max(Number(req.query.limit) || dflt, 1), max), offset: Math.max(Number(req.query.offset) || 0, 0) });
@@ -41,6 +42,26 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
     }
     await log(req, 'email.test', req.admin.email);
     res.json({ sent: true, to: req.admin.email });
+  }));
+
+  /* ---------- SMS delivery diagnostic ---------- */
+  // Sends the same kind of 6-digit code a viewer gets to a number the administrator types, so MSG91, the
+  // DLT-approved template and the number format can be checked before viewers depend on it. The code is
+  // never stored, shown or logged — only the masked number reaches the audit log.
+  router.post('/sms/test', wrap(async (req, res) => {
+    if (req.admin.via !== 'session') throw new HttpError(400, 'sms_test_requires_session', 'Sign in with an administrator account to test SMS delivery.');
+    if (sms?.provider !== 'msg91') throw new HttpError(503, 'sms_not_configured', 'Real SMS is not configured. Set MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID, restart the service and try again (docs/MSG91.md).');
+    const phone = normalizePhone(req.body?.to, sms.countryCode);
+    if (!phone) throw bad('Enter the phone number with its country code, for example +91 98123 45678.');
+    try {
+      await sms.send({ phone, code: generateOtp(6), minutes: 10 });
+    } catch (e) {
+      const code = typeof e.code === 'string' ? e.code.replace(/[^\w.-]/g, '').slice(0, 40) : '';
+      console.error(`[sms] admin test failed${code ? ` (${code})` : ''}:`, e.message);
+      throw new HttpError(e.status === 502 || e.status === 503 ? e.status : 502, code || 'sms_send_failed', `${e.message || 'The test SMS could not be sent.'} Check MSG91 (auth key, template, DLT header) and the server log.`);
+    }
+    await log(req, 'sms.test', maskPhone(phone));
+    res.json({ sent: true, to: maskPhone(phone) });
   }));
 
   /* ---------- analytics ---------- */

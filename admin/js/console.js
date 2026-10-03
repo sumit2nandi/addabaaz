@@ -11,7 +11,7 @@
  * the page frame (sidebar + content), the hash router, the sidebar badges and session-loss handling.
  */
 import { api, getToken, setToken } from './api.js';
-import { html, $, $$, icon, errMsg, guard } from './ui.js';
+import { html, $, $$, icon, errMsg, guard, loadingPage } from './ui.js';
 import { mountSocialButtons } from '/app/js/social.js';
 
 /** Boots a console. `nav` and `routes` come from the entry point; the rest is presentation. */
@@ -103,6 +103,9 @@ export function startConsole({ nav, routes, name = 'Admin', title = 'ADDABAAZ Ad
 
   /* ---------- routing ---------- */
   // Show the page for the current #hash: highlight the menu, lazy-load the module, run it, and show an error card if it throws.
+  // The loading placeholder stays on screen until the page paints, so a page that fetches its data before
+  // rendering shows a spinner with the page's name instead of a blank column.
+  const pageLabel = (id) => { for (const [, items] of nav) for (const [pid, label] of items) if (pid === id) return label; return ''; };
   async function route() {
     if (!admin) return;
     const path = location.hash.replace(/^#\/?/, '').split('?')[0] || 'dashboard', my = ++navToken;
@@ -110,11 +113,13 @@ export function startConsole({ nav, routes, name = 'Admin', title = 'ADDABAAZ Ad
     for (const a of $$('[data-nav]')) a.classList.toggle('active', a.dataset.nav === path.split('/')[0]);
     for (const [re, load] of routes) {
       const m = re.exec(path); if (!m) continue;
-      main.innerHTML = '<div class="loading"><span class="spin"></span> Loading…</div>';
+      main.innerHTML = loadingPage(pageLabel(path.split('/')[0])).s;
       try {
         const mod = await load(); if (my !== navToken) return;
         const ctx = { stale: () => my !== navToken, admin, go: (p) => { location.hash = '#/' + p; }, refreshCounts, query: new URLSearchParams(location.hash.split('?')[1] || '') };
-        main.innerHTML = ''; await mod.default(main, m.slice(1), ctx);
+        // No clearing here: whatever the page paints replaces the placeholder. A page that paints its frame
+        // first and loads a list afterwards puts its own skeletons inside that frame.
+        await mod.default(main, m.slice(1), ctx);
       } catch (e) {
         if (my !== navToken) return;
         console.error(e);

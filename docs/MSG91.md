@@ -67,7 +67,11 @@ MSG91_SENDER_ID=ADDABZ
 MSG91_COUNTRY_CODE=91
 ```
 
-Then verify:
+Then verify. The quickest check is the console itself: **Admin → Dashboard → System status** now has an
+**SMS sign-in (MSG91)** row that says which variables are present — never their values — and an
+orange row appears under **Finish setting up** while it is missing. When MSG91 is connected, the row grows a
+**Send test SMS…** button: it asks for a number and sends the same kind of 6-digit code viewers get
+(standard SMS charges apply, nothing is stored, and the sign-in flow is not touched).
 
 ```bash
 # 1. The sign-in page should now offer the mobile-number tab
@@ -117,7 +121,8 @@ If `otp` is still `false`, the server did not read both variables — check `MSG
 | `Invalid Authkey` (HTTP 200, `type: "error"`) | Wrong/rotated `MSG91_AUTH_KEY`. The server logs `MSG91 rejected the OTP request (code 201)`. |
 | `template not found` / template name error | The template was deleted or from another account. Copy the Template ID again. |
 | SMS never arrives but the API says success | DLT template still pending, or the wording differs from the approved template. Check MSG91 → Reports → SMS. |
-| `otp` is `false` in `/auth/providers` | Only one of the two variables is set, or the server was not restarted. |
+| `otp` is `false` in `/auth/providers` | Only one of the two variables is set, or the server was not restarted. Admin → Dashboard → System status names the missing one. |
+| The row says “not set up for real SMS” | That is a development server: the code is printed in the log instead (`[sms:dev] OTP for … is …`). Add both variables to send real texts. |
 | Code arrives but “isn’t right” | The viewer typed an old code; each request issues a new one and invalidates the previous. |
 | Too many codes | Per number: 1/min, 5/hour. Per IP: `authLimit`. Wait, or use email. |
 

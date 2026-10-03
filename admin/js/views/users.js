@@ -1,6 +1,6 @@
 // Users list with search and filters.
 import { api } from '../api.js';
-import { html, $, $$, icon, badge, empty, pager, pageHead, openModal, guard, toast, errMsg, fmtD, ago, debounce } from '../ui.js';
+import { html, $, $$, icon, badge, empty, pager, pageHead, openModal, guard, toast, errMsg, fmtD, ago, debounce, loadingTable } from '../ui.js';
 
 const LIMIT = 25;
 // Quick filters for the list.
@@ -13,7 +13,7 @@ export default async function users(root, _p, ctx) {
     <div id="dupes"></div>
     <div class="toolbar"><div class="search">${icon('search', 16)}<input id="q" type="search" placeholder="Search name or email…" value="${st.q}"></div>
       <select id="f">${FILTERS.map(([v, l]) => html`<option value="${v}" ${st.filter === v ? 'selected' : ''}>${l}</option>`)}</select></div>
-    <div id="list"></div>`.s;
+    <div id="list">${loadingTable(8, 4)}</div>`.s;   /* placeholder rows until the first page of users arrives */
   const load = async () => {
     const r = await api.get(`/users?q=${encodeURIComponent(st.q)}&filter=${st.filter}&limit=${LIMIT}&offset=${st.offset}`); if (ctx.stale()) return;
     $('#list').innerHTML = html`<div class="card flush">${r.users.length ? html`<table class="tbl"><thead><tr><th>User</th><th>Plan</th><th>Sign-in</th><th>Joined</th><th></th></tr></thead><tbody>
