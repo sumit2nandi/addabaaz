@@ -657,3 +657,39 @@ body:has(#consentBar) .auth-page { padding-bottom: 190px; } body:has(#consentBar
 .tk-msg.admin { background: rgba(229,9,20,.08); border-color: rgba(229,9,20,.28); }
 .tk-msg header { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); }
 .tk-msg p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Maintenance mode (docs/MAINTENANCE.md): the full-screen notice an open tab or a resumed app shows when
+   the API answers 503 maintenance. Rendered by app/js/maintenance.js. */
+.maintenance-screen {
+  position: fixed; inset: 0; z-index: 9000; display: grid; place-items: center; overflow: auto;
+  padding: calc(24px + var(--sat)) 20px calc(24px + var(--sab)); background: var(--bg);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.maintenance-screen::before {
+  content: ''; position: absolute; inset: -20vmax; pointer-events: none;
+  background: radial-gradient(circle at 30% 20%, rgba(229,9,20,.18), transparent 45%), radial-gradient(circle at 74% 76%, rgba(229,9,20,.10), transparent 46%);
+  animation: abm-drift 18s ease-in-out infinite alternate;
+}
+@keyframes abm-drift { from { transform: translate3d(-2%,-1%,0) } to { transform: translate3d(2%,1%,0) } }
+.abm-card {
+  position: relative; width: min(520px, 100%); text-align: center; padding: 34px 26px 26px;
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01)), var(--panel);
+  border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: 0 30px 80px rgba(0,0,0,.6);
+  display: grid; justify-items: center; gap: 12px;
+}
+.abm-brand b { font-size: 19px; letter-spacing: .5px; font-weight: 800; }
+.abm-brand i { font-style: normal; font-size: 19px; letter-spacing: .5px; font-weight: 800; color: var(--accent); }
+.abm-glyph {
+  width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; color: #fff;
+  background: rgba(229,9,20,.16); border: 1px solid rgba(229,9,20,.35);
+  animation: abm-pulse 2.6s ease-in-out infinite;
+}
+@keyframes abm-pulse { 0%,100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(229,9,20,.35) } 50% { transform: scale(1.04); box-shadow: 0 0 0 14px rgba(229,9,20,0) } }
+.abm-card h1 { margin: 0; font-size: clamp(23px, 5vw, 29px); letter-spacing: -.02em; }
+.abm-msg { margin: 0; color: var(--text-2); max-width: 42ch; }
+.abm-left { margin: 0; color: var(--ok); font-size: 14px; font-weight: 600; min-height: 20px; }
+.abm-bar { width: min(300px, 100%); height: 4px; border-radius: 99px; background: var(--panel-3); overflow: hidden; }
+.abm-bar i { display: block; height: 100%; width: 35%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); animation: abm-slide 1.9s ease-in-out infinite; }
+@keyframes abm-slide { 0% { transform: translateX(-110%) } 100% { transform: translateX(320%) } }
+.abm-note { margin: 0; color: var(--muted); font-size: 12.5px; max-width: 40ch; }
+@media (prefers-reduced-motion: reduce) { .maintenance-screen::before, .abm-glyph, .abm-bar i { animation: none } }

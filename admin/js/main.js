@@ -12,7 +12,7 @@ const NAV = [
   ['Overview', [['dashboard', 'Dashboard', 'dashboard']]],
   ['Customers', [['users', 'Users', 'users'], ['payments', 'Payments & refunds', 'card'], ['refunds', 'Refund requests', 'refund'], ['coupons', 'Coupons', 'ticket'], ['support', 'Support', 'chat'], ['messages', 'Messages', 'inbox'], ['comments', 'Comments', 'chat']]],
   ['Growth', [['analytics', 'Analytics', 'chart'], ['promos', 'Promotions', 'gift'], ['notifications', 'Broadcast', 'bell']]],
-  ['System', [['cache', 'Client cache', 'refresh'], ['errors', 'Errors', 'bug'], ['audit', 'Audit log', 'log']]],
+  ['System', [['cache', 'Client cache', 'refresh'], ['maintenance', 'Maintenance', 'power'], ['errors', 'Errors', 'bug'], ['audit', 'Audit log', 'log']]],
 ];
 // URL pattern -> page module. Each module's default export is `render(root, params, ctx)`.
 const ROUTES = [
@@ -30,6 +30,7 @@ const ROUTES = [
   [/^notifications$/, () => import('./views/notifications.js')],
   [/^promos$/, () => import('./views/promos.js')],
   [/^cache$/, () => import('./views/cache.js')],
+  [/^maintenance$/, () => import('./views/maintenance.js')],
   [/^errors$/, () => import('./views/errors.js')],
 ];
 

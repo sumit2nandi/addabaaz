@@ -67,6 +67,7 @@ BTS/, UpcomingReleases/, images/, resources/   original artwork (untouched) & na
 - [Phone sign-in with MSG91](docs/MSG91.md) — SMS OTP sign-up/sign-in: DLT, template, env vars, limits, troubleshooting
 - [Payments on the website](docs/PAYMENTS.md) — Razorpay keys, webhook, test flow, and the store-policy rules the apps follow
 - [Promotional credit & referrals](docs/PROMOS.md) — the ₹100 welcome bonus, the ₹100-for-both referral offer, the Admin → Promotions controls and how credit is spent at checkout
+- [Maintenance mode](docs/MAINTENANCE.md) — take the viewer side offline from Admin → Maintenance, what still works, and how the site comes back (on its own or when you flip the switch)
 - [Billing: GST invoices, coupons, refunds, emails](docs/BILLING.md) — setup, admin API, sales register
 - [Premium video on Cloudflare R2](docs/PREMIUM.md) — bucket, upload, catalog entry, access rules, Razorpay payments, security
 - [Database (MySQL)](docs/DATABASE.md) — schema, migrations, configuration, backups

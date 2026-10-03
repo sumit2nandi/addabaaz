@@ -44,6 +44,7 @@ import { registerBillingRoutes } from './routes/billing.js';
 import { registerOtpRoutes } from './routes/otp.js';
 import { registerSupportRoutes, emailTemplates as supportEmails } from './routes/support.js';
 import { registerPromoRoutes } from './routes/promos.js';
+import { createMaintenance } from './maintenance.js';
 import { smsFromEnv, isPhoneEmail } from './sms.js';
 import { mountWebsite } from './web.js';
 
@@ -109,7 +110,13 @@ export function createApp({
   const api = express.Router();
   api.use(express.json({ limit: '50kb', verify: (req, _res, buf) => { req.rawBody = buf; } }));   // rawBody: payment webhooks are signed over the exact bytes
 
-  registerSystemRoutes(api, { db, catalog, payments, billing, r2, version: VERSION });
+  // Maintenance mode is consulted before every viewer route (and by web.js for pages). It always exists, so
+  // an unconfigured server simply reports "not in maintenance" (docs/MAINTENANCE.md).
+  const maintenance = createMaintenance({ db });
+  // Before every other route on this router: the guard must see viewer calls first. Only /health, /status,
+  // /admin, /auth, payment webhooks and unsubscribe links pass while the switch is on (maintenance.js).
+  api.use(maintenance.guard());
+  registerSystemRoutes(api, { db, catalog, payments, billing, r2, version: VERSION, maintenance });
   // Rate limit for sign-up/login endpoints: 20 requests per minute per IP (disabled in tests with rate:false).
   const authLimit = rate ? rateLimit('auth', 20, 60_000) : (_q, _s, n) => n();
   // The user fields that are safe to send to the browser (no password hash).
@@ -147,7 +154,7 @@ export function createApp({
   registerPaymentWebhook(api, { db, billing, payments });
   /* ---------- admin console API (admin accounts, or ADMIN_TOKEN for scripts) — see server/src/admin.js ---------- */
   // Mount the admin console API. It does its own authentication (admin role or ADMIN_TOKEN).
-  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, campaigns, unsubscribeUrlFor, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate, sms, promos, siteUrl: billing.config.siteUrl || '' }));
+  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, campaigns, unsubscribeUrlFor, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate, sms, promos, maintenance, siteUrl: billing.config.siteUrl || '' }));
 
   /* ---------- authenticated ---------- */
   // AUTH MIDDLEWARE: every route registered after this line requires a valid session token whose session version still matches.
@@ -164,7 +171,7 @@ export function createApp({
   api.use((_req, _res, next) => next(new HttpError(404, 'not_found', 'Unknown endpoint.')));
   app.use('/api/v1', api);
 
-  mountWebsite(app, { serveStatic, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg });
+  mountWebsite(app, { serveStatic, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg, maintenance });
   // FINAL ERROR HANDLER: turns any thrown error into `{ error: { code, message } }`. Unexpected (500) errors are logged and hidden from the client.
   // Only errors that were *authored* for the client are ever shown — HttpError, PaymentError, BillingError
   // (integer status + string code). Library/driver messages and everything else are replaced with a plain,
@@ -189,5 +196,6 @@ export function createApp({
   app.locals.sms = sms;                  // phone sign-in state (the console shows whether SMS is configured)
   app.locals.supportEmails = supportEmails;
   app.locals.promos = promos;            // background jobs (expiry sweep) and tests
+  app.locals.maintenance = maintenance;  // the Admin → Maintenance switch (tests and web.js)
   return app;
 }

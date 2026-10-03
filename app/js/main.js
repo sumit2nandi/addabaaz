@@ -19,6 +19,7 @@ import { initConsent, trackPage } from './consent.js';
 import { initErrorReporting, friendly } from './errors.js';
 import { initPush } from './push.js';
 import { initClientVersionWatch } from './client-version.js';
+import { initMaintenanceWatch } from './maintenance.js';
 import { initNotifyPrompt } from './notify-prompt.js';
 import { initPullToRefresh } from './ui/ptr.js';
 import { initFullscreenRotation } from './orientation.js';
@@ -63,6 +64,8 @@ async function boot() {
   initPullToRefresh(softRefresh);   // app AND mobile browsers: never a reload, so never the boot logo
   initFullscreenRotation();   // the app is portrait-only; the screen turns only in video fullscreen
   initConsent(); initErrorReporting(); initPush();
+  // Maintenance mode: an open tab or a resumed app shows the maintenance screen the moment the API says so.
+  initMaintenanceWatch({ apiBase: base === 'off' ? '' : base });
   // The admin console can invalidate every client's cache; when that reaches us, offer a restart.
   initClientVersionWatch({ apiBase: base === 'off' ? '' : base, onPurge: () => toast('ADDABAAZ was updated — restart the app to load the latest version.', { action: 'Restart', onAction: () => location.reload() }) });
   setNotifyPrompt();

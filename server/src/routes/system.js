@@ -3,7 +3,7 @@ import { HttpError, wrap } from '../http.js';
 import { PLANS } from '../plans.js';
 import { STATES } from '../gst.js';
 
-export function registerSystemRoutes(api, { db, catalog, payments, billing, r2, version }) {
+export function registerSystemRoutes(api, { db, catalog, payments, billing, r2, version, maintenance = null }) {
   // Endpoints below need no sign-in.
   /* ---------- public ---------- */
   api.get('/health', wrap(async (_req, res) => {                 // liveness + discovery: always 200; `db` reports the database state
@@ -13,6 +13,12 @@ export function registerSystemRoutes(api, { db, catalog, payments, billing, r2, 
   api.get('/health/ready', wrap(async (_req, res) => {           // readiness for load balancers / orchestrators: 503 when MySQL is unreachable
     const dbUp = await db.ping().then(() => true, () => false);
     res.status(dbUp ? 200 : 503).json({ ok: dbUp, db: dbUp ? 'up' : 'down' });
+  }));
+  // Public status probe: what the site and the apps poll to know whether the service is up, whether it is in
+  // maintenance and when it is expected back. Never blocked by the maintenance switch (server/src/maintenance.js).
+  api.get('/status', wrap(async (_req, res) => {
+    const m = maintenance ? await maintenance.state() : { active: false, enabled: false, message: '', until: null };
+    res.set('Cache-Control', 'no-store, max-age=0').json({ ok: true, service: 'addabaaz', version, maintenance: m, time: new Date().toISOString() });
   }));
   // The whole catalog as JSON; cached for 15 s by browsers and CDNs.
   api.get('/catalog', wrap(async (_req, res) => { res.set('Cache-Control', 'public, max-age=15'); res.json((await catalog.get()).catalog); }));

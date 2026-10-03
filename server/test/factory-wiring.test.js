@@ -11,49 +11,14 @@ import { createAdminRouter } from '../src/admin.js';
 import { createApp } from '../src/app.js';
 import { createPromos, promosConfigFromEnv } from '../src/promos.js';
 import { createBilling, billingConfigFromEnv } from '../src/billing.js';
-import { fakeCreditDb } from './helpers/credit-db.js';
-
-/* ---------------------------------------------------------------- fakes */
-
-// Everything the two factories touch while they are being built (routes are only registered, not called).
-function fakeDeps({ withPromos = true } = {}) {
-  const db = fakeCreditDb();
-  const noop = async () => ({});
-  const table = new Map();
-  Object.assign(db, {
-    pool: { getConnection: async () => ({ query: noop, release() {} }) },
-    users: { ...db.users, byEmailNorm: async () => null, byEmail: async () => null, list: async () => [], count: async () => 0 },
-    profiles: { list: async () => [], byId: async () => null },
-    subscriptions: { get: async () => ({ planId: 'free', status: 'active', expiresAt: null }), dueForReminder: async () => [] },
-    payments: { listRecent: async () => ({ items: [], total: 0 }), countAll: async () => 0, listForUser: async () => [], openOrder: async () => null, byId: async () => null },
-    coupons: { list: async () => ({ items: [], total: 0 }) },
-    invoices: { register: async () => [], byId: async () => null },
-    refunds: { listPending: async () => [], forPayment: async () => [] },
-    refundRequests: { list: async () => ({ items: [], total: 0 }) },
-    contacts: { list: async () => ({ items: [], total: 0 }) },
-    tickets: { list: async () => ({ items: [], total: 0, counts: {} }) },
-    audit: { add: async () => {}, list: async () => ({ items: [], total: 0 }) },
-    errors: { add: async () => {}, list: async () => ({ items: [], total: 0 }), prune: async () => {} },
-    settings: { all: async () => ({}), set: async () => {} },
-    adminUsers: { list: async () => ({ users: [], total: 0 }), get: async () => null },
-    adminStats: { dashboard: async () => ({}) },
-    catalogStore: { get: async () => ({ catalog: { shows: [], videos: [], upcoming: [], gallery: [] }, version: 1 }) },
-    devices: { purge: async () => {} },
-    push: { pruneSent: async () => {}, audience: async () => [] },
-    campaigns: { prune: async () => {}, list: async () => ({ items: [], total: 0 }) },
-    playback: { purge: async () => {} },
-    playStats: {},
-  });
-  const mailer = { provider: 'none', send: async () => ({ sent: false }) };
-  const payments = { provider: 'none', keyId: '', createOrder: async () => ({ orderId: 'o', amountPaise: 0, currency: 'INR' }) };
-  const catalog = {
-    get: async () => ({ catalog: { shows: [], videos: [], upcoming: [], gallery: [] }, version: 1 }),
-    exists: () => false, video: async () => null, episodes: () => [],
-  };
-  const secret = 'x'.repeat(40);
+import { fakeDeps as fakeBoot, fakeCatalog } from './helpers/app-fakes.js';
+// The whole object graph the two factories are built from: fake storage with the real promos + billing on top.
+function deps({ withPromos = true } = {}) {
+  const { db, mailer, payments, sms, secret } = fakeBoot();
+  const catalog = fakeCatalog(db);
   const promos = withPromos ? createPromos({ db, config: promosConfigFromEnv({}), mailer, siteUrl: 'https://addabaaz.in' }) : null;
   const billing = createBilling({ db, payments, mailer, config: billingConfigFromEnv({ PUBLIC_SITE_URL: 'https://addabaaz.in' }), promos, log: { error() {}, warn() {} } });
-  return { db, billing, catalog, payments, mailer, promos, secret, paymentsTable: table };
+  return { db, catalog, promos, billing, mailer, payments, sms, secret };
 }
 
 const pathsOf = (router) => router.stack
@@ -66,7 +31,7 @@ const pathsOf = (router) => router.stack
 /* ---------------------------------------------------------------- tests */
 
 test('the admin router builds and registers the promotions API when a promos collaborator is given', () => {
-  const { db, billing, catalog, payments, mailer, promos, secret } = fakeDeps();
+  const { db, billing, catalog, payments, mailer, promos, secret } = deps();
   const router = createAdminRouter({
     db, billing, catalog, youtubeFeed: null, r2: { configured: false }, payments, mailer, push: null, campaigns: null,
     unsubscribeUrlFor: null, social: null, adminToken: '', secret, sessionHours: 12, uploadDir: '/tmp', mediaDir: '/tmp',
@@ -80,7 +45,7 @@ test('the admin router builds and registers the promotions API when a promos col
 });
 
 test('without a promos collaborator the section is simply absent (an unconfigured server never breaks)', () => {
-  const { db, billing, catalog, payments, mailer, secret } = fakeDeps({ withPromos: false });
+  const { db, billing, catalog, payments, mailer, secret } = deps({ withPromos: false });
   const router = createAdminRouter({
     db, billing, catalog, youtubeFeed: null, r2: { configured: false }, payments, mailer, push: null, campaigns: null,
     unsubscribeUrlFor: null, social: null, adminToken: '', secret, sessionHours: 12, uploadDir: '/tmp', mediaDir: '/tmp',
@@ -92,7 +57,7 @@ test('without a promos collaborator the section is simply absent (an unconfigure
 });
 
 test('createApp builds, mounts the viewer promotion routes and shares one promos instance', () => {
-  const { db, billing, payments, mailer, promos, secret } = fakeDeps();
+  const { db, billing, payments, mailer, promos, secret } = deps();
   const app = createApp({
     db, jwtSecret: secret, serveStatic: false, payments, sms: { configured: false, provider: 'none', countryCode: '91' },
     mailer, billing, promos, uploadDir: '/tmp', rate: false, catalogPath: '/tmp/none-catalog.json',
@@ -104,7 +69,7 @@ test('createApp builds, mounts the viewer promotion routes and shares one promos
 });
 
 test('the viewer promotion endpoints really answer (public offer; balance and codes need a session)', async () => {
-  const { db, payments, mailer, secret, promos, billing } = fakeDeps();
+  const { db, payments, mailer, secret, promos, billing } = deps();
   const app = createApp({
     db, jwtSecret: secret, serveStatic: false, payments, sms: { configured: false, provider: 'none', countryCode: '91' },
     mailer, billing, promos, uploadDir: '/tmp', rate: false, catalogPath: '/tmp/none-catalog.json',
@@ -127,7 +92,7 @@ test('the viewer promotion endpoints really answer (public offer; balance and co
 });
 
 test('createApp builds its own promos + billing when they are not injected', () => {
-  const { db, payments, mailer, secret } = fakeDeps();
+  const { db, payments, mailer, secret } = deps();
   const app = createApp({
     db, jwtSecret: secret, serveStatic: false, payments, sms: { configured: false, provider: 'none', countryCode: '91' },
     mailer, uploadDir: '/tmp', rate: false, catalogPath: '/tmp/none-catalog.json',
