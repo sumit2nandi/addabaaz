@@ -531,3 +531,86 @@ body:has(#consentBar) .auth-page { padding-bottom: 190px; } body:has(#consentBar
 .reel-pp { display: none; place-items: center; width: 76px; height: 76px; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); pointer-events: none; }
 .reel.paused .reel-pp { display: grid; }
 .reel-player video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
+
+/* ---------- YouTube-style HTML5/R2 video player (.ytp) ---------- */
+.ytp { position: absolute; inset: 0; width: 100%; height: 100%; background: #000; color: #fff; user-select: none; -webkit-user-select: none; overflow: hidden; outline: none; font-family: Roboto, system-ui, -apple-system, sans-serif; }
+.ytp:fullscreen, .ytp:-webkit-full-screen { width: 100vw; height: 100vh; }
+.ytp-video-slot { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
+.ytp-video { width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
+.ytp-top-gradient { position: absolute; inset: 0 0 auto 0; height: 72px; background: linear-gradient(180deg, rgba(0,0,0,.65), transparent); pointer-events: none; opacity: 0; transition: opacity .22s ease; z-index: 1; }
+.ytp.show-controls .ytp-top-gradient, .ytp.is-paused .ytp-top-gradient { opacity: 1; }
+
+/* Center buffering spinner & play/pause pulse bezel */
+.ytp-spinner { position: absolute; inset: 0; display: none; place-items: center; pointer-events: none; z-index: 2; }
+.ytp.is-buffering .ytp-spinner { display: grid; }
+.ytp-spinner svg { width: 52px; height: 52px; animation: ytpSpin 1.1s linear infinite; }
+.ytp-spinner circle { stroke: #fff; stroke-linecap: round; stroke-dasharray: 90, 150; stroke-dashoffset: -35; }
+@keyframes ytpSpin { to { transform: rotate(360deg); } }
+
+.ytp-bezel { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 2; opacity: 0; }
+.ytp-bezel-icon { width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,.62); display: grid; place-items: center; color: #fff; }
+.ytp-bezel-icon svg { width: 28px; height: 28px; }
+.ytp-bezel.animate { animation: ytpBezel .5s cubic-bezier(0, 0, .2, 1) forwards; }
+@keyframes ytpBezel { 0% { opacity: 1; transform: scale(.8); } 100% { opacity: 0; transform: scale(1.45); } }
+
+/* Double-tap -10s / +10s seek indicator */
+.ytp-seek-ind { position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; pointer-events: none; background: rgba(0,0,0,.68); color: #fff; padding: 10px 16px; border-radius: 999px; font-size: 13px; font-weight: 700; opacity: 0; transition: opacity .2s ease; }
+.ytp-seek-ind.left { left: 14%; }
+.ytp-seek-ind.right { right: 14%; }
+.ytp-seek-ind.active { opacity: 1; }
+
+/* Bottom control bar & YouTube Red scrubber */
+.ytp-chrome { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 28px 12px 6px; background: linear-gradient(0deg, rgba(0,0,0,.85) 0%, rgba(0,0,0,.45) 55%, transparent 100%); opacity: 0; pointer-events: none; transition: opacity .22s ease; }
+.ytp.show-controls .ytp-chrome, .ytp.is-paused .ytp-chrome { opacity: 1; pointer-events: auto; }
+
+.ytp-progress { position: relative; height: 16px; display: flex; align-items: center; cursor: pointer; touch-action: none; margin: 0 2px; }
+.ytp-bar-bg { position: relative; width: 100%; height: 3.5px; background: rgba(255,255,255,.25); border-radius: 2px; transition: height .15s ease; }
+.ytp-progress:hover .ytp-bar-bg, .ytp-progress.is-scrubbing .ytp-bar-bg { height: 5.5px; }
+.ytp-bar-buf { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: rgba(255,255,255,.45); border-radius: 2px; pointer-events: none; }
+.ytp-bar-play { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #ff0033; border-radius: 2px; pointer-events: none; }
+.ytp-scrubber-dot { position: absolute; right: -6.5px; top: 50%; width: 13px; height: 13px; border-radius: 50%; background: #ff0033; transform: translateY(-50%) scale(0); transition: transform .15s ease; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.ytp-progress:hover .ytp-scrubber-dot, .ytp-progress.is-scrubbing .ytp-scrubber-dot, .ytp.is-paused .ytp-scrubber-dot { transform: translateY(-50%) scale(1); }
+.ytp-hover-time { position: absolute; bottom: 20px; transform: translateX(-50%); background: rgba(18,18,18,.92); color: #fff; font-size: 12px; font-weight: 600; padding: 3px 7px; border-radius: 4px; pointer-events: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ytp-hover-time[hidden] { display: none; }
+
+.ytp-bar { display: flex; align-items: center; justify-content: space-between; gap: 4px; height: 40px; }
+.ytp-left, .ytp-right { display: flex; align-items: center; gap: 2px; }
+.ytp-btn { position: relative; width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #fff; display: inline-grid; place-items: center; cursor: pointer; opacity: .92; transition: opacity .15s ease, background .15s ease; -webkit-tap-highlight-color: transparent; }
+.ytp-btn:hover { opacity: 1; background: rgba(255,255,255,.1); }
+.ytp-btn[hidden] { display: none !important; }
+.ytp-cc-btn.is-active::after { content: ''; position: absolute; bottom: 5px; left: 9px; right: 9px; height: 2.5px; border-radius: 2px; background: #ff0033; }
+.ytp-gear-btn svg { transition: transform .25s ease; }
+.ytp-gear-btn.is-open svg { transform: rotate(30deg); }
+.ytp-gear-badge { position: absolute; top: 5px; right: 3px; background: #ff0033; color: #fff; font-size: 9px; font-weight: 800; line-height: 1; padding: 2px 3.5px; border-radius: 3px; letter-spacing: .2px; pointer-events: none; }
+.ytp-gear-badge[hidden] { display: none !important; }
+
+.ytp-vol-group { display: inline-flex; align-items: center; }
+.ytp-vol-slider { width: 0; opacity: 0; height: 4px; accent-color: #fff; cursor: pointer; transition: width .2s ease, opacity .2s ease, margin .2s ease; margin: 0; padding: 0; border: 0; background: rgba(255,255,255,.3); }
+.ytp-vol-group:hover .ytp-vol-slider, .ytp-vol-slider:focus { width: 58px; opacity: 1; margin-right: 6px; }
+.ytp-time { font-size: 13px; font-weight: 500; color: rgba(255,255,255,.92); padding: 0 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ytp-sep, .ytp-dur { color: rgba(255,255,255,.72); }
+
+/* YouTube-style Settings Menu popup (.ytp-menu) */
+.ytp-menu { position: absolute; right: 12px; bottom: 56px; z-index: 5; width: min(268px, calc(100% - 24px)); max-height: calc(100% - 68px); overflow-y: auto; background: rgba(28,28,28,.94); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 6px 0; box-shadow: 0 12px 32px rgba(0,0,0,.65); scrollbar-width: thin; }
+.ytp-menu[hidden] { display: none !important; }
+.ytp-menu-item, .ytp-menu-head, .ytp-menu-opt { width: 100%; border: 0; background: transparent; color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; font-size: 13.5px; font-weight: 500; text-align: left; cursor: pointer; }
+.ytp-menu-item:hover, .ytp-menu-head:hover, .ytp-menu-opt:hover { background: rgba(255,255,255,.1); }
+.ytp-menu-head { justify-content: flex-start; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,.12); margin-bottom: 4px; padding-bottom: 10px; }
+.ytp-menu-lead { display: inline-flex; align-items: center; gap: 10px; }
+.ytp-menu-lead svg { opacity: .88; flex: none; }
+.ytp-menu-val { display: inline-flex; align-items: center; gap: 4px; color: rgba(255,255,255,.72); font-size: 13px; }
+.ytp-menu-opt { justify-content: flex-start; gap: 10px; padding: 8px 14px; }
+.ytp-menu-opt.active { font-weight: 700; }
+.ytp-opt-check { width: 18px; height: 18px; display: inline-grid; place-items: center; flex: none; }
+.ytp-opt-sub { color: rgba(255,255,255,.6); font-weight: 400; margin-left: 2px; }
+.ytp-menu-pill { padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.14); font-size: 12px; font-weight: 600; color: rgba(255,255,255,.8); }
+.ytp-menu-pill.on { background: #ff0033; color: #fff; }
+
+@media (max-width: 520px) {
+  .ytp-chrome { padding: 20px 8px 4px; }
+  .ytp-bar { height: 36px; }
+  .ytp-btn { width: 34px; height: 34px; }
+  .ytp-vol-slider { display: none; }
+  .ytp-time { font-size: 12px; padding: 0 4px; }
+  .ytp-menu { right: 8px; bottom: 48px; width: min(240px, calc(100% - 16px)); }
+}

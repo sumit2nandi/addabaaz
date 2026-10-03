@@ -375,13 +375,14 @@ export function createApp({
       req.user = user;
     }
     // Only after the access checks: is storage set up at all, and does the video object exist in R2?
-    if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video storage (Cloudflare R2) is not configured on this server.');
+    // Public viewer messages stay non-technical; detailed storage diagnostics are only shown in the Admin console.
+    if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'This video isn’t available right now — please try again later.');
     if (typeof r2.head === 'function') {
       const h = await r2.head(v.source.key).catch((e) => ({ status: 0, error: e?.message }));
-      if (h.status === 404) throw new HttpError(404, 'video_file_missing', `The video file (${v.source.key}) was not found in Cloudflare R2 storage. Please upload the video file in Admin → Videos & reels.`);
-      if (h.status === 403) throw new HttpError(502, 'storage_access_denied', 'Cloudflare R2 rejected access to this video file (HTTP 403). Check the R2 API credentials and bucket permissions on the server.');
-      if (h.status === 0) throw new HttpError(502, 'storage_unreachable', 'Could not connect to Cloudflare R2 storage. Check R2_ACCOUNT_ID and network settings on the server.');
-      if (h.status !== 200) throw new HttpError(502, 'storage_error', `Cloudflare R2 returned HTTP ${h.status} for this video file.`);
+      if (h.status === 404) throw new HttpError(404, 'video_file_missing', 'This video isn’t available right now — please try again later.');
+      if (h.status === 403) throw new HttpError(502, 'storage_access_denied', 'This video isn’t available right now — please try again later.');
+      if (h.status === 0) throw new HttpError(502, 'storage_unreachable', 'This video isn’t available right now — please try again later.');
+      if (h.status !== 200) throw new HttpError(502, 'storage_error', 'This video isn’t available right now — please try again later.');
     }
     const format = r2Format(v.source), expiresAt = new Date(Date.now() + streamTtl * 1000).toISOString();
     res.set('Cache-Control', 'no-store');

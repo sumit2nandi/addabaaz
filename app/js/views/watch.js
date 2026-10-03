@@ -119,15 +119,11 @@ export default async function watch(ctx) {
     if (flush || now - lastSaved > 5000) { lastSaved = now; u.saveProgress(v.id, t, lastD, { flush }); }
   };
   // Player error message with a Retry button (and a YouTube link when relevant).
-  const failed = (code, detail) => {
+  // Keep viewer-facing messages friendly and non-technical (technical diagnostics belong only in the admin panel).
+  const failed = (code) => {
     msg.hidden = false;
     const yt = v.source.type === 'youtube' ? `https://www.youtube.com/watch?v=${encodeURIComponent(v.source.id)}` : '';
-    const reason = detail
-      || (code === 101 || code === 150 || code === 153 ? 'The owner restricted embedded playback.'
-        : v.source.type !== 'youtube' && code === 4 ? 'The video file could not be loaded from storage (missing file or unsupported format).'
-          : v.source.type !== 'youtube' && code === 3 ? 'This browser could not decode the video stream.'
-            : v.source.type !== 'youtube' && code === 2 ? 'A network or CORS error interrupted playback. Check your connection and bucket CORS policy.'
-              : 'Check your connection and try again.');
+    const reason = code === 101 || code === 150 || code === 153 ? 'The owner restricted embedded playback.' : 'Check your connection and try again.';
     msg.innerHTML = html`${icon('wifioff', { size: 40 })}<h2>Can't play this video here</h2><p>${reason}</p><div class="row"><button class="btn btn-primary" id="retry">Try again</button>${yt ? html`<a class="btn btn-ghost" href="${yt}" target="_blank" rel="noopener">Open on YouTube</a>` : ''}</div>`.s;
     $('#retry', msg).onclick = () => { msg.hidden = true; startPlayer(); };
   };
@@ -218,7 +214,7 @@ export default async function watch(ctx) {
       if (e instanceof ApiError && e.status === 401) return wall('login');       // session expired or never signed in
       if (e instanceof ApiError && e.status === 402) return wall('plan');
       if (e instanceof ApiError && e.code === 'stream_limit') return limitWall(e.message);
-      failed(undefined, (e instanceof ApiError || e?.friendly) ? e.message : undefined);
+      failed();
     }
   }
   // Save progress when the tab is hidden or closed, and tidy up on leaving the page.

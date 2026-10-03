@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import { parseHTML } from 'linkedom';
 import { videoKey } from '../../server/src/uploads.js';
 import { createR2 } from '../../server/src/r2.js';
+import { createHtml5Player } from '../../app/js/players/html5.js';
 
 const read = (p) => fs.readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
 
@@ -136,19 +137,69 @@ test('putFile reports actionable R2 error messages for 403, 404 NoSuchBucket, Si
   assert.match(bucketErr.message, /R2_BUCKET/, '404 NoSuchBucket points to R2_BUCKET');
 });
 
-test('admin content view, server admin routes, and watch page wire R2 verification and detailed errors', () => {
+test('admin panel surfaces technical R2 diagnostics while public app/website keeps viewer errors non-technical', () => {
   const contentView = read('admin/js/views/content.js');
   const adminServer = read('server/src/admin.js');
   const appServer = read('server/src/app.js');
   const watchView = read('app/js/views/watch.js');
+  const reelsView = read('app/js/views/reels.js');
 
   assert.match(contentView, /accept="video\/\*.*\.mov/, 'file picker accepts any video/* and common video extensions');
   assert.match(contentView, /probeVideoDuration\(f\)/, 'duration is automatically derived from the selected video file');
   assert.match(contentView, /✖ Upload failed: \$\{msg\}/, 'upload failures remain visible inline in the modal');
   assert.match(adminServer, /verifyR2Source/, 'admin catalog save verifies the R2 object exists when r2.head is present');
-  assert.match(adminServer, /r2_object_missing/, 'missing R2 objects produce a clear 400 error on save');
-  assert.match(appServer, /video_file_missing/, 'stream endpoint reports missing R2 video files clearly');
-  assert.match(watchView, /\(e instanceof ApiError \|\| e\?\.friendly\) \? e\.message : undefined/, 'watch page displays specific API error messages');
+  assert.match(adminServer, /r2_object_missing/, 'missing R2 objects produce a clear 400 error on save in admin');
+
+  // Public app/website must never expose technical storage strings (bucket names, object keys, Admin panel path, env var names).
+  assert.doesNotMatch(watchView, /was not found in Cloudflare R2|Admin → Videos|CORS policy/, 'watch page does not expose technical storage errors');
+  assert.doesNotMatch(reelsView, /was not found in Cloudflare R2|Admin → Videos/, 'reels page does not expose technical storage errors');
+  assert.doesNotMatch(appServer, /Please upload the video file in Admin|Check the R2 API credentials/, 'public stream API returns friendly non-technical viewer messages');
+});
+
+test('createHtml5Player renders a uniform YouTube-style player (.ytp) with Settings menu (Playback speed, Quality, Subtitles/CC, Loop)', async () => {
+  const { document, window } = parseHTML('<!doctype html><html><body><div id="slot"></div></body></html>');
+  const prevDoc = globalThis.document, prevWin = globalThis.window;
+  globalThis.document = document;
+  globalThis.window = window;
+  try {
+    const slot = document.getElementById('slot');
+    const ctl = await createHtml5Player(
+      slot,
+      { id: 'v1', title: 'Cricket', duration: 6, source: { type: 'mp4', url: 'https://r2.test/cricket.mov' } },
+      { autoplay: false, controls: true },
+    );
+    const ytp = slot.querySelector('.ytp');
+    assert.ok(ytp, 'YouTube-style player wrapper (.ytp) is mounted');
+    assert.ok(ytp.querySelector('.ytp-progress'), 'YouTube red scrubber bar is rendered');
+    assert.ok(ytp.querySelector('.ytp-play'), 'Play/pause button is rendered');
+    assert.ok(ytp.querySelector('.ytp-skip-back') && ytp.querySelector('.ytp-skip-fwd'), '10s skip back/forward buttons are rendered');
+    assert.ok(ytp.querySelector('.ytp-vol-btn'), 'Volume/mute button is rendered');
+    assert.equal(ytp.querySelector('.ytp-dur').textContent, '0:06', 'Duration is formatted in YouTube M:SS style');
+    assert.ok(ytp.querySelector('.ytp-gear-btn'), 'Settings gear button is rendered');
+    assert.ok(ytp.querySelector('.ytp-fs-btn'), 'Fullscreen button is rendered');
+
+    // Open Settings menu and verify Playback speed, Quality, Subtitles/CC, and Loop options.
+    const gear = ytp.querySelector('.ytp-gear-btn');
+    const menu = ytp.querySelector('.ytp-menu');
+    assert.equal(menu.hidden, true, 'Settings menu starts closed');
+    gear.click();
+    assert.equal(menu.hidden, false, 'Clicking gear opens Settings menu');
+    assert.match(menu.textContent, /Playback speed/);
+    assert.match(menu.textContent, /Quality/);
+    assert.match(menu.textContent, /Subtitles\/CC/);
+    assert.match(menu.textContent, /Loop/);
+
+    // Navigate to Playback speed and select 1.5x.
+    menu.querySelector('[data-nav="speed"]').click();
+    assert.ok(menu.querySelector('[data-speed="1.5"]'), '1.5x playback speed option is available');
+    menu.querySelector('[data-speed="1.5"]').click();
+    assert.equal(ytp.querySelector('video').playbackRate, 1.5, 'Selecting 1.5x updates video.playbackRate');
+    assert.equal(menu.hidden, true, 'Menu closes after selecting speed');
+    ctl.destroy();
+  } finally {
+    globalThis.document = prevDoc;
+    globalThis.window = prevWin;
+  }
 });
 
 test('createR2.head signs HEAD requests with method=HEAD (not GET) and falls back to 1-byte Range GET if HEAD is rejected', async () => {
