@@ -9,12 +9,10 @@
  * Move titles to your own CDN later by only changing `source` in data/catalog.json.
  *
  * Autoplay strategy:
- *   1. build every autoplaying player explicitly MUTED and inline; this is the form iOS browsers can
- *      permit, and makes the muted state visible before playback begins;
- *   2. on other browsers, only after a real `playing` event, try to lift mute at 600/1500/3000ms;
- *      iOS pauses autoplaying media when script unmutes it without a direct gesture, so keep it muted
- *      there and offer the viewer an explicit sound control instead.
- * A "tap for sound" pill appears when iOS requires a gesture or other browsers refuse the lifts.
+ *   1. when sound is requested on iOS, try unmuted autoplay first; if WebKit blocks it, retry muted so
+ *      the video still starts, then offer a deliberate sound control (iOS pauses timer-based unmute);
+ *   2. on other browsers, start muted/inline and try to lift mute at 600/1500/3000ms after PLAYING.
+ * A "tap for sound" pill appears when iOS falls back to muted or other browsers refuse the lifts.
  * `onAutoplayBlocked` is reserved for cases where muted playback itself never starts.
  */
 import { loadYouTube, createYouTubePlayer } from './youtube.js';
@@ -56,10 +54,10 @@ export async function createPlayer(container, video, opts = {}) {
     opts.onState?.(s, code);
   } };
 
-  /* Every autoplaying player is created muted and inline. Keep it muted until the browser reports a real
-   * PLAYING state: lifting mute while iOS is still loading can turn a permitted muted autoplay into a
-   * sound-first attempt, which Safari blocks. */
-  const playerOpts = autoplay ? { ...wrapped, muted: true } : wrapped;
+  /* Prefer the sound-first attempt on iOS when the viewer has not chosen silence; all other autoplay
+   * starts muted. The adapters retry muted playback if that unmuted attempt is refused. */
+  const tryUnmutedOnIOS = autoplay && iosBrowser && wantSound;
+  const playerOpts = autoplay ? { ...wrapped, muted: !tryUnmutedOnIOS } : wrapped;
 
   let ctl;
   if (src.type === 'youtube') ctl = await createYouTubePlayer(container, src.id, playerOpts);
@@ -139,6 +137,17 @@ export async function createPlayer(container, video, opts = {}) {
       // this point means the embed was refused entirely → offer the big "tap to play" affordance.
       try { const st = ctl.state?.(); if (st !== 1 && st !== 3) opts.onAutoplayBlocked?.(); } catch { /* player already gone */ }
     }, AUTOPLAY_WAIT_MS * 1.5));
+  }
+
+  // The last-resort YouTube iframe has no API events, so it cannot report whether sound-first autoplay
+  // was blocked. That fallback is deliberately muted to preserve motion; expose the sound hint after load.
+  if (iosBrowser && autoplay && wantSound && ctl.engine === 'iframe') {
+    timers.push(setTimeout(() => {
+      if (gone) return;
+      let stillMuted = true;
+      try { stillMuted = ctl.isMuted ? ctl.isMuted() : true; } catch { return; }
+      if (stillMuted) opts.onAutoplayMuted?.();
+    }, 1000));
   }
 
   const destroy = ctl.destroy;

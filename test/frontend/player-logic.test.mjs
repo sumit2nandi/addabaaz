@@ -1,6 +1,6 @@
 // Unit tests for the createPlayer() autoplay logic (app/js/players/index.js).
-// Every autoplaying player is built muted and inline. Other browsers may lift mute after PLAYING;
-// iOS stays muted until an explicit sound-control gesture because timer-unmute pauses Safari playback.
+// Other browsers build autoplaying players muted and may lift mute after PLAYING. iOS tries sound-first
+// when requested, then the adapters fall back to muted autoplay if WebKit blocks that attempt.
 //
 // Run:  node --test test/frontend/
 import { test, beforeEach } from 'node:test';
@@ -46,7 +46,7 @@ test('autoplay stays muted until PLAYING, then the sound lifts run relative to t
   ctl.destroy();
 });
 
-test('iPhone autoplay stays muted after PLAYING until an explicit sound-control action', async () => {
+test('iPhone tries unmuted autoplay first and skips timer lifts when sound starts', async () => {
   const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const listeners = {};
@@ -66,13 +66,14 @@ test('iPhone autoplay stays muted after PLAYING until an explicit sound-control 
     const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'iphone' } }, {
       autoplay: true, onAutoplayMuted: () => mutedCb++,
     });
+    assert.equal(globalThis.__createdMuted, false, 'iOS gets a best-effort unmuted autoplay attempt');
     await wait(250);
-    assert.equal(globalThis.__muted, true, 'iOS playback remains muted after its first frame');
-    assert.equal(globalThis.__unmuted, false, 'no timer attempts to unmute and stop Safari playback');
-    assert.equal(mutedCb, 1, 'the view is told to show its explicit sound control');
+    assert.equal(globalThis.__muted, false, 'successful sound-first playback stays unmuted');
+    assert.equal(globalThis.__unmuted, false, 'no timer toggles sound after playback starts');
+    assert.equal(mutedCb, 0, 'the fallback sound prompt is not shown when audio started');
     assert.equal((listeners.pointerdown || []).length + (listeners.touchstart || []).length, 0, 'no broad gesture handler races the sound button');
-    ctl.unmute(); // the sound button / pill calls this directly inside its trusted click handler
-    assert.equal(globalThis.__muted, false, 'an explicit sound-control action can unmute');
+    ctl.mute(); ctl.unmute(); // explicit sound controls remain available
+    assert.equal(globalThis.__muted, false);
     ctl.destroy();
   } finally {
     if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);

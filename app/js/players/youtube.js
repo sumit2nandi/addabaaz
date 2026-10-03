@@ -26,9 +26,15 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
   const mount = document.createElement('div');
   container.appendChild(mount);
   let YT;
-  try { YT = await loadYouTube(); } catch (e) { return plainIframe(container, videoId, start, autoplay, muted, controls); }
+  try { YT = await loadYouTube(); }
+  catch (e) {
+    // Without the API there is no onAutoplayBlocked signal to recover an unmuted iOS attempt, so
+    // preserve automatic motion in the simple iframe by making that fallback muted.
+    const fallbackMuted = autoplay ? true : muted;
+    return plainIframe(container, videoId, start, autoplay, fallbackMuted, controls);
+  }
 
-  let player, timer, destroyed = false, ready = false;
+  let player, timer, destroyed = false, ready = false, mutedFallbackAttempted = false;
   const tick = () => {
     if (!ready || destroyed) return;
     try { onProgress?.(player.getCurrentTime(), player.getDuration()); } catch { /* player torn down */ }
@@ -41,10 +47,19 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
       events: {
         onReady: (event) => {
           ready = true;
-          // Enforce the muted inline start on YouTube's actual iOS iframe, not just in the URL
-          // parameters. The extra play command is harmless on desktop and helps WebKit start reliably.
-          if (autoplay && muted) { try { event.target.mute(); event.target.playVideo(); } catch { /* the browser may still require a tap */ } }
+          // Start explicitly in the requested mode; iOS gets a sound-first attempt when requested.
+          if (autoplay) {
+            try { if (muted) event.target.mute(); event.target.playVideo(); }
+            catch { /* the browser may still require a tap */ }
+          }
           resolve();
+        },
+        // If iOS blocks unmuted autoplay, retry muted so video motion still starts automatically.
+        // The shared player reports a block only if this fallback also fails to start.
+        onAutoplayBlocked: () => {
+          if (!autoplay || muted || mutedFallbackAttempted || destroyed) return;
+          mutedFallbackAttempted = true;
+          try { player.mute(); player.playVideo(); } catch { /* shared timeout handles a refused fallback */ }
         },
         onError: (e) => { onState?.('error', e.data); resolve(); },
         onStateChange: (e) => {
@@ -73,9 +88,8 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
   };
 }
 
-// Last-resort embed with no API (no progress tracking). Same trick as main's createVideoPlayer(): the
-// iframe loads with mute=1 (autoplay is then allowed instantly) and the mute is lifted through the
-// postMessage command API on the 600/1500/3000ms schedule, so it still starts with volume.
+// Last-resort embed with no API (no progress tracking). Keep the requested inline/autoplay parameters;
+// createYouTubePlayer passes muted=true for autoplay when sound-block detection is unavailable.
 function plainIframe(container, videoId, start, autoplay, muted, controls) {
   const o = httpOrigin();
   container.innerHTML = `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=${autoplay ? 1 : 0}&mute=${muted ? 1 : 0}&enablejsapi=1&controls=${controls ? 1 : 0}&playsinline=1&rel=0&modestbranding=1&start=${Math.floor(start)}${o ? '&origin=' + encodeURIComponent(o) : ''}" title="Video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
