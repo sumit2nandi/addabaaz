@@ -4,6 +4,7 @@
 // Run:  node --test test/frontend/reels-premium-gate.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { parseHTML } from 'linkedom';
 
 const { document, window, Element } = parseHTML('<!doctype html><html><head></head><body></body></html>');
@@ -95,6 +96,13 @@ test('the Reels feed plays a premium-show reel with no lock wall and no crown', 
   assert.equal(section.querySelector('.reel-gate'), null, 'no lock wall is ever drawn on a reel');
   assert.equal(section.classList.contains('locked'), false, 'the reel is not treated as locked');
   cleanup?.();
+});
+
+test('mobile Reels fill the feed width up to the mobile-tabbar breakpoint', () => {
+  const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
+  const mobileReels = css.slice(css.indexOf('@media (max-width: 899px)'), css.indexOf('/* ---------- lightbox', css.indexOf('@media (max-width: 899px)')));
+  assert.match(mobileReels, /\.reel \{ padding: 0; \}/, 'remove card gutters on mobile layouts');
+  assert.match(mobileReels, /\.reel-frame \{[^}]*width: 100%;[^}]*height: 100%;[^}]*aspect-ratio: auto;/, 'the reel itself stretches to the full available feed instead of retaining a narrow portrait card');
 });
 
 test('the initially selected R2 reel starts signing before the player activation callback', async () => {

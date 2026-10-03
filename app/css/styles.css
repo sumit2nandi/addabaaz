@@ -377,7 +377,13 @@ body.reels-mode { overflow: hidden; } body.reels-mode .footer { display: none; }
 .reel-gate p { color: var(--text-2); }
 .reel.locked .reel-loading, .reel.locked .reel-tap { display: none; }
 .reel-actions { display: grid; gap: 14px; align-content: end; padding-bottom: 20px; }
-@media (max-width: 640px) { .reel { padding: 0; } .reel-frame { border-radius: 0; max-height: none; width: 100%; height: 100%; aspect-ratio: auto; box-shadow: none; } .reel-actions { position: absolute; right: 10px; bottom: 90px; z-index: 5; } }
+/* Reels fill the available feed on every viewport that uses the mobile tab bar. Keeping the
+   9:16 card constraint above 640px left wide phones/tablets with unused black side gutters. */
+@media (max-width: 899px) {
+  .reel { padding: 0; }
+  .reel-frame { border-radius: 0; max-height: none; width: 100%; height: 100%; aspect-ratio: auto; box-shadow: none; }
+  .reel-actions { position: absolute; right: 10px; bottom: 90px; z-index: 5; }
+}
 
 /* ---------- lightbox / dialog / toast ---------- */
 .lightbox { position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,.94); display: grid; place-items: center; animation: fadeIn .2s; padding: var(--sat) 0 var(--sab); }
