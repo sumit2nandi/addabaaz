@@ -113,8 +113,11 @@ export default async function watch(ctx) {
   let ctl = null, lastSaved = 0, dead = false, countdown = null, lastT = start, lastD = v.duration;
 
   // Save watch position at most every 5 s (or immediately when `flush` is set, e.g. on pause or leaving the page).
+  // Do not let an initial sub-second tick (t < 1s) consume the 5s throttle window before 1s of playback is reached.
   const persist = (t, d, flush = false) => {
-    if (!(t > 0)) return; lastT = t; lastD = d || v.duration;
+    if (!(t > 0)) return;
+    lastT = t; lastD = d || lastD || v.duration;
+    if (!flush && t < 1) return;
     const now = Date.now();
     if (flush || now - lastSaved > 5000) { lastSaved = now; u.saveProgress(v.id, t, lastD, { flush }); }
   };
@@ -205,7 +208,25 @@ export default async function watch(ctx) {
         onGestureUnmuted: () => { if (dead) return; $('#unmutePill', ctx.root)?.remove(); },
         onProgress: persist,
         onEnded: () => { u.saveProgress(v.id, lastD || v.duration, lastD || v.duration, { flush: true }); if (next && u.pref('autoplayNext')) showNextUp(); },
-        onState: (s, code) => { if (s === 'playing') { markPlaying(true); $('#playPill', ctx.root)?.remove(); onPlaying(); } else if (s === 'paused') { markPlaying(false); onIdle(false); } else if (s === 'ended') { markPlaying(false); onIdle(true); } else if (s === 'error') { markPlaying(false); onIdle(true); failed(code); } },
+        onState: (s, code) => {
+          if (s === 'playing') {
+            markPlaying(true);
+            $('#playPill', ctx.root)?.remove();
+            if (!lastSaved) persist( Math.max(1, ctl?.time() || lastT || 1), ctl?.duration() || lastD || v.duration, true);
+            onPlaying();
+          } else if (s === 'paused') {
+            markPlaying(false);
+            persist(ctl?.time() || lastT, ctl?.duration() || lastD || v.duration, true);
+            onIdle(false);
+          } else if (s === 'ended') {
+            markPlaying(false);
+            onIdle(true);
+          } else if (s === 'error') {
+            markPlaying(false);
+            onIdle(true);
+            failed(code);
+          }
+        },
       });
       if (dead) ctl.destroy();
       if (ctl.castSupported?.()) { const cb = $('#castBtn', ctx.root); cb.hidden = false; cb.onclick = () => ctl.cast().catch((e) => { if (e?.name !== 'NotAllowedError') toast('No cast devices found nearby.'); }); }
@@ -227,6 +248,6 @@ export default async function watch(ctx) {
     dead = true; clearInterval(countdown); onIdle(true);
     lockPortrait();   // even if a fullscreen video was open, leaving the page lands back in portrait
     document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', onHide);
-    if (ctl) { const t = ctl.time(); if (t > 0) u.saveProgress(v.id, t, ctl.duration() || v.duration, { flush: true }); ctl.destroy(); }
+    if (ctl) { const t = ctl.time() || lastT; if (t > 0) u.saveProgress(v.id, t, ctl.duration() || lastD || v.duration, { flush: true }); ctl.destroy(); }
   });
 }

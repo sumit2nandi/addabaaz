@@ -17,9 +17,11 @@ export function heroBg(thumb, poster, { lazy = false, fallback } = {}) {
   const img = html`<img src="${thumb || poster}" alt="" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''}>`;
   return poster ? html`<picture><source media="(max-width: 759px)" srcset="${poster}">${img}</picture>` : img;
 }
-/** Card thumbnail. hqdefault (480x360, letterboxed) + object-fit:cover gives a clean 16:9 *and* 9:16 crop. */
+/** Card thumbnail. hqdefault (480x360, letterboxed) + object-fit:cover gives a clean 16:9 *and* 9:16 crop. Falls back to video/show artwork for R2 videos without a separate thumbnail. */
 export function ytImg(v, alt = '', { cls = '' } = {}) {
-  return img(app.catalog.thumb(v, 'hqdefault'), alt, { cls });
+  const show = v?.showId ? app.catalog.show(v.showId) || app.catalog.soon(v.showId) : null;
+  const src = app.catalog.thumb(v, 'hqdefault') || v?.poster || show?.backdrop || show?.posterLg || show?.poster || 'media/logo.webp';
+  return img(src, alt, { cls });
 }
 // Subtle crown medallion used as the Premium mark on artwork, instead of a text pill over the image. The outline crown matches the crown line icon in menus and on Plans.
 export function premiumMark({ cls = '' } = {}) {

@@ -218,22 +218,33 @@ export class User extends Emitter {
   saveProgress(videoId, position, duration, { flush = false } = {}) {
     if (!this.account) return;   // guest / signed-out: no history is maintained
     if (!this.activeId || !(position >= 0)) return;
-    this.lib.progress[videoId] = { position: Math.floor(position), duration: Math.floor(duration || 0), updatedAt: new Date().toISOString() };
+    const pos = position > 0 ? Math.max(1, Math.floor(position)) : 0;
+    const dur = Math.floor(duration || this.lib.progress[videoId]?.duration || 0);
+    this.lib.progress[videoId] = { position: pos, duration: dur, updatedAt: new Date().toISOString() };
     this.#persistLib();
     clearTimeout(this.#progressTimers.get(videoId));
-    const send = () => { this.#progressTimers.delete(videoId); this.adapter.saveProgress(this.activeId, videoId, Math.floor(position), Math.floor(duration || 0)).catch(() => {}); };
+    const send = () => { this.#progressTimers.delete(videoId); this.adapter.saveProgress(this.activeId, videoId, pos, dur).catch(() => {}); };
     if (flush) send(); else this.#progressTimers.set(videoId, setTimeout(send, 4000));
   }
   clearProgress(videoId) {
     delete this.lib.progress[videoId]; this.#persistLib(); this.emit('library');
     if (this.activeId) this.adapter.clearProgress(this.activeId, videoId).catch(() => {});
   }
-  /** Videos partially watched, newest first. Signed-in accounts only — guests have no history. */
+  /** Videos partially watched (plus short videos recently played), newest first. Signed-in accounts only — guests have no history. */
   continueWatching(catalog) {
     if (!this.account) return [];
     return Object.entries(this.lib.progress)
-      .map(([id, p]) => ({ video: catalog.video(id), p }))
-      .filter(({ video, p }) => video && p.position >= CONFIG.resumeMinSeconds && !(p.duration && p.position / p.duration >= CONFIG.watchedThreshold))
+      .map(([id, p]) => {
+        const video = catalog.video(id);
+        const dur = p.duration || video?.duration || 0;
+        return { video, p, dur };
+      })
+      .filter(({ video, p, dur }) => {
+        if (!video || !(p.position >= CONFIG.resumeMinSeconds)) return false;
+        // Short videos (<= 30s) reach their end in seconds while watching; keep them in Continue Watching so they don't vanish immediately.
+        if (dur > 30 && p.position / dur >= CONFIG.watchedThreshold) return false;
+        return true;
+      })
       .sort((a, b) => (b.p.updatedAt || '').localeCompare(a.p.updatedAt || ''));
   }
   /** Where "Play" should take you for a show: resume → next unwatched → first episode. */

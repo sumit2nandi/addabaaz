@@ -53,6 +53,13 @@ const resLabel = (h) => {
   return `${h}p`;
 };
 
+// Only replace button innerHTML when the icon key actually changes so in-flight pointerdown→click on the button is never aborted.
+function setBtnIcon(btn, key, svg) {
+  if (!btn || btn.dataset?.icon === key) return;
+  if (btn.dataset) btn.dataset.icon = key;
+  btn.innerHTML = svg;
+}
+
 /** Subtitle files are fetched by us and attached as same-origin blob: URLs, so they work with any player origin and need no crossorigin attribute on the video. */
 async function attachSubtitles(v, tracks = [], onChange) {
   let pref = null;
@@ -83,7 +90,7 @@ async function attachSubtitles(v, tracks = [], onChange) {
 
 // Plays MP4/MOV/WebM or HLS (including protected R2 video) in a <video> element wrapped in a YouTube-style
 // player UI and settings menu (Playback speed, Quality, Subtitles/CC, Loop, PiP, Fullscreen) when controls !== false.
-export async function createHtml5Player(container, video, { start = 0, autoplay = true, muted = false, controls = true, onProgress, onEnded, onState, onDimensions } = {}) {
+export async function createHtml5Player(container, video, { start = 0, autoplay = true, muted = false, controls = true, onProgress, onEnded, onState, onDimensions, onUserMute } = {}) {
   container.innerHTML = '';
   const v = document.createElement('video');
   v.className = 'ytp-video';
@@ -98,10 +105,9 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
   if (video.poster) v.poster = video.poster;
 
   // Restore saved playback speed if the viewer picked one earlier in the session.
-  let savedSpeed = 1;
   try {
     const sp = Number(sessionStorage.getItem('ab.playbackRate'));
-    if (SPEEDS.includes(sp)) { savedSpeed = sp; v.playbackRate = sp; }
+    if (SPEEDS.includes(sp)) v.playbackRate = sp;
   } catch { /* ignore */ }
 
   let hls = null, lastEmit = 0, selectedQuality = -1; // -1 = Auto
@@ -118,6 +124,7 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
         if (hls) hls.currentLevel = lvl;
         uiUpdate();
       },
+      onUserMute,
     });
     uiUpdate = wrap.update;
     uiCleanup = wrap.cleanup;
@@ -154,10 +161,10 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
   v.addEventListener('timeupdate', () => {
     uiUpdate();
     const n = Date.now();
-    if (n - lastEmit > 1000) { lastEmit = n; onProgress?.(v.currentTime, v.duration || 0); }
+    if (n - lastEmit > 1000) { lastEmit = n; onProgress?.(v.currentTime, v.duration || video.duration || 0); }
   });
   v.addEventListener('playing', () => { uiUpdate(); onState?.('playing'); });
-  v.addEventListener('pause', () => { uiUpdate(); onProgress?.(v.currentTime, v.duration || 0); onState?.('paused'); });
+  v.addEventListener('pause', () => { uiUpdate(); onProgress?.(v.currentTime, v.duration || video.duration || 0, true); onState?.('paused'); });
   v.addEventListener('waiting', () => { uiUpdate(); onState?.('buffering'); });
   v.addEventListener('error', () => { uiUpdate(); onState?.('error', v.error?.code); });
   v.addEventListener('ended', () => { uiUpdate(); onState?.('ended'); onEnded?.(); });
@@ -184,7 +191,7 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
     cast: async () => { if (remote?.prompt) await remote.prompt(); else if (airplay) v.webkitShowPlaybackTargetPicker(); },
     hasSubtitles: () => (v.textTracks?.length || 0) > 0,
     time: () => v.currentTime,
-    duration: () => v.duration || 0,
+    duration: () => v.duration || video.duration || 0,
     mute: () => { v.muted = true; uiUpdate(); },
     unmute: () => { v.muted = false; if (v.volume === 0) v.volume = 1; uiUpdate(); },
     isMuted: () => v.muted,
@@ -201,7 +208,7 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
 }
 
 // Builds the YouTube-look player shell, scrubber, control bar, double-tap seek, and Settings menu around <video>.
-function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSelectedQuality }) {
+function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSelectedQuality, onUserMute }) {
   const wrap = document.createElement('div');
   wrap.className = 'ytp is-paused show-controls';
   wrap.tabIndex = 0;
@@ -224,20 +231,20 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
       </div>
       <div class="ytp-bar">
         <div class="ytp-left">
-          <button type="button" class="ytp-btn ytp-play" aria-label="Play">${YT_ICONS.play}</button>
+          <button type="button" class="ytp-btn ytp-play" data-icon="play" aria-label="Play">${YT_ICONS.play}</button>
           <button type="button" class="ytp-btn ytp-skip-back" aria-label="Rewind 10 seconds" title="Rewind 10s">${YT_ICONS.back10}</button>
           <button type="button" class="ytp-btn ytp-skip-fwd" aria-label="Forward 10 seconds" title="Forward 10s">${YT_ICONS.fwd10}</button>
           <div class="ytp-vol-group">
-            <button type="button" class="ytp-btn ytp-vol-btn" aria-label="Mute">${YT_ICONS.volHigh}</button>
+            <button type="button" class="ytp-btn ytp-vol-btn" data-icon="high" aria-label="Mute">${YT_ICONS.volHigh}</button>
             <input type="range" class="ytp-vol-slider" min="0" max="1" step="0.05" value="1" aria-label="Volume">
           </div>
           <div class="ytp-time"><span class="ytp-cur">0:00</span><span class="ytp-sep"> / </span><span class="ytp-dur">${initDur}</span></div>
         </div>
         <div class="ytp-right">
-          <button type="button" class="ytp-btn ytp-cc-btn" aria-label="Subtitles/closed captions" title="Subtitles/closed captions (c)" hidden>${YT_ICONS.cc}</button>
+          <button type="button" class="ytp-btn ytp-cc-btn" aria-label="Subtitles/closed captions" title="Subtitles/closed captions (c)">${YT_ICONS.cc}</button>
           <button type="button" class="ytp-btn ytp-gear-btn" aria-label="Settings" aria-expanded="false" title="Settings">${YT_ICONS.gear}<span class="ytp-gear-badge" hidden>HD</span></button>
           <button type="button" class="ytp-btn ytp-pip-btn" aria-label="Picture-in-Picture" title="Miniplayer / Picture-in-Picture" hidden>${YT_ICONS.pip}</button>
-          <button type="button" class="ytp-btn ytp-fs-btn" aria-label="Full screen" title="Full screen (f)">${YT_ICONS.fsEnter}</button>
+          <button type="button" class="ytp-btn ytp-fs-btn" data-icon="enter" aria-label="Full screen" title="Full screen (f)">${YT_ICONS.fsEnter}</button>
         </div>
       </div>
     </div>`;
@@ -245,6 +252,8 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
   container.appendChild(wrap);
 
   const $ = (sel) => wrap.querySelector(sel);
+  const videoSlot = $('.ytp-video-slot');
+  const chrome = $('.ytp-chrome');
   const playBtn = $('.ytp-play');
   const backBtn = $('.ytp-skip-back');
   const fwdBtn = $('.ytp-skip-fwd');
@@ -274,18 +283,26 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
   );
   if (pipSupported) pipBtn.hidden = false;
 
-  // Auto-hide controls after 3s of playback inactivity (keep visible when paused, scrubbing, or settings menu open).
+  // Auto-hide controls after 3.5s of playback inactivity (keep visible when paused, scrubbing, or settings menu open).
   let hideTimer = null, menuView = null, scrubbing = false;
-  const showControls = () => {
-    wrap.classList.add('show-controls');
+  const scheduleHide = () => {
     clearTimeout(hideTimer);
     if (!v.paused && !v.ended && !menuView && !scrubbing) {
       hideTimer = setTimeout(() => {
         if (!v.paused && !v.ended && !menuView && !scrubbing) wrap.classList.remove('show-controls');
-      }, 3000);
+      }, 3500);
       hideTimer.unref?.();
     }
   };
+  const showControls = () => {
+    wrap.classList.add('show-controls');
+    scheduleHide();
+  };
+
+  // Never let clicks or pointerdowns inside the control bar or settings menu bubble to the video surface or hide controls.
+  chrome?.addEventListener('pointerdown', (e) => { e.stopPropagation(); showControls(); });
+  chrome?.addEventListener('click', (e) => { e.stopPropagation(); showControls(); });
+  menu?.addEventListener('pointerdown', (e) => { e.stopPropagation(); showControls(); });
 
   // Pulse the YouTube center bezel icon briefly on play/pause.
   let bezelTimer = null;
@@ -310,53 +327,44 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
       flashBezel(YT_ICONS.pause);
     }
     showControls();
+    update();
   };
 
   let seekIndTimer = null;
   const skipBy = (delta) => {
-    const d = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : Infinity;
+    const d = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : (video.duration || Infinity);
     v.currentTime = Math.max(0, Math.min(d, (v.currentTime || 0) + delta));
     const ind = delta < 0 ? seekLeft : seekRight;
     ind.classList.add('active');
     clearTimeout(seekIndTimer);
     seekIndTimer = setTimeout(() => { seekLeft.classList.remove('active'); seekRight.classList.remove('active'); }, 550);
+    seekIndTimer.unref?.();
     showControls();
     update();
   };
 
-  // Tap/click and double-tap handling on the video surface (like YouTube).
-  let lastTapAt = 0, singleTapTimer = null;
-  wrap.querySelector('.ytp-video-slot')?.addEventListener('click', (e) => {
-    if (menuView) { closeMenu(); return; }
+  // Video surface interaction:
+  // - If settings menu is open, clicking the video closes the menu.
+  // - Double-tap left/right 35% seeks -10s / +10s.
+  // - Single tap/click toggles play/pause and keeps controls visible.
+  let lastTapAt = 0;
+  videoSlot?.addEventListener('click', (e) => {
+    if (menuView) { closeMenu(); showControls(); return; }
     const now = Date.now();
     const rect = wrap.getBoundingClientRect?.() || { left: 0, width: 300 };
     const relX = rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0.5;
     if (now - lastTapAt < 280 && (relX < 0.35 || relX > 0.65)) {
-      clearTimeout(singleTapTimer);
       lastTapAt = 0;
       skipBy(relX < 0.35 ? -10 : 10);
       return;
     }
     lastTapAt = now;
-    const isTouch = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)')?.matches;
-    if (isTouch) {
-      singleTapTimer = setTimeout(() => {
-        if (wrap.classList.contains('show-controls') && !v.paused) {
-          togglePlay();
-        } else if (!wrap.classList.contains('show-controls')) {
-          showControls();
-        } else {
-          togglePlay();
-        }
-      }, 220);
-    } else {
-      togglePlay();
-    }
+    togglePlay();
   });
 
-  wrap.addEventListener('pointermove', () => showControls());
-  wrap.addEventListener('pointerleave', () => {
-    if (!v.paused && !v.ended && !menuView && !scrubbing) wrap.classList.remove('show-controls');
+  // Only show controls on mouse hover movement (never use pointerleave, which fires on touch release and hides buttons mid-tap).
+  wrap.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'mouse' || !e.pointerType) showControls();
   });
 
   playBtn?.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
@@ -367,7 +375,8 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
   volBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
     v.muted = !v.muted;
-    if (!v.muted && v.volume === 0) v.volume = 1;
+    if (v.muted) onUserMute?.();
+    else if (v.volume === 0) v.volume = 1;
     update();
     showControls();
   });
@@ -376,11 +385,12 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
     const val = Number(volSlider.value);
     v.volume = Number.isFinite(val) ? val : 1;
     v.muted = v.volume === 0;
+    if (v.muted) onUserMute?.();
     update();
     showControls();
   });
 
-  // Scrubber / Timeline bar (hover preview + drag seek).
+  // Scrubber / Timeline bar (hover preview + drag seek + click seek).
   const ratioFromEvent = (e) => {
     const r = prog.getBoundingClientRect?.() || { left: 0, width: 1 };
     return Math.max(0, Math.min(1, ((e.clientX ?? 0) - r.left) / (r.width || 1)));
@@ -410,18 +420,23 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
     prog.setPointerCapture?.(e.pointerId);
     const { ratio, d } = previewAt(e);
     if (d > 0) v.currentTime = ratio * d;
+    showControls();
     update();
   });
-  prog?.addEventListener('pointerup', (e) => {
+  const endScrub = (e) => {
     if (!scrubbing) return;
     scrubbing = false;
     prog.classList.remove('is-scrubbing');
     if (hoverTime) hoverTime.hidden = true;
-    const { ratio, d } = previewAt(e);
-    if (d > 0) v.currentTime = ratio * d;
+    if (e?.clientX !== undefined) {
+      const { ratio, d } = previewAt(e);
+      if (d > 0) v.currentTime = ratio * d;
+    }
     showControls();
     update();
-  });
+  };
+  prog?.addEventListener('pointerup', endScrub);
+  prog?.addEventListener('pointercancel', endScrub);
 
   // Subtitles / CC button.
   const getTracks = () => [...(v.textTracks || [])];
@@ -434,15 +449,19 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
   ccBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
     const tracks = getTracks();
-    if (!tracks.length) return;
-    const cur = activeTrack();
-    setTrack(cur ? null : tracks[0].language);
+    if (tracks.length) {
+      const cur = activeTrack();
+      setTrack(cur ? null : tracks[0].language);
+    } else {
+      renderMenu(menuView === 'subs' ? null : 'subs');
+    }
     showControls();
   });
 
   // Picture-in-Picture toggle.
   pipBtn?.addEventListener('click', async (e) => {
     e.stopPropagation();
+    showControls();
     try {
       if (document.pictureInPictureElement) await document.exitPictureInPicture();
       else if (v.requestPictureInPicture) await v.requestPictureInPicture();
@@ -476,15 +495,17 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
     } catch {
       try { v.webkitEnterFullscreen?.(); } catch { /* ignore */ }
     }
+    showControls();
     update();
   };
   fsBtn?.addEventListener('click', (e) => { e.stopPropagation(); toggleFullscreen(); });
+  const onFsChange = () => update();
   if (typeof document !== 'undefined') {
-    document.addEventListener('fullscreenchange', () => update());
-    document.addEventListener('webkitfullscreenchange', () => update());
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
   }
-  v.addEventListener('webkitbeginfullscreen', () => update());
-  v.addEventListener('webkitendfullscreen', () => update());
+  v.addEventListener('webkitbeginfullscreen', onFsChange);
+  v.addEventListener('webkitendfullscreen', onFsChange);
 
   // Settings Menu (Playback speed, Quality, Subtitles/CC, Loop).
   const closeMenu = () => {
@@ -492,6 +513,7 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
     menu.hidden = true;
     gearBtn.classList.remove('is-open');
     gearBtn.setAttribute('aria-expanded', 'false');
+    scheduleHide();
   };
 
   const qualityOptions = () => {
@@ -522,10 +544,13 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
   };
 
   const renderMenu = (view = 'main') => {
+    if (!view) { closeMenu(); return; }
     menuView = view;
     menu.hidden = false;
     gearBtn.classList.add('is-open');
     gearBtn.setAttribute('aria-expanded', 'true');
+    clearTimeout(hideTimer);
+    wrap.classList.add('show-controls');
     const tracks = getTracks();
     const curSub = activeTrack();
 
@@ -586,7 +611,6 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
     e.stopPropagation();
     if (menuView) closeMenu();
     else renderMenu('main');
-    showControls();
   });
 
   menu?.addEventListener('click', (e) => {
@@ -627,30 +651,34 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
     else if (e.key === 'ArrowRight') { e.preventDefault(); skipBy(5); }
     else if (e.key === 'j' || e.key === 'J') { e.preventDefault(); skipBy(-10); }
     else if (e.key === 'l' || e.key === 'L') { e.preventDefault(); skipBy(10); }
-    else if (e.key === 'm' || e.key === 'M') { e.preventDefault(); v.muted = !v.muted; update(); }
+    else if (e.key === 'm' || e.key === 'M') { e.preventDefault(); v.muted = !v.muted; if (v.muted) onUserMute?.(); update(); }
     else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); toggleFullscreen(); }
     else if (e.key === 'Escape' && menuView) { e.preventDefault(); closeMenu(); }
   });
 
-  // Sync UI with current <video> state.
+  // Sync UI with current <video> state without replacing button DOM nodes unnecessarily.
   function update() {
     const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : (video.duration || 0);
     const cur = Number.isFinite(v.currentTime) && v.currentTime >= 0 ? v.currentTime : 0;
     const pct = dur > 0 ? Math.min(100, Math.max(0, (cur / dur) * 100)) : 0;
 
-    wrap.classList.toggle('is-paused', !!(v.paused || v.ended));
-    wrap.classList.toggle('is-playing', !v.paused && !v.ended);
-    wrap.classList.toggle('is-buffering', v.readyState > 0 && v.readyState < 3 && !v.paused && !v.ended);
+    const paused = !!(v.paused || v.ended);
+    wrap.classList.toggle('is-paused', paused);
+    wrap.classList.toggle('is-playing', !paused);
+    wrap.classList.toggle('is-buffering', v.readyState > 0 && v.readyState < 3 && !paused);
+    if (paused) wrap.classList.add('show-controls');
 
     if (playBtn) {
-      playBtn.innerHTML = v.ended ? YT_ICONS.replay : v.paused ? YT_ICONS.play : YT_ICONS.pause;
-      playBtn.setAttribute('aria-label', v.ended ? 'Replay' : v.paused ? 'Play' : 'Pause');
+      const key = v.ended ? 'replay' : v.paused ? 'play' : 'pause';
+      setBtnIcon(playBtn, key, key === 'replay' ? YT_ICONS.replay : key === 'play' ? YT_ICONS.play : YT_ICONS.pause);
+      playBtn.setAttribute('aria-label', key === 'replay' ? 'Replay' : key === 'play' ? 'Play' : 'Pause');
     }
     if (volBtn) {
       const vol = v.muted ? 0 : (v.volume ?? 1);
-      volBtn.innerHTML = vol === 0 ? YT_ICONS.volMute : vol < 0.5 ? YT_ICONS.volLow : YT_ICONS.volHigh;
+      const key = vol === 0 ? 'mute' : vol < 0.5 ? 'low' : 'high';
+      setBtnIcon(volBtn, key, key === 'mute' ? YT_ICONS.volMute : key === 'low' ? YT_ICONS.volLow : YT_ICONS.volHigh);
       volBtn.setAttribute('aria-label', v.muted ? 'Unmute' : 'Mute');
-      if (volSlider) volSlider.value = String(vol);
+      if (volSlider && document.activeElement !== volSlider) volSlider.value = String(vol);
     }
     if (!scrubbing && playBar) playBar.style.width = `${pct.toFixed(2)}%`;
     if (bufBar && dur > 0 && v.buffered?.length) {
@@ -666,9 +694,7 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
       prog.setAttribute('aria-valuenow', String(Math.round(cur)));
     }
 
-    const tracks = getTracks();
     if (ccBtn) {
-      ccBtn.hidden = tracks.length === 0;
       ccBtn.classList.toggle('is-active', !!activeTrack());
     }
     if (gearBadge) {
@@ -680,12 +706,20 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
     }
     if (fsBtn) {
       const fs = isFullscreen();
-      fsBtn.innerHTML = fs ? YT_ICONS.fsExit : YT_ICONS.fsEnter;
+      setBtnIcon(fsBtn, fs ? 'exit' : 'enter', fs ? YT_ICONS.fsExit : YT_ICONS.fsEnter);
       fsBtn.setAttribute('aria-label', fs ? 'Exit full screen' : 'Full screen');
     }
   }
 
   update();
-  const cleanup = () => { clearTimeout(hideTimer); clearTimeout(bezelTimer); clearTimeout(seekIndTimer); };
+  const cleanup = () => {
+    clearTimeout(hideTimer);
+    clearTimeout(bezelTimer);
+    clearTimeout(seekIndTimer);
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('fullscreenchange', onFsChange);
+      document.removeEventListener('webkitfullscreenchange', onFsChange);
+    }
+  };
   return { wrap, update, cleanup };
 }

@@ -195,10 +195,67 @@ test('createHtml5Player renders a uniform YouTube-style player (.ytp) with Setti
     menu.querySelector('[data-speed="1.5"]').click();
     assert.equal(ytp.querySelector('video').playbackRate, 1.5, 'Selecting 1.5x updates video.playbackRate');
     assert.equal(menu.hidden, true, 'Menu closes after selecting speed');
+
+    // Control buttons must not replace their inner SVG node on repeated timeupdate events, and pointerleave must not hide controls.
+    const playBtn = ytp.querySelector('.ytp-play');
+    const svgBefore = playBtn.querySelector('svg');
+    const vid = ytp.querySelector('video');
+    vid.dispatchEvent(new window.Event('timeupdate'));
+    vid.dispatchEvent(new window.Event('timeupdate'));
+    assert.equal(playBtn.querySelector('svg'), svgBefore, 'SVG node inside button is preserved across timeupdate ticks so clicks are never dropped');
+    ytp.dispatchEvent(new window.Event('pointerleave'));
+    assert.equal(ytp.classList.contains('show-controls'), true, 'pointerleave does not hide the control bar on touch/click');
     ctl.destroy();
   } finally {
     globalThis.document = prevDoc;
     globalThis.window = prevWin;
+  }
+});
+
+test('R2 videos (including short clips like 6s Cricket and newly started videos) appear in Continue Watching', async () => {
+  const { document, window } = parseHTML('<!doctype html><html><body></body></html>');
+  const prevDoc = globalThis.document, prevWin = globalThis.window, prevLoc = globalThis.location, prevLS = globalThis.localStorage, prevSS = globalThis.sessionStorage;
+  const mem = new Map();
+  globalThis.document = document;
+  globalThis.window = window;
+  globalThis.location = { protocol: 'https:', origin: 'https://t.in', pathname: '/', hash: '', href: 'https://t.in/', search: '' };
+  window.location = globalThis.location;
+  const store = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
+  globalThis.localStorage = store;
+  window.localStorage = store;
+  globalThis.sessionStorage = store;
+  window.sessionStorage = store;
+  try {
+    const { User } = await import('../../app/js/data/user.js');
+    const { LocalAdapter } = await import('../../app/js/data/adapters.js');
+    const u = new User(new LocalAdapter());
+    await u.init();
+    u.account = { id: 'u1', email: 'viewer@example.com' };
+    u.activeId = u.profiles[0]?.id;
+
+    const cricket = { id: 'cricket', title: 'Cricket', duration: 6, source: { type: 'r2', key: 'premium/cricket/vid.mov' } };
+    const longEp = { id: 'ep1', title: 'Long Episode', duration: 600, source: { type: 'r2', key: 'premium/show/ep1.mp4' } };
+    const catalog = { video: (id) => (id === 'cricket' ? cricket : id === 'ep1' ? longEp : null), show: () => null };
+
+    // Watching a short 6s R2 video (even if it reaches 6s or pauses at 1.5s) keeps it in Continue Watching.
+    u.saveProgress('cricket', 0.4, 6, { flush: true });
+    assert.equal(u.progressOf('cricket')?.position, 1, 'sub-second playback rounds up to 1s so started videos are tracked');
+    assert.equal(u.continueWatching(catalog).length, 1, 'started R2 video appears in Continue Watching immediately');
+
+    u.saveProgress('cricket', 6, 6, { flush: true });
+    assert.equal(u.continueWatching(catalog).length, 1, 'short 6s R2 video remains in Continue Watching even after playing through');
+
+    // A normal long R2 episode appears in Continue Watching when started (e.g. 3s) and leaves once finished (>= 94%).
+    u.saveProgress('ep1', 3, 600, { flush: true });
+    assert.ok(u.continueWatching(catalog).some((x) => x.video.id === 'ep1'), 'long R2 episode appears in Continue Watching after 3s');
+    u.saveProgress('ep1', 590, 600, { flush: true });
+    assert.ok(!u.continueWatching(catalog).some((x) => x.video.id === 'ep1'), 'finished long episode leaves Continue Watching');
+  } finally {
+    globalThis.document = prevDoc;
+    globalThis.window = prevWin;
+    globalThis.location = prevLoc;
+    globalThis.localStorage = prevLS;
+    globalThis.sessionStorage = prevSS;
   }
 });
 

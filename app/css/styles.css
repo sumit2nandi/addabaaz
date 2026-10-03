@@ -575,8 +575,9 @@ body:has(#consentBar) .auth-page { padding-bottom: 190px; } body:has(#consentBar
 
 .ytp-bar { display: flex; align-items: center; justify-content: space-between; gap: 4px; height: 40px; }
 .ytp-left, .ytp-right { display: flex; align-items: center; gap: 2px; }
-.ytp-btn { position: relative; width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #fff; display: inline-grid; place-items: center; cursor: pointer; opacity: .92; transition: opacity .15s ease, background .15s ease; -webkit-tap-highlight-color: transparent; }
-.ytp-btn:hover { opacity: 1; background: rgba(255,255,255,.1); }
+.ytp-btn { position: relative; width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #fff; display: inline-grid; place-items: center; cursor: pointer; opacity: .92; transition: opacity .15s ease, background .15s ease; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.ytp-btn svg { pointer-events: none; }
+.ytp-btn:hover, .ytp-btn:active { opacity: 1; background: rgba(255,255,255,.12); }
 .ytp-btn[hidden] { display: none !important; }
 .ytp-cc-btn.is-active::after { content: ''; position: absolute; bottom: 5px; left: 9px; right: 9px; height: 2.5px; border-radius: 2px; background: #ff0033; }
 .ytp-gear-btn svg { transition: transform .25s ease; }

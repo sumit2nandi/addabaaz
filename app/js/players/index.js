@@ -36,7 +36,11 @@ export async function createPlayer(container, video, opts = {}) {
   let playing = false, gone = false, errored = false;
   const timers = [];
   let cancelLifts = () => {};   // set once the unmute lifts exist; also called from destroy()
-  const wrapped = { ...opts, onState: (s, code) => { if (s === 'playing' || s === 'buffering') playing = true; else if (s === 'error') errored = true; /* buffering = the browser did start it, just slowly; errored = an autoplay "recovery" would be pointless */ opts.onState?.(s, code); } };
+  const wrapped = {
+    ...opts,
+    onUserMute: () => cancelLifts(),
+    onState: (s, code) => { if (s === 'playing' || s === 'buffering') playing = true; else if (s === 'error') errored = true; /* buffering = the browser did start it, just slowly; errored = an autoplay "recovery" would be pointless */ opts.onState?.(s, code); },
+  };
   const src = video.source || {};
   const autoplay = opts.autoplay !== false;
   const wantSound = !opts.muted;   // the page did not force mute (e.g. the reels viewer chose silence)
@@ -60,11 +64,12 @@ export async function createPlayer(container, video, opts = {}) {
     const EVENTS = ['pointerdown', 'touchstart', 'keydown'];
     const disarm = () => EVENTS.forEach((t) => target.removeEventListener(t, onGesture, true));
     let heard = false;
-    const onGesture = () => {                    // one physical tap fires SEVERAL of these in a row — react once
+    const onGesture = (e) => {                   // one physical tap fires SEVERAL of these in a row — react once
       if (heard || gone) return;
       heard = true;
       disarm();
       if (errored) return;                                  // a dead player gains nothing from unmuting
+      if (e?.target?.closest?.('.ytp-vol-btn, .ytp-vol-slider, [data-reel-sound]')) return;
       try { if (!ctl.isMuted || ctl.isMuted()) ctl.unmute(); } catch { /* player already gone */ }
       opts.onGestureUnmuted?.();
     };
