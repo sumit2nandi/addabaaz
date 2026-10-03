@@ -59,6 +59,14 @@ test('floating mobile tabs stay pinned while scrolling, including the nested Ree
   }
 });
 
+test('local-only mode labels the personal tab Profile, not Me', async () => {
+  const { app } = await import('../../app/js/app.js');
+  const { renderTabbar } = await import('../../app/js/ui/shell.js');
+  app.user = { supportsAuth: false };
+  renderTabbar();
+  assert.equal(document.querySelector('[data-tab="/account"] span')?.textContent, 'Profile');
+});
+
 test('the stylesheet has no scroll-driven hide state for the tab bar', () => {
   const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
   assert.equal(/scroll-hidden/.test(css), false, 'no .scroll-hidden rule remains');
