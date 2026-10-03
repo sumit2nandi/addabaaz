@@ -1,8 +1,8 @@
 # Builds the iOS app in the cloud — same idea as the APK workflow, no Mac needed to compile.
 #
-# Without Apple signing secrets it produces a SIMULATOR build (zip containing App.app, runs only
-# in Xcode's Simulator). To get an installable iPhone .ipa, configure the four APPLE_* repository
-# secrets (Settings → Secrets and variables → Actions) — then the signed build runs too:
+# Set FIREBASE_IOS_PLIST to enable the iOS build. It produces a SIMULATOR build (zip containing
+# App.app, runs only in Xcode's Simulator). To also get an installable iPhone .ipa, configure the
+# four APPLE_* repository secrets (Settings → Secrets and variables → Actions):
 #   APPLE_P12_BASE64       base64 of a Development .p12 (certificate + private key)
 #   APPLE_P12_PASSWORD     password of that .p12
 #   APPLE_PROFILE_BASE64   base64 of a Development provisioning profile for in.addabaaz.app
@@ -11,7 +11,7 @@ name: iOS
 
 on:
   push:
-    branches: [arena/01a0f2b3-addabaaz]
+    branches: [arena/01a0f2b3-addabaaz, arena/01a0fdc1-addabaaz]
   workflow_dispatch:
 
 permissions:
@@ -30,6 +30,7 @@ jobs:
     runs-on: macos-latest
     env:
       HAS_APPLE_CERT: ${{ secrets.APPLE_P12_BASE64 != '' && secrets.APPLE_PROFILE_BASE64 != '' && secrets.APPLE_TEAM_ID != '' }}
+      HAS_FIREBASE_IOS: ${{ secrets.FIREBASE_IOS_PLIST != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -51,6 +52,8 @@ jobs:
         run: npm ci
 
       - name: Build the web bundle (www/)
+        env:
+          NATIVE_PUSH_ENABLED: ${{ secrets.FIREBASE_IOS_PLIST != '' && 'true' || 'false' }}
         run: npm run build:www
 
       - name: Install Capacitor tooling
@@ -64,7 +67,18 @@ jobs:
       - name: Sync www/ into the iOS project
         run: npm --prefix mobile run sync    # cap sync + pod install + android patches (no-op here)
 
+      # Firebase client config is supplied as a GitHub Actions secret; no plist needs to be committed.
+      - name: Configure Firebase iOS app (optional)
+        env:
+          FIREBASE_IOS_PLIST: ${{ secrets.FIREBASE_IOS_PLIST }}
+        run: node mobile/scripts/configure-firebase.mjs ios
+
+      - name: Explain skipped iOS build when Firebase is not configured
+        if: env.HAS_FIREBASE_IOS != 'true'
+        run: echo 'Set the FIREBASE_IOS_PLIST Actions secret to create an iOS build; the Firebase SDK needs this plist at app launch.'
+
       - name: Build (Simulator)
+        if: env.HAS_FIREBASE_IOS == 'true'
         run: |
           xcodebuild -workspace mobile/ios/App/App.xcworkspace -scheme App \
             -configuration Debug -sdk iphonesimulator \
@@ -73,6 +87,7 @@ jobs:
           (cd "$RUNNER_TEMP/dd/Build/Products/Debug-iphonesimulator" && zip -qry "$GITHUB_WORKSPACE/addabaaz-ios-simulator.zip" App.app)
 
       - name: Upload Simulator build
+        if: env.HAS_FIREBASE_IOS == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: addabaaz-ios-simulator
@@ -82,7 +97,7 @@ jobs:
 
       # ---- Signed iPhone .ipa: runs only when the APPLE_* secrets are configured (see header). ----
       - name: Build signed .ipa (iPhone)
-        if: env.HAS_APPLE_CERT == 'true'
+        if: env.HAS_APPLE_CERT == 'true' && env.HAS_FIREBASE_IOS == 'true'
         env:
           APPLE_P12_BASE64: ${{ secrets.APPLE_P12_BASE64 }}
           APPLE_P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
@@ -124,7 +139,7 @@ jobs:
             -exportPath "$RUNNER_TEMP/export" -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
 
       - name: Upload iPhone .ipa
-        if: env.HAS_APPLE_CERT == 'true'
+        if: env.HAS_APPLE_CERT == 'true' && env.HAS_FIREBASE_IOS == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: addabaaz-ios-ipa

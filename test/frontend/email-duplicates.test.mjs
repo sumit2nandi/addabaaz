@@ -12,7 +12,7 @@ import fs from 'node:fs';
 
 const read = (p) => fs.readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
 const norm = read('server/src/email-address.js');
-const app = read('server/src/app.js');
+const authRoutes = read('server/src/routes/auth.js');
 const db = read('server/src/db.js');
 const dbAdmin = read('server/src/db-admin.js');
 const admin = read('server/src/admin.js');
@@ -30,9 +30,9 @@ test('one normalizer is the only definition of "the same address"', () => {
   assert.match(norm, /export const emailKey/, 'the comparison key');
   assert.match(norm, /export function visibleEmail/, 'the admin report can show why two rows look identical');
   // Every entry point uses it — signup, sign-in, social sign-in, password reset, the admin CLI.
-  assert.match(app, /const norm = normalizeEmail\(email\)/, 'signup normalizes before storing/comparing');
-  assert.match(app, /db\.users\.byEmailNorm\(normalizeEmail\(email\)\.email\)/, 'sign-in compares normalized addresses');
-  assert.match(app, /const norm = normalizeEmail\(claims\.email\)/, 'social sign-in normalizes the provider address');
+  assert.match(authRoutes, /const norm = normalizeEmail\(email\)/, 'signup normalizes before storing/comparing');
+  assert.match(authRoutes, /db\.users\.byEmailNorm\(normalizeEmail\(email\)\.email\)/, 'sign-in compares normalized addresses');
+  assert.match(authRoutes, /const norm = normalizeEmail\(claims\.email\)/, 'social sign-in normalizes the provider address');
   assert.match(features, /db\.users\.byEmailNorm\(normalizeEmail\(email\)\.email\)/, 'password reset finds the account either way');
   assert.match(read('server/src/admin-cli.js'), /normalizeEmail\(e\)\.email/, 'grant/revoke admin works with either form');
   // And the database refuses a second account even for two requests racing each other.

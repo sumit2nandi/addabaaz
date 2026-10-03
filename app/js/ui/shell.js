@@ -48,10 +48,10 @@ export function renderShell() {
   });
 }
 
-// Bottom tab bar (phones). Re-drawn when the user signs in or out, because the "Me" tab only exists for signed-in users.
+// Bottom tab bar (phones). Re-drawn when the user signs in or out; local-only builds keep this route for device profiles/settings but label it "Profile" rather than "Me".
 export function renderTabbar() {
   const bar = $('#tabbar'); if (!bar) return;
-  const tabs = TABS.filter(([p]) => p !== '/account' || !isGuest());
+  const tabs = TABS.filter(([p]) => p !== '/account' || !isGuest()).map(([p, label, ic]) => [p, p === '/account' && !app.user?.supportsAuth ? 'Profile' : label, ic]);
   bar.style.setProperty('--tabs', tabs.length);
   bar.innerHTML = tabs.map(([p, l, ic]) => html`<a href="#${p}" data-tab="${p}">${icon(ic, { size: 24 })}<span>${l}</span></a>`).map(String).join('');
   markTabs(lastPath);

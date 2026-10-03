@@ -21,9 +21,9 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      - run: npm audit --audit-level=high
       - run: npm run validate:catalog
       - run: for f in $(find admin app -name '*.js'); do node --check "$f" || exit 1; done   # the browser code has no build step
-      - run: node --test test/frontend/app-modules.test.mjs test/frontend/player-logic.test.mjs test/frontend/watch-autoplay.test.mjs   # stale-index deploy guard + player/autoplay behaviour
       - run: set -o pipefail; npm test 2>&1 | tee /tmp/t.log
       # TEMPORARY (CI logs are unreachable from the sandbox): on failure, publish the first failing TAP
       # block as ONE annotation (GitHub truncates the list of annotations, so a single line carries all
@@ -34,3 +34,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: test-log, path: /tmp/t.log, retention-days: 5, if-no-files-found: ignore }
       - run: npm run build:www
+      - run: docker build --tag addabaaz:ci .
+      - run: docker run --rm addabaaz:ci node --input-type=module -e "import('./server/src/web-assets.js').then(m => m.prepareWebAssets()).then(r => console.log('[web] Docker minification OK:', r.files, 'files')).catch(e => { console.error(e); process.exitCode = 1; })"

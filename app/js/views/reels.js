@@ -27,6 +27,18 @@ export default async function reels(ctx) {
   // Fetch the YouTube IFrame API while the feed renders — on mobile networks the script + handshake is the
   // slowest part of the first reel starting, so begin it before the player ever asks for it.
   if (list.some((v) => v.source?.type === 'youtube' && app.user.gateFor(v, cat) === 'ok')) loadYouTube().catch(() => {});
+  // A reel hosted in R2 needs a signed URL before its player can start; overlap that request with page render.
+  const streamMedia = new Map();
+  const prepareMedia = (v) => {
+    if (v.source?.type !== 'r2') return Promise.resolve(v);
+    if (!streamMedia.has(v.id)) {
+      const pending = Promise.resolve().then(() => app.user.streamUrl(v)).then((st) => ({ ...v, source: { type: st.type, url: st.url }, poster: cat.thumb(v) })).catch((err) => { streamMedia.delete(v.id); throw err; });
+      streamMedia.set(v.id, pending);
+    }
+    return streamMedia.get(v.id);
+  };
+  const firstReel = list[startIdx];
+  if (firstReel?.source?.type === 'r2' && app.user.gateFor(firstReel, cat) === 'ok') prepareMedia(firstReel).catch(() => {});
   ctx.setTitle('Reels');
   document.body.classList.add('reels-mode'); ctx.onCleanup(() => document.body.classList.remove('reels-mode'));
 
@@ -34,7 +46,7 @@ export default async function reels(ctx) {
   // the current one, removed again when it scrolls out of the keep-window.
   const contentHtml = (v, i) => { const show = cat.show(v.showId) || cat.soon(v.showId); return html`
     <div class="reel-frame ${cat.isPremium(v) ? 'has-premium' : ''}">
-      <div class="reel-slot">${img(cat.thumb(v), '', { lazy: i > 2 })}<div class="reel-loading"><div class="spinner"></div></div></div>
+      <div class="reel-slot">${img(cat.thumb(v), '', { lazy: i > 2 && i !== startIdx, priority: i === startIdx })}<div class="reel-loading"><div class="spinner"></div></div></div>
       ${cat.isPremium(v) ? premiumMark() : ''}
       <button type="button" class="reel-tap" data-reel-tap aria-label="Play or pause"><span class="reel-pp">${icon('play', { size: 34 })}</span></button>
       <div class="reel-caption"><strong>${cat.displayTitle(v)}</strong>${show ? html`<a href="#/${cat.show(v.showId) ? 'show' : 'soon'}/${show.id}">${show.titleEn || show.title}</a>` : html`<span>ADDABAAZ</span>`}</div>
@@ -90,11 +102,7 @@ export default async function reels(ctx) {
     }
     const h = document.createElement('div'); h.className = 'reel-player'; slot.appendChild(h);   // poster stays underneath
     try {
-      let media = v;
-      if (v.source.type === 'r2') {                    // R2 reel: the API enforces any Premium gate and signs a short-lived URL
-        const st = await app.user.streamUrl(v);
-        media = { ...v, source: { type: st.type, url: st.url }, poster: cat.thumb(v) };
-      }
+      const media = v.source.type === 'r2' ? await prepareMedia(v) : v;
       if (my !== token) { h.remove(); return; }
       const c = await createPlayer(h, media, {
         autoplay: true, muted: !soundOn, controls: false,
@@ -156,5 +164,9 @@ export default async function reels(ctx) {
   feed.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sections[Math.max(0, Math.min(sections.length - 1, active + (e.key === 'ArrowDown' ? 1 : -1)))]?.scrollIntoView({ behavior: 'smooth' }); }
   });
-  requestAnimationFrame(() => { sections[startIdx]?.scrollIntoView({ block: 'start' }); feed.focus({ preventScroll: true }); if (startIdx === 0) activate(0); });
+  requestAnimationFrame(() => {
+    sections[startIdx]?.scrollIntoView({ block: 'start' });
+    feed.focus({ preventScroll: true });
+    activate(startIdx); // don't wait for IntersectionObserver on a direct /reels/:id deep link
+  });
 }

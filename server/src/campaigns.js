@@ -6,11 +6,14 @@
 //   email  → every account the audience reaches, in pages, honouring unsubscribes, with an
 //            unsubscribe link in each message
 //
-// Sending runs in the background (the route answers with the campaign id immediately) and the row in
-// `campaigns` is updated after every batch, so the console can poll progress. Campaigns left
-// unfinished by a deploy or crash are resumed at boot (runScheduledJobs → campaigns.resume()).
+// Sending runs in the background. Progress and a database-backed lease let multiple instances
+// safely resume work after a deploy or crash without starting duplicate workers.
 import crypto from 'node:crypto';
 import { emailKey } from './email-address.js';
+
+const LEASE_SECONDS = 300;
+const HEARTBEAT_MS = 60_000;
+const leaseLost = () => Object.assign(new Error('Campaign lease was lost.'), { code: 'campaign_lease_lost' });
 
 /**
  * @param {object}   o
@@ -33,27 +36,33 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
     return null;
   }
 
-  async function runPush(campaign, { resolveAudience }) {
+  async function runPush(campaign, { resolveAudience, claimToken, renewLease }) {
+    const finish = (status, error = null) => db.campaigns.finish(campaign.id, status, error, claimToken);
     const audience = pushAudience(campaign.audience, resolveAudience);
-    if (!audience) { await db.campaigns.finish(campaign.id, 'failed', 'Unknown audience.'); return db.campaigns.get(campaign.id); }
+    if (!audience) { await finish('failed', 'Unknown audience.'); return db.campaigns.get(campaign.id); }
     try {
+      await renewLease();
       const r = await push.notify(audience, { title: campaign.title, body: campaign.body, url: campaign.url || '/', tag: `campaign-${campaign.id}` });
       const total = (r.sent || 0) + (r.failed || 0) + (r.removed || 0);
-      await db.campaigns.progress(campaign.id, { sent: r.sent, failed: r.failed, skipped: r.removed, total });
-      await db.campaigns.finish(campaign.id, r.failed && !r.sent ? 'failed' : (r.failed ? 'partial' : 'sent'));
+      const recorded = await db.campaigns.progress(campaign.id, { sent: r.sent, failed: r.failed, skipped: r.removed, total }, claimToken);
+      if (!recorded) throw leaseLost();
+      await finish(r.failed && !r.sent ? 'failed' : (r.failed ? 'partial' : 'sent'));
     } catch (e) {
-      log.error?.(`[campaigns] push ${campaign.id} failed: ${e.message}`);
-      await db.campaigns.finish(campaign.id, 'failed', e.message);
+      if (e.code !== 'campaign_lease_lost') {
+        log.error?.(`[campaigns] push ${campaign.id} failed: ${e.message}`);
+        await finish('failed', e.message);
+      }
     }
     return db.campaigns.get(campaign.id);
   }
 
-  async function runEmail(campaign, { unsubscribeUrlFor, siteUrl }) {
+  async function runEmail(campaign, { unsubscribeUrlFor, siteUrl, claimToken, renewLease }) {
     let cursor = campaign.cursor || 0, total = campaign.total || 0;
     let sent = 0, failed = 0, skipped = 0;                          // deltas since the last progress() call
     // One message per ADDRESS: two account rows that share an address (legacy duplicates, which the
     // admin merge in Admin → Users cleans up) must not receive the same e-mail twice.
     const seen = new Set();
+    const finish = (status, error = null) => db.campaigns.finish(campaign.id, status, error, claimToken);
     try {
       for (;;) {
         const page = await db.adminUsers.emailAudience(campaign.audience, { limit: pageSize, offset: cursor });
@@ -63,24 +72,30 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
           if (seen.has(address)) { skipped++; continue; }
           seen.add(address);
           try {
+            // Renew per recipient as well as on the timer; a slow SMTP call cannot silently outlive the lease.
+            await renewLease();
             const message = email({ name: u.name, email: u.email, subject: campaign.title, body: campaign.body, button: campaign.button ? { label: campaign.button, url: campaign.url } : null, siteUrl, unsubscribeUrl: unsubscribeUrlFor ? unsubscribeUrlFor(u) : '' });
             const r = await mailer.send({ to: u.email, ...message });
             if (r?.sent) sent++; else skipped++;
           } catch (e) {
+            if (e.code === 'campaign_lease_lost') throw e;
             failed++; log.warn?.(`[campaigns] email to ${u.email} failed: ${e.message}`);
           }
         }
         cursor += page.length;
         total = Math.max(total, cursor);                            // people signing up mid-send extend the audience
-        await db.campaigns.progress(campaign.id, { sent, failed, skipped, total, cursor });
+        const recorded = await db.campaigns.progress(campaign.id, { sent, failed, skipped, total, cursor }, claimToken);
+        if (!recorded) throw leaseLost();
         sent = failed = skipped = 0;
         if (page.length < pageSize) break;
       }
       const done = await db.campaigns.get(campaign.id);
-      await db.campaigns.finish(campaign.id, done.failed && !done.sent ? 'failed' : (done.failed ? 'partial' : 'sent'));
+      await finish(done.failed && !done.sent ? 'failed' : (done.failed ? 'partial' : 'sent'));
     } catch (e) {
-      log.error?.(`[campaigns] email ${campaign.id} failed: ${e.message}`);
-      await db.campaigns.finish(campaign.id, 'failed', e.message);
+      if (e.code !== 'campaign_lease_lost') {
+        log.error?.(`[campaigns] email ${campaign.id} failed: ${e.message}`);
+        await finish('failed', e.message);
+      }
     }
     return db.campaigns.get(campaign.id);
   }
@@ -99,15 +114,46 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
       setImmediate(() => svc.run(id, opts).catch((e) => log.error?.(`[campaigns] ${id}: ${e.message}`)));
       return db.campaigns.get(id);
     },
-    /** Runs (or continues) a campaign now. The same id never runs twice in parallel inside one process. */
+    /** Runs (or continues) a campaign now. A database lease prevents parallel runs across instances. */
     async run(id, opts = {}) {
       if (running.has(id)) return db.campaigns.get(id);
+      const current = await db.campaigns.get(id);
+      if (!current || ['sent', 'partial', 'cancelled', 'failed'].includes(current.status)) return current;
+
+      const claimToken = crypto.randomUUID();
+      if (!(await db.campaigns.claim(id, claimToken, LEASE_SECONDS))) return db.campaigns.get(id);
       const campaign = await db.campaigns.get(id);
-      if (!campaign || campaign.status === 'sent' || campaign.status === 'cancelled' || campaign.status === 'failed') return campaign;
+      if (!campaign) return null;
       running.add(id);
+
+      let leaseLostAlready = false, renewing = false;
+      const renewLease = async () => {
+        if (leaseLostAlready) throw leaseLost();
+        try {
+          const ok = await db.campaigns.renew(id, claimToken, LEASE_SECONDS);
+          if (!ok) { leaseLostAlready = true; throw leaseLost(); }
+        } catch (e) {
+          leaseLostAlready = true;
+          if (e.code === 'campaign_lease_lost') throw e;
+          log.warn?.(`[campaigns] lease renewal ${id} failed: ${e.message}`);
+          throw leaseLost();
+        }
+      };
+      const heartbeat = setInterval(async () => {
+        if (renewing || leaseLostAlready) return;
+        renewing = true;
+        try {
+          if (!(await db.campaigns.renew(id, claimToken, LEASE_SECONDS))) leaseLostAlready = true;
+        } catch (e) {
+          leaseLostAlready = true;
+          log.warn?.(`[campaigns] lease renewal ${id} failed: ${e.message}`);
+        } finally { renewing = false; }
+      }, HEARTBEAT_MS);
+      heartbeat.unref?.();
       try {
-        return campaign.channel === 'push' ? await runPush(campaign, opts) : await runEmail(campaign, opts);
-      } finally { running.delete(id); }
+        const runOpts = { ...opts, claimToken, renewLease };
+        return campaign.channel === 'push' ? await runPush(campaign, runOpts) : await runEmail(campaign, runOpts);
+      } finally { clearInterval(heartbeat); running.delete(id); }
     },
     /** Sends one test message to the admin who asked — never to the audience, never recorded as a campaign. */
     async sendTest({ channel, to, userId, name = 'there', title, body, url = null, button = null, siteUrl, unsubscribeUrlFor }) {
@@ -122,7 +168,7 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
       const r = await mailer.send({ to, ...message });
       return r?.sent ? { ok: true } : { ok: false, error: 'The mail server did not accept the message.' };
     },
-    /** At boot: continue campaigns a deploy or crash left unfinished. */
+    /** At boot: continue campaigns a deploy or crash interrupted; claim() arbitrates multi-instance races. */
     async resume(opts = {}) {
       const left = await db.campaigns.unfinished().catch(() => []);
       if (!left.length) return 0;

@@ -2,7 +2,7 @@
  * This is a good-faith TEMPLATE written for the way this app works. It is not legal advice: have a lawyer review and adjust it
  * before you go live (see docs/COMPLIANCE.md). Names, address and e-mail come from the studio profile (data/studio.json / admin console). */
 // Date shown as "Last updated"; change it whenever the text changes.
-export const LEGAL_UPDATED = '2026-09-29';
+export const LEGAL_UPDATED = '2026-10-03';
 // URL -> document id.
 export const LEGAL_PAGES = { '/privacy': 'privacy', '/terms': 'terms', '/refunds': 'refunds' };
 
@@ -24,17 +24,18 @@ export function legalDoc(slug, { studio = {}, refundDays = 7 } = {}) {
           'Comments you post, and reports you file about other comments.',
           'Payments: which plan you bought, the amount, GST details you enter (state, optional GSTIN and business name) and the Razorpay order and payment ids. Card, UPI and bank details are entered on Razorpay’s pages and never reach our servers.',
           'Devices and usage: a random device id, a device label such as “Android · Chrome”, the time each device last watched (to enforce the limit on simultaneous screens), and anonymous play counts and watch time per video. Basic server logs (IP address, browser, pages) and error reports help us keep the service running.',
-          'Notifications: if you turn them on, your browser’s push subscription.',
+          'Notifications: when app notifications are enabled, Firebase Cloud Messaging receives an app-installation token so it can deliver push. A guest app token is stored without an account link and is used for general broadcasts only; personalized episode and launch notifications rely on account profiles and reminders stored on our server. Browser push is a separate subscription that you switch on while signed in.',
         ]],
         ['Why we use it', [
           'To create and secure your account, show your library on every device, and let you watch premium titles you have paid for.',
           'To process payments, issue GST invoices and credit notes, send receipts and refund emails, and keep the records the law requires.',
-          'To send service messages (verification, password reset, receipts, plan-expiry reminders) and — only if you opt in — notifications about new episodes and announcements.',
+          'To send service messages (verification, password reset, receipts, plan-expiry reminders) and app/browser notifications on devices where notifications are enabled. Guest app devices receive general broadcasts only; account-specific episode and launch messages use server-side profile and reminder data.',
           'To moderate comments, prevent abuse and fraud, fix errors and understand which titles people watch.',
         ]],
         ['Who receives it', [
           'Service providers acting for us: Razorpay (payments), Cloudflare (hosting private video files in R2), our email delivery provider, and our hosting and database providers.',
           'Google, Facebook and Apple, if you choose to sign in with them. YouTube, whose player shows most of our free videos, may set its own cookies and collect data under Google’s policy when you press play.',
+          'Google Firebase Cloud Messaging, which delivers app push notifications to the installation token when notifications are enabled.',
           'Google Analytics, only if you accept optional analytics in the cookie notice.',
           'Authorities, when the law requires it. We do not sell your personal data.',
         ]],
@@ -47,7 +48,7 @@ export function legalDoc(slug, { studio = {}, refundDays = 7 } = {}) {
           'Invoices and credit notes are kept, detached from your account, for as long as Indian tax law requires. Server logs and error reports are kept for about 30 days; playback-session records for a few minutes.',
         ]],
         ['Your rights', [
-          'You can see and correct your details in Account, download your invoices in Billing, delete your account at any time, withdraw consent for notifications and analytics, and ask us for a copy of your data or to fix or erase it.',
+          'You can see and correct your details in Account/Profile settings, download your invoices in Billing, delete your account at any time, turn off app notifications in the app or Android settings, withdraw browser-notification and analytics consent, and ask us for a copy of your data or to fix or erase it.',
           `To exercise a right or raise a concern, ${contact} We aim to reply within 7 days.`,
         ]],
         ['Children', [

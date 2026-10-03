@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
-import { SocialError } from './social.js';
+import { SocialError } from './social-errors.js';
 
 /**
  * Sign in with Apple. The client (Apple JS on the web, the native SDK through Capacitor in the iOS app) obtains an
  * `identityToken` (an RS256 JWT). We verify it against Apple's published keys, issuer and audience — never trusting the client.
- *   APPLE_CLIENT_ID=com.addabaaz.app          (the app's bundle id — used by the iOS app)
+ *   APPLE_CLIENT_ID=in.addabaaz.app           (the app's bundle id — used by the iOS app)
  *   APPLE_SERVICE_ID=com.addabaaz.web         (a Services ID — used by the website; optional)
  * Apple only reports the user's name on the FIRST authorisation, and may hide the email behind a private relay address.
  */

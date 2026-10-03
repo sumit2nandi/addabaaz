@@ -31,6 +31,7 @@ window.scrollTo = (x, y) => {
 Object.defineProperty(window, 'scrollY', { configurable: true, writable: true, value: 0 });
 
 const { jumpScroll, Router } = await import('../../app/js/router.js');
+const { app } = await import('../../app/js/app.js');
 
 test('jumpScroll jumps instantly, with the stylesheet smooth-scroll overridden for that one call', () => {
   document.documentElement.style.scrollBehavior = '';
@@ -93,4 +94,18 @@ test('a real navigation jumps instead of animating the scroll-up from the old pa
   assert.doesNotMatch(src, /window\.scrollTo\(\{ top: restore/, 'no raw scrollTo left on the navigation path');
   const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
   assert.match(css, /html \{[^}]*scroll-behavior: smooth/, 'in-page anchors keep their smooth scrolling (that is why the override exists)');
+});
+
+test('pointing at a watch link prewarms YouTube without navigating away', async () => {
+  let apiChecks = 0;
+  Object.defineProperty(window, 'YT', { configurable: true, get() { apiChecks++; return { Player: function Player() {} }; } });
+  app.catalog = { video: () => ({ source: { type: 'youtube' } }), reels: () => [] };
+  app.user = { gateFor: () => 'ok' };
+  const a = document.createElement('a'); a.setAttribute('href', '#/watch/fast-start'); document.body.appendChild(a);
+  const before = globalThis.location.hash;
+  a.dispatchEvent(new window.Event('pointerover', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 10));
+  assert.ok(apiChecks > 0, 'the IFrame API is warmed before the video link is clicked');
+  assert.equal(globalThis.location.hash, before, 'prewarming does not trigger navigation');
+  a.remove();
 });

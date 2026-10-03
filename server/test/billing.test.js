@@ -37,7 +37,8 @@ const fetchImpl = async (url, init) => {
 const razorpay = createRazorpay({ keyId: 'rzp_test_key', keySecret: KEY_SECRET, webhookSecret: WEBHOOK_SECRET, fetchImpl });
 
 const sent = [];
-const mailer = createMailer({ transport: { sendMail: async (m) => { sent.push(m); } }, from: 'ADDABAAZ <billing@addabaaz.in>' });
+let failNextMail = false;
+const mailer = createMailer({ transport: { sendMail: async (m) => { if (failNextMail) { failNextMail = false; throw new Error('temporary SMTP failure'); } sent.push(m); } }, from: 'ADDABAAZ <billing@addabaaz.in>' });
 const emailsTo = (to, re) => sent.filter((m) => m.to === to && (!re || re.test(m.subject)));
 
 // Database for the tests: TEST_DATABASE_URL or a local MySQL. Each file creates its own throw-away database (unique name) and drops it at the end, so tests never touch real data.
@@ -415,6 +416,17 @@ test('payment.failed emails the buyer once and leaves the order open for a retry
   assert.equal(emailsTo('failed@example.com', /didn’t go through/).length, 1, 'nothing for an order that has since been paid');
 });
 
+test('a temporary payment-failure mail error releases the one-time notice for webhook retry', async () => {
+  const u = await signup('failed-retry@example.com');
+  const c = await call('POST', '/payments/checkout', { planId: 'plus-monthly', billing: MH }, u.token);
+  const ev = () => webhook('payment.failed', { payment: { entity: { id: 'pay_retry_notice', order_id: c.body.orderId, status: 'failed' } } });
+  failNextMail = true;
+  await ev(); await billing.idle();
+  assert.equal(emailsTo('failed-retry@example.com', /didn’t go through/).length, 0);
+  await ev(); await billing.idle();
+  assert.equal(emailsTo('failed-retry@example.com', /didn’t go through/).length, 1);
+});
+
 /* ---------------- reminders, register, retention ---------------- */
 test('expiry reminders: once per expiry date, only for paid plans ending soon', async () => {
   const soon = await signup('soon@example.com'), far = await signup('far@example.com'), gone = await signup('gone@example.com');
@@ -437,6 +449,17 @@ test('expiring plans: concurrent runners send exactly one reminder', async () =>
   await db.pool.query('UPDATE subscriptions SET expires_at = UTC_TIMESTAMP(3) + INTERVAL 1 DAY WHERE user_id = ?', [u.user.id]);
   const counts = await Promise.all([1, 2, 3, 4].map(() => billing.sendExpiryReminders())); await billing.idle();
   assert.equal(counts.reduce((a, b) => a + b, 0), 1); assert.equal(emailsTo('race@example.com', /ends on/).length, 1);
+});
+
+test('a temporary expiry-reminder mail error releases its claim for a later retry', async () => {
+  const u = await signup('reminder-retry@example.com'); await buy(u); await billing.idle();
+  await db.pool.query('UPDATE subscriptions SET expires_at = UTC_TIMESTAMP(3) + INTERVAL 1 DAY WHERE user_id = ?', [u.user.id]);
+  failNextMail = true;
+  assert.equal(await billing.sendExpiryReminders(), 1); await billing.idle();
+  const [[afterFailure]] = await db.pool.query('SELECT expiry_reminder_for FROM subscriptions WHERE user_id = ?', [u.user.id]);
+  assert.equal(afterFailure.expiry_reminder_for, null);
+  assert.equal(await billing.sendExpiryReminders(), 1); await billing.idle();
+  assert.equal(emailsTo('reminder-retry@example.com', /ends on/).length, 1);
 });
 
 test('sales register CSV: invoices positive, credit notes negative, GSTIN and place of supply included', async () => {

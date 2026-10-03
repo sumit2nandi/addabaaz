@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
-import { HttpError, bad, wrap, rateLimit } from './http.js';
-import { isDuplicate } from './db.js';
+import { HttpError, bad, wrap, rateLimit, safeErrorUrl } from './http.js';
+import { isDuplicate } from './db-errors.js';
 import { hashPassword, verifyPassword, signToken } from './auth.js';
 import { endpointHash } from './push.js';
 import { FREE_KINDS } from './catalog-schema.js';
@@ -84,7 +84,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
     const st = await db.accounts.pin(user.id);
     if (!st?.hash) return true;
     if (st.lockedUntil && st.lockedUntil > new Date()) throw new HttpError(429, 'pin_locked', `Too many wrong PINs. Try again in ${Math.ceil((st.lockedUntil - Date.now()) / 60_000)} minute(s).`);
-    if (typeof pin === 'string' && /^\d{4,6}$/.test(pin) && verifyPassword(pin, st.hash)) { if (st.failed) await db.accounts.pinOk(user.id); return true; }
+    if (typeof pin === 'string' && /^\d{4,6}$/.test(pin) && await verifyPassword(pin, st.hash)) { if (st.failed) await db.accounts.pinOk(user.id); return true; }
     await db.accounts.pinFailed(user.id, 5, 15 * 60_000);
     throw new HttpError(403, 'pin_invalid', 'Incorrect PIN.');
   }
@@ -137,7 +137,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         if (!uid) throw new HttpError(400, 'invalid_token', 'This reset link is invalid or has expired. Please request a new one.');
         const user = await db.users.byId(uid); if (!user) throw new HttpError(400, 'invalid_token', 'This reset link is invalid or has expired.');
         notDisabled(user);
-        const sv = await db.accounts.setPassword(uid, hashPassword(password), { verify: true });      // signs out every other device
+        const sv = await db.accounts.setPassword(uid, await hashPassword(password), { verify: true });      // signs out every other device
         sendMail(user.email, mail.passwordChangedEmail({ name: user.name, siteUrl, supportEmail: cfg.supportEmail }), `password changed for ${user.email}`);
         res.json({ ...sessionFor({ ...user, emailVerifiedAt: user.emailVerifiedAt || new Date().toISOString() }, sv), profiles: await db.profiles.list(uid) });
       }));
@@ -163,7 +163,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       // Browser error reports (rate limited, stored for the admin Errors page).
       api.post('/client-errors', limit('clienterr', 20, 60_000), wrap(async (req, res) => {
         const b = req.body || {};
-        if (typeof b.message === 'string' && b.message) await db.errors.add({ source: 'client', message: b.message, stack: b.stack, url: b.url, userAgent: req.get('user-agent') });
+        if (typeof b.message === 'string' && b.message) await db.errors.add({ source: 'client', message: b.message, stack: b.stack, url: safeErrorUrl(b.url), userAgent: req.get('user-agent') });
         res.sendStatus(204);
       }));
 
@@ -181,6 +181,23 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         const me = await userFromRequest(req).catch(() => null);
         res.set('Cache-Control', 'no-store');
         res.json({ total, comments: items.map((c) => ({ id: c.id, author: c.author, body: c.body, createdAt: c.createdAt, ...(me && c.userId === me.id ? { mine: true } : {}) })) });
+      }));
+
+      /* anonymous native app push devices */
+      // A connected guest may register one FCM token without an account. This only enters general
+      // app-push audiences; account-specific episode/launch audiences are resolved from server data.
+      const guestDeviceLimit = limit('guest-devices', 20, 60_000);
+      api.post('/devices/guest', guestDeviceLimit, wrap(async (req, res) => {
+        const { token, platform = null, label = null } = req.body || {};
+        if (typeof token !== 'string' || token.length < 20 || token.length > 512) throw bad('Invalid device token.');
+        await db.devices.upsertGuest({ hash: endpointHash(token), token, platform, label: typeof label === 'string' && label.trim() ? label.trim() : null });
+        res.status(201).json({ ok: true });
+      }));
+      // Token possession is required; deleting by token hash also cleans up a stale account link left by an older app session.
+      api.delete('/devices/guest', guestDeviceLimit, wrap(async (req, res) => {
+        const token = req.body?.token;
+        if (typeof token === 'string' && token.length >= 20 && token.length <= 512) await db.devices.removeHash(endpointHash(token));
+        res.sendStatus(204);
       }));
 
       /* push config */
@@ -204,8 +221,8 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       api.post('/me/password', authLimit, wrap(async (req, res) => {
         const { currentPassword, newPassword } = req.body || {};
         if (!passwordOk(newPassword)) throw bad('Password must be 8–128 characters.', 'weak_password');
-        if (req.user.passwordHash && !verifyPassword(String(currentPassword || ''), req.user.passwordHash)) throw new HttpError(403, 'invalid_credentials', 'Your current password is incorrect.');
-        const sv = await db.accounts.setPassword(req.user.id, hashPassword(newPassword));
+        if (req.user.passwordHash && !(await verifyPassword(String(currentPassword || ''), req.user.passwordHash))) throw new HttpError(403, 'invalid_credentials', 'Your current password is incorrect.');
+        const sv = await db.accounts.setPassword(req.user.id, await hashPassword(newPassword));
         sendMail(req.user.email, mail.passwordChangedEmail({ name: req.user.name, siteUrl, supportEmail: cfg.supportEmail }), `password changed for ${req.user.email}`);
         res.json(sessionFor(req.user, sv));
       }));
@@ -218,7 +235,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         const { pin, currentPin } = req.body || {};
         if (typeof pin !== 'string' || !/^\d{4,6}$/.test(pin)) throw bad('The PIN must be 4–6 digits.', 'invalid_pin');
         if (req.user.hasPin) await checkPin(req.user, currentPin);
-        await db.accounts.setPin(req.user.id, hashPassword(pin)); res.sendStatus(204);
+        await db.accounts.setPin(req.user.id, await hashPassword(pin)); res.sendStatus(204);
       }));
       api.post('/me/pin/verify', authLimit, wrap(async (req, res) => { await checkPin(req.user, req.body?.pin); res.json({ ok: true }); }));
       api.delete('/me/pin', authLimit, wrap(async (req, res) => { await checkPin(req.user, req.body?.pin); await db.accounts.setPin(req.user.id, null); res.sendStatus(204); }));
@@ -296,8 +313,8 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       }));
       api.post('/push/unsubscribe', wrap(async (req, res) => { if (typeof req.body?.endpoint === 'string') await db.push.remove(req.user.id, endpointHash(req.body.endpoint)); res.sendStatus(204); }));
 
-      /* --- native app push devices (Android/iOS apps: FCM tokens) — Admin → Notifications sends to these --- */
-      // The apps call this after FCM/APNs hands them a token; the same token is never shared between accounts.
+      /* --- native app push devices for signed-in accounts (FCM tokens) — Admin → Notifications sends to these --- */
+      // Sign-in links an existing guest token to the account; one FCM token has exactly one audience.
       api.post('/devices', wrap(async (req, res) => {
         const { token, platform = null, label = null } = req.body || {};
         if (typeof token !== 'string' || token.length < 20 || token.length > 512) throw bad('Invalid device token.');

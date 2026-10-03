@@ -2,6 +2,8 @@
 
 The native apps are a thin [Capacitor](https://capacitorjs.com) shell around the **same web app** in `../` — one codebase, three platforms. Full guide: [`../docs/MOBILE.md`](../docs/MOBILE.md).
 
+**No laptop?** Firebase config is injected by the GitHub Actions cloud builds from repository secrets; see [`../docs/MOBILE.md`](../docs/MOBILE.md#push-notifications-no-laptop-setup) for the exact secret names and how to download the APK artifact.
+
 ```bash
 # from the repository root
 npm run build:www                       # (or API_BASE=https://api.addabaaz.in npm run build:www)

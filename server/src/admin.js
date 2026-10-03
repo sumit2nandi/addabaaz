@@ -3,9 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { HttpError, bad, wrap, rateLimit } from './http.js';
-import { isDuplicate } from './db.js';
+import { isDuplicate } from './db-errors.js';
 import { visibleEmail, plainEmail } from './email-address.js';
-import { verifyToken, sessionValid } from './auth.js';
+import { sessionForRequest } from './sessions.js';
 import { PLANS, paidPlan } from './plans.js';
 import { validate, TYPES } from './catalog-schema.js';
 import { describeImage, describeSubtitle, cacheUpload, UPLOAD_NAME, videoKey } from './uploads.js';
@@ -48,10 +48,9 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     const got = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
     if (!got) throw new HttpError(401, 'unauthorized', 'Please sign in.');
     if (tokenOn && crypto.timingSafeEqual(digest(got), digest(adminToken))) { req.admin = { id: null, email: 'ADMIN_TOKEN', name: 'Admin token', via: 'token' }; return next(); }
-    const payload = verifyToken(got, secret);
-    if (!payload || payload.aud || !payload.sub) throw new HttpError(401, 'unauthorized', 'Please sign in.');
-    const user = await db.users.byId(String(payload.sub));
-    if (!user || !sessionValid(payload, user)) throw new HttpError(401, 'unauthorized', 'Please sign in.');
+    const session = await sessionForRequest(req, { db, secret });
+    if (!session) throw new HttpError(401, 'unauthorized', 'Please sign in.');
+    const { user, claims: payload } = session;
     if (user.disabledAt) throw new HttpError(403, 'account_disabled', 'This account is disabled.');
     if (!user.isAdmin) throw new HttpError(403, 'forbidden', 'This account is not an administrator.');
     if (Date.now() / 1000 - payload.iat > sessionHours * 3600) throw new HttpError(401, 'admin_session_expired', `For security, admin sessions last ${sessionHours} hours — please sign in again.`);
@@ -103,7 +102,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
       item('mail', 'Email', mailer.provider === 'smtp', mailer.provider === 'smtp' ? 'SMTP is configured. Use Send test email below to check actual delivery.' : 'SMTP_URL is not set — verification, password-reset and billing emails are not sent.'),
       item('r2', 'Private video storage (R2)', !!r2.configured, r2.configured ? `Bucket “${r2.bucket}” is configured.` : 'R2 is not configured — R2-hosted videos cannot play (optional for other sources).'),
       item('push', 'Web push', !!push?.configured, push?.configured ? 'VAPID keys are set; broadcasts reach browsers and installed web apps.' : 'VAPID keys are not set — browser notifications are off (optional).', 'info'),
-      item('apppush', 'App push', !!push?.nativeConfigured, push?.nativeConfigured ? 'The Firebase service account is set; the Android/iOS apps receive broadcasts.' : 'FCM_SERVICE_ACCOUNT is not set — the phone apps cannot receive broadcasts (optional; see docs/MOBILE.md).', 'info'),
+      item('apppush', 'App push', !!push?.nativeConfigured, push?.nativeConfigured ? 'Server Firebase credentials are set; native app builds also need Firebase client config (and iOS APNs setup).' : 'FCM_SERVICE_ACCOUNT is not set — the phone apps cannot receive broadcasts (optional; see docs/MOBILE.md).', 'info'),
       item('apple', 'Apple sign-in', !!social.verifiers?.apple, social.verifiers?.apple ? 'Enabled.' : 'Not configured (optional; required only for iOS apps that offer other social logins).', 'info'),
       item('google', 'Google sign-in', !!social.verifiers?.google, social.verifiers?.google ? 'Enabled.' : 'Not configured (optional).', 'info'),
       item('facebook', 'Facebook sign-in', !!social.verifiers?.facebook, social.verifiers?.facebook ? 'Enabled.' : 'Not configured (optional).', 'info'),
