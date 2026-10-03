@@ -38,7 +38,12 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
   const { type, url } = video.source;
   if (type === 'hls' && !v.canPlayType('application/vnd.apple.mpegurl')) {
     const Hls = await loadHls();
-    if (Hls.isSupported()) { hls = new Hls({ startPosition: start || -1 }); hls.loadSource(url); hls.attachMedia(v); }
+    if (Hls.isSupported()) {
+      hls = new Hls({ startPosition: start || -1 });
+      hls.on?.(Hls.Events?.ERROR || 'hlsError', (_e, d) => { if (d?.fatal) onState?.('error', d.response?.code === 404 ? 4 : 2); });
+      hls.loadSource(url);
+      hls.attachMedia(v);
+    }
     else throw Object.assign(new Error('This video format isn’t supported on your device.'), { friendly: true });
   } else v.src = url;
 

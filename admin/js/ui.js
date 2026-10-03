@@ -1,5 +1,5 @@
 /* Small UI toolkit for the admin console: templating, icons, formatting, toasts, modals and a schema-driven form builder. */
-import { html, raw, esc, $, $$, debounce } from '/app/js/util.js';
+import { html, raw, esc, $, $$, debounce } from '../../app/js/util.js';
 import { api, prepareImage, putFile, ApiError } from './api.js';
 export { html, raw, esc, $, $$, debounce, ApiError };
 
@@ -16,7 +16,46 @@ export const ago = (iso) => {
 };
 export const fmtDur = (sec) => { sec = Math.max(0, Math.round(Number(sec) || 0)); const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`; };
 // Duration text <-> seconds ("1:05:30" or plain seconds); slug and YouTube-id helpers for the content forms.
-export const parseDur = (t) => { t = String(t ?? '').trim(); if (/^\d+$/.test(t)) return Number(t); const p = t.split(':').map(Number); return p.length > 1 && p.length <= 3 && p.every((x) => Number.isInteger(x) && x >= 0) ? p.reduce((a, x) => a * 60 + x, 0) : NaN; };
+export const parseDur = (t) => { t = String(t ?? '').trim(); if (!t) return 0; if (/^\d+$/.test(t)) return Number(t); const p = t.split(':').map(Number); return p.length > 1 && p.length <= 3 && p.every((x) => Number.isInteger(x) && x >= 0) ? p.reduce((a, x) => a * 60 + x, 0) : NaN; };
+/** Reads the duration (in whole seconds) of a local video File/Blob or URL using an off-screen <video> element. Resolves to 0 if unreadable. */
+export function probeVideoDuration(source, { timeoutMs = 10000 } = {}) {
+  if (!source || typeof document === 'undefined') return Promise.resolve(0);
+  return new Promise((resolve) => {
+    const vid = document.createElement('video');
+    const objectUrl = typeof source === 'string' ? '' : (typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(source) : '');
+    const src = typeof source === 'string' ? source : objectUrl;
+    if (!src) return resolve(0);
+    let settled = false, seekedForDuration = false;
+    const finish = (secs) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { vid.removeAttribute('src'); vid.load?.(); } catch { /* ignore */ }
+      if (objectUrl) try { URL.revokeObjectURL(objectUrl); } catch { /* ignore */ }
+      resolve(secs > 0 && Number.isFinite(secs) ? Math.max(1, Math.round(secs)) : 0);
+    };
+    const check = () => {
+      const d = Number(vid.duration);
+      if (Number.isFinite(d) && d > 0) return finish(d);
+      if (d === Infinity && !seekedForDuration) {
+        seekedForDuration = true;
+        try { vid.currentTime = 1e101; } catch { finish(0); }
+      }
+    };
+    const timer = setTimeout(() => finish(0), timeoutMs);
+    vid.preload = 'metadata';
+    vid.muted = true;
+    vid.playsInline = true;
+    vid.setAttribute?.('playsinline', '');
+    vid.setAttribute?.('webkit-playsinline', '');
+    vid.addEventListener('loadedmetadata', check);
+    vid.addEventListener('durationchange', check);
+    vid.addEventListener('timeupdate', () => { if (Number.isFinite(vid.duration) && vid.duration > 0) finish(vid.duration); });
+    vid.addEventListener('error', () => finish(0), { once: true });
+    vid.src = src;
+    try { vid.load?.(); } catch { /* ignore */ }
+  });
+}
 export const slug = (s) => String(s || '').normalize('NFKD').replace(/[^\w\s-]/g, '').trim().toLowerCase().replace(/[\s_]+/g, '-').replace(/-+/g, '-').slice(0, 50);
 export const plural = (n, w) => `${n.toLocaleString('en-IN')} ${w}${n === 1 ? '' : 's'}`;
 export const imgSrc = (p) => (!p ? '' : /^https?:/.test(p) ? p : '/' + p);
@@ -53,10 +92,23 @@ const I = {
 export const icon = (n, size = 18) => raw(`<svg class="i" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n] || ''}</svg>`);
 
 /* ---------- toasts ---------- */
-// Small pop-up message; type 'ok' or 'err'.
+// Small pop-up message; type 'ok' or 'err'. When a <dialog> modal is open in the top layer, also show the toast inside the modal so it isn't hidden behind the dialog backdrop.
 export function toast(message, type = 'ok') {
+  const openDlg = document.querySelector('dialog.modal[open]');
+  let host = $('#toasts');
+  if (openDlg) {
+    if (type === 'err') {
+      const formErr = $('.form-err', openDlg);
+      if (formErr) { formErr.textContent = message; formErr.hidden = false; formErr.scrollIntoView?.({ block: 'nearest' }); }
+    }
+    let modalHost = $('.modal-toasts', openDlg);
+    if (!modalHost) { modalHost = document.createElement('div'); modalHost.className = 'modal-toasts'; openDlg.append(modalHost); }
+    host = modalHost;
+  }
   const t = document.createElement('div'); t.className = `toast ${type}`; t.textContent = message;
-  $('#toasts').append(t); setTimeout(() => t.classList.add('out'), type === 'err' ? 6000 : 3200); setTimeout(() => t.remove(), type === 'err' ? 6400 : 3600);
+  host?.append(t);
+  setTimeout(() => t.classList.add('out'), type === 'err' ? 6000 : 3200)?.unref?.();
+  setTimeout(() => t.remove(), type === 'err' ? 6400 : 3600)?.unref?.();
 }
 export const errMsg = (e) => (e instanceof Error ? e.message : String(e));
 
@@ -133,9 +185,9 @@ export function wireImages(root) {
     const show = () => { prev.innerHTML = input.value.trim() ? `<img alt="" src="${esc(imgSrc(input.value.trim()))}">` : '<span class="muted small">No image</span>'; };
     input.addEventListener('change', show);
     file.addEventListener('change', async () => {
-      const f = file.files[0]; if (!f) return; st.textContent = 'Uploading…';
-      try { const blob = await prepareImage(f, { maxWidth: Number(box.dataset.maxw) || 1600 }); const r = await api.uploadImage(blob); input.value = r.path; st.textContent = `Uploaded (${Math.round(r.bytes / 1024)} KB)`; show(); }
-      catch (e) { st.textContent = ''; toast(errMsg(e), 'err'); } finally { file.value = ''; }
+      const f = file.files[0]; if (!f) return; st.classList.remove('err', 'ok'); st.textContent = 'Uploading…';
+      try { const blob = await prepareImage(f, { maxWidth: Number(box.dataset.maxw) || 1600 }); const r = await api.uploadImage(blob); input.value = r.path; st.classList.add('ok'); st.textContent = `Uploaded ✓ (${Math.round(r.bytes / 1024)} KB)`; show(); }
+      catch (e) { st.classList.add('err'); st.textContent = `✖ ${errMsg(e)}`; toast(errMsg(e), 'err'); } finally { file.value = ''; }
     });
   }
 }

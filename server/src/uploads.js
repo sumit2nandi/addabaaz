@@ -40,15 +40,18 @@ export function cacheUpload(dir, name, data) {
   } catch { return false; }
 }
 
-// Video types accepted for upload to R2.
-const VIDEO_EXT = { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm' };
+// Video types accepted for upload to R2 (including iPhone / iOS QuickTime .mov recordings).
+const VIDEO_EXT = { mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', '3gp': 'video/3gpp' };
+const VIDEO_MIME = { 'video/mp4': 'mp4', 'video/x-m4v': 'm4v', 'video/quicktime': 'mov', 'video/webm': 'webm', 'video/3gpp': '3gp' };
 /** Object key for a browser upload to the private R2 bucket: premium/<slug>/<random>-<clean-name>.<ext>. */
-export function videoKey(filename, slug = '') {
-  const m = /\.([a-z0-9]{2,4})$/i.exec(String(filename || ''));
-  const ext = m && VIDEO_EXT[m[1].toLowerCase()] ? m[1].toLowerCase() : null;
+export function videoKey(filename, slug = '', mimeType = '') {
+  const raw = String(filename || '');
+  const m = /\.([a-z0-9]{1,8})$/i.exec(raw);
+  const ext = m ? (VIDEO_EXT[m[1].toLowerCase()] ? m[1].toLowerCase() : null)
+    : VIDEO_MIME[String(mimeType || '').split(';')[0].trim().toLowerCase()] || null;
   if (!ext) return null;
   const clean = (s) => String(s).normalize('NFKD').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 60);
-  const base = clean(String(filename).replace(/\.[^.]+$/, '')) || 'video';
+  const base = clean(raw.replace(/\.[^.]+$/, '')) || 'video';
   return { key: `premium/${clean(slug) || 'uploads'}/${crypto.randomBytes(4).toString('hex')}-${base}.${ext}`, contentType: VIDEO_EXT[ext], format: 'mp4' };
 }
 

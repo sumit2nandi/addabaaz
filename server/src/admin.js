@@ -448,10 +448,23 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
 
   // Full catalog including drafts and scheduled items (the public API hides those).
   router.get('/catalog', wrap(async (_req, res) => { const s = await catalog.get({ all: true }); res.json({ ...s.catalog, studio: s.studio }); }));
+  // Verify that an R2 video object actually exists in the configured bucket before saving a catalog entry pointing to it.
+  const verifyR2Source = async (doc) => {
+    if (doc?.source?.type !== 'r2') return;
+    if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video storage (R2) is not configured on this server. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_BUCKET.');
+    if (typeof r2.head !== 'function') return;
+    let h;
+    try { h = await r2.head(doc.source.key); }
+    catch (e) { throw new HttpError(502, 'r2_unreachable', `Could not reach Cloudflare R2 to verify “${doc.source.key}” (${e?.message || 'network error'}). Check R2_ACCOUNT_ID and R2_ENDPOINT.`); }
+    if (h.status === 404) throw new HttpError(400, 'r2_object_missing', `The video file “${doc.source.key}” was not found in your R2 bucket${r2.bucket ? ` “${r2.bucket}”` : ''}. Click “Upload video” and wait for “Uploaded ✓”, or upload the file to R2 first.`);
+    if (h.status === 403) throw new HttpError(502, 'r2_access_denied', `Cloudflare R2 rejected access to “${doc.source.key}”${r2.bucket ? ` in bucket “${r2.bucket}”` : ''} (HTTP 403). Check R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_BUCKET.`);
+    if (h.status !== 200) throw new HttpError(502, 'r2_error', `Cloudflare R2 returned HTTP ${h.status} when checking “${doc.source.key}”.`);
+  };
   // Create an item: validated by catalog-schema.js, stored in MySQL, then the cache is cleared so the site updates.
   router.post('/catalog/:type', wrap(async (req, res) => {
     const { key, type } = kindOf(req), snap = await catalog.get({ all: true });
     const { doc, errors } = validate(type, req.body, await ctxFor(snap, req.body)); if (errors.length) throw invalid(errors);
+    await verifyR2Source(doc);
     try { await db.catalog.put(key, doc.id, doc, { create: true }); } catch (e) { if (isDuplicate(e)) throw new HttpError(409, 'exists', `A ${type} with the id “${doc.id}” already exists.`); throw e; }
     catalog.invalidate(); await log(req, `catalog.${type}.create`, doc.id, { title: doc.title || doc.caption || doc.id });
     res.status(201).json({ item: doc });
@@ -469,6 +482,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     const body = { ...(req.body || {}) }; if (body.id === undefined) body.id = req.params.id;
     if (body.id !== req.params.id) throw bad('An id can’t be changed — create a new item instead.');
     const { doc, errors } = validate(type, body, await ctxFor(snap, body)); if (errors.length) throw invalid(errors);
+    await verifyR2Source(doc);
     if (!(await db.catalog.put(key, doc.id, doc))) throw new HttpError(404, 'not_found', `Unknown ${type}.`);
     catalog.invalidate(); await log(req, `catalog.${type}.update`, doc.id, { title: doc.title || doc.caption || doc.id });
     res.json({ item: doc });
@@ -510,9 +524,12 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   /** Presigned PUT so the browser sends a big video straight to the private R2 bucket (never through this server). */
   // Returns a presigned URL so the browser uploads the big video file straight to R2 (it never passes through this server).
   router.post('/uploads/video', wrap(async (req, res) => {
-    if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video storage (R2) is not configured on this server.');
-    const k = videoKey(req.body?.filename, req.body?.slug); if (!k) throw bad('Upload an .mp4, .m4v or .webm file.', 'unsupported_video');
-    const size = Number(req.body?.size); if (Number.isFinite(size) && size > 5 * 1024 ** 3) throw bad('Single uploads are limited to 5 GB — split or compress the video.');
+    if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video storage (R2) is not configured on this server. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_BUCKET.');
+    const k = videoKey(req.body?.filename, req.body?.slug, req.body?.contentType);
+    if (!k) throw bad(`Unsupported video file${req.body?.filename ? ` “${String(req.body.filename).slice(0, 80)}”` : ''}. Upload an .mp4, .mov (iPhone), .m4v, .webm or .3gp video file.`, 'unsupported_video');
+    const size = Number(req.body?.size);
+    if (Number.isFinite(size) && size <= 0) throw bad('The selected video file is empty (0 bytes).', 'empty_video');
+    if (Number.isFinite(size) && size > 5 * 1024 ** 3) throw bad('Single uploads are limited to 5 GB — split or compress the video.');
     await log(req, 'upload.video', k.key, { size: size || undefined });
     res.status(201).json({ key: k.key, format: k.format, contentType: k.contentType, uploadUrl: r2.presignPut(k.key, { ttl: 6 * 3600 }), expiresInSeconds: 6 * 3600 });
   }));

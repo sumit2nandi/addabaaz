@@ -103,7 +103,9 @@ test('uploads helpers: magic-byte sniffing and R2 keys', () => {
   assert.equal(sniffImage(PNG).ext, 'png'); assert.equal(sniffImage(Buffer.from('<svg onload=alert(1)>')), null); assert.equal(sniffImage(Buffer.from('<html>')), null);
   assert.equal(sniffImage(Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBPVP8 ')])).ext, 'webp');
   const k = videoKey('My Film (Final).MP4', 'Shahid EP 6'); assert.match(k.key, /^premium\/shahid-ep-6\/[0-9a-f]{8}-my-film-final\.mp4$/); assert.equal(k.contentType, 'video/mp4');
-  assert.equal(videoKey('evil.exe'), null); assert.equal(videoKey('a.mp4.html'), null);
+  const mov = videoKey('IMG_6304.MOV', 'Cricket'); assert.match(mov.key, /^premium\/cricket\/[0-9a-f]{8}-img_6304\.mov$/); assert.equal(mov.contentType, 'video/quicktime');
+  const mimeMov = videoKey('trimmed-clip', 'Cricket', 'video/quicktime'); assert.match(mimeMov.key, /^premium\/cricket\/[0-9a-f]{8}-trimmed-clip\.mov$/); assert.equal(mimeMov.contentType, 'video/quicktime');
+  assert.equal(videoKey('evil.exe'), null); assert.equal(videoKey('a.mp4.html'), null); assert.equal(videoKey('evil.exe', '', 'video/mp4'), null);
 });
 
 test('access control: viewers and anonymous users are refused; sessions expire; disabled and demoted admins lose access at once', async () => {
@@ -283,7 +285,10 @@ test('uploads: images are sniffed, stored by content hash and served; videos get
   // video → presigned URL
   const v = await A('POST', '/uploads/video', { filename: 'Episode 6 Final.mp4', slug: 'shahid-ep6', size: 1e9 }); assert.equal(v.status, 201);
   assert.match(v.body.key, /^premium\/shahid-ep6\/[0-9a-f]{8}-episode-6-final\.mp4$/); assert.equal(v.body.uploadUrl, `https://r2.test/put/${v.body.key}?sig=1`); assert.equal(v.body.contentType, 'video/mp4'); assert.equal(puts.at(-1), v.body.key);
+  const iphoneMov = await A('POST', '/uploads/video', { filename: 'IMG_6304.MOV', contentType: 'video/quicktime', slug: 'cricket', size: 12e6 }); assert.equal(iphoneMov.status, 201);
+  assert.match(iphoneMov.body.key, /^premium\/cricket\/[0-9a-f]{8}-img_6304\.mov$/); assert.equal(iphoneMov.body.contentType, 'video/quicktime');
   assert.equal((await A('POST', '/uploads/video', { filename: 'virus.exe' })).status, 400);
+  assert.equal((await A('POST', '/uploads/video', { filename: 'empty.mp4', size: 0 })).status, 400);
   assert.equal((await A('POST', '/uploads/video', { filename: 'big.mp4', size: 6 * 1024 ** 3 })).status, 400);
   assert.equal((await call('POST', '/admin/uploads/video', { filename: 'a.mp4' }, viewer.token)).status, 403);
 });

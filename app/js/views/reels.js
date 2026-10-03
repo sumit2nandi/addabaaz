@@ -130,7 +130,7 @@ export default async function reels(ctx) {
         sec.classList.add('paused');   // shows the big play glyph: one tap starts it with sound
         return;
       }
-      toast(e?.status === 401 ? 'Sign in to watch this premium reel.' : e?.status === 402 ? 'This reel needs an active plan.' : 'Could not load this reel. Check connection.');
+      toast(e?.status === 401 ? 'Sign in to watch this premium reel.' : e?.status === 402 ? 'This reel needs an active plan.' : (e?.status && e?.message) ? e.message : 'Could not load this reel. Check connection.');
       if (locked) sec.classList.add('paused');
     }
   }

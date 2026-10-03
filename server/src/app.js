@@ -374,8 +374,15 @@ export function createApp({
       if (!seat.ok) throw new HttpError(429, 'stream_limit', `Your plan allows ${features.cfg.streamLimit} screens at once. Stop playback on another device to continue.`);
       req.user = user;
     }
-    // Only after the access checks: is storage set up at all?
-    if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video playback isn’t available right now — please try again later.');
+    // Only after the access checks: is storage set up at all, and does the video object exist in R2?
+    if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video storage (Cloudflare R2) is not configured on this server.');
+    if (typeof r2.head === 'function') {
+      const h = await r2.head(v.source.key).catch((e) => ({ status: 0, error: e?.message }));
+      if (h.status === 404) throw new HttpError(404, 'video_file_missing', `The video file (${v.source.key}) was not found in Cloudflare R2 storage. Please upload the video file in Admin → Videos & reels.`);
+      if (h.status === 403) throw new HttpError(502, 'storage_access_denied', 'Cloudflare R2 rejected access to this video file (HTTP 403). Check the R2 API credentials and bucket permissions on the server.');
+      if (h.status === 0) throw new HttpError(502, 'storage_unreachable', 'Could not connect to Cloudflare R2 storage. Check R2_ACCOUNT_ID and network settings on the server.');
+      if (h.status !== 200) throw new HttpError(502, 'storage_error', `Cloudflare R2 returned HTTP ${h.status} for this video file.`);
+    }
     const format = r2Format(v.source), expiresAt = new Date(Date.now() + streamTtl * 1000).toISOString();
     res.set('Cache-Control', 'no-store');
     // HLS: return a short-lived token URL that points at our own gateway (below).
