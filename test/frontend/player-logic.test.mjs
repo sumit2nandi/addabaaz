@@ -1,6 +1,6 @@
 // Unit tests for the createPlayer() autoplay logic (app/js/players/index.js).
-// Every autoplaying player is built muted and inline. Sound lifts are measured from the first actual
-// PLAYING event, so a slow iPhone/YouTube startup cannot be unmuted before WebKit accepts autoplay.
+// Every autoplaying player is built muted and inline. Other browsers may lift mute after PLAYING;
+// iOS stays muted until an explicit sound-control gesture because timer-unmute pauses Safari playback.
 //
 // Run:  node --test test/frontend/
 import { test, beforeEach } from 'node:test';
@@ -46,7 +46,43 @@ test('autoplay stays muted until PLAYING, then the sound lifts run relative to t
   ctl.destroy();
 });
 
-test('slow iPhone-style startup stays muted while buffering, then starts sound lifts after PLAYING', async () => {
+test('iPhone autoplay stays muted after PLAYING until an explicit sound-control action', async () => {
+  const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const listeners = {};
+  Object.defineProperty(globalThis, 'navigator', {
+    value: {
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
+      platform: 'iPhone', maxTouchPoints: 5,
+    }, configurable: true,
+  });
+  globalThis.window = {
+    addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); },
+    removeEventListener: (t, fn) => { listeners[t] = (listeners[t] || []).filter((x) => x !== fn); },
+  };
+  try {
+    globalThis.__ytScenario = { bufferingAfterMs: 10, playAfterMs: 40 };
+    let mutedCb = 0;
+    const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'iphone' } }, {
+      autoplay: true, onAutoplayMuted: () => mutedCb++,
+    });
+    await wait(250);
+    assert.equal(globalThis.__muted, true, 'iOS playback remains muted after its first frame');
+    assert.equal(globalThis.__unmuted, false, 'no timer attempts to unmute and stop Safari playback');
+    assert.equal(mutedCb, 1, 'the view is told to show its explicit sound control');
+    assert.equal((listeners.pointerdown || []).length + (listeners.touchstart || []).length, 0, 'no broad gesture handler races the sound button');
+    ctl.unmute(); // the sound button / pill calls this directly inside its trusted click handler
+    assert.equal(globalThis.__muted, false, 'an explicit sound-control action can unmute');
+    ctl.destroy();
+  } finally {
+    if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);
+    else delete globalThis.navigator;
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else delete globalThis.window;
+  }
+});
+
+test('slow startup stays muted while buffering, then starts sound lifts after PLAYING on non-iOS', async () => {
   globalThis.__ytScenario = { bufferingAfterMs: 100, playAfterMs: 4500 };
   let mutedCb = 0, blockedCb = 0;
   const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
