@@ -19,7 +19,7 @@ import { stableSigning, hasStableSigning } from './android-gradle.mjs';
 import { patchMainActivity, mainActivityInstallsFullscreen, writeFullscreenClient, addCoreDependency, javaSourceDir } from './android-fullscreen.mjs';
 
 // Deep-link scheme for the Google sign-in redirect back into the app (= the Capacitor appId;
-// the API's google-return.js deep-links to the same scheme, keep them in step).
+// the API's /auth/google/native-page deep-links to the same scheme, keep them in step).
 const APP_SCHEME = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'capacitor.config.json'), 'utf8')).appId;
 
 const MIN_AGP = '8.9.1';           // Android Gradle Plugin

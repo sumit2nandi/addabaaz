@@ -3,8 +3,10 @@
  * The client only obtains a credential from the provider; the ADDABAAZ API verifies it
  * (POST /auth/google {idToken}, POST /auth/facebook {accessToken}) and returns our own session token.
  *   - Web:            Google Identity Services button + Facebook JS SDK popup
- *   - Android / iOS:  native SDKs through the Capacitor plugin @capgo/capacitor-social-login
- *                     (Google's/Facebook's web flows are blocked or unreliable inside app WebViews)
+ *   - Android / iOS:  Google opens the API's native-page in a Chrome Custom Tab (one-time ticket
+ *                     deep-linked back — Google's web flows are blocked inside app WebViews and the
+ *                     native SDK needs every build keystore's SHA-1); Facebook/Apple use native SDKs
+ *                     through the Capacitor plugin @capgo/capacitor-social-login
  * Provider ids come from GET /auth/providers, so they're configured once, on the server.
  */
 import { html, $ } from './util.js';
@@ -69,7 +71,8 @@ async function appleWeb({ clientId }) {
 }
 
 /* ---------- native (Capacitor) ---------- */
-// Native apps use the Capacitor social-login plugin; it is initialised once with the ids from the server.
+// Facebook / Apple use the Capacitor social-login plugin; it is initialised once with the ids from
+// the server. Google never touches it (see nativeGoogleTicket below).
 let nativeInit = false;
 function nativePlugin(providers) {
   const SL = window.Capacitor?.Plugins?.SocialLogin;
@@ -81,7 +84,10 @@ function nativePlugin(providers) {
       // Apple is iOS-only here: sending `apple: {}` to Android makes initialize reject (it wants
       // redirectUrl/clientId) and takes the other providers down with it — Capgo issue #197.
       ...(providers.apple && ios ? { apple: {} } : {}),
-      ...(providers.facebook ? { facebook: { appId: providers.facebook.appId, clientToken: providers.facebook.clientToken } } : {}),
+      // Facebook needs BOTH the app id and the client token: the plugin rejects the entire
+      // initialize when either is missing ("facebook.clientToken is null or empty"), taking every
+      // other provider down with it. An incomplete Facebook config must only break Facebook.
+      ...(providers.facebook?.appId && providers.facebook?.clientToken ? { facebook: { appId: providers.facebook.appId, clientToken: providers.facebook.clientToken } } : {}),
     }).then(() => { nativeInit = true; }),
     new Promise((_, rej) => setTimeout(() => rej(soft('Sign-in couldn’t start — please try again.')), 12000)),
   ]);
@@ -133,6 +139,13 @@ export function nativeGoogleTicket() {
   });
 }
 async function nativeCredential(provider, providers) {
+  // Google on native never uses the in-app SDK: Google blocks WebView sign-in and the SDK needs
+  // every build keystore's SHA-1 registered in the Google console. The OAuth dance happens in
+  // real Chrome (Custom Tab) and the app receives a one-time ticket over a deep link instead.
+  // Google must therefore never wait on SocialLogin.initialize(): that call is all-or-nothing
+  // across providers (a half-configured provider — e.g. Facebook without FACEBOOK_CLIENT_TOKEN —
+  // makes the whole initialize reject), and this flow does not need the plugin at all.
+  if (provider === 'google') return nativeGoogleTicket();
   const { SL, ready } = nativePlugin(providers); await ready;
   const call = (opts, msg) => Promise.race([
     SL.login(opts),
@@ -140,10 +153,6 @@ async function nativeCredential(provider, providers) {
   ]);
   try {
     if (provider === 'apple') { const r = await call({ provider: 'apple', options: { scopes: ['email', 'name'] } }, 'Apple sign-in didn’t respond — please try again.'); const n = r.result?.profile; return { identityToken: r.result?.idToken, name: n ? [n.givenName, n.familyName].filter(Boolean).join(' ') : '' }; }
-    // Google on native never uses the in-app SDK: Google blocks WebView sign-in and the SDK needs
-    // every build keystore's SHA-1 registered in the Google console. The OAuth dance happens in
-    // real Chrome (Custom Tab) and the app receives a one-time ticket over a deep link instead.
-    if (provider === 'google') return nativeGoogleTicket();
     const r = await call({ provider: 'facebook', options: { permissions: ['email', 'public_profile'] } }, 'Facebook sign-in didn’t respond — please try again.');
     const token = r?.result?.accessToken?.token;
     if (!token) throw soft('Facebook sign-in returned nothing — please try again.');

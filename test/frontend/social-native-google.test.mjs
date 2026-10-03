@@ -27,9 +27,55 @@ window.Capacitor = {
   },
 };
 
-const { nativeGoogleTicket } = await import('../../app/js/social.js');
+const { nativeGoogleTicket, mountSocialButtons } = await import('../../app/js/social.js');
 const tick = () => new Promise((r) => setTimeout(r, 0));
 const fire = (name, ev) => listeners[name].forEach((cb) => cb(ev));
+
+// Mounts the native social buttons and taps "Continue with Google".
+async function tapGoogle(providers) {
+  const box = document.createElement('div');
+  document.body.appendChild(box);
+  const outcome = { cred: null, err: null };
+  const shown = mountSocialButtons(box, providers, {
+    onCredential: async (p, c) => { outcome.cred = { p, c }; },
+    onError: (m) => { outcome.err = m; },
+  });
+  assert.equal(shown, true);
+  const btn = box.querySelector('.btn-social[data-p="google"]');
+  assert.ok(btn, 'native renders our own Google button (not the GIS div)');
+  btn.dispatchEvent(new window.Event('click', { bubbles: true }));
+  return outcome;
+}
+
+test('Continue with Google runs the Custom Tab flow when the SocialLogin plugin is missing entirely', async () => {
+  delete window.Capacitor.Plugins.SocialLogin;
+  const outcome = await tapGoogle({ google: { clientId: 'g-web' } });
+  await tick();
+  assert.equal(openedUrl, 'https://api.test/api/v1/auth/google/native-page', 'the Custom Tab opens without any social-login plugin');
+  fire('appUrlOpen', { url: 'in.addabaaz.app://oauth?ticket=tkt-no-plugin' });
+  await tick();
+  assert.deepEqual(outcome.cred, { p: 'google', c: { ticket: 'tkt-no-plugin' } });
+  assert.equal(outcome.err, null);
+});
+
+test('a broken SocialLogin.initialize can never take Google sign-in down with it', async () => {
+  // Capgo 7.20.0 Android rejects the WHOLE initialize when any provider config is incomplete
+  // (e.g. facebook without clientToken). Google must not wait on that call at all.
+  const initCalls = [];
+  window.Capacitor.Plugins.SocialLogin = {
+    initialize: async (opts) => { initCalls.push(opts); throw Object.assign(new Error('facebook.clientToken is null or empty')); },
+    login: async () => { throw new Error('SocialLogin.login must never be called for google'); },
+    logout: async () => {},
+  };
+  const outcome = await tapGoogle({ google: { clientId: 'g-web' }, facebook: { appId: '1' } });
+  await tick();
+  assert.equal(openedUrl, 'https://api.test/api/v1/auth/google/native-page', 'the Custom Tab opens even when initialize rejects');
+  fire('appUrlOpen', { url: 'in.addabaaz.app://oauth?ticket=tkt-init-broken' });
+  await tick();
+  assert.deepEqual(outcome.cred, { p: 'google', c: { ticket: 'tkt-init-broken' } });
+  assert.equal(outcome.err, null);
+  assert.deepEqual(initCalls, [], 'Google never touches SocialLogin.initialize');
+});
 
 test('native Google opens the OAuth start URL in a Custom Tab and resolves the deep-linked ticket', async () => {
   const p = nativeGoogleTicket();
