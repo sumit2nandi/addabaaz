@@ -9,24 +9,41 @@ import { videoKey } from '../../server/src/uploads.js';
 
 const read = (p) => fs.readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
 
-test('videoKey accepts iPhone .mov recordings and mobile MIME fallbacks while rejecting unsafe files', () => {
+test('videoKey accepts any video format (including iPhone .mov, .mkv, .avi, .wmv, .flv, .ts, .3gp and any video/* MIME) while rejecting unsafe files', () => {
   const mov = videoKey('IMG_6304.MOV', 'Cricket');
   assert.ok(mov, 'iPhone .MOV file is accepted');
   assert.match(mov.key, /^premium\/cricket\/[0-9a-f]{8}-img_6304\.mov$/);
   assert.equal(mov.contentType, 'video/quicktime');
   assert.equal(mov.format, 'mp4');
 
+  for (const [file, mime] of [
+    ['episode.mkv', 'video/x-matroska'],
+    ['clip.avi', 'video/x-msvideo'],
+    ['stream.wmv', 'video/x-ms-wmv'],
+    ['flash.flv', 'video/x-flv'],
+    ['cam.m2ts', 'video/mp2t'],
+    ['movie.mpeg', 'video/mpeg'],
+    ['clip.3gp', 'video/3gpp'],
+    ['ogg-video.ogv', 'video/ogg'],
+  ]) {
+    const res = videoKey(file, 'Show');
+    assert.ok(res, `${file} is accepted`);
+    assert.equal(res.contentType, mime);
+  }
+
+  const customVideoMime = videoKey('camera-capture.dv', 'Cricket', 'video/x-dv');
+  assert.ok(customVideoMime, 'arbitrary video/* MIME with custom video extension is accepted');
+  assert.match(customVideoMime.key, /^premium\/cricket\/[0-9a-f]{8}-camera-capture\.dv$/);
+  assert.equal(customVideoMime.contentType, 'video/x-dv');
+
   const noExtMov = videoKey('trimmed-video', 'Cricket', 'video/quicktime; codecs="avc1"');
   assert.ok(noExtMov, 'extensionless mobile blob with video/quicktime MIME is accepted');
   assert.match(noExtMov.key, /^premium\/cricket\/[0-9a-f]{8}-trimmed-video\.mov$/);
   assert.equal(noExtMov.contentType, 'video/quicktime');
 
-  const gp = videoKey('clip.3gp', 'Show');
-  assert.ok(gp);
-  assert.equal(gp.contentType, 'video/3gpp');
-
   assert.equal(videoKey('malware.exe', 'Show', 'video/mp4'), null, 'disallowed extension is rejected even with video MIME');
-  assert.equal(videoKey('trick.mov.html', 'Show'), null);
+  assert.equal(videoKey('trick.mov.html', 'Show', 'video/mp4'), null);
+  assert.equal(videoKey('vector.svg', 'Show', 'video/mp4'), null);
 });
 
 test('probeVideoDuration and parseDur derive and parse durations reliably (including iOS Safari load() and Infinity fallback)', async () => {
@@ -124,7 +141,7 @@ test('admin content view, server admin routes, and watch page wire R2 verificati
   const appServer = read('server/src/app.js');
   const watchView = read('app/js/views/watch.js');
 
-  assert.match(contentView, /video\/quicktime.*\.mov/, 'file picker accepts iPhone .mov videos');
+  assert.match(contentView, /accept="video\/\*.*\.mov/, 'file picker accepts any video/* and common video extensions');
   assert.match(contentView, /probeVideoDuration\(f\)/, 'duration is automatically derived from the selected video file');
   assert.match(contentView, /✖ Upload failed: \$\{msg\}/, 'upload failures remain visible inline in the modal');
   assert.match(adminServer, /verifyR2Source/, 'admin catalog save verifies the R2 object exists when r2.head is present');

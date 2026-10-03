@@ -526,7 +526,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   router.post('/uploads/video', wrap(async (req, res) => {
     if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video storage (R2) is not configured on this server. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_BUCKET.');
     const k = videoKey(req.body?.filename, req.body?.slug, req.body?.contentType);
-    if (!k) throw bad(`Unsupported video file${req.body?.filename ? ` “${String(req.body.filename).slice(0, 80)}”` : ''}. Upload an .mp4, .mov (iPhone), .m4v, .webm or .3gp video file.`, 'unsupported_video');
+    if (!k) throw bad(`Unsupported file${req.body?.filename ? ` “${String(req.body.filename).slice(0, 80)}”` : ''}. Please select a valid video file.`, 'unsupported_video');
     const size = Number(req.body?.size);
     if (Number.isFinite(size) && size <= 0) throw bad('The selected video file is empty (0 bytes).', 'empty_video');
     if (Number.isFinite(size) && size > 5 * 1024 ** 3) throw bad('Single uploads are limited to 5 GB — split or compress the video.');
