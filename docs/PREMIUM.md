@@ -92,6 +92,8 @@ Add (or change) a video in `data/catalog.json`; `access: "premium"` is what requ
 
 Premium plays only for **a signed-in viewer with an active paid plan** — always, there is no switch to turn that off. Plans are **prepaid passes** (₹99 → 30 days, ₹799 → 365 days, edit `server/src/plans.js`): no auto-renewal, nothing to cancel; buying again *adds* time to the end of the current pass. When `expires_at` passes, access locks again automatically (no cron needed).
 
+This flow runs on the **website**. The Android/iOS builds deliberately do not sell (store billing rules) — see [PAYMENTS.md](PAYMENTS.md) for what Apple and Google allow inside the apps, the 2026–27 changes, and the review risks. Verify the keys with `npm run razorpay:check` (add `--order` to prove order creation works).
+
 ```
 Plans page → POST /payments/checkout {planId}        API creates a Razorpay order + a `payments` row (status created)
           → Razorpay Checkout (UPI / cards / netbanking / wallets; card data never touches our servers)

@@ -19,6 +19,7 @@
     "mobile:ios": "npm run mobile:sync && npm --prefix mobile run open:ios",
     "db:migrate": "node server/src/migrate-cli.js",
     "r2:check": "node scripts/r2-check.mjs",
+    "razorpay:check": "node scripts/razorpay-check.mjs",
     "admin": "node server/src/admin-cli.js",
     "catalog:export": "node scripts/catalog-cli.mjs export",
     "catalog:import": "node scripts/catalog-cli.mjs import",
