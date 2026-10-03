@@ -1,15 +1,25 @@
 # Builds the Android APK in the cloud — no laptop required.
-# Pushes to arena/ott or a working branch, pull requests targeting arena/ott,
-# or a manual Actions run (even from a phone) produce an installable debug APK Artifact:
+# Every push to a working branch (arena/**) or main, pull requests targeting them, or a manual
+# Actions run (even from a phone) produces an installable debug APK Artifact:
 #   Actions → APK run → Artifacts → addabaaz-debug-apk (zip) → app-debug.apk
+# A manual run additionally publishes the same APK as a release asset, so the phone can download it
+# straight from https://github.com/<you>/<repo>/releases/tag/apk (no zip to unpack).
 name: APK
 
 on:
   push:
-    branches: [arena/ott, arena/01a0f872-addabaaz, arena/01a0f999-addabaaz, arena/01a0fdc1-addabaaz]
+    # Every arena working branch (the list of individual branch names used to go stale and silently
+    # stop building the branch being worked on — the pattern cannot).
+    branches: ['arena/**', main]
   pull_request:
-    branches: [arena/ott]
+    branches: [main, arena/ott]
   workflow_dispatch:                      # "Run workflow" button in the Actions tab
+    inputs:
+      api_base:
+        description: 'API the app should talk to (leave empty for production)'
+        type: string
+        default: ''
+        required: false
 
 permissions:
   contents: read
@@ -45,6 +55,8 @@ jobs:
       - name: Build the web bundle (www/)
         env:
           NATIVE_PUSH_ENABLED: ${{ secrets.FIREBASE_ANDROID_JSON != '' && 'true' || 'false' }}
+          # A manual run can point the app at another API (staging); everything else uses the default above.
+          API_BASE: ${{ github.event.inputs.api_base || 'https://addabaazott.onrender.com' }}
         run: npm run build:www
 
       - name: Install Capacitor tooling
@@ -107,3 +119,33 @@ jobs:
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+  # Manual runs only: attach the same APK to a rolling "apk" release, so a phone (or a friend who has
+  # neither a laptop nor a GitHub login) can download and install it from one link.
+  publish:
+    name: Publish the download link
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write                     # only this job may write to the repository (the release asset)
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: addabaaz-debug-apk
+          path: out
+
+      - name: Publish the rolling "apk" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK="out/addabaaz-${GITHUB_SHA::7}.apk"
+          mv out/app-debug.apk "$APK"
+          gh release delete apk --yes --cleanup-tag 2>/dev/null || true
+          gh release create apk "$APK" \
+            --target "$GITHUB_SHA" \
+            --title "ADDABAAZ app — build ${GITHUB_SHA::7}" \
+            --notes "Installable **debug** build for testing (not for the Play Store). Android will ask you to allow installing from this browser — that is expected for a build outside Google Play. Signed in with the account you subscribed with, premium titles unlock here automatically. Commit: ${GITHUB_SHA}"
