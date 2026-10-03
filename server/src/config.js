@@ -5,7 +5,7 @@
  *   DB_SSL=true            enable TLS (managed MySQL: RDS, Cloud SQL, PlanetScale, Azure, Aiven…)
  *   DB_SSL_CA_FILE=/etc/secrets/ca.pem   CA certificate to trust (Aiven, some others, sign with their own CA) - a file path, or
  *   DB_SSL_CA="-----BEGIN CERTIFICATE-----..."   the same certificate pasted as text (\n written as \\n is fine)
- *   DB_SSL_VERIFY_IDENTITY=true   with a CA, also require the certificate's host name to match DB_HOST (default: chain check only)
+ *   DB_SSL_VERIFY_IDENTITY=false  only for providers whose valid certificate does not match DB_HOST (hostname verification is on by default)
  *   A URL ending in ?ssl-mode=REQUIRED (what Aiven shows) turns TLS on by itself.
  *   DB_POOL_SIZE=10
  */
@@ -56,9 +56,9 @@ export function dbConfigFromEnv(env = process.env) {
       try { cfg.ssl.ca = normalizePem(fs.readFileSync(env.DB_SSL_CA_FILE, 'utf8')); }
       catch (e) { if (/DB_SSL_CA does not/.test(e.message)) throw new Error(e.message.replace('DB_SSL_CA', 'DB_SSL_CA_FILE')); throw new Error(`DB_SSL_CA_FILE: cannot read "${env.DB_SSL_CA_FILE}" (${e.code || e.message}). Upload the CA certificate as a secret file at that path.`); }
     } else if (env.DB_SSL_CA) cfg.ssl.ca = normalizePem(env.DB_SSL_CA);
-    // With a private CA we check the certificate chain (same as the mysql client's VERIFY_CA); managed providers' certificates are not always
-    // issued for the exact host name. Set DB_SSL_VERIFY_IDENTITY=true to also require the host name to match.
-    if (cfg.ssl.ca && !/^(1|true|yes)$/i.test(env.DB_SSL_VERIFY_IDENTITY || '')) cfg.ssl.checkServerIdentity = () => undefined;
+    // Node verifies the certificate chain and hostname by default. For an unusual provider whose certificate
+    // legitimately does not match DB_HOST, DB_SSL_VERIFY_IDENTITY=false opts out of hostname verification only.
+    if (/^(0|false|no)$/i.test(env.DB_SSL_VERIFY_IDENTITY || '')) cfg.ssl.checkServerIdentity = () => undefined;
   }
   // How many connections the pool may keep open.
   cfg.connectionLimit = Number(env.DB_POOL_SIZE) || 10;

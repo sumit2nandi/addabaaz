@@ -1,7 +1,7 @@
 // Firebase Cloud Messaging (HTTP v1) — real app push for the native Android/iOS apps.
 //
 // The admin console sends a notification to every registered device token (see Admin → Notifications
-// and POST /api/v1/devices, which the Capacitor apps call after `PushNotifications.register()`).
+// and POST /api/v1/devices, which the Capacitor apps call after `FirebaseMessaging.getToken()`).
 // Delivery uses FCM's HTTP v1 API with a Google service account:
 //
 //   1. build a JWT (RS256) signed with the service account's private key,

@@ -25,13 +25,29 @@ services:
     volumes:
       - uploads:/app/uploads      # images uploaded from the admin console
       - backups:/app/backups      # `docker compose exec app npm run backup` writes here (copy them off the machine!)
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/v1/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     environment:
       NODE_ENV: production
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
-      DATABASE_URL: mysql://addabaaz:${MYSQL_PASSWORD}@db:3306/addabaaz
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: addabaaz
+      DB_USER: addabaaz
+      DB_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
       TRUST_PROXY: ${TRUST_PROXY:-}
       PUBLIC_API_URL: ${PUBLIC_API_URL:-}
+      YOUTUBE_CHANNEL_ID: ${YOUTUBE_CHANNEL_ID:-UCdG8idFz3zA7xOaca8H6qtw}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+      CONTACT_WEBHOOK_URL: ${CONTACT_WEBHOOK_URL:-}
+      UPLOAD_DIR: /app/uploads
+      IMAGE_ALLOWED_HOSTS: ${IMAGE_ALLOWED_HOSTS:-}
+      DISABLE_COMPRESSION: ${DISABLE_COMPRESSION:-}
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
       RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
@@ -59,6 +75,7 @@ services:
       R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
       R2_BUCKET: ${R2_BUCKET:-}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
       GOOGLE_EXTRA_CLIENT_IDS: ${GOOGLE_EXTRA_CLIENT_IDS:-}
       APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
       APPLE_SERVICE_ID: ${APPLE_SERVICE_ID:-}
@@ -78,6 +95,12 @@ services:
       BACKUP_PASSPHRASE: ${BACKUP_PASSPHRASE:-}
       BACKUP_KEEP: ${BACKUP_KEEP:-14}
       BACKUP_R2_BUCKET: ${BACKUP_R2_BUCKET:-}
+      BACKUP_R2_ACCOUNT_ID: ${BACKUP_R2_ACCOUNT_ID:-}
+      BACKUP_R2_ACCESS_KEY_ID: ${BACKUP_R2_ACCESS_KEY_ID:-}
+      BACKUP_R2_SECRET_ACCESS_KEY: ${BACKUP_R2_SECRET_ACCESS_KEY:-}
+      BACKUP_R2_ENDPOINT: ${BACKUP_R2_ENDPOINT:-}
+      FCM_SERVICE_ACCOUNT: ${FCM_SERVICE_ACCOUNT:-}
+      FCM_SERVICE_ACCOUNT_FILE: ${FCM_SERVICE_ACCOUNT_FILE:-}
 volumes:
   db-data:
   uploads:

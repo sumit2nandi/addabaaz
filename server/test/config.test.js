@@ -24,13 +24,20 @@ test('private CA: from a file path or pasted text (\\n allowed); a missing file 
   const f = path.join(os.tmpdir(), `ca-${process.pid}.pem`); fs.writeFileSync(f, PEM);
   try {
     assert.equal(dbConfigFromEnv({ DB_HOST: 'h', DB_SSL: 'true', DB_SSL_CA_FILE: f }).ssl.ca, PEM);
-    assert.equal(dbConfigFromEnv({ DB_HOST: 'h', DB_SSL_CA: PEM.replace(/\n/g, '\\n') }).ssl.ca, PEM);   // a CA alone also turns TLS on
+    const withCa = dbConfigFromEnv({ DB_HOST: 'h', DB_SSL_CA: PEM.replace(/\n/g, '\\n') }).ssl;
+    assert.equal(withCa.ca, PEM);   // a CA alone also turns TLS on
+    assert.equal(withCa.checkServerIdentity, undefined, 'hostname verification stays enabled by default');
+    const withoutHostnameCheck = dbConfigFromEnv({ DB_HOST: 'h', DB_SSL_CA: PEM, DB_SSL_VERIFY_IDENTITY: 'false' }).ssl;
+    assert.equal(withoutHostnameCheck.checkServerIdentity('h', {}), undefined, 'hostname verification is opt-out only');
   } finally { fs.unlinkSync(f); }
   assert.throws(() => dbConfigFromEnv({ DB_HOST: 'h', DB_SSL_CA_FILE: '/nope/ca.pem' }), /DB_SSL_CA_FILE: cannot read/);
 });
 
-test('DB_SSL_VERIFY=false skips certificate checks (lab servers only)', () => {
+test('TLS verification controls are explicit opt-outs', () => {
   assert.equal(dbConfigFromEnv({ DB_HOST: 'h', DB_SSL: '1', DB_SSL_VERIFY: 'false' }).ssl.rejectUnauthorized, false);
+  const hostnameOptOut = dbConfigFromEnv({ DB_HOST: 'h', DB_SSL: '1', DB_SSL_VERIFY_IDENTITY: 'false' }).ssl;
+  assert.equal(hostnameOptOut.rejectUnauthorized, true, 'certificate-chain validation stays enabled');
+  assert.equal(hostnameOptOut.checkServerIdentity('h', {}), undefined, 'hostname verification can be opted out independently');
 });
 
 test('a pasted certificate survives what hosting dashboards do to it (spaces, literal \\n, quotes); garbage is rejected', () => {

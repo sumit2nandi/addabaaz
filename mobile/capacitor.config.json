@@ -11,6 +11,7 @@
   "ios": { "contentInset": "never", "allowsLinkPreview": false, "limitsNavigationsToAppBoundDomains": false },
   "android": { "allowMixedContent": false, "backgroundColor": "#050505" },
   "plugins": {
+    "FirebaseMessaging": { "presentationOptions": ["alert", "badge", "sound"] },
     "SplashScreen": { "launchShowDuration": 0, "launchAutoHide": false, "backgroundColor": "#050505", "showSpinner": false },
     "StatusBar": { "style": "DARK", "backgroundColor": "#050505", "overlaysWebView": false }
   }

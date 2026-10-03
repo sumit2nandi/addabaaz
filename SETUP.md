@@ -157,7 +157,7 @@ What development mode (`NODE_ENV` not `production`) gives you:
 
 ```bash
 curl http://localhost:3000/api/v1/health        # {"ok":true,"service":"addabaaz","db":"up",...}
-npm test                                        # 115 tests, needs a MySQL server (see below)
+npm test                                        # all automated server, frontend and mobile tests; needs MySQL (see below)
 npm run validate:catalog                        # checks data/catalog.json and every image it references
 ```
 
@@ -245,7 +245,7 @@ All settings are environment variables (see `.env.example`, which has the same l
 |---|---|---|
 | `NODE_ENV` | — | `production` on the live site. Turns on indexing, disables the demo checkout, requires `JWT_SECRET`. |
 | `PORT` | `3000` | HTTP port. **Leave unset on Hostinger** — the platform assigns it. |
-| `JWT_SECRET` | dev only | **Required in production.** Long random string (`openssl rand -hex 32`). Changing it signs everyone out. |
+| `JWT_SECRET` | dev only | **Required in production.** At least 32 random bytes (`openssl rand -hex 32`); example placeholders are rejected. Changing it signs everyone out. |
 | `PUBLIC_SITE_URL` | `https://addabaaz.in` | The public address, `https://…`, no trailing slash. Used in emails, canonical URLs and the sitemap. |
 | `PUBLIC_API_URL` | — | Public address of the API when it differs from the site (needed for HLS video behind a proxy). |
 | `CORS_ORIGINS` | `*` | Allowed browser origins, comma separated. Sign-in uses bearer tokens, so `*` is safe; restrict it if you like. |
@@ -260,7 +260,7 @@ All settings are environment variables (see `.env.example`, which has the same l
 | `DATABASE_URL` | — | `mysql://user:password@host:3306/database` |
 | `DB_HOST` `DB_PORT` `DB_USER` `DB_PASSWORD` `DB_NAME` | `127.0.0.1` `3306` `root` (empty) `addabaaz` | Use these instead of `DATABASE_URL` if you prefer. |
 | `DB_SSL` / `DB_SSL_VERIFY` | off | `DB_SSL=true` for managed MySQL. `DB_SSL_VERIFY=false` skips certificate checks (not recommended). |
-| `DB_SSL_CA` / `DB_SSL_CA_FILE` | empty | The provider's CA certificate, for databases whose certificates are signed by a private CA (Aiven): pasted as text (`DB_SSL_CA`) or a file path (`DB_SSL_CA_FILE`). Either one turns TLS on. `DB_SSL_VERIFY_IDENTITY=true` also checks the host name. |
+| `DB_SSL_CA` / `DB_SSL_CA_FILE` | empty | The provider's CA certificate, for databases whose certificates are signed by a private CA (Aiven): pasted as text (`DB_SSL_CA`) or a file path (`DB_SSL_CA_FILE`). Either one turns TLS on; chain and hostname checks are on by default. Set `DB_SSL_VERIFY_IDENTITY=false` only if your provider's certificate legitimately does not match the host. |
 | `DB_POOL_SIZE` | `10` | Connection pool size. |
 | `DB_CREATE` | `false` | `true` = create the database if it doesn't exist. |
 | `DB_MIGRATE` | `true` | `false` = don't migrate on start; run `npm run db:migrate` in your deploy step instead. |
@@ -306,7 +306,7 @@ All settings are environment variables (see `.env.example`, which has the same l
 | Variable | Meaning |
 |---|---|
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push (browsers). Generate with `npx web-push generate-vapid-keys`; subject like `mailto:support@addabaaz.in`. |
-| `FCM_SERVICE_ACCOUNT` or `FCM_SERVICE_ACCOUNT_FILE` | App push to the Android/iOS apps: the Firebase service-account JSON itself, or a path to it. See `docs/MOBILE.md`. |
+| `FCM_SERVICE_ACCOUNT` or `FCM_SERVICE_ACCOUNT_FILE` | App push to Android/iOS: the Firebase service-account JSON itself, or a path to it. In Docker Compose, mount a file read-only into the app container at the configured path; inline `FCM_SERVICE_ACCOUNT` needs no mount. See `docs/MOBILE.md`. |
 | `GA4_MEASUREMENT_ID` | `G-XXXXXXX` — optional Google Analytics 4; loads only after the visitor accepts. |
 | `SENTRY_DSN` | Optional server error alerts (also `npm i @sentry/node`). |
 | `CONTACT_WEBHOOK_URL` | Optional: POST every contact-form message to Slack/Zapier/etc. |
@@ -426,17 +426,18 @@ message, send a test to yourself, then send. Progress (sent / total / failed / s
 kept in the Campaigns list.
 
 1. **Browsers (Web Push):** `npx web-push generate-vapid-keys`, then set `VAPID_PUBLIC_KEY`,
-   `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:support@addabaaz.in`, restart. Viewers switch it on under
-   *Account → Notifications*. iPhones receive web push only when the site is added to the Home Screen
-   (iOS 16.4+).
-2. **Phone apps (FCM):** create a Firebase project, add the service-account JSON as
-   `FCM_SERVICE_ACCOUNT` (or `FCM_SERVICE_ACCOUNT_FILE`) and rebuild the app with
-   `google-services.json` — full steps in `docs/MOBILE.md` → *Push notifications*. The apps register
-   their device token on sign-in; nothing else to do.
+   `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:support@addabaaz.in`, restart. Signed-in viewers switch it
+   on under *Account → Notifications* and choose episode, launch and announcement preferences.
+2. **Android app (FCM):** create a Firebase project; set `FCM_SERVICE_ACCOUNT` in the API host and add
+   the Android client config as a GitHub Actions secret so the cloud APK build can inject it. No local
+   commands are needed. Exact secret name and steps: `docs/MOBILE.md` → *Push notifications (no-laptop
+   setup)*. The app registers for general broadcasts by default after Android permission is granted,
+   including for guests. Guest tokens are anonymous; account-specific episode and launch notifications
+   still require a signed-in account because guest lists and reminders remain on the phone.
 3. **E-mail:** needs `SMTP_URL` + `MAIL_FROM`. Every campaign mail has a one-click unsubscribe link;
    people who unsubscribe are skipped afterwards (receipts and account mail are unaffected).
-4. New episodes and launch reminders are sent automatically to the people who follow a show or set a
-   reminder (web push + app push).
+4. New episodes and launch reminders are sent automatically to signed-in people who follow a show or
+   set a reminder (web push + app push); guest device-local lists and reminders are never uploaded.
 
 ### 8.9 Analytics and error monitoring
 
