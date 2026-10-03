@@ -134,16 +134,23 @@ export class Router {
   }
   #keyNow() { return HISTORY ? location.pathname + location.search : location.hash || '#/'; }
   start() { this.resolve(); }
-  // Handle the current URL.
-  async resolve() {
+  // Handle the current URL. `rerender` re-draws the SAME screen in place (pull-to-refresh's soft
+  // refresh): it must not touch navigation bookkeeping — no scroll map writes, no __navDepth
+  // change (that counter is for forward/back navigation only; a refresh is neither), and the
+  // viewer keeps their scroll position instead of landing at a restored or top offset.
+  async resolve({ rerender = false } = {}) {
     const { path, query } = parseLocation();
     const key = this.#keyNow();
-    if (this.#lastKey !== null) this.#scroll.set(this.#lastKey, window.scrollY);
+    const keepY = window.scrollY;
     let restore = !this.#fresh;
-    if (replaceNext) { restore = false; replaceNext = false; }
-    else this.#depth = this.#fresh ? this.#depth + 1 : Math.max(0, this.#depth - 1);
-    window.__navDepth = this.#depth;
-    this.#fresh = false; this.#lastKey = key;
+    if (rerender) restore = true;   // a re-draw keeps the viewer exactly where they are
+    else {
+      if (this.#lastKey !== null) this.#scroll.set(this.#lastKey, window.scrollY);
+      if (replaceNext) { restore = false; replaceNext = false; }
+      else this.#depth = this.#fresh ? this.#depth + 1 : Math.max(0, this.#depth - 1);
+      window.__navDepth = this.#depth;
+      this.#fresh = false; this.#lastKey = key;
+    }
     const token = ++this.#token;
     this.#cleanups.splice(0).forEach((fn) => { try { fn(); } catch (e) { console.error(e); } });
 
@@ -178,7 +185,7 @@ export class Router {
     const meta = app.catalog ? pageMeta({ path, query, cat: app.catalog, studio: app.studio, origin: siteOrigin() }) : null;
     if (meta && match) applyHead(meta, { canonical: HISTORY });
     else document.title = ctx.title ? `${ctx.title} — ADDABAAZ` : 'ADDABAAZ — Bengali Originals, Comedy & Web Series';
-    jumpScroll(restore ? this.#scroll.get(key) || 0 : 0);
+    jumpScroll(rerender ? keepY : restore ? this.#scroll.get(key) || 0 : 0);
     this.onRoute?.({ path, query, params, view: match?.view });
     document.getElementById('announcer').textContent = ctx.title || meta?.title || 'ADDABAAZ';
   }

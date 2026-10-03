@@ -7,13 +7,15 @@
  * reload (kept for safety; main.js always passes the soft refresh). */
 const THRESHOLD = 88;   // px of pull required to trigger a refresh
 const MAX = 96;         // px the indicator may travel
-let startY = null, pulled = 0, el = null;
+let startY = null, pulled = 0, engaged = false, el = null;
 
 // Leave the gesture alone where it would mean something else: the reels feed swipes vertically,
-// dialogs freeze the scroll at the top, and a reload mid-video would be hostile.
+// dialogs freeze the scroll at the top, and a soft refresh mid-video would tear down the player
+// and restart the episode/reel from the top - hostile, so it is refused while media is playing.
 const blocked = () => document.body.classList.contains('reels-mode')
   || document.body.classList.contains('no-scroll')
-  || !!document.querySelector('dialog[open], .lightbox');
+  || !!document.querySelector('dialog[open], .lightbox')
+  || !!document.querySelector('.player-box.is-playing');
 
 const ensure = () => {
   if (el) return el;
@@ -33,26 +35,30 @@ export function initPullToRefresh(refresh = null) {
   document.__ptrInit = true;
 
   document.addEventListener('touchstart', (e) => {
-    startY = null; pulled = 0;
+    startY = null; pulled = 0; engaged = false;
     if (e.touches.length !== 1 || blocked() || window.scrollY > 0) return;
     startY = e.touches[0].clientY;
   }, { passive: true });
 
   document.addEventListener('touchmove', (e) => {
     if (startY == null) return;
-    if (e.touches.length !== 1 || blocked()) { startY = null; pulled = 0; rest(); return; }
-    if (window.scrollY > 0) { startY = null; pulled = 0; rest(); return; }   // scrolled down mid-gesture
+    if (e.touches.length !== 1 || blocked()) { startY = null; pulled = 0; engaged = false; rest(); return; }
+    if (window.scrollY > 0) { startY = null; pulled = 0; engaged = false; rest(); return; }   // scrolled down mid-gesture
     const dy = e.touches[0].clientY - startY;
-    if (dy <= 4) return;                       // not a pull yet — let the page behave normally
+    if (!engaged) {
+      if (dy <= 4) return;                   // not a pull yet — let the page behave normally
+      engaged = true;                        // from here on this IS our gesture: keep holding the
+    }                                        // native overscroll back even if the finger wobbles up
     pulled = dy;
-    e.preventDefault();                        // non-passive listener: hold back native overscroll
+    e.preventDefault();                      // non-passive listener: hold back native overscroll
     move(dy * 0.55);
   }, { passive: false });
 
+  const abandon = () => { startY = null; pulled = 0; engaged = false; rest(); };
   const end = () => {
     if (startY == null) return;
     const fire = pulled >= THRESHOLD;
-    startY = null; pulled = 0;
+    abandon();
     if (fire) {
       const e = ensure(); e.classList.add('on'); e.style.transform = 'translateY(0px)';
       if (refresh) Promise.resolve(refresh()).catch(() => {}).finally(rest);   // native: re-render in place, never the boot logo
@@ -61,5 +67,7 @@ export function initPullToRefresh(refresh = null) {
     else rest();
   };
   document.addEventListener('touchend', end, { passive: true });
-  document.addEventListener('touchcancel', end, { passive: true });
+  // The system took the gesture over (scroll, incoming call, notification shade…): the viewer did
+  // not complete a pull, so this must never fire a refresh — just put the indicator back.
+  document.addEventListener('touchcancel', abandon, { passive: true });
 }

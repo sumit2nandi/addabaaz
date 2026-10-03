@@ -3,7 +3,7 @@ import { app } from '../app.js';
 import { go } from '../router.js';
 import { html, $, $$, el } from '../util.js';
 import { icon } from '../icons.js';
-import { avatar, toast } from './components.js';
+import { avatar, toast, confirmSignOut } from './components.js';
 import { CONFIG } from '../config.js';
 import { mayLeaveKids } from './parental.js';
 
@@ -101,7 +101,15 @@ function wireMenus() {
     }
     const sw = e.target.closest('[data-switch-profile]');
     if (sw) { const t = app.user.profiles.find((x) => x.id === sw.dataset.switchProfile); mayLeaveKids(app.user, t).then((ok) => ok && app.user.selectProfile(t.id)).then((r) => r !== false && location.reload()); return; }
-    if (e.target.closest('[data-signout]')) { closeAll(); app.user.signOut().catch(() => {}).then(() => { toast('Signed out'); go('/'); }); }
+    if (e.target.closest('[data-signout]')) {
+      closeAll();
+      // Signing out ends the viewer's session — ask first, in the app's confirmation popup.
+      confirmSignOut().then((ok) => {
+        if (!ok) return;
+        app.user.signOut().catch(() => {}).then(() => { toast('Signed out'); go('/'); });
+      });
+      return;
+    }
     if (!e.target.closest('.menu') || e.target.closest('a.menu-item, a')) closeAll();
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(); });

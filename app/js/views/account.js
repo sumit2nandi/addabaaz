@@ -3,7 +3,7 @@ import { app } from '../app.js';
 import { CONFIG } from '../config.js';
 import { html, $, fmtDate } from '../util.js';
 import { icon } from '../icons.js';
-import { avatar, toast, sectionHeader } from '../ui/components.js';
+import { avatar, toast, sectionHeader, confirmSignOut } from '../ui/components.js';
 import { confirmDialog } from '../ui/dialog.js';
 import { go } from '../router.js';
 import { platform } from '../platform.js';
@@ -57,7 +57,11 @@ export default async function account(ctx) {
   </div>`.s;
 
   extras.wire(ctx.root, ctx);
-  $('#signout', ctx.root)?.addEventListener('click', async () => { try { await u.signOut(); } catch { /* local state is already cleared */ } toast('Signed out'); go('/', { replace: true }); });
+  $('#signout', ctx.root)?.addEventListener('click', async () => {
+    if (!(await confirmSignOut())) return;   // confirmation popup first — sign out only on confirm
+    try { await u.signOut(); } catch { /* local state is already cleared */ }
+    toast('Signed out'); go('/', { replace: true });
+  });
   $('#autoNext', ctx.root).addEventListener('change', (e) => u.setPref('autoplayNext', e.target.checked));
   $('#clearHist', ctx.root).addEventListener('click', async () => {
     if (await confirmDialog({ title: 'Clear watch history?', text: 'This removes Continue Watching for this profile.', confirm: 'Clear', danger: true })) { u.clearHistory(); toast('Watch history cleared'); }

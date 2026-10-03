@@ -1,6 +1,8 @@
 // Unit tests for the createPlayer() autoplay logic (app/js/players/index.js).
-// Other browsers build autoplaying players muted and may lift mute after PLAYING. iOS tries sound-first
-// when requested, then the adapters fall back to muted autoplay if WebKit blocks that attempt.
+// Other browsers build autoplaying players muted and may lift mute after PLAYING. iOS browsers
+// (Safari) must also start muted — it is the only autoplay start WebKit allows there — and get the
+// tap-for-sound pill; the native app's WKWebView permits the sound-first attempt, then the adapters
+// fall back to muted autoplay if WebKit blocks that attempt.
 //
 // Run:  node --test test/frontend/
 import { test, beforeEach } from 'node:test';
@@ -46,41 +48,68 @@ test('autoplay stays muted until PLAYING, then the sound lifts run relative to t
   ctl.destroy();
 });
 
-test('iPhone tries unmuted autoplay first and skips timer lifts when sound starts', async () => {
+const iPhoneUA = {
+  userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
+  platform: 'iPhone', maxTouchPoints: 5,
+};
+const withIphone = (extraWindow = {}) => {
   const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const listeners = {};
-  Object.defineProperty(globalThis, 'navigator', {
-    value: {
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
-      platform: 'iPhone', maxTouchPoints: 5,
-    }, configurable: true,
-  });
+  Object.defineProperty(globalThis, 'navigator', { value: iPhoneUA, configurable: true });
   globalThis.window = {
     addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); },
     removeEventListener: (t, fn) => { listeners[t] = (listeners[t] || []).filter((x) => x !== fn); },
+    ...extraWindow,
   };
+  return {
+    listeners,
+    restore() {
+      if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);
+      else delete globalThis.navigator;
+      if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+      else delete globalThis.window;
+    },
+  };
+};
+
+test('iPhone BROWSER starts muted — the only autoplay Safari allows — and offers tap-for-sound', async () => {
+  const env = withIphone();   // no Capacitor: this is Safari on the web
+  try {
+    globalThis.__ytScenario = { bufferingAfterMs: 10, playAfterMs: 40 };
+    let mutedCb = 0, blockedCb = 0;
+    const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'iphone-web' } }, {
+      autoplay: true, onAutoplayMuted: () => mutedCb++, onAutoplayBlocked: () => blockedCb++,
+    });
+    assert.equal(globalThis.__createdMuted, true, 'the embed is built muted (mute=1&autoplay=1): the one start iOS Safari reliably allows');
+    await wait(250);
+    assert.equal(globalThis.__muted, true, 'Safari keeps it muted — a gesture-less unmute would pause it');
+    assert.equal(globalThis.__unmuted, false, 'no timer tries to lift mute on iOS');
+    assert.equal(mutedCb, 1, 'the tap-for-sound pill is offered instead');
+    assert.equal(blockedCb, 0, 'muted playback started → not a block');
+    assert.equal((env.listeners.pointerdown || []).length + (env.listeners.touchstart || []).length, 0, 'no broad gesture handler races the sound button');
+    ctl.destroy();
+  } finally { env.restore(); }
+});
+
+test('iPhone APP (WKWebView) keeps the sound-first attempt and skips timer lifts when sound starts', async () => {
+  const env = withIphone({ Capacitor: { isNativePlatform: () => true } });   // native build: media playback policy is off in the app
   try {
     globalThis.__ytScenario = { bufferingAfterMs: 10, playAfterMs: 40 };
     let mutedCb = 0;
-    const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'iphone' } }, {
+    const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'iphone-app' } }, {
       autoplay: true, onAutoplayMuted: () => mutedCb++,
     });
-    assert.equal(globalThis.__createdMuted, false, 'iOS gets a best-effort unmuted autoplay attempt');
+    assert.equal(globalThis.__createdMuted, false, 'the app gets a best-effort unmuted autoplay attempt');
     await wait(250);
     assert.equal(globalThis.__muted, false, 'successful sound-first playback stays unmuted');
     assert.equal(globalThis.__unmuted, false, 'no timer toggles sound after playback starts');
     assert.equal(mutedCb, 0, 'the fallback sound prompt is not shown when audio started');
-    assert.equal((listeners.pointerdown || []).length + (listeners.touchstart || []).length, 0, 'no broad gesture handler races the sound button');
+    assert.equal((env.listeners.pointerdown || []).length + (env.listeners.touchstart || []).length, 0, 'no broad gesture handler races the sound button');
     ctl.mute(); ctl.unmute(); // explicit sound controls remain available
     assert.equal(globalThis.__muted, false);
     ctl.destroy();
-  } finally {
-    if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);
-    else delete globalThis.navigator;
-    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
-    else delete globalThis.window;
-  }
+  } finally { env.restore(); }
 });
 
 test('slow startup stays muted while buffering, then starts sound lifts after PLAYING on non-iOS', async () => {

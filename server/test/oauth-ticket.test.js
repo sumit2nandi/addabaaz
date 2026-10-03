@@ -1,6 +1,6 @@
-// Native Google sign-in: the app opens /auth/google/native-start in a Custom Tab; Google redirects
-// (implicit id_token flow) to /auth/google/native-return, whose page turns the verified id_token into
-// a single-use ticket and deep-links it into the app; /auth/ticket exchanges it for a session.
+// Native Google sign-in: the app opens /auth/google/native-page in a Custom Tab (the website's own
+// Google Identity Services button), whose page turns the verified id_token into a single-use ticket
+// and deep-links it into the app; /auth/ticket exchanges it for a session.
 // Needs MySQL (CI); see api.test.js. Run with `npm test`.
 import test from 'node:test';
 import assert from 'node:assert/strict';

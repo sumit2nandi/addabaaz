@@ -30,7 +30,12 @@ Each later release: `npm run mobile:sync` from the repo root, then build/run fro
 
 GitHub Actions builds both apps from this branch — no local toolchain needed:
 
-- **Android** (`.github/workflows/apk.yml`): every push produces an installable debug APK — Actions run → Artifacts → `addabaaz-debug-apk`. It signs with the pinned `mobile/debug.keystore`, so the Google SHA-1 allowlisting (see [AUTH.md](AUTH.md)) never goes stale.
+- **Android** (`.github/workflows/apk.yml`): every push to a working branch (`arena/**`) or `main`, every PR to `main`/`arena/ott`, and the **Run workflow** button build an installable debug APK.
+  - **Easiest way to install it on a phone:** the rolling release <https://github.com/sumit2nandi/addabaaz/releases/tag/apk> always holds the APK of the newest successful build (`addabaaz-<commit>.apk`) — one tap, no zip to unpack. Android will ask you to allow installing from the browser; that is normal for a build that does not come from Google Play.
+  - From a run: Actions → the APK run → **Artifacts** → `addabaaz-debug-apk` (a zip, kept 14 days) → `app-debug.apk`.
+  - A manual run can point the app at another API: **Run workflow** → `api_base` (empty = production `https://addabaazott.onrender.com`).
+  - Every build signs with the same pinned key (`mobile/keystores/ci-debug.p12`), so a fresh APK installs as an **update** over an older install instead of being refused (signature mismatch). The build prints the APK's SHA-1 — register it as a Google console **Android client** (below) so the native "Use your account for …" sign-in sheet works; until then, Google sign-in still works through the Custom Tab fallback.
+  - A debug APK is for **testing**. Publishing to Google Play needs a **signed App Bundle** built from Android Studio with your own upload key — see *Store-readiness* below.
 - **iOS** (`.github/workflows/ios.yml`): when `FIREBASE_IOS_PLIST` is set, each push produces `addabaaz-ios-simulator` (a zip with `App.app` for Xcode's Simulator). To also get an installable `addabaaz-ios-ipa`, set the four `APPLE_*` repository secrets listed in the workflow header (Development .p12 + password, provisioning profile for `in.addabaaz.app`, Team ID).
 
 The manual toolchain above stays useful for day-to-day native debugging (`open:android` / `open:ios`).
@@ -39,7 +44,7 @@ The manual toolchain above stays useful for day-to-day native debugging (`open:a
 
 1. **`mobile/capacitor.config.json`** — `appId` (`in.addabaaz.app`, change if you own a different reverse-DNS id) and `server.hostname`. The app is served from `https://<hostname>` inside the WebView; pick a hostname you control that isn't used by a live site. YouTube's embedded player rejects `capacitor://` / `file://` origins (error 153), which is why `androidScheme`/`iosScheme` are `https`.
 2. **API URL** — `API_BASE` in `build:www`. The API's `CORS_ORIGINS` must allow `https://<hostname>` (default `*` is fine because auth uses bearer tokens, not cookies).
-3. **Google / Facebook sign-in** — uses the native `@capgo/capacitor-social-login` plugin (already in `mobile/package.json`). Finish the native configuration described in [AUTH.md](AUTH.md#native-apps-android--ios) (Facebook Info.plist/strings.xml + AppDelegate, Google SHA-1 / URL scheme). Apple requires **Sign in with Apple** alongside third-party logins on iOS (guideline 4.8) — not implemented yet.
+3. **Google / Facebook sign-in** — **Google** shows the system account sheet (needs an **Android** OAuth client: package `in.addabaaz.app` + each signing key's SHA-1, *Native Google sign-in* below) and falls back to a Custom Tab + one-time ticket that needs no configuration (see [AUTH.md](AUTH.md#native-apps-android--ios)); **Facebook** uses the native `@capgo/capacitor-social-login` plugin (already in `mobile/package.json`) and needs its `strings.xml` / `Info.plist` + `AppDelegate` steps plus `FACEBOOK_CLIENT_TOKEN` on the server. Apple requires **Sign in with Apple** alongside third-party logins on iOS (guideline 4.8) — `POST /auth/apple` is implemented.
 4. **Deep links** (optional) — custom scheme `addabaaz://show/shahid` is handled in `platform.js`. For universal/app links, host `apple-app-site-association` and `assetlinks.json` on your domain and add the associated domain in Xcode / intent-filter in `AndroidManifest.xml`.
 5. **Push notifications** (Android app FCM push and browser Web Push) are implemented. The Android app uses `@capacitor-firebase/messaging`; after Android permission is granted, it registers for general broadcasts even when browsing as a guest. For phone-only setup, add the Firebase config files as GitHub Actions secrets—no local commands or committed native project are needed; see *Push notifications (no-laptop setup)* below.
 6. **Orientation (Android)** — the app is locked to portrait: turning the phone never switches it to landscape, and playback does not unlock anything. `mobile/scripts/patch-android.mjs` (run by `npm run add:android` and `npm run sync`, so every CI build gets it) adds `android:screenOrientation="portrait"` to `MainActivity` in the generated `AndroidManifest.xml`. To allow rotation again, remove the `patch('app/src/main/AndroidManifest.xml', …)` call at the end of that script. Platform note: apps targeting API 36 can be rotated by Android 16 itself on tablets and foldables (screens ≥ 600 dp wide) regardless of this setting; phones always honour it. iOS is not affected by this setting.
@@ -67,20 +72,44 @@ The data contract is the REST API + `catalog.json` (see `openapi.yaml`), so a Sw
 | Can't reach API from Android emulator | Use `https://` and a real hostname (cleartext is blocked); for local dev use `adb reverse` or a tunnel |
 | Status bar overlaps header | Safe-area insets are handled in CSS; make sure `viewport-fit=cover` is in `index.html` (it is) |
 
-## Native Google sign-in (Custom Tab + one-time ticket, zero console setup)
+## Native Google sign-in (sheet on Android + Custom Tab fallback)
 
-Google refuses sign-in inside WebViews, and the native Google SDK needs every
-build keystore's SHA-1 registered in the Google Cloud console - impossible for
-cloud CI debug builds. Instead the app opens
+**Android — the system sheet.** Tapping "Continue with Google" opens the Google
+account picker ("Use your account for …", Credential Manager / Sign in with
+Google — `GetSignInWithGoogleOption` through the `@capgo/capacitor-social-login`
+plugin). The sheet returns the Google ID token, which is posted to
+`POST /auth/google` exactly like the website button. Google only shows the
+sheet when the build's signing key has an **Android OAuth client** in the
+Google console (package `in.addabaaz.app` + SHA-1 — *Set up Google* step 4 in
+[AUTH.md](AUTH.md#set-up-google)). Register **every** signing key you install
+from:
+
+| Build | Signing key | SHA-1 |
+|---|---|---|
+| GitHub Actions APKs (the `apk` release) | `mobile/keystores/ci-debug.p12` | `63:B5:79:5C:52:03:F1:34:87:E0:CC:1F:95:3C:0D:7F:22:65:24:2A` |
+| Local Android Studio builds (pinned key) | `mobile/debug.keystore` | `FB:47:C5:A4:00:89:BB:39:7C:C3:F1:91:CE:A2:37:69:DB:37:47:70` |
+
+The build log's *Show the APK signing certificate SHA-1* step prints the
+authoritative value for that build (two SHA-1s = two Android clients, same
+package name).
+
+**Fallback — Custom Tab + one-time ticket (zero console setup).** Whenever the
+sheet cannot run (Android OAuth client not yet created, no Google Play
+services, plugin error) the app opens
 `<API>/api/v1/auth/google/native-page` in a real Chrome Custom Tab
 (@capacitor/browser). That same-origin page shows the very same Google
 Identity Services button the website uses - the site origin is already an
-authorized JavaScript origin, so **no Google console change is needed** (no
-redirect URIs, no SHA-1, no client secret). The verified id_token goes through
-the existing `POST /auth/google`, which mints a 2-minute single-use ticket;
-the page deep-links `in.addabaaz.app://oauth?ticket=…` into the app
-(MainActivity gets the scheme filter from `patch-android.mjs`), and the app
-exchanges it at `POST /auth/ticket` for its own session.
+authorized JavaScript origin, so this flow needs **no Google console change at
+all** (no redirect URIs, no SHA-1, no client secret). The verified id_token
+goes through the existing `POST /auth/google`, which mints a 2-minute
+single-use ticket; the page deep-links `in.addabaaz.app://oauth?ticket=…` into
+the app (MainActivity gets the scheme filter from `patch-android.mjs`), and
+the app exchanges it at `POST /auth/ticket` for its own session.
+
+**iOS** uses the Custom Tab flow (the sheet is Android-only here). Dismissing
+the sheet is a quiet cancel — no error, and no push into the fallback. Google
+is initialised per provider, so a broken Facebook/Apple config can never take
+it down.
 
 ## App identity
 

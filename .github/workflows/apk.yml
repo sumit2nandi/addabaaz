@@ -1,15 +1,25 @@
 # Builds the Android APK in the cloud — no laptop required.
-# Pushes to arena/ott or a working branch, pull requests targeting arena/ott,
-# or a manual Actions run (even from a phone) produce an installable debug APK Artifact:
+# Every push to a working branch (arena/**) or main, pull requests targeting them, or a manual
+# Actions run (even from a phone) produces an installable debug APK Artifact:
 #   Actions → APK run → Artifacts → addabaaz-debug-apk (zip) → app-debug.apk
+# Every successful build additionally publishes the same APK as a rolling release asset, so the phone
+# can download it straight from https://github.com/<you>/<repo>/releases/tag/apk (no zip to unpack).
 name: APK
 
 on:
   push:
-    branches: [arena/ott, arena/01a0f872-addabaaz, arena/01a0f999-addabaaz, arena/01a0fdc1-addabaaz]
+    # Every arena working branch (the list of individual branch names used to go stale and silently
+    # stop building the branch being worked on — the pattern cannot).
+    branches: ['arena/**', main]
   pull_request:
-    branches: [arena/ott]
+    branches: [main, arena/ott]
   workflow_dispatch:                      # "Run workflow" button in the Actions tab
+    inputs:
+      api_base:
+        description: 'API the app should talk to (leave empty for production)'
+        type: string
+        default: ''
+        required: false
 
 permissions:
   contents: read
@@ -45,6 +55,8 @@ jobs:
       - name: Build the web bundle (www/)
         env:
           NATIVE_PUSH_ENABLED: ${{ secrets.FIREBASE_ANDROID_JSON != '' && 'true' || 'false' }}
+          # A manual run can point the app at another API (staging); everything else uses the default above.
+          API_BASE: ${{ github.event.inputs.api_base || 'https://addabaazott.onrender.com' }}
         run: npm run build:www
 
       - name: Install Capacitor tooling
@@ -85,8 +97,8 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('mobile/android/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
-      # A stable debug keystore: Google sign-in validates the app's SHA-1 against the OAuth client,
-      # so a keystore regenerated on every CI run could never be allowlisted in Google Cloud Console.
+      # A stable debug keystore: every build signs with the same key, so a fresh APK installs as an
+      # UPDATE over an older install instead of being refused ("App not installed", signature mismatch).
       # (Same file as the classic ~/.android/debug.keystore — password "android", alias androiddebugkey.)
       - name: Install the pinned debug keystore (stable SHA-1)
         run: mkdir -p "$HOME/.android" && cp mobile/debug.keystore "$HOME/.android/debug.keystore"
@@ -95,8 +107,8 @@ jobs:
         working-directory: mobile/android
         run: ./gradlew assembleDebug --no-daemon
 
-      # The definitive fingerprint of THIS build: it must match the Android OAuth client saved in
-      # Google Cloud Console or Google sign-in fails after the account picker ("cancelled by the user").
+      # The definitive fingerprint of THIS build — printed for diagnostics (support, keystore checks).
+      # Google sign-in needs no SHA-1 allowlisting: the app signs in through a Chrome Custom Tab.
       - name: Show the APK signing certificate SHA-1
         run: keytool -printcert -jarfile mobile/android/app/build/outputs/apk/debug/app-debug.apk | grep -E "Owner|SHA1:|SHA256:"
 
@@ -107,3 +119,39 @@ jobs:
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+  # Attach the same APK to a rolling "apk" release, so a phone (or someone with neither a laptop nor a
+  # GitHub account) can install it from one link instead of downloading and unpacking the artifact zip.
+  # Runs after every successful build — the download link is always the newest APK of the newest push.
+  publish:
+    name: Publish the download link
+    needs: build
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write                     # only this job may write to the repository (the release asset)
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: addabaaz-debug-apk
+          path: out
+
+      - name: Publish the rolling "apk" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK="out/addabaaz-${GITHUB_SHA::7}.apk"
+          mv out/app-debug.apk "$APK"
+          gh release delete apk --yes --cleanup-tag 2>/dev/null || true
+          gh release create apk "$APK" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "ADDABAAZ app — test build ${GITHUB_SHA::7}" \
+            --notes "Installable **debug** build for testing (this is not the Play Store version). Android will ask you to allow installing from this browser — expected for a build that does not come from Google Play.
+          
+          Branch: \`${GITHUB_REF_NAME}\` · commit \`${GITHUB_SHA}\` · built $(date -u '+%d %b %Y, %H:%M UTC').
+          
+          Sign in with the same account you subscribed with on the website and premium titles unlock here automatically (the app itself does not sell plans — see docs/PAYMENTS.md)."

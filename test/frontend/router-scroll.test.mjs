@@ -90,7 +90,7 @@ test('a real navigation jumps instead of animating the scroll-up from the old pa
   for (const s of scrolls) assert.notEqual(s.behavior, 'smooth', 'restores never animate either');
 
   const src = fs.readFileSync(new URL('../../app/js/router.js', import.meta.url), 'utf8');
-  assert.match(src, /jumpScroll\(restore \? this\.#scroll\.get\(key\) \|\| 0 : 0\)/, 'the navigation path uses the instant jump');
+  assert.match(src, /jumpScroll\(rerender \? keepY : restore \? this\.#scroll\.get\(key\) \|\| 0 : 0\)/, 'the navigation path uses the instant jump (a re-render keeps the viewer where they are)');
   assert.doesNotMatch(src, /window\.scrollTo\(\{ top: restore/, 'no raw scrollTo left on the navigation path');
   const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
   assert.match(css, /html \{[^}]*scroll-behavior: smooth/, 'in-page anchors keep their smooth scrolling (that is why the override exists)');
