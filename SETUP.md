@@ -426,17 +426,18 @@ message, send a test to yourself, then send. Progress (sent / total / failed / s
 kept in the Campaigns list.
 
 1. **Browsers (Web Push):** `npx web-push generate-vapid-keys`, then set `VAPID_PUBLIC_KEY`,
-   `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:support@addabaaz.in`, restart. Viewers switch it on under
-   *Account → Notifications*. iPhones receive web push only when the site is added to the Home Screen
-   (iOS 16.4+).
-2. **Phone apps (FCM):** create a Firebase project; set `FCM_SERVICE_ACCOUNT` in the API host and add
-   the Android/iOS client config files as GitHub Actions secrets so cloud builds can inject them. No
-   local commands are needed. Exact secret names and steps: `docs/MOBILE.md` → *Push notifications
-   (no-laptop setup)*. The apps register their FCM token on sign-in.
+   `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:support@addabaaz.in`, restart. Signed-in viewers switch it
+   on under *Account → Notifications* and choose episode, launch and announcement preferences.
+2. **Android app (FCM):** create a Firebase project; set `FCM_SERVICE_ACCOUNT` in the API host and add
+   the Android client config as a GitHub Actions secret so the cloud APK build can inject it. No local
+   commands are needed. Exact secret name and steps: `docs/MOBILE.md` → *Push notifications (no-laptop
+   setup)*. The app registers for general broadcasts by default after Android permission is granted,
+   including for guests. Guest tokens are anonymous; account-specific episode and launch notifications
+   still require a signed-in account because guest lists and reminders remain on the phone.
 3. **E-mail:** needs `SMTP_URL` + `MAIL_FROM`. Every campaign mail has a one-click unsubscribe link;
    people who unsubscribe are skipped afterwards (receipts and account mail are unaffected).
-4. New episodes and launch reminders are sent automatically to the people who follow a show or set a
-   reminder (web push + app push).
+4. New episodes and launch reminders are sent automatically to signed-in people who follow a show or
+   set a reminder (web push + app push); guest device-local lists and reminders are never uploaded.
 
 ### 8.9 Analytics and error monitoring
 

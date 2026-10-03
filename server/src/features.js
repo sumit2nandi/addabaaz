@@ -183,6 +183,23 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         res.json({ total, comments: items.map((c) => ({ id: c.id, author: c.author, body: c.body, createdAt: c.createdAt, ...(me && c.userId === me.id ? { mine: true } : {}) })) });
       }));
 
+      /* anonymous native app push devices */
+      // A connected guest may register one FCM token without an account. This only enters general
+      // app-push audiences; account-specific episode/launch audiences are resolved from server data.
+      const guestDeviceLimit = limit('guest-devices', 20, 60_000);
+      api.post('/devices/guest', guestDeviceLimit, wrap(async (req, res) => {
+        const { token, platform = null, label = null } = req.body || {};
+        if (typeof token !== 'string' || token.length < 20 || token.length > 512) throw bad('Invalid device token.');
+        await db.devices.upsertGuest({ hash: endpointHash(token), token, platform, label: typeof label === 'string' && label.trim() ? label.trim() : null });
+        res.status(201).json({ ok: true });
+      }));
+      // Token possession is required; deleting by token hash also cleans up a stale account link left by an older app session.
+      api.delete('/devices/guest', guestDeviceLimit, wrap(async (req, res) => {
+        const token = req.body?.token;
+        if (typeof token === 'string' && token.length >= 20 && token.length <= 512) await db.devices.removeHash(endpointHash(token));
+        res.sendStatus(204);
+      }));
+
       /* push config */
       // Tells the browser whether push is enabled and the public VAPID key it needs to subscribe.
       api.get('/push/config', (_req, res) => res.json({ enabled: push.configured, publicKey: push.publicKey || null }));
@@ -296,8 +313,8 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       }));
       api.post('/push/unsubscribe', wrap(async (req, res) => { if (typeof req.body?.endpoint === 'string') await db.push.remove(req.user.id, endpointHash(req.body.endpoint)); res.sendStatus(204); }));
 
-      /* --- native app push devices (Android/iOS apps: FCM tokens) — Admin → Notifications sends to these --- */
-      // The apps call this with an FCM registration token; the same token is never shared between accounts.
+      /* --- native app push devices for signed-in accounts (FCM tokens) — Admin → Notifications sends to these --- */
+      // Sign-in links an existing guest token to the account; one FCM token has exactly one audience.
       api.post('/devices', wrap(async (req, res) => {
         const { token, platform = null, label = null } = req.body || {};
         if (typeof token !== 'string' || token.length < 20 || token.length > 512) throw bad('Invalid device token.');

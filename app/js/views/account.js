@@ -56,7 +56,7 @@ export default async function account(ctx) {
     ${u.account ? html`<h2 class="sub-h">Danger zone</h2><div class="card-panel list"><button class="row-link danger" id="delAcc">${icon('trash', { size: 22 })}<span><b>Delete account</b><small>Permanently removes your account, profiles, list and history.</small></span></button></div>` : ''}
   </div>`.s;
 
-  extras.wire(ctx.root);
+  extras.wire(ctx.root, ctx);
   $('#signout', ctx.root)?.addEventListener('click', async () => { try { await u.signOut(); } catch { /* local state is already cleared */ } toast('Signed out'); go('/', { replace: true }); });
   $('#autoNext', ctx.root).addEventListener('change', (e) => u.setPref('autoplayNext', e.target.checked));
   $('#clearHist', ctx.root).addEventListener('click', async () => {

@@ -41,7 +41,7 @@ The manual toolchain above stays useful for day-to-day native debugging (`open:a
 2. **API URL** — `API_BASE` in `build:www`. The API's `CORS_ORIGINS` must allow `https://<hostname>` (default `*` is fine because auth uses bearer tokens, not cookies).
 3. **Google / Facebook sign-in** — uses the native `@capgo/capacitor-social-login` plugin (already in `mobile/package.json`). Finish the native configuration described in [AUTH.md](AUTH.md#native-apps-android--ios) (Facebook Info.plist/strings.xml + AppDelegate, Google SHA-1 / URL scheme). Apple requires **Sign in with Apple** alongside third-party logins on iOS (guideline 4.8) — not implemented yet.
 4. **Deep links** (optional) — custom scheme `addabaaz://show/shahid` is handled in `platform.js`. For universal/app links, host `apple-app-site-association` and `assetlinks.json` on your domain and add the associated domain in Xcode / intent-filter in `AndroidManifest.xml`.
-5. **Push notifications** (FCM app push and browser Web Push) are implemented. Native apps use `@capacitor-firebase/messaging`; the server sends app broadcasts and reminder notifications through Firebase Cloud Messaging. For phone-only setup, add the Firebase config files as GitHub Actions secrets—no local commands or committed native project are needed; see *Push notifications (no-laptop setup)* below.
+5. **Push notifications** (Android app FCM push and browser Web Push) are implemented. The Android app uses `@capacitor-firebase/messaging`; after Android permission is granted, it registers for general broadcasts even when browsing as a guest. For phone-only setup, add the Firebase config files as GitHub Actions secrets—no local commands or committed native project are needed; see *Push notifications (no-laptop setup)* below.
 6. **Orientation (Android)** — the app is locked to portrait: turning the phone never switches it to landscape, and playback does not unlock anything. `mobile/scripts/patch-android.mjs` (run by `npm run add:android` and `npm run sync`, so every CI build gets it) adds `android:screenOrientation="portrait"` to `MainActivity` in the generated `AndroidManifest.xml`. To allow rotation again, remove the `patch('app/src/main/AndroidManifest.xml', …)` call at the end of that script. Platform note: apps targeting API 36 can be rotated by Android 16 itself on tablets and foldables (screens ≥ 600 dp wide) regardless of this setting; phones always honour it. iOS is not affected by this setting.
 7. **Full screen (Android, YouTube-app behaviour)** — the video's own fullscreen button is the only way into full screen and the only place the screen turns. `mobile/scripts/patch-android.mjs` installs `FullscreenClient` (see `mobile/scripts/android-fullscreen.mjs`) in the generated `MainActivity`: Capacitor's own `WebChromeClient` cancels Android's custom-view fullscreen, which left the video growing inside the page with the white system-bar/window strips around it. The client accepts that view — video alone on black, edge to edge, status **and** navigation bars hidden. While it is up the screen **follows the phone**: the client switches the activity to `SCREEN_ORIENTATION_FULL_SENSOR`, so the video is portrait while the phone is held upright, turns landscape when the phone is turned and back again — in both directions, and even when the device's own auto-rotate switch is off. The page (`app/js/orientation.js`) deliberately sets no orientation on the way in (Capacitor's `unlock()` maps to `UNSPECIFIED`, which obeys the auto-rotate switch, and any `lock()` would pin the screen again); it only locks the app back to portrait when full screen ends. Back leaves full screen instead of the app. The running theme (`AppTheme.NoActionBar`, which does not inherit from `AppTheme`) is patched to the brand dark with light system-bar icons, so no white bar can show in the app either.
 
@@ -127,9 +127,10 @@ client config from secrets, so no terminal or laptop is needed.
 4. From GitHub on your phone, open **Actions → APK → Run workflow**. Download the
    `addabaaz-debug-apk` artifact and install it. The workflow runs on this branch and handles the native
    build; no local build commands are needed.
-5. Sign in, allow notifications, then use `/admin` → Dashboard → System status and **Broadcast → Send
-   a test to me** to verify. FCM device tokens register automatically after sign-in and are refreshed
-   when Firebase rotates them.
+5. Open the installed app and allow Android notifications; sign-in is not required for general app
+   broadcasts. To verify delivery, use `/admin` → Dashboard → System status and **Broadcast → Send a
+   test to me** from a signed-in administrator account. Guest tokens register anonymously; signing in
+   links the device to the account, and Firebase token rotations are refreshed automatically.
 
 ### iOS (optional)
 
@@ -143,7 +144,8 @@ with that capability for the signed build. iOS push must be tested on a real iPh
 Installing an iPhone build also requires Apple Developer signing credentials; without those, the cloud
 workflow can only produce its simulator artifact.
 
-The app uses `@capacitor-firebase/messaging` to request permission and obtain the same kind of FCM token
-on Android and iOS, then registers it with `POST /api/v1/devices`. Signing out removes the device from
-the account; tapping a notification opens its page. FCM-reported unregistered tokens are removed
-automatically, and idle tokens expire after 180 days.
+On Android, `@capacitor-firebase/messaging` requests OS notification permission and obtains an FCM
+registration token. Connected guests register anonymously at `POST /api/v1/devices/guest`; signing in
+links the installation to the account at `POST /api/v1/devices`. Signing out removes the account link and
+returns to guest broadcasts unless notifications were switched off. Tapping a notification opens its
+page. FCM-reported unregistered tokens are removed automatically, and idle tokens expire after 180 days.

@@ -151,8 +151,17 @@ export function extraDb({ q, tx, iso }) {
         ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), token = VALUES(token), platform = COALESCE(?, platform), label = COALESCE(?, label), fail_count = 0, last_seen = UTC_TIMESTAMP(3)`,
       [userId, plat, hash, String(token).slice(0, 512), lab, plat, lab]);
     },
-    /** Removes one token (sign-out, permission revoked). Returns the number of rows deleted. */
+    /** Stores a guest app token with no account association; the same device moves to a user on sign-in. */
+    async upsertGuest({ hash, token, platform = null, label = null }) {
+      const plat = ['android', 'ios', 'web'].includes(platform) ? platform : null;
+      const lab = label ? String(label).slice(0, 120) : null;
+      await q(`INSERT INTO push_devices (id, user_id, platform, token_hash, token, label) VALUES (UUID(),NULL,COALESCE(?,'android'),?,?,?)
+        ON DUPLICATE KEY UPDATE user_id = NULL, token = VALUES(token), platform = COALESCE(?, platform), label = COALESCE(?, label), fail_count = 0, last_seen = UTC_TIMESTAMP(3)`,
+      [plat, hash, String(token).slice(0, 512), lab, plat, lab]);
+    },
+    /** Removes one token (sign-out, permission revoked, or account opt-out). */
     async remove(userId, hash) { return (await q('DELETE FROM push_devices WHERE user_id = ? AND token_hash = ?', [userId, hash])).affectedRows; },
+    /** Removes a token by hash (FCM dead-token cleanup and public guest opt-out / stale-link cleanup). */
     async removeHash(hash) { await q('DELETE FROM push_devices WHERE token_hash = ?', [hash]); },
     async listFor(userId) { return (await q('SELECT platform, label, last_seen FROM push_devices WHERE user_id = ? ORDER BY last_seen DESC', [userId])).map((r) => ({ platform: r.platform, label: r.label, lastSeen: iso(r.last_seen) })); },
     async count() { return Number((await q('SELECT COUNT(*) AS n FROM push_devices'))[0].n); },
