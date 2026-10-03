@@ -401,10 +401,12 @@ For Premium titles stored in R2, playback is protected by login, plan and short-
 
 Plans are ₹99 for 30 days and ₹799 for 365 days (prices include GST); they don't auto-renew. Change them in `server/src/plans.js`.
 
+**Never used Razorpay?** [docs/RAZORPAY-SETUP.md](docs/RAZORPAY-SETUP.md) is the same steps written out click by click, including KYC documents and going live. The short version:
+
 1. Create a [Razorpay](https://razorpay.com/) account. In *Settings → API Keys* generate **test** keys first.
 2. Set `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`.
 3. Check them from the command line: `npm run razorpay:check` (add `--order` to create a ₹1 unpaid order and prove order creation works). It also prints the webhook URL and flags test keys left in production.
-4. *Settings → Webhooks* → add `https://addabaaz.in/api/v1/payments/webhook`, events **`payment.captured`**, **`payment.failed`** and **`refund.created` / `refund.processed` / `refund.failed`**, choose a secret and put it in `RAZORPAY_WEBHOOK_SECRET`.
+4. *Settings → Webhooks* → add `https://<your-domain>/api/v1/payments/webhook`, events **`payment.captured`**, **`payment.failed`** and **`refund.created` / `refund.processed` / `refund.failed`**, choose a secret and put it in `RAZORPAY_WEBHOOK_SECRET`. (In live mode the webhook list is separate — add it again after switching keys.)
 5. Restart, and **make a real test-mode payment** (Razorpay's test cards/UPI), check the invoice PDF and the refund flow in `/admin → Payments`.
 6. Switch to `rzp_live_…` keys only after the test passes. (`docs/PAYMENTS.md` covers selling inside the Android/iOS apps, which the store rules restrict.)
 

@@ -3,6 +3,9 @@
 *Read the last section before you rely on this: store rules changed three times in 2025–2026 and the dates below
 matter. **Verified against Apple's, Google's and Razorpay's own documentation on 3 October 2026.***
 
+**New to Razorpay?** You do not need to understand this document to start: [RAZORPAY-SETUP.md](RAZORPAY-SETUP.md)
+walks through the account, test keys, the webhook, KYC and going live, click by click.
+
 **Short answer.**
 
 - **Website — yes, today.** Razorpay Checkout is already wired end to end (`docs/PREMIUM.md#payments-razorpay`,

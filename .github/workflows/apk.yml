@@ -120,12 +120,13 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # Manual runs only: attach the same APK to a rolling "apk" release, so a phone (or a friend who has
-  # neither a laptop nor a GitHub login) can download and install it from one link.
+  # Attach the same APK to a rolling "apk" release, so a phone (or someone with neither a laptop nor a
+  # GitHub account) can install it from one link instead of downloading and unpacking the artifact zip.
+  # Runs after every successful build — the download link is always the newest APK of the newest push.
   publish:
     name: Publish the download link
-    if: github.event_name == 'workflow_dispatch'
     needs: build
+    if: needs.build.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write                     # only this job may write to the repository (the release asset)
@@ -147,5 +148,10 @@ jobs:
           gh release delete apk --yes --cleanup-tag 2>/dev/null || true
           gh release create apk "$APK" \
             --target "$GITHUB_SHA" \
-            --title "ADDABAAZ app — build ${GITHUB_SHA::7}" \
-            --notes "Installable **debug** build for testing (not for the Play Store). Android will ask you to allow installing from this browser — that is expected for a build outside Google Play. Signed in with the account you subscribed with, premium titles unlock here automatically. Commit: ${GITHUB_SHA}"
+            --prerelease \
+            --title "ADDABAAZ app — test build ${GITHUB_SHA::7}" \
+            --notes "Installable **debug** build for testing (this is not the Play Store version). Android will ask you to allow installing from this browser — expected for a build that does not come from Google Play.
+          
+          Branch: \`${GITHUB_REF_NAME}\` · commit \`${GITHUB_SHA}\` · built $(date -u '+%d %b %Y, %H:%M UTC').
+          
+          Sign in with the same account you subscribed with on the website and premium titles unlock here automatically (the app itself does not sell plans — see docs/PAYMENTS.md)."
