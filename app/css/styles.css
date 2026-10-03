@@ -360,8 +360,9 @@ img.player-wall-art { position: absolute; inset: 0; z-index: 1; width: 100%; hei
 }
 
 /* ---------- reels ---------- */
-body.reels-mode { overflow: hidden; } body.reels-mode .footer { display: none; }
-.reels-feed { height: calc(100dvh - var(--topbar-h) - var(--sat) - var(--tabbar-h) - var(--sab) - 24px); overflow-y: auto; scroll-snap-type: y mandatory; scrollbar-width: none; outline: none; overscroll-behavior: contain; }
+body.reels-mode { overflow: hidden; padding-bottom: 0; } body.reels-mode .footer { display: none; }
+/* The tab bar is a floating overlay, not space to subtract from the reel: let video continue behind it. */
+.reels-feed { height: calc(100dvh - var(--topbar-h) - var(--sat)); overflow-y: auto; scroll-snap-type: y mandatory; scrollbar-width: none; outline: none; overscroll-behavior: contain; }
 .reels-feed::-webkit-scrollbar { display: none; }
 .reel { position: relative; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 10px 12px; }
 @supports (content-visibility: auto) { .reel { content-visibility: auto; } }   /* skip off-screen reel subtrees: big GPU/RAM saving on phones */
@@ -377,12 +378,13 @@ body.reels-mode { overflow: hidden; } body.reels-mode .footer { display: none; }
 .reel-gate p { color: var(--text-2); }
 .reel.locked .reel-loading, .reel.locked .reel-tap { display: none; }
 .reel-actions { display: grid; gap: 14px; align-content: end; padding-bottom: 20px; }
-/* Reels fill the available feed on every viewport that uses the mobile tab bar. Keeping the
-   9:16 card constraint above 640px left wide phones/tablets with unused black side gutters. */
-@media (max-width: 899px) {
+/* Phone browsers and native app webviews use the full feed width; the mobile tab bar floats over
+   the video like Shorts rather than forcing the reel into a narrower 9:16 card. */
+@media (max-width: 899px), (pointer: coarse) {
   .reel { padding: 0; }
   .reel-frame { border-radius: 0; max-height: none; width: 100%; height: 100%; aspect-ratio: auto; box-shadow: none; }
-  .reel-actions { position: absolute; right: 10px; bottom: 90px; z-index: 5; }
+  .reel-actions { position: absolute; right: 10px; bottom: calc(var(--tabbar-h) + var(--sab) + 12px); z-index: 5; }
+  .reel-caption { bottom: calc(var(--tabbar-h) + var(--sab) + 12px); }
 }
 
 /* ---------- lightbox / dialog / toast ---------- */
@@ -452,7 +454,6 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 /* ---------- responsive shell ---------- */
 @media (min-width: 900px) {
   body { padding-bottom: 0; } .tabbar { display: none; } .nav { display: flex; } .toasts { bottom: 28px; }
-  .reels-feed { height: calc(100dvh - var(--topbar-h) - var(--sat)); }
 }
 @media (max-width: 899px) {
   .topbar { gap: 12px; } .brand-text { font-size: 17px; } #installBtn { display: none !important; }

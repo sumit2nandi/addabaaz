@@ -98,11 +98,20 @@ test('the Reels feed plays a premium-show reel with no lock wall and no crown', 
   cleanup?.();
 });
 
-test('mobile Reels fill the feed width up to the mobile-tabbar breakpoint', () => {
+test('mobile Reels fill the screen and continue behind the floating tab bar', () => {
   const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
-  const mobileReels = css.slice(css.indexOf('@media (max-width: 899px)'), css.indexOf('/* ---------- lightbox', css.indexOf('@media (max-width: 899px)')));
+  const mobileQuery = '@media (max-width: 899px), (pointer: coarse)';
+  const mobileStart = css.indexOf(mobileQuery);
+  const mobileEnd = css.indexOf('/* ---------- lightbox', mobileStart);
+  const mobileReels = css.slice(mobileStart, mobileEnd);
+  const feed = css.match(/\.reels-feed \{([^}]+)\}/)?.[1] || '';
+  assert.ok(mobileStart >= 0, 'the layout covers narrow browsers and touch-first native webviews');
   assert.match(mobileReels, /\.reel \{ padding: 0; \}/, 'remove card gutters on mobile layouts');
-  assert.match(mobileReels, /\.reel-frame \{[^}]*width: 100%;[^}]*height: 100%;[^}]*aspect-ratio: auto;/, 'the reel itself stretches to the full available feed instead of retaining a narrow portrait card');
+  assert.match(mobileReels, /\.reel-frame \{[^}]*width: 100%;[^}]*height: 100%;[^}]*aspect-ratio: auto;/, 'the reel stretches to the full viewport width and feed height');
+  assert.match(feed, /height: calc\(100dvh - var\(--topbar-h\) - var\(--sat\)\)/, 'the feed extends to the bottom of the viewport instead of reserving space above the floating tab bar');
+  assert.match(mobileReels, /\.reel-actions \{[^}]*bottom: calc\(var\(--tabbar-h\) \+ var\(--sab\) \+ 12px\);/, 'playback controls stay above the overlaid navigation and iOS safe area');
+  assert.match(mobileReels, /\.reel-caption \{ bottom: calc\(var\(--tabbar-h\) \+ var\(--sab\) \+ 12px\); \}/, 'captions stay visible above the overlaid navigation');
+  assert.match(css, /body\.reels-mode \{ overflow: hidden; padding-bottom: 0; \}/, 'page padding cannot leave a black strip below the reel');
 });
 
 test('the initially selected R2 reel starts signing before the player activation callback', async () => {
