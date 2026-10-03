@@ -304,3 +304,14 @@ The CI workflow runs the suite against MySQL 8, validates the catalog, builds `w
 - Keep media, SMTP, payment, social-provider, push and MySQL credentials in deployment secrets. Test backup restore procedures; a successful backup alone is not a restore guarantee.
 
 Related guides: [database and TLS](DATABASE.md), [deployment](DEPLOY-RENDER-AIVEN.md), [authentication](AUTH.md), [billing](BILLING.md), [mobile](MOBILE.md), [admin](ADMIN.md), [SEO](SEO.md), and [OpenAPI contract](openapi.yaml).
+
+## Future evolution
+
+The current system already includes web checkout, admin catalog and YouTube-import workflows, social sign-in, account e-mail flows (when SMTP is configured), SEO, native FCM, and browser Web Push. Treat the following as optional product work rather than missing runtime modules:
+
+- **Native billing:** integrate Apple StoreKit / Google Play Billing (directly or through a service such as RevenueCat) before offering in-app purchases. Web checkout remains Razorpay-based; evaluate e-invoicing/IRN only if applicable to the business.
+- **Premium media:** `scripts/encode-hls.mjs` and `server/src/hls.js` already build adaptive HLS and can upload to private R2. DRM (Widevine/FairPlay), offline downloads, and Chromecast/AirPlay need separate product and platform design.
+- **Editorial workflow:** the admin console supports catalog edits and YouTube preview/import with undo. Consider a headless CMS only if multi-editor publishing workflows outgrow that model.
+- **Analytics and discovery:** aggregate play events are available; recommendations such as “Because you watched…”, richer analytics, and hero A/B tests need explicit product, privacy, and measurement decisions.
+- **Localization:** a Bengali/English language toggle would need a shared translation catalog and a pass over strings that are currently embedded in views.
+- **Scale-out:** use shared edge/Redis rate limiting and review MySQL capacity before adding instances. Campaign leases and push-device tables are already database-backed; keep backups off-host and routinely test restores.
