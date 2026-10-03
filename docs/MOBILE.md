@@ -30,7 +30,12 @@ Each later release: `npm run mobile:sync` from the repo root, then build/run fro
 
 GitHub Actions builds both apps from this branch — no local toolchain needed:
 
-- **Android** (`.github/workflows/apk.yml`): every push produces an installable debug APK — Actions run → Artifacts → `addabaaz-debug-apk`. It signs with the pinned `mobile/debug.keystore`, so the Google SHA-1 allowlisting (see [AUTH.md](AUTH.md)) never goes stale.
+- **Android** (`.github/workflows/apk.yml`): every push to a working branch (`arena/**`) or `main`, every PR to `main`/`arena/ott`, and the **Run workflow** button build an installable debug APK.
+  - **Easiest way to install it on a phone:** the rolling release <https://github.com/sumit2nandi/addabaaz/releases/tag/apk> always holds the APK of the newest successful build (`addabaaz-<commit>.apk`) — one tap, no zip to unpack. Android will ask you to allow installing from the browser; that is normal for a build that does not come from Google Play.
+  - From a run: Actions → the APK run → **Artifacts** → `addabaaz-debug-apk` (a zip, kept 14 days) → `app-debug.apk`.
+  - A manual run can point the app at another API: **Run workflow** → `api_base` (empty = production `https://addabaazott.onrender.com`).
+  - Every build signs with the same pinned key (`mobile/keystores/ci-debug.p12`), so a fresh APK installs as an **update** over an older install instead of being refused (signature mismatch). The build prints the APK's SHA-1 for diagnostics; Google sign-in needs no SHA-1 allowlisting (it goes through a Chrome Custom Tab, see [AUTH.md](AUTH.md#native-apps-android--ios)).
+  - A debug APK is for **testing**. Publishing to Google Play needs a **signed App Bundle** built from Android Studio with your own upload key — see *Store-readiness* below.
 - **iOS** (`.github/workflows/ios.yml`): when `FIREBASE_IOS_PLIST` is set, each push produces `addabaaz-ios-simulator` (a zip with `App.app` for Xcode's Simulator). To also get an installable `addabaaz-ios-ipa`, set the four `APPLE_*` repository secrets listed in the workflow header (Development .p12 + password, provisioning profile for `in.addabaaz.app`, Team ID).
 
 The manual toolchain above stays useful for day-to-day native debugging (`open:android` / `open:ios`).
