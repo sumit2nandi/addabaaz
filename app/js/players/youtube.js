@@ -39,7 +39,13 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
       width: '100%', height: '100%',
       playerVars: { autoplay: autoplay ? 1 : 0, playsinline: 1, controls: controls ? 1 : 0, rel: 0, modestbranding: 1, start: Math.floor(start), origin: httpOrigin(), iv_load_policy: 3, mute: muted ? 1 : 0 },
       events: {
-        onReady: () => { ready = true; resolve(); },
+        onReady: (event) => {
+          ready = true;
+          // Enforce the muted inline start on YouTube's actual iOS iframe, not just in the URL
+          // parameters. The extra play command is harmless on desktop and helps WebKit start reliably.
+          if (autoplay && muted) { try { event.target.mute(); event.target.playVideo(); } catch { /* the browser may still require a tap */ } }
+          resolve();
+        },
         onError: (e) => { onState?.('error', e.data); resolve(); },
         onStateChange: (e) => {
           const S = YT.PlayerState;

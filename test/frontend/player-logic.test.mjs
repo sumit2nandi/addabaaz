@@ -1,8 +1,6 @@
 // Unit tests for the createPlayer() autoplay logic (app/js/players/index.js).
-// The strategy under test is the main branch's: every autoplaying player is BUILT muted
-// (autoplay=1&mute=1 → motion starts instantly on every phone) and the mute is then lifted on
-// main's 600/1500/3000ms schedule so playback comes up with VOLUME — no gesture required, no
-// multi-second sound-first wait, and no "blocked" signal for a merely slow load.
+// Every autoplaying player is built muted and inline. Sound lifts are measured from the first actual
+// PLAYING event, so a slow iPhone/YouTube startup cannot be unmuted before WebKit accepts autoplay.
 //
 // Run:  node --test test/frontend/
 import { test, beforeEach } from 'node:test';
@@ -14,8 +12,9 @@ const { createPlayer } = await import('../../app/js/players/index.js');
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const container = { innerHTML: '' };
-// createPlayer()'s block/pill windows: block check at 2200*1.5ms, "still muted" check 600ms after the last lift.
-const BLOCK_AT = 3300, PILL_AT = 3900;
+// createPlayer()'s windows: block check at 2200*1.5ms; sound pill check at 600ms after the last lift,
+// with all sound timers now measured from the first PLAYING event.
+const BLOCK_AT = 3300, PILL_AFTER_PLAYING = 3900;
 
 function setActivation(active) {
   try { Object.defineProperty(navigator, 'userActivation', { value: { hasBeenActive: active }, configurable: true }); }
@@ -28,23 +27,26 @@ beforeEach(() => {
   setActivation(true);   // default: the user HAS interacted with the page
 });
 
-test('autoplay builds the player MUTED (instant start) and the lifts give volume with NO gesture', async () => {
+test('autoplay stays muted until PLAYING, then the sound lifts run relative to the first frame', async () => {
   globalThis.__ytScenario = { playAfterMs: 400 };
   let mutedCb = 0, blockedCb = 0;
   const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
     autoplay: true, onAutoplayMuted: () => mutedCb++, onAutoplayBlocked: () => blockedCb++,
   });
-  assert.equal(globalThis.__createdMuted, true, 'built muted like main autoplay=1&mute=1 → starts playing instantly everywhere');
-  await wait(800);   // first lift lands at 600ms
-  assert.equal(globalThis.__unmuted, true, 'the 600ms lift unmuted the player without any user gesture (main\'s schedule)');
-  assert.equal(globalThis.__muted, false, 'volume is on');
-  await wait(PILL_AT - 800 + 300);
+  assert.equal(globalThis.__createdMuted, true, 'built muted for inline autoplay');
+  await wait(800);   // player has played for 400ms, but the first lift is not due until 600ms after PLAYING
+  assert.equal(globalThis.__unmuted, false, 'never unmute before the post-start delay');
+  assert.equal(globalThis.__muted, true, 'the slow-starting player remains muted');
+  await wait(300);
+  assert.equal(globalThis.__unmuted, true, 'sound lift follows confirmed playback');
+  assert.equal(globalThis.__muted, false, 'volume is on where policy permits');
+  await wait(PILL_AFTER_PLAYING);
   assert.equal(mutedCb, 0, 'no "tap for sound" pill: the lift gave sound');
   assert.equal(blockedCb, 0, 'playback started → no blocked signal');
   ctl.destroy();
 });
 
-test('slow playback (starts playing at 4.5s) is NOT mistaken for a block', async () => {
+test('slow iPhone-style startup stays muted while buffering, then starts sound lifts after PLAYING', async () => {
   globalThis.__ytScenario = { bufferingAfterMs: 100, playAfterMs: 4500 };
   let mutedCb = 0, blockedCb = 0;
   const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
@@ -52,10 +54,12 @@ test('slow playback (starts playing at 4.5s) is NOT mistaken for a block', async
   });
   await wait(BLOCK_AT + 400);   // buffering already happened → the block check must pass
   assert.equal(blockedCb, 0, 'a buffering player is not blocked');
-  await wait(1500);
+  assert.equal(globalThis.__unmuted, false, 'do not turn sound on while the iframe is still buffering');
+  assert.equal(globalThis.__muted, true, 'remain muted so iOS can finish its autoplay start');
+  await wait(1800);              // playback begins at 4.5s, then the 600ms lift is eligible
   assert.equal(blockedCb, 0, 'still not blocked once it reaches playing');
-  assert.equal(mutedCb, 0, 'and it was never force-muted');
-  assert.equal(globalThis.__muted, false, 'volume via the lifts');
+  assert.equal(mutedCb, 0, 'no sound prompt on a browser that accepted unmute');
+  assert.equal(globalThis.__muted, false, 'the post-start lift eventually turns volume on');
   ctl.destroy();
 });
 
@@ -73,7 +77,7 @@ test('muted playback also refused (Low Power Mode) → onAutoplayBlocked once, n
   ctl.destroy();
 });
 
-test('fresh page load (no user activation at all): still instant + lifts still run — activation no longer gates anything', async () => {
+test('fresh page load without activation still starts muted; optional sound lifts wait for PLAYING', async () => {
   const stubbed = setActivation(false);   // deep link / reload: no gesture yet on this page
   globalThis.__ytScenario = { playAfterMs: 400 };
   let mutedCb = 0;
@@ -81,10 +85,12 @@ test('fresh page load (no user activation at all): still instant + lifts still r
     const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
       autoplay: true, onAutoplayMuted: () => mutedCb++,
     });
-    assert.equal(globalThis.__createdMuted, true, 'instant muted build');
+    assert.equal(globalThis.__createdMuted, true, 'muted inline build');
     await wait(800);
-    if (stubbed) assert.equal(globalThis.__unmuted, true, 'the lift runs even before any gesture (main unmutes on a timer)');
-    await wait(PILL_AT);
+    assert.equal(globalThis.__unmuted, false, 'no unmute before the post-PLAYING delay');
+    await wait(300);
+    if (stubbed) assert.equal(globalThis.__unmuted, true, 'the optional lift begins after playback, not during startup');
+    await wait(PILL_AFTER_PLAYING + 200);
     assert.equal(mutedCb, 0, 'mock reports unmuted after the lifts → no pill');
     ctl.destroy();
   } finally { setActivation(true); }
@@ -113,7 +119,7 @@ test('a page-muted build (viewer chose silence) gets NO lifts and no pill — bu
     assert.equal(unmutedCb, 1, 'the page is told sound switched on');
     assert.equal(globalThis.__unmuted, true, 'gesture unmute ran');
     assert.equal(mutedCb, 0, 'the viewer\'s own mute choice never shows a pill');
-    await wait(PILL_AT);
+    await wait(PILL_AFTER_PLAYING);
     assert.equal(mutedCb, 0, 'and the pill check stays quiet for page-muted builds');
     ctl.destroy();
   } finally {
@@ -127,11 +133,11 @@ test('a viewer mute during the lift window cancels the remaining lifts — their
   const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'x' } }, {
     autoplay: true, onAutoplayMuted: () => mutedCb++,
   });
-  await wait(800);                 // first lift already gave sound
+  await wait(1200);                // the player starts at 400ms; the first lift runs 600ms later
   assert.equal(globalThis.__unmuted, true, 'lifted');
   ctl.mute();                      // the reels sound button (or any page-driven mute)
   assert.equal(globalThis.__muted, true, 'muted on request');
-  await wait(PILL_AT);             // past the 1500/3000ms lifts and the pill check
+  await wait(PILL_AFTER_PLAYING);  // past the remaining post-start lifts and pill check
   assert.equal(globalThis.__muted, true, 'no later lift un-mutes the viewer\'s explicit choice');
   assert.equal(mutedCb, 0, 'and no misleading "tap for sound" pill');
   ctl.destroy();
@@ -171,7 +177,7 @@ test('html5: built muted → plays instantly, the lift turns the volume on, noth
   await wait(1200);
   assert.equal(globalThis.__unmuted, true, 'lifted to volume');
   assert.equal(globalThis.__muted, false);
-  await wait(PILL_AT - 1200 + 200);
+  await wait(PILL_AFTER_PLAYING - 1200 + 200);
   assert.equal(mutedCb, 0);
   assert.equal(blockedCb, 0, 'it played');
   ctl.destroy();

@@ -28,7 +28,14 @@ async function attachSubtitles(v, tracks = []) {
 export async function createHtml5Player(container, video, { start = 0, autoplay = true, muted = false, controls = true, onProgress, onEnded, onState, onDimensions } = {}) {
   container.innerHTML = '';
   const v = document.createElement('video');
-  v.controls = controls; v.muted = muted; v.playsInline = true; v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', ''); v.autoplay = autoplay; v.preload = 'metadata';
+  v.controls = controls;
+  // iOS WebKit checks muted + inline at the element level before allowing autoplay. Set both the
+  // reflected attributes and live properties before inserting the element or assigning its source.
+  v.defaultMuted = muted; v.muted = muted;
+  if (muted) v.setAttribute('muted', ''); else v.removeAttribute('muted');
+  v.playsInline = true; v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', '');
+  v.autoplay = autoplay; if (autoplay) v.setAttribute('autoplay', ''); else v.removeAttribute('autoplay');
+  v.preload = 'metadata';
   v.setAttribute('controlsList', 'nodownload');
   if (video.poster) v.poster = video.poster;
   container.appendChild(v);
