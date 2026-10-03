@@ -190,6 +190,7 @@ test('YouTube retries blocked unmuted autoplay muted', async () => {
     isMuted() { return muted; }
     getCurrentTime() { return 0; }
     getDuration() { return 0; }
+    getPlayerState() { return -1; }
     destroy() {}
   }
   globalThis.document = { createElement() { return {}; } };
@@ -205,6 +206,45 @@ test('YouTube retries blocked unmuted autoplay muted', async () => {
     assert.deepEqual(actions, ['play', 'mute', 'play'], 'a blocked attempt is retried muted');
     config.events.onAutoplayBlocked();
     assert.deepEqual(actions, ['play', 'mute', 'play'], 'muted fallback is attempted only once');
+    ctl.destroy();
+  } finally { restore(); }
+});
+
+test('YouTube watchdog retries muted when iOS omits the blocked-autoplay event', async () => {
+  const restore = saveGlobals(['document', 'location', 'window', 'setTimeout', 'clearTimeout']);
+  const realSetTimeout = globalThis.setTimeout, realClearTimeout = globalThis.clearTimeout;
+  const actions = [];
+  let config, fallbackCheck;
+  globalThis.setTimeout = (fn, ms, ...args) => {
+    if (ms === 1200) { fallbackCheck = fn; return { mutedFallbackTimer: true }; }
+    return realSetTimeout(fn, ms, ...args);
+  };
+  globalThis.clearTimeout = (timer) => {
+    if (timer?.mutedFallbackTimer) return;
+    return realClearTimeout(timer);
+  };
+  class FakePlayer {
+    constructor(_mount, options) {
+      config = options;
+      realSetTimeout(() => options.events.onReady({ target: this }), 0);
+    }
+    mute() { actions.push('mute'); }
+    playVideo() { actions.push('play'); }
+    getPlayerState() { return -1; }
+    getCurrentTime() { return 0; }
+    getDuration() { return 0; }
+    destroy() {}
+  }
+  globalThis.document = { createElement() { return {}; } };
+  globalThis.location = { protocol: 'https:', origin: 'https://addabaaz.example' };
+  globalThis.window = { YT: { Player: FakePlayer, PlayerState: { PLAYING: 1, PAUSED: 2, ENDED: 0, BUFFERING: 3 } } };
+  try {
+    const container = { innerHTML: '', appendChild() {} };
+    const ctl = await createYouTubePlayer(container, 'iphone-video', { autoplay: true, muted: false, controls: false });
+    assert.deepEqual(actions, ['play'], 'start with the requested sound-first attempt');
+    assert.equal(typeof fallbackCheck, 'function', 'arm a watchdog after the player is ready');
+    fallbackCheck(); // no onAutoplayBlocked callback; the player remains UNSTARTED
+    assert.deepEqual(actions, ['play', 'mute', 'play'], 'retry inline playback muted instead of leaving the poster stuck');
     ctl.destroy();
   } finally { restore(); }
 });

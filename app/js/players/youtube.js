@@ -3,6 +3,8 @@
 let apiPromise = null;
 const API_LOAD_TIMEOUT_MS = 8000;
 const PLAYER_API_BUDGET_MS = 1500;
+const MUTED_AUTOPLAY_FALLBACK_MS = 1200;
+const MUTED_AUTOPLAY_BUFFERING_GRACE_MS = 3000;
 export function loadYouTube() {
   if (window.YT?.Player) return Promise.resolve(window.YT);
   if (apiPromise) return apiPromise;
@@ -57,7 +59,13 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
     return plainIframe(container, videoId, start, autoplay, fallbackMuted, controls);
   }
 
-  let player, timer, destroyed = false, ready = false, mutedFallbackAttempted = false;
+  let player, timer, mutedFallbackTimer, mutedFallbackStartedAt = 0, destroyed = false, ready = false, mutedFallbackAttempted = false;
+  const retryMutedAutoplay = (target = player) => {
+    if (!autoplay || muted || mutedFallbackAttempted || destroyed || !target) return;
+    mutedFallbackAttempted = true;
+    clearTimeout(mutedFallbackTimer); mutedFallbackTimer = null;
+    try { target.mute(); target.playVideo(); } catch { /* shared timeout handles a refused fallback */ }
+  };
   const tick = () => {
     if (!ready || destroyed) return;
     try { onProgress?.(player.getCurrentTime(), player.getDuration()); } catch { /* player torn down */ }
@@ -74,20 +82,34 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
           if (autoplay) {
             try { if (muted) event.target.mute(); event.target.playVideo(); }
             catch { /* the browser may still require a tap */ }
+            if (!muted && !mutedFallbackAttempted) {
+              // Some iOS/YouTube combinations omit onAutoplayBlocked. If the player remains unstarted
+              // after the sound-first attempt, retry muted; give genuine network buffering extra time.
+              mutedFallbackStartedAt = Date.now();
+              const checkMutedFallback = () => {
+                if (destroyed || mutedFallbackAttempted) return;
+                let state = -1;
+                try { state = player.getPlayerState(); } catch { /* treat unreadable state as blocked */ }
+                const S = YT.PlayerState || {};
+                if (state === S.PLAYING) { mutedFallbackTimer = null; return; }
+                if (state === S.BUFFERING && Date.now() - mutedFallbackStartedAt < MUTED_AUTOPLAY_BUFFERING_GRACE_MS) {
+                  mutedFallbackTimer = setTimeout(checkMutedFallback, 500);
+                  return;
+                }
+                retryMutedAutoplay(player);
+              };
+              mutedFallbackTimer = setTimeout(checkMutedFallback, MUTED_AUTOPLAY_FALLBACK_MS);
+            }
           }
           resolve();
         },
-        // If iOS blocks unmuted autoplay, retry muted so video motion still starts automatically.
-        // The shared player reports a block only if this fallback also fails to start.
-        onAutoplayBlocked: () => {
-          if (!autoplay || muted || mutedFallbackAttempted || destroyed) return;
-          mutedFallbackAttempted = true;
-          try { player.mute(); player.playVideo(); } catch { /* shared timeout handles a refused fallback */ }
-        },
-        onError: (e) => { onState?.('error', e.data); resolve(); },
+        // Retry immediately when the browser reports blocked unmuted autoplay; the watchdog above
+        // covers WebKit versions which don't emit this event.
+        onAutoplayBlocked: (event) => retryMutedAutoplay(event?.target),
+        onError: (e) => { clearTimeout(mutedFallbackTimer); onState?.('error', e.data); resolve(); },
         onStateChange: (e) => {
           const S = YT.PlayerState;
-          if (e.data === S.PLAYING) { onState?.('playing'); clearInterval(timer); timer = setInterval(tick, 1000); }
+          if (e.data === S.PLAYING) { clearTimeout(mutedFallbackTimer); mutedFallbackTimer = null; onState?.('playing'); clearInterval(timer); timer = setInterval(tick, 1000); }
           else if (e.data === S.PAUSED) { onState?.('paused'); tick(); clearInterval(timer); }
           else if (e.data === S.ENDED) { clearInterval(timer); tick(); onState?.('ended'); onEnded?.(); }
           else if (e.data === S.BUFFERING) onState?.('buffering');
@@ -106,8 +128,8 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
     seek: (s) => player.seekTo?.(s, true),
     mute: () => player.mute?.(), unmute: () => { player.unMute?.(); player.setVolume?.(100); }, isMuted: () => !!player.isMuted?.(),
     play: () => player.playVideo?.(),
-    pause: () => player.pauseVideo?.(),
-    destroy() { destroyed = true; clearInterval(timer); try { player.destroy(); } catch {} container.innerHTML = ''; },
+    pause: () => { clearTimeout(mutedFallbackTimer); mutedFallbackTimer = null; player.pauseVideo?.(); },
+    destroy() { destroyed = true; clearTimeout(mutedFallbackTimer); clearInterval(timer); try { player.destroy(); } catch {} container.innerHTML = ''; },
   };
 }
 

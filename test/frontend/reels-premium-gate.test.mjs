@@ -108,6 +108,7 @@ test('mobile Reels fill the screen and continue behind the floating tab bar', ()
   assert.ok(mobileStart >= 0, 'the layout covers narrow browsers and touch-first native webviews');
   assert.match(mobileReels, /\.reel \{ padding: 0; \}/, 'remove card gutters on mobile layouts');
   assert.match(mobileReels, /\.reel-frame \{[^}]*width: 100%;[^}]*height: 100%;[^}]*aspect-ratio: auto;/, 'the reel stretches to the full viewport width and feed height');
+  assert.match(mobileReels, /\.reel-frame::after \{[^}]*height: calc\(var\(--tabbar-h\) \+ var\(--sab\) \+ 12px\);[^}]*linear-gradient\(180deg, rgba\(0,0,0,\.85\), rgba\(0,0,0,\.55\)\)/, 'continue the caption fade behind the menu and at the screen edges');
   assert.match(feed, /height: calc\(100dvh - var\(--topbar-h\) - var\(--sat\)\)/, 'the feed extends to the bottom of the viewport instead of reserving space above the floating tab bar');
   assert.match(mobileReels, /\.reel-actions \{[^}]*bottom: calc\(var\(--tabbar-h\) \+ var\(--sab\) \+ 12px\);/, 'playback controls stay above the overlaid navigation and iOS safe area');
   assert.match(mobileReels, /\.reel-caption \{ bottom: calc\(var\(--tabbar-h\) \+ var\(--sab\) \+ 12px\); \}/, 'captions stay visible above the overlaid navigation');

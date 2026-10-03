@@ -383,6 +383,9 @@ body.reels-mode { overflow: hidden; padding-bottom: 0; } body.reels-mode .footer
 @media (max-width: 899px), (pointer: coarse) {
   .reel { padding: 0; }
   .reel-frame { border-radius: 0; max-height: none; width: 100%; height: 100%; aspect-ratio: auto; box-shadow: none; }
+  /* Continue the caption's dark fade behind and around the floating pill so bright posters don't
+     suddenly reappear below it; the gradient begins at the same opacity where the caption ends. */
+  .reel-frame::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--tabbar-h) + var(--sab) + 12px); background: linear-gradient(180deg, rgba(0,0,0,.85), rgba(0,0,0,.55)); pointer-events: none; z-index: 1; }
   .reel-actions { position: absolute; right: 10px; bottom: calc(var(--tabbar-h) + var(--sab) + 12px); z-index: 5; }
   .reel-caption { bottom: calc(var(--tabbar-h) + var(--sab) + 12px); }
 }
