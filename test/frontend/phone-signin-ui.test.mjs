@@ -34,9 +34,10 @@ test('the sign-in page leads with the mobile number, and only when the server of
 });
 
 test('phone sign-in talks to the OTP endpoints through the data layer', () => {
-  assert.match(user, /requestOtp\(phone\) \{ return this\.remote\.requestOtp\(phone\); \}/, 'user.requestOtp exists');
-  assert.match(user, /async signInOtp\(phone, code, name\)/, 'user.signInOtp exists');
-  assert.match(adapters, /requestOtp\(phone\)/, 'the remote adapter calls the API');
+  // The optional `ref` carries a friend's invite code (docs/PROMOS.md) — it does not change the flow.
+  assert.match(user, /requestOtp\(phone, ref = ''\) \{ return this\.remote\.requestOtp\(phone, ref\); \}/, 'user.requestOtp exists');
+  assert.match(user, /async signInOtp\(phone, code, name, ref = ''\)/, 'user.signInOtp exists');
+  assert.match(adapters, /requestOtp\(phone, ref = ''\)/, 'the remote adapter calls the API');
   assert.match(adapters, /auth\/otp\/request/, 'the request endpoint is /auth/otp/request');
   assert.match(adapters, /auth\/otp\/verify/, 'the verify endpoint is /auth/otp/verify');
   assert.match(read('server/src/routes/otp.js'), /api\.post\('\/auth\/otp\/request'/, 'the server registers it');

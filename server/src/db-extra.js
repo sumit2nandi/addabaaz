@@ -4,6 +4,8 @@
  * Same conventions as db.js: parameterised queries, UTC timestamps returned as ISO strings.
  */
 // Each `const x = {...}` below is one group of related queries, exposed as `db.x` (see the return statement at the end).
+import crypto from 'node:crypto';
+
 export function extraDb({ q, tx, iso }) {
   // ---- One-time tokens (password reset, e-mail verification). Only a hash is stored, never the token itself ----
   const authTokens = {
@@ -395,6 +397,223 @@ export function extraDb({ q, tx, iso }) {
     async all() { return Object.fromEntries((await q('SELECT k, v FROM app_settings')).map((r) => [r.k, r.v])); },
   };
 
+
+  /* ---- Promotional credit (welcome bonus, referral rewards, goodwill) — see server/src/promos.js ----
+   * The ledger is append-only: a grant stores how much is left (`remaining_paise`), and spending walks the
+   * grants oldest-expiry-first and decrements them inside one transaction with row locks. That is what makes
+   * a balance correct under two tabs checking out at once, and what stops an expired grant from being spent.
+   */
+  const CREDIT_SELECT = `SELECT id, user_id, kind, amount_paise, remaining_paise, status, reason, ref_type, ref_id, expires_at, settled_at, created_at FROM user_credit`;
+  const mapCredit = (r) => r && ({
+    id: r.id, userId: r.user_id, kind: r.kind, amountPaise: Number(r.amount_paise), remainingPaise: Number(r.remaining_paise),
+    status: r.status, reason: r.reason, refType: r.ref_type, refId: r.ref_id,
+    expiresAt: iso(r.expires_at), settledAt: iso(r.settled_at), createdAt: iso(r.created_at),
+  });
+  const credits = {
+    /** The spendable balance in paise (grants that are available and not expired). */
+    async balance(userId) {
+      const r = (await q(`SELECT COALESCE(SUM(remaining_paise),0) AS n FROM user_credit
+        WHERE user_id = ? AND status = 'available' AND amount_paise > 0 AND remaining_paise > 0
+          AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP(3))`, [userId]))[0];
+      return Number(r?.n || 0);
+    },
+    /** Spendable balance, what is on hold (a referral whose friend has not qualified yet) and what expires soon. */
+    async summary(userId) {
+      const r = (await q(`SELECT
+        COALESCE(SUM(CASE WHEN amount_paise > 0 AND status = 'available' AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP(3)) THEN remaining_paise ELSE 0 END),0) AS available,
+        COALESCE(SUM(CASE WHEN amount_paise > 0 AND status = 'pending' THEN remaining_paise ELSE 0 END),0) AS pending,
+        COALESCE(SUM(CASE WHEN amount_paise < 0 AND status = 'pending' THEN -amount_paise ELSE 0 END),0) AS held,
+        COALESCE(SUM(CASE WHEN status = 'available' AND expires_at IS NOT NULL AND expires_at > UTC_TIMESTAMP(3) AND expires_at <= UTC_TIMESTAMP(3) + INTERVAL 7 DAY THEN remaining_paise ELSE 0 END),0) AS expiring,
+        MIN(CASE WHEN amount_paise > 0 AND status = 'available' AND expires_at IS NOT NULL AND expires_at > UTC_TIMESTAMP(3) THEN expires_at END) AS nextExpiry
+        FROM user_credit WHERE user_id = ?`, [userId]))[0] || {};
+      // `heldPaise` is credit reserved by an order that has not been paid yet — it comes back if it never is.
+      return { availablePaise: Number(r.available || 0), pendingPaise: Number(r.pending || 0), heldPaise: Number(r.held || 0), expiringPaise: Number(r.expiring || 0), nextExpiryAt: iso(r.nextExpiry) };
+    },
+    /** Has the account ever been granted this kind? (One welcome bonus per account, ever.) */
+    async hasKind(userId, kind) { return Number((await q('SELECT COUNT(*) AS n FROM user_credit WHERE user_id = ? AND kind = ?', [userId, kind]))[0].n) > 0; },
+    /** Adds one ledger row. `status: 'pending'` holds the value until it is released. */
+    async add(entry) {
+      const id = entry.id || crypto.randomUUID();
+      await q(`INSERT INTO user_credit (id, user_id, kind, amount_paise, remaining_paise, status, reason, ref_type, ref_id, expires_at, settled_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      [id, entry.userId, entry.kind, entry.amountPaise, entry.amountPaise > 0 ? entry.amountPaise : 0, entry.status || 'available',
+        entry.reason ? String(entry.reason).slice(0, 200) : null, entry.refType || null, entry.refId || null, entry.expiresAt || null,
+        entry.status && entry.status !== 'pending' && entry.status !== 'available' ? new Date() : null]);
+      return mapCredit((await q(`${CREDIT_SELECT} WHERE id = ?`, [id]))[0]);
+    },
+    /** Grants that are waiting for the referred friend to qualify. */
+    async pendingFor(userId) { return (await q(`${CREDIT_SELECT} WHERE user_id = ? AND status = 'pending' AND amount_paise > 0 ORDER BY created_at`, [userId])).map(mapCredit); },
+    /** Releases the pending grants tied to one reference (a single referral, an order …). */
+    async releasePendingRef(userId, refType, refId) {
+      const r = (await q(`SELECT COALESCE(SUM(remaining_paise),0) AS n FROM user_credit WHERE user_id = ? AND ref_type = ? AND ref_id = ? AND status = 'pending' AND amount_paise > 0`, [userId, refType, refId]))[0];
+      const amount = Number(r?.n || 0);
+      if (amount > 0) await q(`UPDATE user_credit SET status = 'available', settled_at = UTC_TIMESTAMP(3) WHERE user_id = ? AND ref_type = ? AND ref_id = ? AND status = 'pending' AND amount_paise > 0`, [userId, refType, refId]);
+      return amount;
+    },
+    /** Releases every pending grant of an account. Returns how much became spendable. */
+    async releasePending(userId) {
+      const rows = await q(`SELECT COALESCE(SUM(remaining_paise),0) AS n FROM user_credit WHERE user_id = ? AND status = 'pending' AND amount_paise > 0`, [userId]);
+      const amount = Number(rows[0]?.n || 0);
+      if (amount > 0) await q(`UPDATE user_credit SET status = 'available', settled_at = UTC_TIMESTAMP(3) WHERE user_id = ? AND status = 'pending' AND amount_paise > 0`, [userId]);
+      return amount;
+    },
+    /**
+     * Spends `amountPaise` oldest-expiry-first under row locks. Returns { appliedPaise, spendId } — applied may be
+     * less than asked when the balance ran out. Records the spend as one negative ledger row (status `pending`
+     * until the payment it belongs to is settled, so an abandoned order can be given back).
+     */
+    async spend(userId, amountPaise, { refType = null, refId = null, reason = null, status = 'available' } = {}) {
+      const want = Math.max(0, Math.floor(Number(amountPaise) || 0));
+      if (!want) return { appliedPaise: 0, spendId: null };
+      return tx(async (t) => {
+        const grants = await t.query(`SELECT id, remaining_paise FROM user_credit
+          WHERE user_id = ? AND status = 'available' AND amount_paise > 0 AND remaining_paise > 0
+            AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP(3))
+          ORDER BY (expires_at IS NULL) DESC, expires_at ASC, created_at ASC, id ASC
+          FOR UPDATE`, [userId]);
+        let left = want;
+        for (const g of grants) {
+          if (left <= 0) break;
+          const take = Math.min(left, Number(g.remaining_paise));
+          const rest = Number(g.remaining_paise) - take;
+          await t.query('UPDATE user_credit SET remaining_paise = ?, status = ? WHERE id = ?', [rest, rest > 0 ? 'available' : 'spent', g.id]);
+          left -= take;
+        }
+        const applied = want - left;
+        if (!applied) return { appliedPaise: 0, spendId: null };
+        const id = crypto.randomUUID();
+        await t.query(`INSERT INTO user_credit (id, user_id, kind, amount_paise, remaining_paise, status, reason, ref_type, ref_id)
+          VALUES (?,?,?,?,?,?,?,?,?)`, [id, userId, 'spend', -applied, 0, status, reason ? String(reason).slice(0, 200) : null, refType, refId]);
+        return { appliedPaise: applied, spendId: id };
+      });
+    },
+    /** Marks the spends tied to a reference as final (the payment went through) or void (it never will be paid). */
+    async settleRef(refType, refId, status) {
+      const res = await q(`UPDATE user_credit SET status = ?, settled_at = UTC_TIMESTAMP(3) WHERE ref_type = ? AND ref_id = ? AND kind = 'spend' AND status = 'pending'`, [status, refType, refId]);
+      return res.affectedRows || 0;
+    },
+    /** What a pending spend holds (used to give the value back when an order is abandoned). */
+    async pendingSpend(refType, refId) {
+      const r = (await q(`SELECT id, COALESCE(SUM(-amount_paise),0) AS n FROM user_credit WHERE ref_type = ? AND ref_id = ? AND kind = 'spend' AND status = 'pending'`, [refType, refId]))[0];
+      return { amountPaise: Number(r?.n || 0), id: r?.id || null };
+    },
+    /** Undoes a pending spend: books a `refund` grant so the viewer keeps the value. */
+    async returnPending(refType, refId, { reason = 'Order not completed' } = {}) {
+      const held = await credits.pendingSpend(refType, refId);
+      if (!held.amountPaise) return 0;
+      const n = await credits.settleRef(refType, refId, 'void');
+      if (!n) return 0;
+      await credits.add({ userId: (await q(`SELECT user_id FROM user_credit WHERE ref_type = ? AND ref_id = ? AND kind = 'spend' LIMIT 1`, [refType, refId]))[0]?.user_id, kind: 'refund', amountPaise: held.amountPaise, reason, refType, refId });
+      return held.amountPaise;
+    },
+    /** Pending spends older than `hours` whose payment is still unpaid (a deploy or a closed tab left them). */
+    async stalePending(hours = 24) {
+      return (await q(`SELECT c.id, c.user_id AS userId, c.ref_id AS paymentId, -c.amount_paise AS amountPaise FROM user_credit c
+        WHERE c.kind = 'spend' AND c.status = 'pending' AND c.ref_type = 'payment' AND c.created_at < UTC_TIMESTAMP(3) - INTERVAL ? HOUR
+          AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.id = c.ref_id AND p.status = 'paid')`, [hours])).map((r) => ({ id: r.id, userId: r.userId, paymentId: r.paymentId, amountPaise: Number(r.amountPaise) }));
+    },
+    /** Removes one grant that has not been touched yet (a mistake or a fraud report). Returns what was removed. */
+    async revoke(id, { reason = null } = {}) {
+      const r = (await q(`SELECT remaining_paise FROM user_credit WHERE id = ? AND amount_paise > 0 AND status IN ('pending','available') AND remaining_paise > 0`, [id]))[0];
+      if (!r) return 0;
+      await q(`UPDATE user_credit SET remaining_paise = 0, status = 'void', reason = COALESCE(?, reason), settled_at = UTC_TIMESTAMP(3) WHERE id = ?`, [reason ? String(reason).slice(0, 200) : null, id]);
+      return Number(r.remaining_paise);
+    },
+    /** Removes every untouched grant created by a reference (cancelling a referral). Returns the total removed. */
+    async revokeByRef(refType, refId, { reason = null } = {}) {
+      const rows = await q(`SELECT COALESCE(SUM(remaining_paise),0) AS n FROM user_credit
+        WHERE ref_type = ? AND ref_id = ? AND amount_paise > 0 AND status IN ('pending','available') AND remaining_paise > 0`, [refType, refId]);
+      const amount = Number(rows[0]?.n || 0);
+      if (amount > 0) await q(`UPDATE user_credit SET remaining_paise = 0, status = 'void', reason = COALESCE(?, reason), settled_at = UTC_TIMESTAMP(3)
+        WHERE ref_type = ? AND ref_id = ? AND amount_paise > 0 AND status IN ('pending','available') AND remaining_paise > 0`, [reason ? String(reason).slice(0, 200) : null, refType, refId]);
+      return amount;
+    },
+    /** Flips grants whose expiry has passed. Returns how much value expired. */
+    async expireDue() {
+      const r = (await q(`SELECT COALESCE(SUM(remaining_paise),0) AS n FROM user_credit WHERE status = 'available' AND amount_paise > 0 AND remaining_paise > 0 AND expires_at IS NOT NULL AND expires_at <= UTC_TIMESTAMP(3)`))[0];
+      const amount = Number(r?.n || 0);
+      if (amount > 0) await q(`UPDATE user_credit SET status = 'expired', settled_at = UTC_TIMESTAMP(3) WHERE status = 'available' AND amount_paise > 0 AND remaining_paise > 0 AND expires_at IS NOT NULL AND expires_at <= UTC_TIMESTAMP(3)`);
+      return amount;
+    },
+    /** The viewer's own movements, newest first. */
+    async ledger(userId, { limit = 50, offset = 0 } = {}) {
+      const rows = await q(`${CREDIT_SELECT} WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`, [userId, limit, offset]);
+      const total = Number((await q('SELECT COUNT(*) AS n FROM user_credit WHERE user_id = ?', [userId]))[0].n);
+      return { total, items: rows.map(mapCredit) };
+    },
+    /** Console: the newest movements across all accounts (optionally for one account or one kind). */
+    async list({ userId = null, kind = null, limit = 50, offset = 0 } = {}) {
+      const where = [], args = [];
+      if (userId) { where.push('c.user_id = ?'); args.push(userId); }
+      if (kind) { where.push('c.kind = ?'); args.push(kind); }
+      const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
+      const rows = await q(`SELECT c.*, u.email AS user_email, u.name AS user_name FROM user_credit c LEFT JOIN users u ON u.id = c.user_id ${w} ORDER BY c.created_at DESC, c.id DESC LIMIT ? OFFSET ?`, [...args, limit, offset]);
+      const total = Number((await q(`SELECT COUNT(*) AS n FROM user_credit c ${w}`, args))[0].n);
+      return { total, items: rows.map((r) => ({ ...mapCredit(r), userEmail: r.user_email, userName: r.user_name })) };
+    },
+    /** Headline numbers for the console: what is out there, what was used, what expired. */
+    async stats() {
+      const r = (await q(`SELECT
+        COALESCE(SUM(CASE WHEN amount_paise > 0 AND status IN ('available','pending') THEN remaining_paise ELSE 0 END),0) AS outstanding,
+        COALESCE(SUM(CASE WHEN amount_paise > 0 THEN amount_paise ELSE 0 END),0) AS granted,
+        COALESCE(SUM(CASE WHEN kind = 'spend' AND status <> 'void' THEN -amount_paise ELSE 0 END),0) AS spent,
+        COALESCE(SUM(CASE WHEN status = 'expired' THEN amount_paise ELSE 0 END),0) AS expired,
+        COUNT(DISTINCT CASE WHEN amount_paise > 0 THEN user_id END) AS accounts`))[0] || {};
+      const byKind = Object.fromEntries((await q(`SELECT kind, COUNT(*) AS n, COALESCE(SUM(amount_paise),0) AS paise FROM user_credit GROUP BY kind`)).map((x) => [x.kind, { count: Number(x.n), paise: Number(x.paise) }]));
+      return { outstandingPaise: Number(r.outstanding || 0), grantedPaise: Number(r.granted || 0), spentPaise: Number(r.spent || 0), expiredPaise: Number(r.expired || 0), accounts: Number(r.accounts || 0), byKind };
+    },
+  };
+
+  // ---- Referrals: who invited whom (one row per invited account, at most one referral per person) ----
+  const mapReferral = (r) => r && ({
+    id: r.id, inviterId: r.inviter_id, inviteeId: r.invitee_id, code: r.code, status: r.status,
+    bonusPaise: Number(r.bonus_paise), createdAt: iso(r.created_at), completedAt: iso(r.completed_at),
+    inviterEmail: r.inviter_email, inviteeEmail: r.invitee_email, inviteeName: r.invitee_name,
+  });
+  const referrals = {
+    async create({ id = crypto.randomUUID(), inviterId, inviteeId, code, bonusPaise = 0, status = 'pending' }) {
+      await q('INSERT INTO referrals (id, inviter_id, invitee_id, code, status, bonus_paise, completed_at) VALUES (?,?,?,?,?,?,?)',
+        [id, inviterId, inviteeId, code, status, bonusPaise, status === 'completed' ? new Date() : null]);
+      return referrals.byId(id);
+    },
+    async byId(id) { return mapReferral((await q('SELECT * FROM referrals WHERE id = ?', [id]))[0]); },
+    /** The referral of an invited account (each account can have at most one). */
+    async byInvitee(inviteeId) { return mapReferral((await q('SELECT * FROM referrals WHERE invitee_id = ?', [inviteeId]))[0]); },
+    /** Everyone this account invited, newest first, with the friend's name/email. */
+    async forInviter(inviterId, { limit = 50, offset = 0 } = {}) {
+      const rows = await q(`SELECT r.*, u.email AS invitee_email, u.name AS invitee_name FROM referrals r LEFT JOIN users u ON u.id = r.invitee_id
+        WHERE r.inviter_id = ? ORDER BY r.created_at DESC LIMIT ? OFFSET ?`, [inviterId, limit, offset]);
+      const total = Number((await q('SELECT COUNT(*) AS n FROM referrals WHERE inviter_id = ?', [inviterId]))[0].n);
+      return { total, items: rows.map(mapReferral) };
+    },
+    /** How many rewards this account has already earned or is waiting on (the anti-farming cap). */
+    async countForInviter(inviterId) { return Number((await q("SELECT COUNT(*) AS n FROM referrals WHERE inviter_id = ? AND status <> 'void'", [inviterId]))[0].n); },
+    async complete(id) { await q("UPDATE referrals SET status = 'completed', completed_at = UTC_TIMESTAMP(3) WHERE id = ? AND status = 'pending'", [id]); return referrals.byId(id); },
+    async void(id) { await q("UPDATE referrals SET status = 'void' WHERE id = ?", [id]); return referrals.byId(id); },
+    /** Console list: newest first, with both parties for display. */
+    async list({ status = null, limit = 50, offset = 0 } = {}) {
+      const where = status ? 'WHERE r.status = ?' : '', args = status ? [status] : [];
+      const rows = await q(`SELECT r.*, i.email AS inviter_email, u.email AS invitee_email, u.name AS invitee_name FROM referrals r
+        LEFT JOIN users i ON i.id = r.inviter_id LEFT JOIN users u ON u.id = r.invitee_id ${where} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`, [...args, limit, offset]);
+      const total = Number((await q(`SELECT COUNT(*) AS n FROM referrals r ${where}`, args))[0].n);
+      return { total, items: rows.map(mapReferral) };
+    },
+    /** Who brings the most people in (completed referrals first). */
+    async leaderboard(limit = 10) {
+      return (await q(`SELECT r.inviter_id AS userId, u.name, u.email, COUNT(*) AS invited,
+          SUM(CASE WHEN r.status = 'completed' THEN 1 ELSE 0 END) AS completed, SUM(CASE WHEN r.status <> 'void' THEN r.bonus_paise ELSE 0 END) AS bonusPaise
+        FROM referrals r LEFT JOIN users u ON u.id = r.inviter_id GROUP BY r.inviter_id, u.name, u.email
+        ORDER BY completed DESC, invited DESC LIMIT ?`, [limit])).map((r) => ({ userId: r.userId, name: r.name, email: r.email, invited: Number(r.invited), completed: Number(r.completed || 0), bonusPaise: Number(r.bonusPaise || 0) }));
+    },
+    async stats() {
+      const r = (await q(`SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending, SUM(CASE WHEN status = 'void' THEN 1 ELSE 0 END) AS void,
+        COALESCE(SUM(CASE WHEN status <> 'void' THEN bonus_paise ELSE 0 END),0) AS bonusPaise FROM referrals`))[0] || {};
+      return { total: Number(r.total || 0), completed: Number(r.completed || 0), pending: Number(r.pending || 0), void: Number(r.void || 0), bonusPaise: Number(r.bonusPaise || 0) };
+    },
+    /** Deleting an account removes its referral rows through the foreign keys. */
+  };
+
   // ---- Client/server error reports shown in the admin "Errors" page ----
   const errors = {
     async add(e) {
@@ -469,5 +688,5 @@ export function extraDb({ q, tx, iso }) {
     async prune() { await q("DELETE FROM campaigns WHERE finished_at IS NOT NULL AND finished_at < UTC_TIMESTAMP(3) - INTERVAL 365 DAY"); },
   };
 
-  return { authTokens, accounts, ratings, comments, push, devices, campaigns, playback, playStats, refundRequests, tickets, phoneOtps, phones, settings, errors };
+  return { authTokens, accounts, ratings, comments, push, devices, campaigns, playback, playStats, refundRequests, tickets, phoneOtps, phones, settings, errors, credits, referrals };
 }

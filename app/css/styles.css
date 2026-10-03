@@ -536,6 +536,11 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .legal section { margin-top: 26px; } .legal h2 { font-size: 19px; margin-bottom: 8px; } .legal p { color: var(--text-2); margin-top: 8px; line-height: 1.7; max-width: 72ch; } .legal .lead { font-size: 16px; margin-top: 4px; } .legal-links { margin-top: 36px !important; }
 .consent-bar { position: fixed; z-index: 90; left: 12px; right: 12px; bottom: calc(var(--tabbar-h) + var(--sab) + 24px); max-width: 760px; margin: 0 auto; display: flex; gap: 14px 20px; align-items: center; flex-wrap: wrap; justify-content: space-between; padding: 14px 18px; border-radius: 16px; background: rgba(24,24,28,.97); border: 1px solid var(--border-2); box-shadow: 0 12px 40px rgba(0,0,0,.6); font-size: 13.5px; color: var(--text-2); } .consent-bar p { flex: 1 1 320px; } .consent-bar a { text-decoration: underline; } .consent-bar .row { display: flex; gap: 8px; }
 @media (min-width: 900px) { .consent-bar { bottom: 20px; } }
+/* Refer & earn (Account → credit, invite code and the people who joined) */
+.refer-card .refer-head { display: flex; gap: 14px; align-items: flex-start; } .refer-card .refer-head b { display: block; } .refer-card .refer-head small { color: var(--muted); }
+.refer-bal { font-size: 30px; font-weight: 700; } .refer-bal small { font-size: 14px; font-weight: 400; color: var(--muted); } .refer-bal em { display: block; font-size: 13px; font-style: normal; font-weight: 400; color: var(--muted); }
+.refer-ledger summary { cursor: pointer; color: var(--muted); font-size: 13.5px; } .refer-ledger ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; } .refer-ledger li { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; }
+@media (max-width: 600px) { .refer-bal { font-size: 26px; } }
 .dev-list { display: grid; gap: 4px; margin-top: 10px; } .dev-list li { display: flex; gap: 12px; align-items: center; padding: 10px 4px; border-top: 1px solid var(--border); } .dev-list li > div { flex: 1; display: grid; } .dev-list small { color: var(--muted); }
 .row-switch { cursor: pointer; }
 .rate-box { display: inline-flex; } .rate { display: inline-flex; gap: 6px; } .rate-btn { gap: 6px; } .rate-btn.on { border-color: var(--gold); color: var(--gold); } .rate-btn .i { flex: none; }

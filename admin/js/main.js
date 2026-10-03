@@ -11,7 +11,7 @@ import { startConsole } from './console.js';
 const NAV = [
   ['Overview', [['dashboard', 'Dashboard', 'dashboard']]],
   ['Customers', [['users', 'Users', 'users'], ['payments', 'Payments & refunds', 'card'], ['refunds', 'Refund requests', 'refund'], ['coupons', 'Coupons', 'ticket'], ['support', 'Support', 'chat'], ['messages', 'Messages', 'inbox'], ['comments', 'Comments', 'chat']]],
-  ['Growth', [['analytics', 'Analytics', 'chart'], ['notifications', 'Broadcast', 'bell']]],
+  ['Growth', [['analytics', 'Analytics', 'chart'], ['promos', 'Promotions', 'gift'], ['notifications', 'Broadcast', 'bell']]],
   ['System', [['cache', 'Client cache', 'refresh'], ['errors', 'Errors', 'bug'], ['audit', 'Audit log', 'log']]],
 ];
 // URL pattern -> page module. Each module's default export is `render(root, params, ctx)`.
@@ -28,6 +28,7 @@ const ROUTES = [
   [/^comments$/, () => import('./views/comments.js')],
   [/^refunds$/, () => import('./views/refunds.js')],
   [/^notifications$/, () => import('./views/notifications.js')],
+  [/^promos$/, () => import('./views/promos.js')],
   [/^cache$/, () => import('./views/cache.js')],
   [/^errors$/, () => import('./views/errors.js')],
 ];

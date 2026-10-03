@@ -25,7 +25,7 @@ const noop = (_q, _s, n) => n();
  */
 // Returns helper functions plus two route registrars, `public(api)` and `authed(api)`, which app.js calls
 // (before and after the authentication middleware respectively). Behaviour limits come from `options` or environment variables.
-export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rate = true, publicUser, notDisabled, userFromRequest, plans = [], options = {} }) {
+export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rate = true, publicUser, notDisabled, userFromRequest, plans = [], promos = null, options = {} }) {
   // Tunable limits: screens at once, refund window, reports needed to hide a comment, comment rate, whether an e-mail must be verified before commenting/buying.
   const cfg = {
     supportEmail: options.supportEmail ?? process.env.SUPPORT_EMAIL ?? '',
@@ -138,6 +138,8 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         const user = await db.users.byId(uid); if (!user) throw new HttpError(400, 'invalid_token', 'This reset link is invalid or has expired.');
         notDisabled(user);
         const sv = await db.accounts.setPassword(uid, await hashPassword(password), { verify: true });      // signs out every other device
+        // Opening the reset link proves the address is theirs, so a held referral reward can be released too.
+        if (promos) promos.qualify({ ...user, id: uid }, { reason: 'verified' }).catch(() => {});
         sendMail(user.email, mail.passwordChangedEmail({ name: user.name, siteUrl, supportEmail: cfg.supportEmail }), `password changed for ${user.email}`);
         res.json({ ...sessionFor({ ...user, emailVerifiedAt: user.emailVerifiedAt || new Date().toISOString() }, sv), profiles: await db.profiles.list(uid) });
       }));
@@ -147,6 +149,8 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         const uid = typeof token === 'string' && token.length >= 20 && token.length <= 200 ? await db.authTokens.consume(sha256(token), 'verify') : null;
         if (!uid) throw new HttpError(400, 'invalid_token', 'This confirmation link is invalid or has expired. Sign in and request a new one from Account.');
         await db.accounts.markVerified(uid);
+        // A confirmed e-mail is what a referral reward was waiting for — pay the inviter now (see promos.js).
+        if (promos) { const u = await db.users.byId(uid); if (u) promos.qualify(u, { reason: 'verified' }).catch(() => {}); }
         res.json({ verified: true });
       }));
 

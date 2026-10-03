@@ -29,8 +29,24 @@ export default async function user(root, [id], ctx) {
         <section class="card"><div class="card-head"><h2>Profiles</h2></div>
           <ul class="plain">${profiles.map((p) => html`<li><span class="dot c${p.color}"></span>${p.name}</li>`)}</ul></section>
       </div>
+      <section class="card" id="creditCard"><div class="card-head"><h2>Credit &amp; referrals</h2></div><div class="spinner" style="margin:14px auto"></div></section>
       <section class="card"><div class="card-head"><h2>Payments</h2></div>${payments.length ? paymentTable(payments, { showUser: false }) : empty('No payments.')}</section>`.s;
     wirePaymentActions(root, payments, load);
+    // Promotional credit for this account (best effort: the card disappears when the offer is not running).
+    $('#creditCard') && api.get(`/credits/user/${encodeURIComponent(id)}`)
+      .then((cr) => {
+        const box = $('#creditCard', root); if (!box || ctx.stale()) return;
+        box.innerHTML = html`<div class="card-head"><h2>Credit &amp; referrals</h2></div>
+          <p><strong>${inr(cr.balancePaise)}</strong> available${cr.pendingPaise ? html` · ${inr(cr.pendingPaise)} on hold` : ''}${cr.expiringPaise ? html` · ${inr(cr.expiringPaise)} expiring soon` : ''}${cr.spendMs ? html` <span class="muted small">(${inr(cr.spendMs)} used on plans)</span>` : ''}</p>
+          <p class="muted small">${cr.code ? html`Invite code <strong>${cr.code}</strong> · ` : ''}${cr.invitedTotal || 0} friend${cr.invitedTotal === 1 ? '' : 's'} invited${cr.referredBy ? html` · joined via ${cr.referredBy.status === 'completed' ? 'a completed' : 'an open'} referral` : ''}</p>
+          ${cr.ledger?.length ? html`<table class="tbl"><tbody>${cr.ledger.slice(0, 8).map((x) => html`<tr><td class="small">${fmtDT(x.createdAt)}<br><span class="muted">${x.reason || x.kind}</span></td><td class="num">${x.amountPaise < 0 ? '−' : '+'}${inr(Math.abs(x.amountPaise))}</td><td class="end small muted">${x.status === 'pending' ? 'on hold' : x.status}</td></tr>`)}</tbody></table>` : ''}
+          <div class="row wrap"><button class="btn" id="giveCredit">${icon('gift', 16)} Add credit…</button><button class="btn" id="revokeCredit" ${cr.balancePaise + cr.pendingPaise > 0 ? '' : 'disabled'}>Remove all unspent</button></div>`;
+        $('#giveCredit', box).onclick = () => formModal({ title: 'Add credit', note: 'Goodwill credit for this account — the viewer is e-mailed and the entry is logged.', submit: 'Add credit',
+          fields: [{ k: 'amountINR', label: 'Amount (₹)', type: 'number', min: 1, max: 10000, req: true }, { k: 'reason', label: 'Reason (sent to the viewer)', max: 200, wide: true }],
+          onSubmit: async (v) => { await api.post('/credits/grant', { user: id, ...v }); toast('Credit added'); await load(); } });
+        $('#revokeCredit', box).onclick = async () => { if (!await confirmBox({ title: 'Remove unspent credit?', text: `${inr(cr.balancePaise + cr.pendingPaise)} that has not been used yet will be removed. Credit already spent on a plan is untouched.`, confirm: 'Remove credit', danger: true })) return; try { for (const x of cr.ledger.filter((y) => y.amountPaise > 0 && y.status !== 'void' && (y.status === 'available' || y.status === 'pending'))) await api.post(`/credits/${x.id}/revoke`, {}); toast('Credit removed'); await load(); } catch (e) { toast(errMsg(e), 'err'); } };
+      })
+      .catch(() => { const box = $('#creditCard', root); if (box) box.remove(); });
     $('#rename').onclick = () => formModal({ title: 'Rename user', fields: [{ k: 'name', label: 'Name', req: true, max: 60 }], values: { name: u.name }, onSubmit: async (v) => { await api.patch(`/users/${id}`, v); toast('Saved'); await load(); } });
     $('#mkadmin').onclick = async (e) => { if (await confirmBox({ title: u.isAdmin ? 'Remove admin access?' : 'Make this user an administrator?', text: u.isAdmin ? `${u.email} will lose access to this console immediately.` : `${u.email} will be able to edit the catalog, see all users and payments and issue refunds.`, confirm: u.isAdmin ? 'Remove admin' : 'Make admin', danger: !u.isAdmin })) act(() => api.patch(`/users/${id}`, { isAdmin: !u.isAdmin }), 'Saved')(e); };
     $('#disable').onclick = async (e) => { if (u.disabledAt || await confirmBox({ title: 'Disable this account?', text: 'They are signed out everywhere and can’t sign in again until you enable it. Their data and payments are kept.', confirm: 'Disable', danger: true })) act(() => api.patch(`/users/${id}`, { disabled: !u.disabledAt }), u.disabledAt ? 'Account enabled' : 'Account disabled')(e); };

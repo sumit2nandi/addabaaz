@@ -42,9 +42,13 @@ export function receiptEmail(o) {
     subject: `Your ADDABAAZ Plus ${tax ? 'invoice' : 'receipt'} ${o.invoice.number}`,
     paragraphs: [
       hello(o.name),
-      `Thank you! We received ${inr(o.amountPaise)} for ${o.planName}. Premium videos are unlocked until ${day(o.validUntil)}.`,
+      // A credit-only order has nothing "received" — say what actually happened.
+      o.creditPaise && !o.amountPaise
+        ? `ADDABAAZ credit covered the full ${inr(o.creditPaise)} — ${o.planName} is active and premium videos are unlocked until ${day(o.validUntil)}. No payment was needed.`
+        : `Thank you! We received ${inr(o.amountPaise)} for ${o.planName}. Premium videos are unlocked until ${day(o.validUntil)}.`,
       `${tax ? 'Tax invoice' : 'Receipt'} ${o.invoice.number} is attached as a PDF. You can also download it any time from Account → Billing & invoices.`,
       o.discountPaise ? `Coupon ${o.couponCode} saved you ${inr(o.discountPaise)}.` : null,
+      o.creditPaise && o.amountPaise ? `ADDABAAZ credit covered ${inr(o.creditPaise)} of this order.` : null,
     ].filter(Boolean),
     button: { label: 'Start watching', url: o.siteUrl },
     footer: help(o),

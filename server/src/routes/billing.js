@@ -8,10 +8,15 @@ export function registerBillingRoutes(api, { db, billing, payments, features, ra
   // Payment endpoints are rate limited too (20 per minute per IP).
   const payLimit = rate ? rateLimit('pay', 20, 60_000) : (_q, _s, n) => n();
 
-  /** Price preview: applies a coupon (and tells the viewer why it doesn't work). */
+  /**
+   * Price preview: applies a coupon, and — when the buyer asks for it (`useCredit: true`, the plans page's
+   * "use my credit" box) — shows how much of the price promotional credit would cover.
+   */
   api.post('/payments/quote', payLimit, wrap(async (req, res) => {
     if (payments.provider !== 'razorpay') throw new HttpError(501, 'payments_not_configured', 'Coupons aren’t available right now.');
-    res.json({ quote: billing.quoteView(await billing.quote(req.user.id, req.body?.planId, req.body?.couponCode)) });
+    const q = await billing.quote(req.user.id, req.body?.planId, req.body?.couponCode);
+    const creditPaise = req.body?.useCredit === true ? await billing.creditFor(req.user.id, q.finalPaise) : 0;
+    res.json({ quote: billing.quoteView(q, { creditPaise }) });
   }));
 
   /** Step 1: start a purchase. Razorpay → returns the order for Checkout (coupon + GST billing details applied). Demo provider → activates immediately. */
@@ -25,7 +30,7 @@ export function registerBillingRoutes(api, { db, billing, payments, features, ra
       await db.subscriptions.activateDemo(req.user.id, plan.id, plan.days);
       return res.status(201).json({ provider: 'mock', demo: true, subscription: await db.subscriptions.get(req.user.id) });
     }
-    res.status(201).json(await billing.checkout({ user: req.user, planId: plan.id, couponCode: req.body?.couponCode, billing: req.body?.billing }));
+    res.status(201).json(await billing.checkout({ user: req.user, planId: plan.id, couponCode: req.body?.couponCode, billing: req.body?.billing, useCredit: req.body?.useCredit === true }));
   }));
 
   /** Step 3: the browser reports a finished payment. Nothing is granted unless the signature is valid for OUR order. */

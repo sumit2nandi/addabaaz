@@ -19,6 +19,9 @@ const RESEND_SECONDS = 60;   // matches the server's one-a-minute limit
 export default async function auth(ctx) {
   const u = app.user; const signup = ctx.path === '/signup';
   const next = ctx.query.next ? decodeURIComponent(ctx.query.next) : '/';
+  // `?ref=CODE` — someone opened a friend's invite link. The code rides along with whichever sign-up
+  // method is used, so both sides get their bonus (see server/src/promos.js).
+  const ref = String(ctx.query.ref || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
   ctx.setTitle(signup ? 'Create account' : 'Sign in');
   document.body.classList.add('bare'); ctx.onCleanup(() => document.body.classList.remove('bare'));
   if (!u.supportsAuth) { ctx.root.innerHTML = html`<div class="auth-page"><div class="empty"><h2>Accounts aren’t enabled</h2><p>This copy of ADDABAAZ runs in local mode, so your list and progress are saved on this device. Connect the ADDABAAZ API to enable sign-in and cross-device sync.</p><a class="btn btn-primary" href="#/">Back to home</a></div></div>`.s; return; }
@@ -38,6 +41,7 @@ export default async function auth(ctx) {
     <form class="auth-card form" id="af" novalidate>
       <button type="button" class="auth-close" id="authClose" aria-label="Close">${icon('x', { size: 16 })}</button>
       <h1>${signup ? 'Create your account' : 'Welcome back'}</h1>
+      ${ref ? html`<div class="notice ok" id="refNote">${icon('gift', { size: 18 })} Invite code <b>${ref}</b> will be applied — you and your friend both get credit.</div>` : ''}
       <p class="muted" id="authSub">${canOtp ? 'Sign in or create your account with your mobile number — we’ll text you a code.' : (signup ? 'Sync My List and Continue Watching across all your devices.' : 'Sign in to pick up where you left off.')}</p>
 
       ${canOtp ? html`<div class="seg seg-full" role="tablist" aria-label="Sign-in method">
@@ -110,7 +114,7 @@ export default async function auth(ctx) {
       onCredential: async (provider, cred) => {
         setStatus('');
         busy(true);
-        try { const r = await u.signInSocial(provider, cred); busy(false); finish(r.isNew ? 'Welcome to ADDABAAZ!' : 'Signed in'); }
+        try { const r = await u.signInSocial(provider, cred, ref); busy(false); finish(r.isNew ? 'Welcome to ADDABAAZ!' : 'Signed in'); }
         catch (err) { busy(false); const m = friendly(err); setStatus(m); toast(m); }
       },
     });
@@ -144,7 +148,7 @@ export default async function auth(ctx) {
     if (btn) btn.disabled = true;
     setStatus('');
     try {
-      const r = await u.requestOtp(`${country}${phone.replace(/\D/g, '')}`);
+      const r = await u.requestOtp(`${country}${phone.replace(/\D/g, '')}`, ref);
       phoneSent = phone;
       $('#otpPhoneStep', ctx.root).hidden = true;
       $('#otpCodeStep', ctx.root).hidden = false;
@@ -183,7 +187,7 @@ export default async function auth(ctx) {
       const btn = $('#otpVerify', ctx.root);
       btn.disabled = true; setStatus('');
       try {
-        const r = await u.signInOtp(`${country}${phoneSent.replace(/\D/g, '')}`, code, name || undefined);
+        const r = await u.signInOtp(`${country}${phoneSent.replace(/\D/g, '')}`, code, name || undefined, ref);
         finish(r.isNew ? 'Welcome to ADDABAAZ!' : 'Signed in');
       } catch (err) { setStatus(friendly(err)); btn.disabled = false; }
       return;
@@ -191,7 +195,7 @@ export default async function auth(ctx) {
     // Email + password (the original flow).
     const f = new FormData(e.target);
     const body = { email: String(f.get('email')).trim(), password: String(f.get('password')) };
-    if (signup) body.name = String(f.get('name')).trim();
+    if (signup) { body.name = String(f.get('name')).trim(); if (ref) body.ref = ref; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) { setStatus('Please enter a valid email address.'); return; }
     if (body.password.length < 8) { setStatus('Password must be at least 8 characters.'); return; }
     if (signup && !body.name) { setStatus('Please enter your name.'); return; }

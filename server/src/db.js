@@ -17,7 +17,7 @@ const MAX_PROGRESS = 500;
 // Converts a `payments` table row (snake_case) into the camelCase object the rest of the code uses.
 const mapPayment = (r) => r && ({
   id: r.id, userId: r.user_id, planId: r.plan_id, provider: r.provider, orderId: r.provider_order_id, paymentId: r.provider_payment_id,
-  amountPaise: r.amount_paise, listPricePaise: r.list_price_paise ?? r.amount_paise, discountPaise: r.discount_paise, couponCode: r.coupon_code,
+  amountPaise: r.amount_paise, listPricePaise: r.list_price_paise ?? r.amount_paise, discountPaise: r.discount_paise, creditAppliedPaise: Number(r.credit_applied_paise || 0), couponCode: r.coupon_code,
   billing: typeof r.billing === 'string' ? JSON.parse(r.billing) : r.billing || null, refundedPaise: r.refunded_paise, currency: r.currency,
   status: r.status, createdAt: iso(r.created_at), paidAt: iso(r.paid_at),
 });
@@ -55,7 +55,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
   }
 
   // Row mappers: database column names -> API field names.
-  const userRow = (r) => r && { id: r.id, email: r.email, emailNorm: r.email_norm || null, emailDup: !!r.email_dup, name: r.name, passwordHash: r.password_hash, createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabledAt: iso(r.disabled_at), emailVerifiedAt: iso(r.email_verified_at), sessionVersion: r.session_version || 0, hasPin: !!r.parental_pin_hash, phone: r.phone || null, phoneVerifiedAt: iso(r.phone_verified_at) };
+  const userRow = (r) => r && { id: r.id, email: r.email, emailNorm: r.email_norm || null, emailDup: !!r.email_dup, name: r.name, passwordHash: r.password_hash, createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabledAt: iso(r.disabled_at), emailVerifiedAt: iso(r.email_verified_at), sessionVersion: r.session_version || 0, hasPin: !!r.parental_pin_hash, phone: r.phone || null, phoneVerifiedAt: iso(r.phone_verified_at), referralCode: r.referral_code || null };
   const profileRow = (r) => ({ id: r.id, name: r.name, color: r.color, ...(r.kids ? { kids: true } : {}) });
 
   // The public object. `self` is also handed to the extension modules so they can call each other's methods.
@@ -83,6 +83,10 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
         });
       },
       async rename(id, name) { await q('UPDATE users SET name = ? WHERE id = ?', [name, id]); },
+      /** Looks an account up by its short referral code (case-insensitive: codes are stored upper-case). */
+      async byReferralCode(code) { return userRow((await q('SELECT * FROM users WHERE referral_code = ?', [String(code || '').trim().toUpperCase()]))[0]); },
+      /** Stores a code, unless it was taken meanwhile (the unique index is the real guard). Returns the stored code. */
+      async setReferralCode(id, code) { await q('UPDATE users SET referral_code = ? WHERE id = ?', [String(code).toUpperCase(), id]); return String(code).toUpperCase(); },
       /** Deleting the user cascades to profiles, list, progress, reminders and subscription. */
       async remove(id) { await q('DELETE FROM users WHERE id = ?', [id]); },
     },
@@ -216,8 +220,8 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       /** `coupon` (a coupons row) makes the insert happen under the coupon's row lock so its limits can't be beaten by parallel checkouts. */
       async create(p, { coupon = null } = {}) {
         const insert = (t) => t.query(
-          'INSERT INTO payments (id, user_id, plan_id, provider, provider_order_id, amount_paise, list_price_paise, discount_paise, coupon_code, billing, currency) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-          [p.id, p.userId, p.planId, p.provider, p.orderId, p.amountPaise, p.listPricePaise ?? p.amountPaise, p.discountPaise ?? 0, p.couponCode ?? null, p.billing ? JSON.stringify(p.billing) : null, p.currency || 'INR']);
+          'INSERT INTO payments (id, user_id, plan_id, provider, provider_order_id, amount_paise, list_price_paise, discount_paise, credit_applied_paise, coupon_code, billing, currency) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+          [p.id, p.userId, p.planId, p.provider, p.orderId, p.amountPaise, p.listPricePaise ?? p.amountPaise, p.discountPaise ?? 0, p.creditAppliedPaise ?? 0, p.couponCode ?? null, p.billing ? JSON.stringify(p.billing) : null, p.currency || 'INR']);
         if (coupon) await self.coupons.reserve(coupon, p.userId, insert); else await insert({ query: q });
       },
       // Lookups by our id, the provider's order id and the provider's payment id (used by the webhook).

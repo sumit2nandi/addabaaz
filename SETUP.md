@@ -489,13 +489,29 @@ everything*, its offline artwork) and downloads them again. Use it after deployi
 seeing. Nobody is signed out and no setting is changed. An open tab notices within seconds and offers a
 restart; a closed browser or installed app picks it up on its next launch.
 
-### 8.11 Analytics and error monitoring
+### 8.11 Promotional credit and referrals (new users get ₹100, invite a friend for ₹100 each)
+
+Out of the box every new account is given **₹100 of ADDABAAZ credit** and a referral pays **₹100 to the
+inviter and ₹100 to the invited friend** — the inviter’s reward is released once the friend confirms their
+e-mail or phone number. Credit comes off the price of a plan at checkout (it is never paid out and never
+refunded to a card); when it covers the whole price the plan activates with no payment.
+
+Change the amounts, the hold rule, the caps and the expiry either in **`.env`** (`PROMO_*`, shown in
+`.env.example`) or, without a redeploy, in **`/admin → Promotions`** — the console also shows the ledger,
+lets you grant goodwill credit to one account and lists who invited whom. The invite link is
+`https://<your site>/#/signup?ref=<CODE>`; every account’s code appears on **Account → Refer & earn**.
+
+Set `PROMO_ENABLED=false` (or `PROMO_SIGNUP_CREDIT_INR=0`) to switch it off — nothing else changes and credit
+already in an account stays spendable. Full details, the HTTP API and the abuse controls are in
+[docs/PROMOS.md](docs/PROMOS.md).
+
+### 8.12 Analytics and error monitoring
 
 * Built in: `/admin → Analytics` (plays, watch time, top titles, revenue) and `/admin → Errors`. Nothing to set up.
 * Optional Google Analytics 4: create a GA4 property, set `GA4_MEASUREMENT_ID=G-XXXXXXX`. A consent banner then appears and GA loads only after a visitor accepts.
 * Optional Sentry: `npm i @sentry/node`, set `SENTRY_DSN`.
 
-### 8.12 Legal pages (do this before taking money)
+### 8.13 Legal pages (do this before taking money)
 
 The site serves `/privacy`, `/terms` and `/refunds`. **They are templates, not legal advice.** Have a lawyer review them, then edit the wording in `app/js/legal-text.js` (one file used by the site and the search-engine renderer) and update `LEGAL_UPDATED`. See `docs/COMPLIANCE.md` for what the software stores and what the policies must say.
 

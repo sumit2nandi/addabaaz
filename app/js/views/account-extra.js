@@ -39,6 +39,60 @@ function wireNotifications(root, { guest = false, onCleanup = null } = {}) {
   });
 }
 
+/**
+ * "Refer & earn": the viewer's own invite code, their credit balance, who joined with their link and a box
+ * to add a friend's code. Filled in asynchronously (like the notifications slot) so a slow API — or the
+ * offer being switched off — never delays the account page.
+ */
+function wireReferral(root) {
+  const u = app.user;
+  const slot = $('#referSlot', root); if (!slot) return;
+  slot.innerHTML = html`<h2 class="sub-h">Refer &amp; earn</h2><div class="card-panel"><div class="spinner" style="margin:14px auto"></div></div>`.s;
+  const draw = async () => {
+    let data = null;
+    try { data = await u.credits(); } catch { /* the section simply stays hidden */ }
+    if (!data || !data.offer?.enabled || (!data.offer.referralPaise && !data.creditPaise)) { slot.innerHTML = ''; return; }
+    const inr = (p) => `₹${(p / 100).toFixed(p % 100 ? 2 : 0)}`;
+    let share = null;
+    try { share = await u.inviteLink(); } catch { /* the code alone is enough */ }
+    const code = share?.code || '';
+    const link = share?.link || '';
+    slot.innerHTML = html`<h2 class="sub-h">Refer &amp; earn</h2>
+      <div class="card-panel refer-card">
+        <div class="refer-head">${icon('gift', { size: 22 })}<div><b>${inr(data.offer.referralPaise)} for you and ${inr(data.offer.referralPaise)} for your friend</b>
+          <small>${data.offer.hold === 'signup' ? 'Credit lands as soon as they sign up.' : data.offer.hold === 'payment' ? 'Your reward unlocks after their first payment.' : 'Your reward unlocks when they confirm their email or phone.'}</small></div></div>
+        <div class="refer-bal">${inr(data.creditPaise)}${data.pendingPaise || data.heldPaise ? html` <small>+ ${inr((data.pendingPaise || 0) + (data.heldPaise || 0))} on hold</small>` : ''}<em>credit available</em></div>
+        ${data.heldPaise ? html`<p class="fine fine-left">${inr(data.heldPaise)} is held by an order that was not completed — it comes back automatically.</p>` : ''}
+        ${code ? html`<label>Your invite code<span class="co-row"><input id="refCode" readonly value="${code}"><button class="btn btn-ghost" type="button" data-copy="${code}">Copy</button></span></label>
+          <label>Your invite link<span class="co-row"><input id="refLink" readonly value="${link}"><button class="btn btn-ghost" type="button" data-copy="${link}">Copy</button></span></label>` : ''}
+        <div class="row"><button class="btn btn-ghost btn-sm" id="refShare" type="button">${icon('share', { size: 16 })} Share invite</button></div>
+        ${data.invited?.items?.length ? html`<ul class="dev-list">${data.invited.items.map((f) => html`<li><span>${icon('user', { size: 20 })}</span><div><b>${f.name}</b><small>${f.status === 'completed' ? `Reward unlocked · ${timeAgo(f.completedAt)}` : 'Waiting for them to confirm'}</small></div><b class="muted">+${inr(f.bonusPaise)}</b></li>`)}</ul>` : html`<p class="fine fine-left">Nobody has joined with your code yet — share your link on WhatsApp.</p>`}
+        ${data.canRedeem ? html`<label>Have a friend’s invite code?<span class="co-row"><input id="refRedeem" maxlength="12" autocapitalize="characters" placeholder="e.g. AB12CD34"><button class="btn btn-primary" type="button" id="refApply">Apply</button></span></label>` : ''}
+        ${data.referredBy ? html`<p class="fine fine-left">You joined with a friend’s invite — ${data.referredBy.status === 'completed' ? 'their reward is unlocked.' : 'your first confirmation unlocks their reward.'}</p>` : ''}
+        ${data.ledger?.length ? html`<details class="refer-ledger"><summary>Credit history</summary><ul>${data.ledger.map((r) => html`<li><span>${r.reason || r.label}</span><b class="${r.amountPaise < 0 ? 'muted' : ''}">${r.amountPaise < 0 ? '' : '+'}${inr(Math.abs(r.amountPaise))}</b></li>`)}</ul></details>` : ''}
+      </div>`.s;
+  };
+  const copy = async (text) => { try { await navigator.clipboard.writeText(text); toast('Copied'); } catch { toast('Copy the code from the box'); } };
+  slot.addEventListener('click', async (e) => {
+    const c = e.target.closest('[data-copy]');
+    if (c) return copy(c.dataset.copy);
+    if (e.target.closest('#refShare')) {
+      const link = $('#refLink', slot)?.value || '';
+      const text = `Join me on ADDABAAZ${link ? ` — ${link}` : ''}`;
+      try { if (navigator.share) await navigator.share({ title: 'ADDABAAZ', text, url: link || undefined }); else return copy(text); }
+      catch { /* the viewer dismissed the share sheet */ }
+      return;
+    }
+    const b = e.target.closest('#refApply'); if (!b) return;
+    const input = $('#refRedeem', slot), code = String(input?.value || '').trim();
+    if (!code) return;
+    b.disabled = true;
+    try { const r = await u.redeemInvite(code); toast(r.message || 'Invite applied'); await draw(); }
+    catch (err) { toast(friendly(err)); b.disabled = false; }
+  });
+  draw();
+}
+
 /** Returns { banner, sections, wire(root) } — both go into the page, wire() attaches the handlers once it is in the DOM. */
 export function accountExtras() {
   const u = app.user, acc = u.account;
@@ -65,6 +119,7 @@ export function accountExtras() {
       ${row('pinBtn', 'lock', u.hasPin ? 'Change or remove parental PIN' : 'Set a parental PIN', u.hasPin ? 'Needed to leave a Kids profile or change profiles.' : 'Keeps children on their Kids profile and stops profile changes.')}
       <a class="row-link" href="#/profiles?manage=1">${icon('user', { size: 22 })}<span><b>Kids profiles</b><small>Mark any profile as “Kids” to show only titles rated for children.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a>
     </div>
+    <div id="referSlot"></div>
     <div id="notifySlot"></div>
     <h2 class="sub-h">Privacy</h2>
     <div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}<a class="row-link" href="#/privacy">${icon('info', { size: 22 })}<span><b>Privacy Policy</b></span>${icon('right', { size: 18, cls: 'chev' })}</a><a class="row-link" href="#/terms">${icon('info', { size: 22 })}<span><b>Terms of Use</b></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>`;
@@ -127,6 +182,7 @@ export function accountExtras() {
     });
 
     wireNotifications(root, { onCleanup: ctx?.onCleanup });
+    wireReferral(root);
   };
   return { banner, sections, wire };
 }

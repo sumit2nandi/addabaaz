@@ -33,7 +33,7 @@ const MAX_ATTEMPTS = 5;                  // wrong tries before the code is burnt
  * @param {Function} o.notDisabled
  * @param {Function} o.authLimit  per-IP rate limiter for authentication endpoints
  */
-export function registerOtpRoutes(api, { db, sms, secret, publicUser, notDisabled, authLimit }) {
+export function registerOtpRoutes(api, { db, sms, secret, publicUser, notDisabled, authLimit, promos = null }) {
   // Feature switch the sign-in page reads: without a configured provider no OTP tab is offered.
   const otpEnabled = () => !!sms?.configured && sms.provider !== 'none';
   // The answer is always the same whether or not the number belongs to an account: phone numbers must not
@@ -95,6 +95,9 @@ export function registerOtpRoutes(api, { db, sms, secret, publicUser, notDisable
     }
     if (!user) throw new HttpError(500, 'server_error', 'Something went wrong.');
     notDisabled(user);
+    // New phone accounts get the same welcome bonus as e-mail ones, plus any referral code that came with
+    // the request. Existing accounts that already got their bonus are untouched (`onSignup` is idempotent).
+    const bonus = isNew && promos ? await promos.onSignup({ user: await db.users.byId(user.id) || user, code: req.body?.ref }) : { welcomePaise: 0 };
     // A verified phone counts as a verified identity, so commenting/buying are not blocked for phone accounts.
     if (!user.emailVerifiedAt) await db.accounts.markVerified(user.id).catch(() => {});
     res.json({
@@ -103,6 +106,8 @@ export function registerOtpRoutes(api, { db, sms, secret, publicUser, notDisable
       profiles: await db.profiles.list(user.id),
       isNew,
       phoneSignIn: true,
+      ...(bonus.welcomePaise || bonus.inviteePaise ? { creditPaise: bonus.welcomePaise + bonus.inviteePaise } : {}),
+      ...(bonus.skipped ? { referralSkipped: bonus.skipped } : {}),
     });
   }));
 }
