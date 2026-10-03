@@ -44,7 +44,7 @@ export default async function support(ctx) {
   const isPhoneAccount = !!acc?.emailIsPlaceholder;
   let tickets = [];
   if (acc) { try { tickets = (await u.myTickets({ limit: 25 })).tickets || []; } catch { /* the form still works */ } }
-  if (ctx.stale()) return;
+  if (ctx.stale?.()) return;   // see the sign-in page: an older shell may not have it yet
 
   ctx.root.innerHTML = html`<div class="page page-narrow">
     ${sectionHeader({ tag: 'We’re here to help', title: 'Support', subtitle: 'Tell us what went wrong and we’ll get back to you by e-mail — usually within one working day.' })}

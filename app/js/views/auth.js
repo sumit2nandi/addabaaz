@@ -34,7 +34,10 @@ export default async function auth(ctx) {
   let mode = canOtp ? 'otp' : 'email';        // OTP first whenever it is configured
   let phoneSent = '';
   let timer = null;
-  if (ctx.stale()) return;
+  // `stale` is optional on purpose: a browser can briefly hold the previous shell (which cached it) next
+  // to this newer page module (which it did not). Without the guard that mix crashed the whole sign-in page
+  // with "ctx.stale is not a function".
+  if (ctx.stale?.()) return;
 
   ctx.root.innerHTML = html`<div class="auth-page">
     <a href="#/" class="auth-brand"><img src="media/icons/icon-96.png" width="56" height="56" alt=""><span class="brand-text"><b>ADDA</b><i>BAAZ</i></span></a>
