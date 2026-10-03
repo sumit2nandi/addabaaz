@@ -15,7 +15,7 @@ Bengali originals, stand-up comedy, web series and reels from ADDABAAZ (Kolkata)
 
 ## What's in the app
 
-Home hero carousel · Continue Watching · Top 10 · per-show rails · **show pages** with episode lists, resume and "next unwatched" · **watch page** with resume, progress tracking and autoplay-next · **Reels** (vertical swipe feed) · search (Bengali + English, recent/popular) · My List · Coming Soon with reminders · Behind-the-Scenes gallery with lightbox · multi-profile ("Who's watching?") · sign-up / sign-in (email, Google, Facebook) · account, settings, delete-account (signing out asks first, in a confirmation popup) · **Support page** to raise and follow tickets (sign-in, registration, payments, playback…) answered from the Admin console · **pull to refresh** any screen in place (soft refresh — no reload, no boot logo; never restarts a playing video) · **premium titles that require sign-in** (free titles never do) · optional ADDABAAZ Plus paywall (feature-flagged) · About / Services / Contact (existing studio pages, kept).
+Home hero carousel · Continue Watching · Top 10 · per-show rails · **show pages** with episode lists, resume and "next unwatched" · **watch page** with resume, progress tracking and autoplay-next · **Reels** (vertical swipe feed) · search (Bengali + English, recent/popular) · My List · Coming Soon with reminders · tap a details-page poster to see the whole artwork · multi-profile ("Who's watching?") · sign-up / sign-in (email, Google, Facebook) · account, settings, delete-account (signing out asks first, in a confirmation popup) · **Support page** to raise and follow tickets (sign-in, registration, payments, playback…) answered from the Admin console · **pull to refresh** any screen in place (soft refresh — no reload, no boot logo; never restarts a playing video) · **premium titles that require sign-in** (free titles never do) · optional ADDABAAZ Plus paywall (feature-flagged) · About / Services / Contact (existing studio pages, kept).
 
 ## Run it
 
@@ -45,7 +45,7 @@ npm run build:www        # static bundle in ./www  (what the mobile apps package
 index.html, manifest.webmanifest, sw.js   app shell, PWA manifest, service worker
 app/                 web app (css/, js/{views,ui,data,players}, env.js = deploy-time settings)
 admin/               the Admin console (served at /admin) — users, payments, support tickets, broadcasts, system
-content/             the Content studio (served at /content) — shows, videos & reels, coming soon, gallery
+content/             the Content studio (served at /content) — shows, videos & reels, coming soon, Top 10
 data/catalog.json    content SEED + static/mobile bundle (live catalog is in MySQL; `npm run catalog:export` syncs it back)
 data/studio.json     About / team / services / contact details (same role)
 media/               optimised WebP artwork + app icons (generated)

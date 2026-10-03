@@ -65,7 +65,6 @@ export default async function auth(ctx) {
           <button class="btn btn-primary btn-lg block" type="submit" id="otpVerify">Verify &amp; continue</button>
           <div class="row between otp-links"><button type="button" class="linklike" id="otpResend" disabled>Resend code</button><button type="button" class="linklike" id="otpChange">Change number</button></div>
         </div>
-        <div class="auth-busy" id="asBusy" hidden><div class="spinner"></div><p>Signing you in…</p></div>
       </div>` : ''}
 
       <div id="emailPane" ${canOtp ? 'hidden' : ''}>
@@ -78,6 +77,7 @@ export default async function auth(ctx) {
         <button class="btn btn-primary btn-lg block" type="submit" id="asub">${signup ? 'Create account' : 'Sign in'}</button>
       </div>
 
+      <div class="auth-busy" id="asBusy" hidden><div class="spinner"></div><p id="asBusyMsg">Signing you in…</p></div>
       <div class="form-status" id="as" role="alert"></div>
       ${signup ? html`<p class="fine">By creating an account you agree to our <a href="#/terms">Terms</a> and <a href="#/privacy">Privacy Policy</a>.</p>` : ''}
       <p class="switch-auth">${signup ? html`Already have an account? <a href="#/signin?next=${encodeURIComponent(next)}">Sign in</a>` : html`New to ADDABAAZ? <a href="#/signup?next=${encodeURIComponent(next)}">Create an account</a>`}</p>
@@ -88,7 +88,13 @@ export default async function auth(ctx) {
   const st = () => $('#as', ctx.root);
   const setStatus = (msg, kind = 'err') => { const el = st(); el.textContent = msg; el.className = kind === 'ok' ? 'form-status success' : 'form-status'; };
   const finish = (msg, type = 'ok') => { toast(msg, type); if (u.needsProfileChoice()) go('/profiles?next=' + encodeURIComponent(next), { replace: true }); else go(next, { replace: true }); };
-  const busy = (on) => { const el = $('#asBusy', ctx.root); if (el) el.hidden = !on; };
+  // The overlay covers the whole card (it sits outside the two panes), so the viewer always sees why the
+  // form is frozen — on the mobile-number tab and on the email tab with the Google/Apple buttons.
+  const busy = (on, what = 'Signing you in…') => {
+    const el = $('#asBusy', ctx.root); if (!el) return;
+    const msg = $('#asBusyMsg', ctx.root); if (msg) msg.textContent = what;
+    el.hidden = !on;
+  };
 
   /* ---------- mode switch (mobile number ⇄ email) ---------- */
   const setMode = (m) => {
@@ -116,7 +122,7 @@ export default async function auth(ctx) {
       onError: (m) => { setStatus(m); toast(m); },
       onCredential: async (provider, cred) => {
         setStatus('');
-        busy(true);
+        busy(true, provider === 'google' ? 'Signing you in with Google…' : provider === 'apple' ? 'Signing you in with Apple…' : 'Signing you in…');
         try { const r = await u.signInSocial(provider, cred, ref); busy(false); finish(r.isNew ? 'Welcome to ADDABAAZ!' : 'Signed in'); }
         catch (err) { busy(false); const m = friendly(err); setStatus(m); toast(m); }
       },
@@ -204,10 +210,11 @@ export default async function auth(ctx) {
     if (signup && !body.name) { setStatus('Please enter your name.'); return; }
     const btn = $('#asub', ctx.root);
     btn.disabled = true; setStatus('');
+    busy(true, signup ? 'Creating your account…' : 'Signing you in…');
     try {
       const result = await (signup ? u.signUp(body) : u.signIn(body));
       if (signup && result.verificationEmailSent === false) finish('Account created, but the confirmation email could not be sent. Try Resend link from Account.', 'err');
       else finish(signup ? 'Welcome to ADDABAAZ!' : 'Signed in');
-    } catch (err) { setStatus(friendly(err)); btn.disabled = false; }
+    } catch (err) { busy(false); setStatus(friendly(err)); btn.disabled = false; }
   });
 }

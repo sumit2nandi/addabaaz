@@ -2,7 +2,7 @@
 //
 // Counts for shows/episodes/reels/coming-soon, the titles that still need artwork or a video source
 // before they can be published, and the most recently published titles. Every card links into the page
-// where the work happens (Shows, Videos & reels, Coming soon, Gallery).
+// where the work happens (Shows, Videos & reels, Coming soon, Top 10).
 import { api } from '../api.js';
 import { html, icon, empty, pageHead, errMsg, imgSrc, ago } from '../ui.js';
 
@@ -48,7 +48,7 @@ export default async function contentOverview(root, _p, ctx) {
           ${issue(noArt, 'episodes have no thumbnail', 'The thumbnail is what viewers see in every row.', '#/videos')}
           ${issue(noDuration, 'titles have no duration', 'Duration is shown on the card and drives the progress bar.', '#/videos')}`
           : html`<p class="muted">Every title has artwork, a source and a duration.</p>`}
-        <p class="muted small">${premium} premium ${premium === 1 ? 'title' : 'titles'} · ${(cat.gallery || []).length} gallery ${(cat.gallery || []).length === 1 ? 'photo' : 'photos'}</p>
+        <p class="muted small">${premium} premium ${premium === 1 ? 'title' : 'titles'}</p>
       </section>
       <section class="card">
         <h2>Recently published</h2>

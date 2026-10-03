@@ -33,7 +33,7 @@ Everything you need to install, configure, run, deploy and operate ADDABAAZ, in 
 | **Website (PWA)** | Plain HTML + JavaScript modules in `index.html`, `app/`, `sw.js`. No build step. | Everything |
 | **API + web server** | Node.js / Express in `server/src/`, storing data in **MySQL**. Also serves the website, the admin console and SEO pages. | Accounts, premium video, payments, admin, comments, notifications … |
 | **Admin console** | `/admin` (files in `admin/`). Users, payments and refunds, coupons, the contact inbox, support tickets, comments, analytics, broadcasts, errors, audit log, client-cache refresh. | Running the business |
-| **Content studio (CMS)** | `/content` (files in `content/`, sharing `admin/js/*`). Shows and seasons, videos and reels, the “coming soon” calendar, the gallery, studio credits. | Publishing content |
+| **Content studio (CMS)** | `/content` (files in `content/`, sharing `admin/js/*`). Shows and seasons, videos and reels, the “coming soon” calendar, the homepage Top 10, studio credits. | Publishing content |
 | **Mobile apps** | A Capacitor wrapper in `mobile/` that packages the same website as Android / iOS apps. | Play Store / App Store |
 
 Two ways to run it:
@@ -523,7 +523,7 @@ The live catalog is stored in MySQL and edited in `/admin`:
 
 * **Shows** — poster, description, genres, rating (U / 7+ / 13+ / 16+ / 18+; Kids profiles show only U and 7+), Free/Premium.
 * **Videos & reels** — YouTube link, MP4/HLS URL or R2 key, thumbnail, duration, *Publish at* (schedule), *Subtitles* (upload `.srt`/`.vtt`), rating and independent Free/Premium access.
-* **Coming soon**, **Gallery**, **Studio & team** (About / Services / Contact pages).
+* **Coming soon**, **Top 10**, **Studio & team** (About / Services / Contact pages).
 
 The first start seeds MySQL from `data/catalog.json` and `data/studio.json`. Those files are still used by the static site and the mobile bundle, so after editing in the admin run `npm run catalog:export` to write them back, then commit. `npm run catalog:import -- --force` goes the other way and **replaces** the database catalog. `npm run validate:catalog` checks the files.
 

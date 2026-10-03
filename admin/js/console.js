@@ -1,7 +1,7 @@
 /* Shared console shell used by BOTH consoles:
  *
  *   /admin/    — the Admin console (customers, payments, broadcast, moderation, system …)
- *   /content/  — the Content studio (shows, videos & reels, coming soon, gallery, studio & team)
+ *   /content/  — the Content studio (shows, videos & reels, coming soon, Top 10, studio & team)
  *
  * The two are deliberately separate pages: content work is a different job, often done by different people,
  * and one sidebar with thirty entries is unusable — especially on a phone. They share this file, the API

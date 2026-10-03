@@ -25,3 +25,17 @@ test('Premium show and video access are independent of the media source', () => 
     assert.deepEqual(result.errors, [], `Premium ${source.type} video should validate`);
   }
 });
+
+test('Top 10 ranking: 1…10 on an episode, ignored everywhere else', () => {
+  const video = (extra) => ({ id: 'ep-1', showId: 'show-1', kind: 'episode', title: 'Episode', source: { type: 'youtube', id: 'abcdefghijk' }, duration: 60, publishedAt: '2026-01-01', access: 'free', ...extra });
+  assert.deepEqual(validate('video', video({ topRank: 1 }), { showIds: new Set(['show-1']) }).errors, []);
+  assert.equal(validate('video', video({ topRank: 7 }), { showIds: new Set(['show-1']) }).doc.topRank, 7);
+  assert.equal(validate('video', video({}), { showIds: new Set(['show-1']) }).doc.topRank, null, 'no rank is fine');
+  assert.match(validate('video', video({ topRank: 11 }), { showIds: new Set(['show-1']) }).errors.join(' '), /topRank must be a whole number between 1 and 10/);
+  assert.match(validate('video', video({ topRank: 0 }), { showIds: new Set(['show-1']) }).errors.join(' '), /topRank must be a whole number/);
+
+  // Only episodes belong in the rail: a ranked reel is quietly unranked rather than rejected.
+  const reel = validate('video', { ...video({ topRank: 3 }), kind: 'reel' }, { showIds: new Set(['show-1']) });
+  assert.deepEqual(reel.errors, []);
+  assert.equal(reel.doc.topRank, null, 'a reel can never hold a Top 10 slot');
+});

@@ -85,16 +85,25 @@ export class Catalog {
     return MATURE.has(v.rating || (show ? show.rating : null));
   }
   /**
-   * Episodes by most-watched (the "Top 10 Episodes" rail). With `matureCap`, at most that many mature
-   * episodes stay in the list — used for guests and accounts that never watch mature content so it is
-   * recommended less often. The cap only relaxes when there aren't enough other episodes to fill the list.
+   * The "Top 10 Episodes" rail, in two parts:
+   *
+   *  1. episodes an editor picked in Content studio → Top 10 (`topRank` 1…10), in that exact order. An
+   *     editorial pick is a decision, so the mature cap does not quietly drop it;
+   *  2. the rest of the slots, filled by most-watched (`views`), where `matureCap` still applies — guests
+   *     and accounts that never watch mature content get it demoted, and the cap only relaxes when there
+   *     aren't enough other episodes to fill the list.
+   *
+   * With nothing picked this is exactly the old most-watched list.
    */
   trending(n = 10, { matureCap = Infinity } = {}) {
     const eps = [...this.allEpisodes()].sort((a, b) => b.views - a.views);
-    if (!Number.isFinite(matureCap)) return eps.slice(0, n);
-    const out = [];
+    const pinned = this.allEpisodes().filter((v) => Number(v.topRank) >= 1 && Number(v.topRank) <= 10).sort((a, b) => Number(a.topRank) - Number(b.topRank)).slice(0, n);
+    const rest = eps.filter((v) => !pinned.includes(v));
+    const out = [...pinned];
+    if (out.length >= n) return out.slice(0, n);
+    if (!Number.isFinite(matureCap)) return [...out, ...rest].slice(0, n);
     let cap = Math.max(0, matureCap);
-    for (const v of eps) {
+    for (const v of rest) {
       const mature = this.isMature(v);
       if (mature && cap <= 0) continue;
       if (mature) cap--;
@@ -102,7 +111,7 @@ export class Catalog {
       if (out.length === n) return out;
     }
     // Not enough non-mature episodes to fill the rail: top up with the highest-viewed skipped ones.
-    for (const v of eps) { if (out.includes(v)) continue; out.push(v); if (out.length === n) break; }
+    for (const v of rest) { if (out.includes(v)) continue; out.push(v); if (out.length === n) break; }
     return out;
   }
   reels() {

@@ -3,7 +3,8 @@ import { app } from '../app.js';
 import { go } from '../router.js';
 import { html, $, fmtDuration, fmtViews, fmtDate, timeAgo, fmtRuntime } from '../util.js';
 import { icon } from '../icons.js';
-import { rail, enhanceRails, showCard, videoCard, reelCard, listBtn, img, heroBg, showMeta, premiumMark, toast } from '../ui/components.js';
+import { rail, enhanceRails, showCard, videoCard, reelCard, listBtn, img, heroBg, showMeta, premiumMark, toast, fitPoster } from '../ui/components.js';
+import { openPoster } from '../ui/lightbox.js';
 import { shareOrCopy } from '../util.js';
 import { shareUrl } from '../platform.js';
 // mountRating removed: like/dislike removed from the show page per requirement
@@ -37,7 +38,7 @@ export default async function showView(ctx) {
       <div class="hero-shade"></div>
       ${s.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
       <div class="hero-inner">
-        <div class="detail-poster">${img(s.posterLg || s.poster, s.title, { lazy: false })}</div>
+        <button type="button" class="detail-poster" id="detailPoster" aria-label="Open the full poster">${img(s.posterLg || s.poster, s.title, { lazy: false })}</button>
         <div class="hero-copy">
           <div class="eyebrow">${s.type === 'series' ? 'Original Series' : s.type === 'podcast' ? 'Fake Podcast' : 'Stand-up Comedy'}</div>
           <h1 class="hero-title bn">${s.title}</h1>
@@ -71,6 +72,9 @@ export default async function showView(ctx) {
     </div>`.s;
 
   enhanceRails(ctx.root);
+  fitPoster(ctx.root);                                   // whatever shape the artwork is, crop it only a little
+  const posterSrc = s.posterLg || s.poster;
+  $('#detailPoster', ctx.root)?.addEventListener('click', () => openPoster(posterSrc, s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title));
   let order = 'asc';
   $('#sortEps', ctx.root)?.addEventListener('click', (e) => {
     order = order === 'asc' ? 'desc' : 'asc';

@@ -50,7 +50,7 @@ test('stale shell assets are refreshed before the service worker can be stopped'
   assert.equal(backgroundWork.length, 1, 'keep the worker alive until stale-while-revalidate finishes');
   await Promise.all(backgroundWork);
   assert.equal(stored.get(assetUrl).label, 'fresh', 'replace the cached asset with the network response');
-  assert.equal(cacheName, 'ab-shell-v2.11.2', 'the release creates a fresh shell cache for installed browsers');
+  assert.equal(cacheName, 'ab-shell-v2.12.0', 'the release creates a fresh shell cache for installed browsers');
 
   let fontResponsePromise;
   const fontBackgroundWork = [];

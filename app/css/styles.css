@@ -171,8 +171,13 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .hero-dots button.active { background: #fff; width: 44px; }
 .detail-hero .hero-inner { align-items: flex-end; justify-content: flex-start; padding-bottom: 48px; }
 .detail-hero { min-height: min(78vh, 700px); display: flex; }
-.detail-poster { display: none; flex: none; width: clamp(180px, 18vw, 260px); aspect-ratio: 2/3; border-radius: var(--radius-lg); overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.7), 0 0 0 1px var(--border-2); }
-.detail-poster img { width: 100%; height: 100%; object-fit: cover; }
+/* The details-page poster: a button, so it opens the full artwork (lightbox). Its box follows the image's
+ * own aspect ratio — set by fitPoster() and clamped to a poster-like range — so a 4:5 or 16:9 upload is
+ * cropped only a little instead of losing half the picture. Without JS it falls back to 4:5. */
+.detail-poster { display: none; flex: none; width: clamp(180px, 18vw, 260px); aspect-ratio: var(--poster-ar, 4/5); border-radius: var(--radius-lg); overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.7), 0 0 0 1px var(--border-2); background: var(--panel-2); padding: 0; border: 0; cursor: zoom-in; transition: transform .35s var(--ease), box-shadow .35s var(--ease); }
+.detail-poster:hover { transform: translateY(-2px) scale(1.01); box-shadow: 0 34px 90px rgba(0,0,0,.75), 0 0 0 1px var(--border-2); }
+.detail-poster:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.detail-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .facts { display: grid; gap: 4px; margin: 6px 0 0; font-size: 13.5px; }
 .facts div { display: flex; gap: 10px; } .facts dt { color: var(--muted); min-width: 76px; } .facts dd { margin: 0; color: var(--text-2); }
 @media (min-width: 760px) { .hero-poster, .detail-poster { display: block; } }
@@ -444,7 +449,14 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .plans { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 20px; } .plan { position: relative; background: var(--panel); border: 1px solid var(--border-2); border-radius: 20px; padding: 28px 24px; display: grid; gap: 16px; align-content: start; } .plan.best { border-color: var(--gold); } .plan.current { box-shadow: 0 0 0 2px var(--accent); }
 .plan .price { font-size: 38px; font-weight: 800; } .plan .price small { font-size: 14px; color: var(--muted); font-weight: 500; } .plan li { display: flex; gap: 8px; align-items: flex-start; color: var(--text-2); font-size: 14px; margin-bottom: 8px; } .plan li svg { color: var(--ok); margin-top: 3px; }
 .badge { position: absolute; top: -12px; right: 20px; background: var(--gold); color: #000; font-size: 12px; font-weight: 800; padding: 4px 12px; border-radius: 999px; }
-.notice { display: flex; gap: 10px; align-items: center; background: #2a2200; border: 1px solid #5c4a00; color: var(--gold); padding: 12px 16px; border-radius: 12px; font-size: 14px; }
+/* Inline notice ("Your plan is active until…"): the icon stays with the first line and never shrinks, the
+ * text takes the rest of the row and wraps normally — on a phone the old centred layout squeezed the
+ * sentence into a thin column beside a squashed icon. */
+.notice { display: flex; gap: 10px; align-items: flex-start; background: #2a2200; border: 1px solid #5c4a00; color: var(--gold); padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+.notice > svg, .notice > .i { flex: 0 0 auto; margin-top: 2px; }
+.notice > span, .notice > div, .notice > b { min-width: 0; flex: 1; }
+.notice b { font-weight: 700; white-space: nowrap; }
+@media (max-width: 520px) { .notice { font-size: 13.5px; padding: 11px 13px; gap: 8px; } }
 .notice.ok { background: #0f2415; border-color: #1f5c31; color: #7be495; } .page > .notice { margin-top: 14px; }
 
 /* ---------- studio pages ---------- */
@@ -531,7 +543,7 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .otp-phone input { border: 0 !important; background: none !important; border-radius: 0 !important; letter-spacing: 1px; }
 .otp-links { margin-top: 2px; } .otp-links .linklike { font-size: 14px; }
 .otp-links .linklike:disabled { color: var(--muted); cursor: default; text-decoration: none; }
-.auth-busy { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px; color: var(--text-2); }
+.auth-busy { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 12px; color: var(--text-2); }
 .auth-busy[hidden] { display: none; }
 .legal section { margin-top: 26px; } .legal h2 { font-size: 19px; margin-bottom: 8px; } .legal p { color: var(--text-2); margin-top: 8px; line-height: 1.7; max-width: 72ch; } .legal .lead { font-size: 16px; margin-top: 4px; } .legal-links { margin-top: 36px !important; }
 .consent-bar { position: fixed; z-index: 90; left: 12px; right: 12px; bottom: calc(var(--tabbar-h) + var(--sab) + 24px); max-width: 760px; margin: 0 auto; display: flex; gap: 14px 20px; align-items: center; flex-wrap: wrap; justify-content: space-between; padding: 14px 18px; border-radius: 16px; background: rgba(24,24,28,.97); border: 1px solid var(--border-2); box-shadow: 0 12px 40px rgba(0,0,0,.6); font-size: 13.5px; color: var(--text-2); } .consent-bar p { flex: 1 1 320px; } .consent-bar a { text-decoration: underline; } .consent-bar .row { display: flex; gap: 8px; }

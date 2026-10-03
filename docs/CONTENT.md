@@ -51,8 +51,26 @@ Copy an existing entry in `shows` (fields: `id`, `title`, `titleEn`, `type`, `ge
 
 ## Coming-soon posters & Behind-the-scenes photos
 
-Drop originals in `UpcomingReleases/` or `BTS/`, run `npm run images` (needs ImageMagick), then add an entry to `upcoming` / `gallery` in the catalog. When a title launches, move it from `upcoming` to `shows` and re-point its teasers (`showId`).
+Drop originals in `UpcomingReleases/`, run `npm run images` (needs ImageMagick), then add an entry to `upcoming` in the catalog. When a title launches, move it from `upcoming` to `shows` and re-point its teasers (`showId`).
 
 ## Go live
 
 Static hosting: commit and deploy — the service worker picks up new content on the next visit. With the API running, `/api/v1/catalog` reloads automatically when the file changes. In the native apps, `data/catalog.json` is bundled at build time and, when an API is configured, refreshed from `/api/v1/catalog` on launch (with the bundled copy as fallback).
+
+## Top 10 episodes
+
+The homepage rail **Top 10 Episodes** is normally the ten most-watched episodes. To control it, open
+**Content studio → Top 10**: pick episodes, move them up or down, take them out, or press **Rank by views**
+to go back to the automatic list. Slots you leave empty are still filled by most-watched, so the rail is
+never short. An episode can also be pinned while editing it, in the **Top 10 position** field (1–10).
+
+A picked episode always appears — even a mature one — because it is an editorial choice rather than a
+recommendation; the mature-content cap (docs/ENGAGEMENT.md) still demotes the auto-filled rest for guests.
+
+## The photo gallery
+
+The Behind-the-scenes gallery is **hidden**: it has no entry point for viewers (top bar, footer, home rail,
+Account shortcuts), nothing in the Content studio, and it is out of the sitemap. `/gallery` redirects to the
+home page for old links. The photos themselves are untouched in the catalog (`gallery` in
+`data/catalog.json`, or the `gallery` items in MySQL) and the photo lightbox is still part of the app — it
+now powers the poster popup on show and coming-soon pages.

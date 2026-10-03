@@ -107,6 +107,27 @@ export function galleryCard(g, i) {
   return html`<button type="button" class="card card-gallery" data-lightbox="${g.id}" aria-label="Open photo ${i + 1}"><div class="poster">${img(g.image, g.caption || g.group + ' behind the scenes')}</div></button>`;
 }
 
+/**
+ * Let a details-page poster keep its own shape instead of being forced into a fixed portrait box.
+ *
+ * The artwork admins upload is not all 2:3 — coming-soon posters are often 4:5 and some are 16:9 banners.
+ * Filling a 2:3 box with those (`object-fit: cover`) threw away up to half the picture. Here the box takes
+ * the image's own aspect ratio, clamped to a poster-like range: at most a little is cropped, and a wide
+ * image is trimmed at the sides instead of losing most of its height. The whole picture is one tap away in
+ * the lightbox (see `openPoster` in ui/lightbox.js).
+ */
+export function fitPoster(root) {
+  for (const img of root.querySelectorAll('.detail-poster img')) {
+    const set = () => {
+      const w = img.naturalWidth, h = img.naturalHeight;
+      if (!w || !h) return;
+      const box = img.closest('.detail-poster');
+      if (box) box.style.setProperty('--poster-ar', String(Math.min(1.55, Math.max(0.68, w / h)).toFixed(4)));
+    };
+    if (img.complete && img.naturalWidth) set(); else img.addEventListener('load', set, { once: true });
+  }
+}
+
 /* ---------- rails ---------- */
 // A horizontal scrolling row with a heading and a "See all" link.
 export function rail({ title, subtitle = '', items = [], href = '', linkLabel = 'See all', cls = '', id = '', hideHeading = false }) {

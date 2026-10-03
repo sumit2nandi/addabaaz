@@ -1,7 +1,7 @@
 // Content studio entry point (http://…/content/) — the CMS half of the management tools.
 //
 // Everything that shapes what viewers see: shows and seasons, videos and reels, the "coming soon"
-// calendar, the gallery, and the studio/team credits. The business half (customers, payments and refunds,
+// calendar and the studio/team credits. The business half (customers, payments and refunds,
 // support tickets, broadcasts, errors) lives in the Admin console at /admin/.
 //
 // Both consoles share the shell (admin/js/console.js), the API client (admin/js/api.js) and the page
@@ -14,14 +14,14 @@ const NAV = [
     ['shows', 'Shows & seasons', 'film'],
     ['videos', 'Videos & reels', 'tv'],
     ['upcoming', 'Coming soon', 'clock'],
-    ['gallery', 'Gallery', 'image'],
+    ['top', 'Top 10', 'crown'],
     ['studio', 'Studio & team', 'building'],
   ]],
 ];
 // URL pattern -> page module. Each module's default export is `render(root, params, ctx)`.
 const ROUTES = [
   [/^dashboard$/, () => import('/admin/js/views/content-overview.js')],
-  [/^(shows|videos|upcoming|gallery)$/, () => import('/admin/js/views/content.js')],
+  [/^(shows|videos|upcoming|top)$/, () => import('/admin/js/views/content.js')],
   [/^studio$/, () => import('/admin/js/views/studio.js')],
 ];
 

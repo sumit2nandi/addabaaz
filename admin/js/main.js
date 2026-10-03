@@ -39,5 +39,5 @@ startConsole({
   routes: ROUTES,
   name: 'Admin',
   title: 'ADDABAAZ Admin',
-  switchTo: { href: '/content/', label: 'Content studio', icon: 'film', title: 'Shows, videos, coming soon, gallery and studio credits' },
+  switchTo: { href: '/content/', label: 'Content studio', icon: 'film', title: 'Shows, videos, coming soon, Top 10 and studio credits' },
 });

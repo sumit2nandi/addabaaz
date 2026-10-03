@@ -10,7 +10,7 @@ import { mayLeaveKids } from './parental.js';
 // Menu definitions: [path, label] for the top bar, and [path, label, icon] for the mobile tab bar.
 const NAV = [
   ['/', 'Home', 'home'], ['/shows', 'Shows', 'shows'], ['/reels', 'Reels', 'reels'],
-  ['/upcoming', 'Coming Soon', 'upcoming'], ['/gallery', 'Behind the Scenes', 'gallery'], ['/list', 'My List', 'list'],
+  ['/upcoming', 'Coming Soon', 'upcoming'], ['/list', 'My List', 'list'],   // the photo gallery is hidden (app/js/views/gallery.js redirects home)
 ];
 const STUDIO = [['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact'], ['/support', 'Support']];
 const TABS = [['/', 'Home', 'home'], ['/shows', 'Shows', 'tv'], ['/reels', 'Reels', 'reels'], ['/search', 'Search', 'search'], ['/account', 'Me', 'user']];
@@ -22,7 +22,7 @@ let lastPath = '/';
 const section = (path) => {
   if (path === '/' ) return 'home';
   const seg = path.split('/')[1];
-  return { shows: 'shows', show: 'shows', watch: 'shows', reels: 'reels', upcoming: 'upcoming', soon: 'upcoming', gallery: 'gallery', list: 'list',
+  return { shows: 'shows', show: 'shows', watch: 'shows', reels: 'reels', upcoming: 'upcoming', soon: 'upcoming', list: 'list',
     about: 'studio', services: 'studio', contact: 'studio', support: 'studio', search: 'search', account: 'account', profiles: 'account', plans: 'account', billing: 'account', signin: 'account', signup: 'account' }[seg] || '';
 };
 

@@ -107,3 +107,13 @@ test('promotions are cleaned up by the background job and never break an unconfi
   assert.match(billing, /promos && payment\.creditAppliedPaise > 0/, 'a refund returns the credit that bought the plan');
   assert.match(read('server/src/features.js'), /promos\.qualify\(u, \{ reason: 'verified' \}\)/, 'confirming an e-mail releases a held reward');
 });
+
+test('the plan notice reads properly on a phone', () => {
+  const css = read('app/css/styles.css');
+  const rule = css.match(/^\.notice \{[^}]*\}$/m)?.[0] || '';
+  assert.match(rule, /align-items: flex-start/, 'the icon sits with the first line instead of the middle of a wrapped block');
+  assert.match(rule, /overflow-wrap: anywhere/, 'long words cannot push the box out of shape');
+  assert.match(css, /\.notice > svg, \.notice > \.i \{ flex: 0 0 auto;/, 'the icon never shrinks to a sliver');
+  assert.match(css, /@media \(max-width: 520px\) \{ \.notice \{ font-size: 13\.5px/, 'slightly smaller type on phones');
+  assert.match(css, /\.notice b \{ font-weight: 700; white-space: nowrap; \}/, 'the date stays on one line');
+});

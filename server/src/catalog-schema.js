@@ -93,7 +93,7 @@ function show(input, ctx) {
 
 // Video or episode. The `source` decides where it plays from: YouTube id, Cloudflare R2 object, or a direct mp4/hls URL; premium access is independent of source.
 function video(input, ctx) {
-  const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'description', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access', 'rating', 'subtitles', 'publishAt', 'hidden'], 'A video', ctx);
+  const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'description', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access', 'rating', 'subtitles', 'publishAt', 'hidden', 'topRank'], 'A video', ctx);
   r.id(); r.oneOf('kind', KINDS, { req: true }); r.str('showId', { max: 64, pattern: ID, nullable: true }); ref(r, ctx, 'showId', [ctx.showIds, ctx.upcomingIds].filter(Boolean));
   r.int('episode', { min: 1, max: 100000, nullable: true }); if (r.out.kind && r.out.kind !== 'episode') r.out.episode = null;
   r.str('title', { req: true, max: 300 }); r.str('shortTitle', { max: 120 }); r.str('description', { max: 500 });
@@ -116,6 +116,9 @@ function video(input, ctx) {
   }
   r.img('thumbnail'); r.int('duration', { req: true, max: 86400 }); r.date('publishedAt', { req: true }); r.int('views', { dflt: 0 });
   r.oneOf('access', ACCESS, { req: true }); r.oneOf('rating', RATINGS); r.date('publishAt'); r.bool('hidden', false);
+  // The homepage "Top 10 Episodes" rail: an editor's pick, 1 = first (Content studio → Top 10).
+  r.int('topRank', { min: 1, max: 10, nullable: true });
+  if (r.out.topRank && r.out.kind !== 'episode') r.out.topRank = null;   // only episodes can be ranked
   // Optional subtitle tracks: max 12, each with a language code, label and a .vtt file; one track per language.
   if (r.src.subtitles !== undefined && r.src.subtitles !== null) {
     const subs = r.src.subtitles;

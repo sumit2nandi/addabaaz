@@ -66,3 +66,18 @@ test('the sign-in page styles exist for the phone-first form', () => {
     assert.ok(css.includes(cls), `${cls} is styled`);
   assert.match(css, /\.auth-busy\[hidden\] \{ display: none; \}/, 'the busy state stays hidden until it is used');
 });
+
+test('the sign-in loader covers the whole card, on every method', () => {
+  const auth = read('app/js/views/auth.js');
+  // The overlay used to live inside the mobile-number pane, so on the e-mail tab (where the Google,
+  // Facebook and Apple buttons are) its parent was hidden and the spinner never appeared.
+  const card = auth.slice(auth.indexOf('<form class="auth-card form" id="af"'), auth.indexOf('</form>'));
+  assert.match(card, /<div class="auth-busy" id="asBusy" hidden>/, 'one overlay, a child of the card itself');
+  const otpPaneStart = card.indexOf('<div id="otpPane">');
+  const otpPaneEnd = card.indexOf('<div id="emailPane"');
+  const otpPane = card.slice(otpPaneStart, otpPaneEnd);
+  assert.equal(otpPane.includes('asBusy'), false, 'it is not inside the mobile-number pane any more');
+  assert.match(auth, /busy\(true, provider === 'google' \? 'Signing you in with Google…'/, 'the social flow turns it on with a clear label');
+  assert.match(auth, /busy\(true, signup \? 'Creating your account…'/, 'and so does the e-mail form');
+  assert.match(read('app/css/styles.css'), /\.auth-busy \{ display: flex; flex-direction: column; align-items: center; justify-content: center;/, 'centred over the card, not pinned to the top');
+});

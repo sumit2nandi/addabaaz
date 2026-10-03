@@ -330,3 +330,13 @@ main#main { overflow-x: clip; }
   .side-foot .btn { min-height: 44px; }
 }
 @media (max-width: 420px) { .stats, .tiles { grid-template-columns: 1fr; } }
+
+/* Top 10 episodes (Content studio → Top 10): the ordered rail picks and the most-watched candidates. */
+.top-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.top-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2, rgba(255,255,255,.02)); }
+.top-rank { flex: none; min-width: 22px; text-align: center; font-weight: 800; color: var(--accent, #e50914); }
+.top-thumb { flex: none; width: 64px; height: 40px; object-fit: cover; border-radius: 6px; background: #000; }
+.top-info { flex: 1; min-width: 0; }
+.top-info b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-info small { display: block; }
+@media (max-width: 640px) { .top-thumb { width: 52px; height: 34px; } .top-row { gap: 8px; padding: 7px 8px; } }

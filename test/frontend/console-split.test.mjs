@@ -35,7 +35,8 @@ test('content management and administration are two separate consoles', () => {
   assert.equal(/\[\['shows', 'Shows'/.test(adminMain), false, 'shows moved to the Content studio');
   assert.equal(adminMain.includes("import('./views/content.js')"), false, 'and so did its page module');
   assert.match(studioMain, /const ROUTES = \[/, 'the studio has its own routes');
-  for (const page of ['shows', 'videos', 'upcoming', 'gallery', 'studio']) assert.ok(studioMain.includes(`'${page}'`), `the studio has ${page}`);
+  for (const page of ['shows', 'videos', 'upcoming', 'top', 'studio']) assert.ok(studioMain.includes(`'${page}'`), `the studio has ${page}`);
+  assert.equal(studioMain.includes("'gallery'"), false, 'and the photo gallery is hidden (docs/CONTENT.md)');
   assert.match(studioMain, /import\('\/admin\/js\/views\/content\.js'\)/, 'it reuses the content page modules');
   assert.match(studioMain, /name: 'Content'/, 'the studio names itself in the sign-in card and sidebar');
   assert.match(read('admin/js/views/content.js'), /export default async function content\(root, \[section\], ctx\)/, 'the content page still takes its section');
