@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { parseHTML } from 'linkedom';
 import { videoKey } from '../../server/src/uploads.js';
+import { createR2 } from '../../server/src/r2.js';
 
 const read = (p) => fs.readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
 
@@ -148,4 +149,43 @@ test('admin content view, server admin routes, and watch page wire R2 verificati
   assert.match(adminServer, /r2_object_missing/, 'missing R2 objects produce a clear 400 error on save');
   assert.match(appServer, /video_file_missing/, 'stream endpoint reports missing R2 video files clearly');
   assert.match(watchView, /\(e instanceof ApiError \|\| e\?\.friendly\) \? e\.message : undefined/, 'watch page displays specific API error messages');
+});
+
+test('createR2.head signs HEAD requests with method=HEAD (not GET) and falls back to 1-byte Range GET if HEAD is rejected', async () => {
+  const now = new Date('2026-10-03T12:00:00Z');
+  const r2 = createR2({
+    R2_ACCOUNT_ID: 'acct123',
+    R2_ACCESS_KEY_ID: 'AKIAEXAMPLE',
+    R2_SECRET_ACCESS_KEY: 'secretkeyexample',
+    R2_BUCKET: 'addabaaz-premium',
+  });
+  const getUrl = new URL(r2.presignGet('premium/cricket/e911c479-img_6304.mov', { ttl: 60, now }));
+  const headUrl = new URL(r2.presignHead('premium/cricket/e911c479-img_6304.mov', { ttl: 60, now }));
+  assert.notEqual(
+    getUrl.searchParams.get('X-Amz-Signature'),
+    headUrl.searchParams.get('X-Amz-Signature'),
+    'HEAD presigned URL uses a distinct SigV4 signature from GET so Cloudflare R2 does not reject HEAD with 403 SignatureDoesNotMatch',
+  );
+
+  const prevFetch = globalThis.fetch;
+  try {
+    const calls = [];
+    globalThis.fetch = async (url, opts = {}) => {
+      calls.push({ url: String(url), method: opts.method || 'GET', headers: opts.headers || {} });
+      if (opts.method === 'HEAD') {
+        return new Response(null, { status: 403 });
+      }
+      return new Response('x', { status: 206, headers: { 'content-range': 'bytes 0-0/18454937', 'content-type': 'video/quicktime' } });
+    };
+    const h = await r2.head('premium/cricket/e911c479-img_6304.mov');
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].method, 'HEAD');
+    assert.equal(calls[1].method, 'GET');
+    assert.equal(calls[1].headers.Range, 'bytes=0-0');
+    assert.equal(h.status, 200);
+    assert.equal(h.size, 18454937);
+    assert.equal(h.type, 'video/quicktime');
+  } finally {
+    globalThis.fetch = prevFetch;
+  }
 });
