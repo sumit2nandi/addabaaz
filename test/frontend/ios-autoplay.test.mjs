@@ -1,0 +1,250 @@
+// iOS/WebKit may reject unmuted autoplay; adapters should try sound first and fall back to muted inline playback.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createHtml5Player } from '../../app/js/players/html5.js';
+import { createYouTubePlayer } from '../../app/js/players/youtube.js';
+
+const saveGlobals = (names) => {
+  const previous = new Map(names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
+  return () => {
+    for (const [name, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  };
+};
+
+test('HTML5 autoplay marks the video muted and inline before assigning its source', async () => {
+  const restore = saveGlobals(['document', 'navigator', 'window', 'localStorage']);
+  const attributes = new Map();
+  const element = {
+    textTracks: { length: 0, addEventListener() {} },
+    setAttribute(name, value) { attributes.set(name, value); },
+    removeAttribute(name) { attributes.delete(name); },
+    addEventListener() {},
+    canPlayType() { return 'probably'; },
+    appendChild() {}, pause() {}, load() {}, play() { return Promise.resolve(); },
+  };
+  const container = { innerHTML: '', appendChild() {} };
+  globalThis.document = { createElement(tag) { assert.equal(tag, 'video'); return element; } };
+  Object.defineProperty(globalThis, 'navigator', { value: {}, configurable: true });
+  globalThis.window = {};
+  globalThis.localStorage = { getItem() { return null; }, setItem() {} };
+  try {
+    const ctl = await createHtml5Player(container, { source: { type: 'mp4', url: '/video.mp4' } }, { autoplay: true, muted: true });
+    assert.equal(element.defaultMuted, true);
+    assert.equal(element.muted, true);
+    assert.equal(element.playsInline, true);
+    assert.equal(element.autoplay, true);
+    assert.equal(element.preload, 'auto', 'active playback asks for media bytes immediately');
+    for (const name of ['muted', 'playsinline', 'webkit-playsinline', 'autoplay']) assert.ok(attributes.has(name), `${name} attribute is present`);
+    ctl.destroy();
+  } finally { restore(); }
+});
+
+test('HTML5 retries autoplay muted when iOS rejects the first unmuted play attempt', async () => {
+  const restore = saveGlobals(['document', 'navigator', 'window', 'localStorage']);
+  const attributes = new Map();
+  const playModes = [];
+  const element = {
+    textTracks: { length: 0, addEventListener() {} },
+    setAttribute(name, value) { attributes.set(name, value); },
+    removeAttribute(name) { attributes.delete(name); },
+    addEventListener() {},
+    canPlayType() { return 'probably'; },
+    appendChild() {}, pause() {}, load() {},
+    play() {
+      playModes.push(this.muted);
+      if (playModes.length === 1) {
+        const err = new Error('autoplay requires a gesture'); err.name = 'NotAllowedError';
+        return Promise.reject(err);
+      }
+      return Promise.resolve();
+    },
+  };
+  const container = { innerHTML: '', appendChild() {} };
+  globalThis.document = { createElement(tag) { assert.equal(tag, 'video'); return element; } };
+  Object.defineProperty(globalThis, 'navigator', { value: {}, configurable: true });
+  globalThis.window = {};
+  globalThis.localStorage = { getItem() { return null; }, setItem() {} };
+  try {
+    const ctl = await createHtml5Player(container, { source: { type: 'mp4', url: '/video.mp4' } }, { autoplay: true, muted: false });
+    assert.deepEqual(playModes, [false, true], 'sound-first attempt is followed by muted autoplay');
+    assert.equal(element.defaultMuted, true);
+    assert.equal(element.muted, true);
+    assert.ok(attributes.has('muted'), 'muted attribute is applied before the retry');
+    await ctl.playPromise;
+    ctl.destroy();
+  } finally { restore(); }
+});
+
+test('HTML5 returns the player without waiting for a slow subtitle request', async () => {
+  const restore = saveGlobals(['document', 'navigator', 'window', 'localStorage', 'fetch']);
+  let playCalled = false;
+  const element = {
+    textTracks: { length: 0, addEventListener() {} },
+    setAttribute() {}, removeAttribute() {}, addEventListener() {},
+    canPlayType() { return 'probably'; }, appendChild() {}, pause() {}, load() {},
+    play() { playCalled = true; return Promise.resolve(); },
+  };
+  const container = { innerHTML: '', appendChild() {} };
+  globalThis.document = { createElement() { return element; } };
+  Object.defineProperty(globalThis, 'navigator', { value: {}, configurable: true });
+  globalThis.window = {};
+  globalThis.localStorage = { getItem() { return null; }, setItem() {} };
+  globalThis.fetch = () => new Promise(() => {}); // subtitle server never responds
+  try {
+    const result = await Promise.race([
+      createHtml5Player(container, {
+        source: { type: 'mp4', url: '/video.mp4' },
+        subtitles: [{ url: '/slow.vtt', label: 'English', lang: 'en' }],
+      }, { autoplay: true, muted: true }).then((ctl) => ({ ctl })),
+      new Promise((resolve) => setTimeout(() => resolve(null), 250)),
+    ]);
+    assert.ok(result?.ctl, 'player setup completes while subtitles continue in the background');
+    assert.equal(playCalled, true, 'video play is requested without waiting for the subtitle response');
+    result.ctl.destroy();
+  } finally { restore(); }
+});
+
+test('YouTube autoplay explicitly mutes the iOS iframe before asking it to play inline', async () => {
+  const restore = saveGlobals(['document', 'location', 'window']);
+  const actions = [];
+  let config;
+  class FakePlayer {
+    constructor(_mount, options) {
+      config = options;
+      setTimeout(() => options.events.onReady({ target: this }), 0);
+    }
+    mute() { actions.push('mute'); }
+    playVideo() { actions.push('play'); }
+    getCurrentTime() { return 0; }
+    getDuration() { return 0; }
+    destroy() {}
+  }
+  globalThis.document = { createElement() { return {}; } };
+  globalThis.location = { protocol: 'https:', origin: 'https://addabaaz.example' };
+  globalThis.window = { YT: { Player: FakePlayer, PlayerState: { PLAYING: 1, PAUSED: 2, ENDED: 0, BUFFERING: 3 } } };
+  try {
+    const container = { innerHTML: '', appendChild() {} };
+    const ctl = await createYouTubePlayer(container, 'test-video', { autoplay: true, muted: true, controls: false });
+    assert.equal(config.playerVars.autoplay, 1);
+    assert.equal(config.playerVars.mute, 1);
+    assert.equal(config.playerVars.playsinline, 1);
+    assert.deepEqual(actions, ['mute', 'play']);
+    ctl.destroy();
+  } finally { restore(); }
+});
+
+test('YouTube falls back to an immediately playable muted iframe when the API script fails', async () => {
+  const restore = saveGlobals(['document', 'location', 'window']);
+  globalThis.document = {
+    createElement() { return {}; },
+    head: { appendChild(script) { setTimeout(() => script.onerror?.(), 0); } },
+  };
+  globalThis.location = { protocol: 'https:', origin: 'https://addabaaz.example' };
+  globalThis.window = {};
+  try {
+    const container = { innerHTML: '', appendChild() {}, querySelector() { return null; } };
+    const ctl = await createYouTubePlayer(container, 'test-video', { autoplay: true, muted: false, controls: false });
+    assert.equal(ctl.engine, 'iframe', 'slow/blocked API does not hold the video behind its 8-second timeout');
+    assert.match(container.innerHTML, /autoplay=1/);
+    assert.match(container.innerHTML, /mute=1/, 'fallback favors immediate muted autoplay over a stalled sound-first attempt');
+    assert.match(container.innerHTML, /playsinline=1/);
+    ctl.destroy();
+  } finally { restore(); }
+});
+
+test('YouTube does not wait for the API network timeout before using its iframe fallback', async () => {
+  const restore = saveGlobals(['document', 'location', 'window', 'setTimeout', 'clearTimeout']);
+  const realSetTimeout = globalThis.setTimeout, realClearTimeout = globalThis.clearTimeout;
+  const stalledApiTimeout = { stalledApiTimeout: true };
+  globalThis.setTimeout = (fn, ms, ...args) => ms === 1500
+    ? realSetTimeout(fn, 0, ...args)
+    : ms === 8000 ? stalledApiTimeout : realSetTimeout(fn, ms, ...args);
+  globalThis.clearTimeout = (timer) => { if (timer !== stalledApiTimeout) realClearTimeout(timer); };
+  globalThis.document = { createElement() { return {}; }, head: { appendChild() {} } };
+  globalThis.location = { protocol: 'https:', origin: 'https://addabaaz.example' };
+  globalThis.window = {};
+  try {
+    const container = { innerHTML: '', appendChild() {}, querySelector() { return null; } };
+    const ctl = await createYouTubePlayer(container, 'slow-api-video', { autoplay: true, muted: false, controls: false });
+    assert.equal(ctl.engine, 'iframe', 'the playback budget expires while the API script request is still pending');
+    assert.match(container.innerHTML, /mute=1/, 'fallback still preserves autoplay with sound-safe mute');
+    ctl.destroy();
+  } finally { restore(); }
+});
+
+test('YouTube retries blocked unmuted autoplay muted', async () => {
+  const restore = saveGlobals(['document', 'location', 'window']);
+  const actions = [];
+  let config;
+  let muted = false;
+  class FakePlayer {
+    constructor(_mount, options) {
+      config = options;
+      setTimeout(() => options.events.onReady({ target: this }), 0);
+    }
+    mute() { muted = true; actions.push('mute'); }
+    playVideo() { actions.push('play'); }
+    isMuted() { return muted; }
+    getCurrentTime() { return 0; }
+    getDuration() { return 0; }
+    getPlayerState() { return -1; }
+    destroy() {}
+  }
+  globalThis.document = { createElement() { return {}; } };
+  globalThis.location = { protocol: 'https:', origin: 'https://addabaaz.example' };
+  globalThis.window = { YT: { Player: FakePlayer, PlayerState: { PLAYING: 1, PAUSED: 2, ENDED: 0, BUFFERING: 3 } } };
+  try {
+    const container = { innerHTML: '', appendChild() {} };
+    const ctl = await createYouTubePlayer(container, 'test-video', { autoplay: true, muted: false, controls: false });
+    assert.equal(config.playerVars.autoplay, 1);
+    assert.equal(config.playerVars.mute, 0, 'sound-first autoplay is requested');
+    assert.deepEqual(actions, ['play']);
+    config.events.onAutoplayBlocked();
+    assert.deepEqual(actions, ['play', 'mute', 'play'], 'a blocked attempt is retried muted');
+    config.events.onAutoplayBlocked();
+    assert.deepEqual(actions, ['play', 'mute', 'play'], 'muted fallback is attempted only once');
+    ctl.destroy();
+  } finally { restore(); }
+});
+
+test('YouTube watchdog retries muted when iOS omits the blocked-autoplay event', async () => {
+  const restore = saveGlobals(['document', 'location', 'window', 'setTimeout', 'clearTimeout']);
+  const realSetTimeout = globalThis.setTimeout, realClearTimeout = globalThis.clearTimeout;
+  const actions = [];
+  let config, fallbackCheck;
+  globalThis.setTimeout = (fn, ms, ...args) => {
+    if (ms === 1200) { fallbackCheck = fn; return { mutedFallbackTimer: true }; }
+    return realSetTimeout(fn, ms, ...args);
+  };
+  globalThis.clearTimeout = (timer) => {
+    if (timer?.mutedFallbackTimer) return;
+    return realClearTimeout(timer);
+  };
+  class FakePlayer {
+    constructor(_mount, options) {
+      config = options;
+      realSetTimeout(() => options.events.onReady({ target: this }), 0);
+    }
+    mute() { actions.push('mute'); }
+    playVideo() { actions.push('play'); }
+    getPlayerState() { return -1; }
+    getCurrentTime() { return 0; }
+    getDuration() { return 0; }
+    destroy() {}
+  }
+  globalThis.document = { createElement() { return {}; } };
+  globalThis.location = { protocol: 'https:', origin: 'https://addabaaz.example' };
+  globalThis.window = { YT: { Player: FakePlayer, PlayerState: { PLAYING: 1, PAUSED: 2, ENDED: 0, BUFFERING: 3 } } };
+  try {
+    const container = { innerHTML: '', appendChild() {} };
+    const ctl = await createYouTubePlayer(container, 'iphone-video', { autoplay: true, muted: false, controls: false });
+    assert.deepEqual(actions, ['play'], 'start with the requested sound-first attempt');
+    assert.equal(typeof fallbackCheck, 'function', 'arm a watchdog after the player is ready');
+    fallbackCheck(); // no onAutoplayBlocked callback; the player remains UNSTARTED
+    assert.deepEqual(actions, ['play', 'mute', 'play'], 'retry inline playback muted instead of leaving the poster stuck');
+    ctl.destroy();
+  } finally { restore(); }
+});

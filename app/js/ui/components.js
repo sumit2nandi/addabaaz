@@ -8,8 +8,8 @@ import { avatarColor } from '../data/user.js';
 // onerror= scripts would be blocked by the site's Content-Security-Policy).
 
 // <img> markup with lazy loading and the failure fallback above.
-export function img(src, alt = '', { cls = '', lazy = true, fallback } = {}) {
-  return html`<img class="${cls}" src="${src}" alt="${alt}" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''}>`;
+export function img(src, alt = '', { cls = '', lazy = true, fallback, priority = false } = {}) {
+  return html`<img class="${cls}" src="${src}" alt="${alt}" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''} ${priority ? raw('fetchpriority="high"') : ''}>`;
 }
 /** Hero background. Wide screens get the landscape episode thumbnail; phones (portrait, < 760px) get the portrait show poster instead,
  *  because a 16:9 picture cropped into a tall phone screen shows only a thin slice of the middle (faces cut in half). */

@@ -8,16 +8,12 @@
  *   { type: 'hls',  url }           – adaptive stream (.m3u8) via native HLS or hls.js
  * Move titles to your own CDN later by only changing `source` in data/catalog.json.
  *
- * Autoplay strategy — the same one the main branch used in its createVideoPlayer():
- *   1. build the player MUTED (autoplay=1&mute=1): muted autoplay is allowed everywhere, so motion
- *      starts the instant the embed is ready — no sound-first attempt, no player-state polling, no
- *      multi-second dead screen on phones;
- *   2. lift the mute at 600/1500/3000ms (main postMessaged unMute + setVolume(100) on that schedule):
- *      the tap that opened this video already satisfies the browser's sound policy, so playback comes
- *      up with VOLUME on mobiles instead of staying muted until another gesture.
- * If the player still reports muted after the last lift, the page shows its "tap for sound" pill; the
- * first gesture anywhere also unmutes as a safety net. onAutoplayBlocked fires only when even the
- * muted start never ran (Low Power Mode, data saver) — never for a merely slow load.
+ * Autoplay strategy:
+ *   1. when sound is requested on iOS, try unmuted autoplay first; if WebKit blocks it, retry muted so
+ *      the video still starts, then offer a deliberate sound control (iOS pauses timer-based unmute);
+ *   2. on other browsers, start muted/inline and try to lift mute at 600/1500/3000ms after PLAYING.
+ * A "tap for sound" pill appears when iOS falls back to muted or other browsers refuse the lifts.
+ * `onAutoplayBlocked` is reserved for cases where muted playback itself never starts.
  */
 import { loadYouTube, createYouTubePlayer } from './youtube.js';
 import { createHtml5Player } from './html5.js';
@@ -25,51 +21,68 @@ import { createHtml5Player } from './html5.js';
 // How long a player gets before "it never started" counts as a full autoplay block (a genuine
 // rejection on HTML5, a still-unstarted YouTube state at this point).
 const AUTOPLAY_WAIT_MS = 2200;
-// main's unmute schedule: try to lift the initial mute at 600ms, 1500ms and 3000ms after creation.
+// Optional sound schedule, measured from the first real PLAYING event (not player construction).
 const UNMUTE_LIFTS_MS = [600, 1500, 3000];
 
+// iOS pauses autoplaying media if script unmutes it without a direct user gesture. Include iPadOS
+// desktop-mode Safari, whose user agent says Mac but whose touch-point count identifies an iPad.
+function isIOSBrowser() {
+  const nav = globalThis.navigator;
+  if (!nav) return false;
+  return nav.userAgentData?.platform === 'iOS'
+    || /iPad|iPhone|iPod/i.test(nav.userAgent || '')
+    || (nav.platform === 'MacIntel' && Number(nav.maxTouchPoints) > 1);
+}
+
 /** Options (all optional): start, autoplay, muted, controls (false for reels), onProgress, onEnded, onState,
- *  onAutoplayMuted() - the player still runs muted after every unmute lift (show a "tap for sound" hint),
- *  onGestureUnmuted() - the first user gesture unmuted the player (hide the hint above),
+ *  onAutoplayMuted() - autoplay is running muted and needs an explicit sound action (show a "tap for sound" hint),
+ *  onGestureUnmuted() - the first fallback gesture unmuted the player (hide the hint above),
  *  onAutoplayBlocked() - even muted playback did not start (Low Power Mode etc.); the viewer has to tap play. */
 export async function createPlayer(container, video, opts = {}) {
-  let playing = false, gone = false, errored = false;
+  let playing = false, playbackStarted = false, gone = false, errored = false;
   const timers = [];
   let cancelLifts = () => {};   // set once the unmute lifts exist; also called from destroy()
+  let startSoundLifts = () => {}; // initialized after the adapter resolves; PLAYING may arrive before then
+  const src = video.source || {};
+  const autoplay = opts.autoplay !== false;
+  const iosBrowser = isIOSBrowser();
+  const wantSound = !opts.muted;   // the page did not force mute (e.g. the reels viewer chose silence)
   const wrapped = {
     ...opts,
     onUserMute: () => cancelLifts(),
-    onState: (s, code) => { if (s === 'playing' || s === 'buffering') playing = true; else if (s === 'error') errored = true; /* buffering = the browser did start it, just slowly; errored = an autoplay "recovery" would be pointless */ opts.onState?.(s, code); },
+    onState: (s, code) => {
+      if (s === 'playing') { playing = true; playbackStarted = true; startSoundLifts(); }
+      else if (s === 'buffering') playing = true; // accepted by the engine; wait for actual PLAYING before any unmute attempt
+      else if (s === 'error') errored = true;
+      opts.onState?.(s, code);
+    },
   };
-  const src = video.source || {};
-  const autoplay = opts.autoplay !== false;
-  const wantSound = !opts.muted;   // the page did not force mute (e.g. the reels viewer chose silence)
 
-  /* Instant-by-construction: every autoplaying player is BUILT muted (main's autoplay=1&mute=1 embed).
-   * Muted autoplay never gets refused, so videos and reels start moving the moment the engine is ready
-   * on every phone — the volume then arrives via the lifts below instead of by delaying playback. */
-  const playerOpts = autoplay ? { ...wrapped, muted: true } : wrapped;
+  /* Prefer the sound-first attempt on iOS when the viewer has not chosen silence; all other autoplay
+   * starts muted. The adapters retry muted playback if that unmuted attempt is refused. */
+  const tryUnmutedOnIOS = autoplay && iosBrowser && wantSound;
+  const playerOpts = autoplay ? { ...wrapped, muted: !tryUnmutedOnIOS } : wrapped;
 
   let ctl;
   if (src.type === 'youtube') ctl = await createYouTubePlayer(container, src.id, playerOpts);
   else if (src.type === 'mp4' || src.type === 'hls') ctl = await createHtml5Player(container, video, playerOpts);
   else throw Object.assign(new Error('This video can’t be played right now.'), { friendly: true });
 
-  /* Unmute at the first genuine gesture (pointerdown/touchstart/keydown, capture phase, at most once per
-   * playback): that interaction satisfies every browser's sound policy, so a muted start need not stay muted
-   * beyond the viewer's first interaction. Views hear onGestureUnmuted() and hide their tap-for-sound pill. */
+  /* On browsers that auto-unmute is allowed, use the first genuine gesture (capture phase) as a safety net.
+   * Skip dedicated sound buttons: their own click handlers toggle mute, and pre-unmuting in capture would
+   * invert the button's intended action. iOS gets explicit sound controls rather than this broad fallback. */
   const armGestureUnmute = () => {
     const target = typeof window !== 'undefined' ? window : (typeof document !== 'undefined' ? document : null);
     if (!target || typeof target.addEventListener !== 'function') return;
     const EVENTS = ['pointerdown', 'touchstart', 'keydown'];
     const disarm = () => EVENTS.forEach((t) => target.removeEventListener(t, onGesture, true));
     let heard = false;
-    const onGesture = (e) => {                   // one physical tap fires SEVERAL of these in a row — react once
+    const onGesture = (event) => {               // one physical tap fires SEVERAL of these in a row — react once
       if (heard || gone) return;
+      if (event?.target?.closest?.('.unmute-pill, .ytp-vol-btn, .ytp-vol-slider, [data-reel-sound]')) return;
       heard = true;
       disarm();
       if (errored) return;                                  // a dead player gains nothing from unmuting
-      if (e?.target?.closest?.('.ytp-vol-btn, .ytp-vol-slider, [data-reel-sound]')) return;
       try { if (!ctl.isMuted || ctl.isMuted()) ctl.unmute(); } catch { /* player already gone */ }
       opts.onGestureUnmuted?.();
     };
@@ -78,28 +91,37 @@ export async function createPlayer(container, video, opts = {}) {
   };
 
   if (autoplay) {
-    armGestureUnmute();   // every muted autostart (incl. reels' explicit-muted builds) gains sound at the first gesture
+    if (!iosBrowser) armGestureUnmute();   // on iOS, only the explicit sound control should unmute media
 
-    // The lift timers + the "still muted?" pill check: an explicit ctl.mute() from the page (the reels
-    // sound button) cancels them, so the viewer's own mute choice is never overridden by a later lift.
+    // Start optional sound handling only after PLAYING. iOS must stay muted unless a sound control is tapped.
     const soundTimers = [];
+    let liftsStarted = false, liftWorked = false;
     cancelLifts = () => { soundTimers.forEach(clearTimeout); soundTimers.length = 0; };
-    if (wantSound) {
-      // main-branch volume: lift the mute on createVideoPlayer()'s 600/1500/3000ms schedule. On mobiles the
-      // opening tap has already activated the page, so the lift succeeds without any extra gesture.
-      let liftWorked = false;
+    startSoundLifts = () => {
+      if (!ctl || gone || !wantSound || liftsStarted) return;
+      liftsStarted = true;
+      if (iosBrowser) {
+        // Safari stops autoplay when a timer makes a playing video audible. Keep it muted and surface
+        // the explicit tap-for-sound UI; the view's click handler unmutes inside the user's gesture.
+        let stillMuted = true;
+        try { stillMuted = ctl.isMuted ? ctl.isMuted() : true; } catch { return; }
+        if (stillMuted) opts.onAutoplayMuted?.();
+        return;
+      }
+      // Other browsers may allow sound after muted playback starts; try the gradual lift schedule.
       for (const ms of UNMUTE_LIFTS_MS) soundTimers.push(setTimeout(() => {
         if (gone) return;
         try { ctl.unmute(); if (!ctl.isMuted || !ctl.isMuted()) liftWorked = true; } catch { /* player already gone */ }
       }, ms));
-      // Never lifted AND still muted → THIS is the "browser refuses sound" case: show the tap-for-sound pill.
+      // Still muted after the post-start lifts → offer an explicit tap for sound.
       soundTimers.push(setTimeout(() => {
         if (gone || liftWorked) return;
         let stillMuted = false;
         try { stillMuted = ctl.isMuted ? ctl.isMuted() : false; } catch { return; }
         if (stillMuted) opts.onAutoplayMuted?.();
       }, UNMUTE_LIFTS_MS[UNMUTE_LIFTS_MS.length - 1] + 600));
-    }
+    };
+    if (playbackStarted) startSoundLifts();  // playback can start before the async adapter finishes returning
     const baseMute = ctl.mute;
     ctl.mute = () => { cancelLifts(); try { baseMute(); } catch { /* player already gone */ } };
 
@@ -119,6 +141,17 @@ export async function createPlayer(container, video, opts = {}) {
       // this point means the embed was refused entirely → offer the big "tap to play" affordance.
       try { const st = ctl.state?.(); if (st !== 1 && st !== 3) opts.onAutoplayBlocked?.(); } catch { /* player already gone */ }
     }, AUTOPLAY_WAIT_MS * 1.5));
+  }
+
+  // The last-resort YouTube iframe has no API events, so it cannot report whether sound-first autoplay
+  // was blocked. That fallback is deliberately muted to preserve motion; expose the sound hint after load.
+  if (iosBrowser && autoplay && wantSound && ctl.engine === 'iframe') {
+    timers.push(setTimeout(() => {
+      if (gone) return;
+      let stillMuted = true;
+      try { stillMuted = ctl.isMuted ? ctl.isMuted() : true; } catch { return; }
+      if (stillMuted) opts.onAutoplayMuted?.();
+    }, 1000));
   }
 
   const destroy = ctl.destroy;

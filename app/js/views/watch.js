@@ -25,18 +25,23 @@ export default async function watch(ctx) {
   const title = cat.displayTitle(v);
   // Can this viewer play it? 'ok' | 'login' | 'plan' | 'unavailable' (premium in static mode).
   const gate = u.gateFor(v, cat);                   // Video access includes any Premium parent series.
+  // R2 must be signed by the API; start that request while the watch markup is being prepared.
+  let streamUrlPromise = null;
+  const getStreamUrl = () => {
+    if (!streamUrlPromise) {
+      streamUrlPromise = Promise.resolve().then(() => u.streamUrl(v)).catch((err) => { streamUrlPromise = null; throw err; });
+    }
+    return streamUrlPromise;
+  };
+  if (gate === 'ok' && v.source.type === 'r2') getStreamUrl().catch(() => {});
   // Fetch the YouTube IFrame API while the page renders — script + handshake is the slowest part of playback
   // starting on mobile networks, so overlap it with everything else rather than starting it inside the player.
   if (v.source.type === 'youtube' && gate === 'ok') loadYouTube().catch(() => {});
   const here = encodeURIComponent('/watch/' + v.id);
   ctx.setTitle(title);
 
-  // Right-hand list: all episodes for a series episode, otherwise related videos.
-  const sideList = v.kind === 'episode' && show
-    ? html`<div class="section-bar"><h2>Episodes</h2><span class="count">${cat.episodes(show.id).length}</span></div><div class="ep-list compact" id="sideEps">${cat.episodes(show.id).map((e) => epRow(e, { current: e.id === v.id }))}</div>`
-    : html`<div class="section-bar"><h2>Up next</h2></div><div class="stack">${cat.relatedVideos(v, 12).map((x) => videoCard(x, { showName: false }))}</div>`;
-
-  // Page markup (everything interpolated is auto-escaped by html``).
+  // Page markup (everything interpolated is auto-escaped by html``). The player and title are inserted
+  // first; episode/related rails are rendered only after playback setup has begun.
   ctx.root.innerHTML = html`
     <div class="watch">
       <div class="watch-main">
@@ -62,13 +67,29 @@ export default async function watch(ctx) {
           <details class="orig-title"><summary>Original title</summary><p class="bn">${v.title}</p></details>
         </div>
       </div>
-      <aside class="watch-side" aria-label="${v.kind === 'episode' ? 'Episodes' : 'Up next'}">${sideList}</aside>
-      <!-- mobile-only: comes AFTER the episodes/up-next list in the stacked phone layout -->
-      ${rail({ title: 'More from ADDABAAZ', items: cat.latestEpisodes(10).filter((x) => x.id !== v.id).map((x) => videoCard(x)), cls: 'r-video mobile-only' })}
+      <aside class="watch-side" id="watchSide" aria-busy="true" aria-label="${v.kind === 'episode' ? 'Episodes' : 'Up next'}"></aside>
+      <!-- mobile-only: rendered after player setup and comes after the episodes/up-next list in phone layout -->
+      <div id="watchMore"></div>
     </div>`.s;
-  // Wire up interactive bits: rails, auto-play switch, share button, likes and comments.
-  enhanceRails(ctx.root);
-  $('#sideEps .current', ctx.root)?.scrollIntoView({ block: 'nearest' });
+  // Secondary lists are relatively expensive (especially for mobile); fill them after player startup begins.
+  const renderSecondary = () => {
+    const episodes = v.kind === 'episode' && show ? cat.episodes(show.id) : null;
+    const sideList = episodes
+      ? html`<div class="section-bar"><h2>Episodes</h2><span class="count">${episodes.length}</span></div><div class="ep-list compact" id="sideEps">${episodes.map((e) => epRow(e, { current: e.id === v.id }))}</div>`
+      : html`<div class="section-bar"><h2>Up next</h2></div><div class="stack">${cat.relatedVideos(v, 12).map((x) => videoCard(x, { showName: false }))}</div>`;
+    $('#watchSide', ctx.root).innerHTML = sideList.s;
+    $('#watchSide', ctx.root).removeAttribute('aria-busy');
+    $('#watchMore', ctx.root).innerHTML = rail({ title: 'More from ADDABAAZ', items: cat.latestEpisodes(10).filter((x) => x.id !== v.id).map((x) => videoCard(x)), cls: 'r-video mobile-only' }).s;
+    enhanceRails(ctx.root);
+    // Keep a later current episode visible in the desktop side panel without scrolling the document.
+    // scrollIntoView() here also moved the whole phone page down to the Episodes section after render.
+    const currentEpisode = $('#sideEps .current', ctx.root), side = $('#watchSide', ctx.root);
+    if (currentEpisode && side && typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1000px)').matches) {
+      const item = currentEpisode.getBoundingClientRect(), panel = side.getBoundingClientRect();
+      if (item.top < panel.top) side.scrollTop -= panel.top - item.top;
+      else if (item.bottom > panel.bottom) side.scrollTop += item.bottom - panel.bottom;
+    }
+  };
 
   $('#autoNext', ctx.root).addEventListener('change', (e) => u.setPref('autoplayNext', e.target.checked));
   $('#shareBtn', ctx.root).addEventListener('click', async () => {
@@ -104,7 +125,7 @@ export default async function watch(ctx) {
         : html`${icon('lock', { size: 40 })}<h2>Premium video needs an account</h2><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s;
   };
   // Locked: show the wall and stop; no player is created.
-  if (gate !== 'ok') { wall(gate); return; }
+  if (gate !== 'ok') { wall(gate); renderSecondary(); return; }
 
   /* ---------- playback + progress ---------- */
   // Resume where the viewer left off (unless they had almost finished).
@@ -178,7 +199,7 @@ export default async function watch(ctx) {
     try {
       let media = v;
       if (v.source.type === 'r2') {                     // premium/own-hosted video in Cloudflare R2: the API checks access and signs a short-lived URL
-        const s = await u.streamUrl(v);
+        const s = await getStreamUrl();
         media = { ...v, source: { type: s.type, url: s.url }, poster: cat.thumb(v) };
       }
       $('#unmutePill', ctx.root)?.remove(); $('#playPill', ctx.root)?.remove();
@@ -238,9 +259,16 @@ export default async function watch(ctx) {
       failed();
     }
   }
-  // Save progress when the tab is hidden or closed, and tidy up on leaving the page.
-  startPlayer();
+  // Wait one paint so Router has connected this view to the document before play() / YouTube
+  // iframe creation. Starting a detached media element can delay or block autoplay on mobile Safari.
+  const afterViewCommit = globalThis.requestAnimationFrame || ((fn) => setTimeout(fn, 0));
+  afterViewCommit(() => {
+    if (dead) return;
+    startPlayer();
+    renderSecondary();
+  });
 
+  // Save progress when the tab is hidden or closed, and tidy up on leaving the page.
   const onHide = () => { if (document.hidden && ctl) persist(ctl.time(), ctl.duration(), true); };
   document.addEventListener('visibilitychange', onHide);
   window.addEventListener('pagehide', onHide);

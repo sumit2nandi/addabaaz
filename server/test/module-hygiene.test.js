@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const DIR = new URL('../src/', import.meta.url);
-// Helpers that live in a shared module (http.js / email-address.js / db.js) and must be imported by name.
+// Helpers that live in shared error/HTTP/email modules and must be imported by name.
 const SHARED = ['HttpError', 'bad', 'wrap', 'isDuplicate', 'normalizeEmail', 'emailKey', 'visibleEmail', 'plainEmail'];
 
 /** Identifiers the module imports (named, aliased, default) or defines at top level. */
@@ -34,10 +34,18 @@ function availableNames(src) {
   return names;
 }
 
+function sourceFiles(dir = DIR) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const file = new URL(entry.name, dir);
+    if (entry.isDirectory()) return sourceFiles(new URL(entry.name + '/', dir));
+    return entry.isFile() && entry.name.endsWith('.js') ? [file] : [];
+  });
+}
+
 test('every server module imports the shared helpers it uses', () => {
   const complaints = [];
-  for (const file of fs.readdirSync(DIR).filter((f) => f.endsWith('.js'))) {
-    const src = fs.readFileSync(new URL(file, DIR), 'utf8');
+  for (const file of sourceFiles()) {
+    const src = fs.readFileSync(file, 'utf8');
     const available = availableNames(src);
     const code = src.replace(/^\s*(?:\/\/|\*|\/\*).*$/gm, '');          // ignore comments and JSDoc
     for (const name of SHARED) {

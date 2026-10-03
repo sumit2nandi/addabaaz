@@ -24,11 +24,20 @@ self.addEventListener('activate', (e) => {
 });
 
 // Caching strategies. stale-while-revalidate: answer from cache immediately, refresh the cache from the network in the background.
-const swr = async (req, cacheName) => {
-  const cache = await caches.open(cacheName);
-  const hit = (await cache.match(req)) || (await caches.match(req));
-  const net = fetch(req).then((res) => { if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone()); return res; }).catch(() => hit);
-  return hit || net;
+const swr = (req, cacheName, event) => {
+  // Start the refresh while looking up the cached response, and keep the service worker alive until
+  // the network response has actually replaced it. Without waitUntil(), iOS can stop the worker
+  // as soon as it returns the stale hit, so CSS/JS updates may never reach an installed web app.
+  const cachePromise = caches.open(cacheName);
+  const network = cachePromise.then((cache) => fetch(req).then((res) => {
+    if (res && (res.ok || res.type === 'opaque')) return cache.put(req, res.clone()).catch(() => {}).then(() => res);
+    return res;
+  }));
+  event.waitUntil(network.catch(() => {}));
+  return cachePromise.then(async (cache) => {
+    const hit = (await cache.match(req)) || (await caches.match(req));
+    return hit || network;
+  });
 };
 // network-first: try the network, use the cached copy only when offline (catalog data should be fresh).
 const networkFirst = async (req, cacheName) => {
@@ -54,10 +63,10 @@ self.addEventListener('fetch', (e) => {
     if (req.mode === 'navigate') return e.respondWith(fetch(req).catch(() => caches.match('./').then((r) => r || caches.match('index.html'))));
     if (url.pathname.includes('/data/')) return e.respondWith(networkFirst(req, DATA));
     if (url.pathname.includes('/media/')) return e.respondWith(cacheFirst(req, MEDIA));
-    return e.respondWith(swr(req, SHELL));
+    return e.respondWith(swr(req, SHELL, e));
   }
-  if (/(^|\.)ytimg\.com$/.test(url.hostname) || url.hostname === 'img.youtube.com') return e.respondWith(swr(req, THUMBS));
-  if (url.hostname === 'fonts.gstatic.com' || url.hostname === 'fonts.googleapis.com' || url.hostname === 'cdnjs.cloudflare.com') return e.respondWith(swr(req, SHELL));
+  if (/(^|\.)ytimg\.com$/.test(url.hostname) || url.hostname === 'img.youtube.com') return e.respondWith(swr(req, THUMBS, e));
+  if (url.hostname === 'fonts.gstatic.com' || url.hostname === 'fonts.googleapis.com' || url.hostname === 'cdnjs.cloudflare.com') return e.respondWith(swr(req, SHELL, e));
 });
 
 /* ---------- Web Push ---------- */

@@ -1,5 +1,30 @@
-node_modules
+# Credentials and local developer state must never enter the Docker build context.
+.env
+.env.*
 .git
+.npmrc
+.netrc
+.secrets/
+**/.env
+**/.env.*
+**/.npmrc
+**/.netrc
+service-account*.json
+**/service-account*.json
+*.pem
+**/*.pem
+*.key
+**/*.key
+*.p12
+**/*.p12
+*.jks
+**/*.jks
+*.keystore
+**/*.keystore
+
+# Dependencies and generated/local data.
+node_modules
+**/node_modules
 BTS
 UpcomingReleases
 images
@@ -9,3 +34,4 @@ www
 server/test
 uploads
 backups
+.build

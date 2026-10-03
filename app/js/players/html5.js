@@ -95,12 +95,17 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
   const v = document.createElement('video');
   v.className = 'ytp-video';
   v.controls = false;
-  v.muted = muted;
-  v.playsInline = true;
-  v.setAttribute('playsinline', '');
-  v.setAttribute('webkit-playsinline', '');
-  v.autoplay = autoplay;
-  v.preload = 'metadata';
+  // iOS WebKit checks muted + inline at the element level before allowing autoplay. Set both the
+  // reflected attributes and live properties before inserting the element or assigning its source.
+  const setMuted = (value) => {
+    v.defaultMuted = value; v.muted = value;
+    if (value) v.setAttribute('muted', ''); else v.removeAttribute('muted');
+  };
+  setMuted(muted);
+  v.playsInline = true; v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', '');
+  v.autoplay = autoplay; if (autoplay) v.setAttribute('autoplay', ''); else v.removeAttribute('autoplay');
+  // This element is the active player, not a background thumbnail: ask the browser for media bytes now.
+  v.preload = autoplay ? 'auto' : 'metadata';
   v.setAttribute('controlsList', 'nodownload');
   if (video.poster) v.poster = video.poster;
 
@@ -113,7 +118,8 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
   let hls = null, lastEmit = 0, selectedQuality = -1; // -1 = Auto
   let uiUpdate = () => {}, uiCleanup = () => {};
 
-  if (!controls) {
+  if (!controls || typeof container.querySelector !== 'function') {
+    v.controls = Boolean(controls);
     container.appendChild(v);
   } else {
     const wrap = buildYouTubeUI(container, v, video, {
@@ -130,7 +136,9 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
     uiCleanup = wrap.cleanup;
   }
 
+  // Subtitle fetch/parse is optional and must never hold up the first video frame.
   const subs = attachSubtitles(v, video.subtitles, () => uiUpdate());
+  subs.catch(() => {});
 
   const { type, url } = video.source;
   if (type === 'hls' && !v.canPlayType?.('application/vnd.apple.mpegurl')) {
@@ -176,24 +184,36 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
     navigator.mediaSession.setActionHandler('seekbackward', () => { v.currentTime = Math.max(0, v.currentTime - 10); });
     navigator.mediaSession.setActionHandler('seekforward', () => { v.currentTime += 10; });
   }
-
+  // Try the requested sound mode first. If the browser rejects unmuted autoplay, immediately retry muted:
+  // iOS commonly blocks the first attempt but permits muted inline playback without another gesture.
   let playPromise = null;
   if (autoplay) {
-    playPromise = v.play();
-    if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => { /* needs a tap */ });
+    try { playPromise = Promise.resolve(v.play()); }
+    catch (err) { playPromise = Promise.reject(err); }
+    if (!muted) {
+      playPromise = playPromise.catch((err) => {
+        if (err?.name !== 'NotAllowedError' && err?.name !== 'AbortError') throw err; // broken media is not an autoplay-policy fallback
+        setMuted(true);
+        uiUpdate();
+        try { return v.play(); }
+        catch (retryErr) { return Promise.reject(retryErr); }
+      });
+    }
+    playPromise.catch(() => { /* a final refusal is reported through the normal blocked/error path */ });
   }
-  await Promise.race([subs, new Promise((r) => setTimeout(r, 1500))]);
+  // Casting support: Remote Playback API where available, AirPlay on Safari.
   const remote = v.remote, airplay = typeof v.webkitShowPlaybackTargetPicker === 'function';
   return {
     engine: type,
-    playPromise,
+    playPromise, // resolves on requested-mode autoplay or its muted retry; rejects if the final attempt fails
+    /** Chromecast/Android/Edge via the Remote Playback API, AirPlay on Safari. false when neither exists. */
     castSupported: () => !!(remote?.prompt || airplay),
     cast: async () => { if (remote?.prompt) await remote.prompt(); else if (airplay) v.webkitShowPlaybackTargetPicker(); },
     hasSubtitles: () => (v.textTracks?.length || 0) > 0,
     time: () => v.currentTime,
     duration: () => v.duration || video.duration || 0,
-    mute: () => { v.muted = true; uiUpdate(); },
-    unmute: () => { v.muted = false; if (v.volume === 0) v.volume = 1; uiUpdate(); },
+    mute: () => { setMuted(true); uiUpdate(); },
+    unmute: () => { setMuted(false); if (v.volume === 0) v.volume = 1; uiUpdate(); },
     isMuted: () => v.muted,
     seek: (s) => { v.currentTime = s; uiUpdate(); },
     play: () => v.play(),

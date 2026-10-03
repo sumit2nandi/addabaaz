@@ -8,7 +8,7 @@ export const AVATAR_COUNT = PALETTE.length;
 /**
  * Session + per-profile library state (My List, Continue Watching, reminders) + preferences.
  * Reads are synchronous (in-memory); writes are optimistic and forwarded to the adapter.
- * Events: 'account' | 'profile' | 'library' | 'prefs' | 'subscription'
+ * Events: 'account' | 'profile' | 'library' | 'prefs' | 'subscription' | 'push' (native push state changed)
  */
 // The facade the whole UI talks to. It keeps the current account, profiles, library, subscription and preferences in memory (so reads are instant)
 // and forwards changes to the right adapter: `remote` when signed in, otherwise `local`.

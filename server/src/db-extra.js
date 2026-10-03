@@ -137,7 +137,7 @@ export function extraDb({ q, tx, iso }) {
     async claim(kind, ref, userId) { return (await q('INSERT IGNORE INTO notify_sent (kind, ref, user_id) VALUES (?,?,?)', [kind, ref, userId])).affectedRows === 1; },
   };
 
-  // ---- Native app push devices (FCM/APNs tokens; the Capacitor apps POST these to /api/v1/devices) ----
+  // ---- Native app push devices (FCM tokens; the Capacitor apps POST these to /api/v1/devices) ----
   const devices = {
     /**
      * Registers (or refreshes) a token for a user; the same token on another account moves to it.
@@ -151,8 +151,17 @@ export function extraDb({ q, tx, iso }) {
         ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), token = VALUES(token), platform = COALESCE(?, platform), label = COALESCE(?, label), fail_count = 0, last_seen = UTC_TIMESTAMP(3)`,
       [userId, plat, hash, String(token).slice(0, 512), lab, plat, lab]);
     },
-    /** Removes one token (sign-out, permission revoked). Returns the number of rows deleted. */
+    /** Stores a guest app token with no account association; the same device moves to a user on sign-in. */
+    async upsertGuest({ hash, token, platform = null, label = null }) {
+      const plat = ['android', 'ios', 'web'].includes(platform) ? platform : null;
+      const lab = label ? String(label).slice(0, 120) : null;
+      await q(`INSERT INTO push_devices (id, user_id, platform, token_hash, token, label) VALUES (UUID(),NULL,COALESCE(?,'android'),?,?,?)
+        ON DUPLICATE KEY UPDATE user_id = NULL, token = VALUES(token), platform = COALESCE(?, platform), label = COALESCE(?, label), fail_count = 0, last_seen = UTC_TIMESTAMP(3)`,
+      [plat, hash, String(token).slice(0, 512), lab, plat, lab]);
+    },
+    /** Removes one token (sign-out, permission revoked, or account opt-out). */
     async remove(userId, hash) { return (await q('DELETE FROM push_devices WHERE user_id = ? AND token_hash = ?', [userId, hash])).affectedRows; },
+    /** Removes a token by hash (FCM dead-token cleanup and public guest opt-out / stale-link cleanup). */
     async removeHash(hash) { await q('DELETE FROM push_devices WHERE token_hash = ?', [hash]); },
     async listFor(userId) { return (await q('SELECT platform, label, last_seen FROM push_devices WHERE user_id = ? ORDER BY last_seen DESC', [userId])).map((r) => ({ platform: r.platform, label: r.label, lastSeen: iso(r.last_seen) })); },
     async count() { return Number((await q('SELECT COUNT(*) AS n FROM push_devices'))[0].n); },
@@ -276,20 +285,42 @@ export function extraDb({ q, tx, iso }) {
       [c.id, c.channel, String(c.audience).slice(0, 120), String(c.title).slice(0, 200), String(c.body).slice(0, 20_000), c.url || null, c.button || null, c.status || 'queued', c.test ? 1 : 0, c.by || null]);
     },
     async get(id) { const r = (await q('SELECT * FROM campaigns WHERE id = ?', [id]))[0]; return r ? mapCampaign(r) : null; },
-    // Progress updates while a campaign sends (called after every batch).
-    async progress(id, { sent, failed, skipped, total, cursor }) {
-      await q(`UPDATE campaigns SET sent = sent + ?, failed = failed + ?, skipped = skipped + ?, total = GREATEST(total, ?), page_cursor = ?, status = 'sending', updated_at = UTC_TIMESTAMP(3) WHERE id = ?`,
-      [Number(sent) || 0, Number(failed) || 0, Number(skipped) || 0, Number(total) || 0, Number(cursor) || 0, id]);
+    /** Claims a queued campaign, or takes over only after another instance's lease expires. */
+    async claim(id, token, leaseSeconds = 300) {
+      const lease = Math.min(Math.max(Number(leaseSeconds) || 300, 30), 900);
+      const r = await q(`UPDATE campaigns SET status = 'sending', claim_token = ?, claim_until = TIMESTAMPADD(SECOND, ?, UTC_TIMESTAMP(3)), updated_at = UTC_TIMESTAMP(3)
+                         WHERE id = ? AND status IN ('queued','sending') AND (claim_token IS NULL OR claim_until IS NULL OR claim_until <= UTC_TIMESTAMP(3))`, [token, lease, id]);
+      return r.affectedRows === 1;
     },
-    async finish(id, status, error = null) {
-      await q('UPDATE campaigns SET status = ?, error = ?, updated_at = UTC_TIMESTAMP(3), finished_at = UTC_TIMESTAMP(3) WHERE id = ?', [status, error ? String(error).slice(0, 300) : null, id]);
+    /** Renews only the caller's live lease; a worker that lost ownership cannot extend or overwrite it. */
+    async renew(id, token, leaseSeconds = 300) {
+      const lease = Math.min(Math.max(Number(leaseSeconds) || 300, 30), 900);
+      const r = await q(`UPDATE campaigns SET claim_until = TIMESTAMPADD(SECOND, ?, UTC_TIMESTAMP(3)), updated_at = UTC_TIMESTAMP(3)
+                         WHERE id = ? AND status = 'sending' AND claim_token = ? AND claim_until > UTC_TIMESTAMP(3)`, [lease, id, token]);
+      if (r.affectedRows === 1) return true;
+      // MySQL can report zero changed rows when two renewals land in the same millisecond.
+      return !!(await q("SELECT id FROM campaigns WHERE id = ? AND status = 'sending' AND claim_token = ? AND claim_until > UTC_TIMESTAMP(3)", [id, token]))[0];
+    },
+    // Progress updates after each e-mail page (and once for push); they also extend the lease atomically.
+    async progress(id, { sent, failed, skipped, total, cursor }, token) {
+      const r = await q(`UPDATE campaigns SET sent = sent + ?, failed = failed + ?, skipped = skipped + ?, total = GREATEST(total, ?), page_cursor = ?,
+                         claim_until = TIMESTAMPADD(SECOND, 300, UTC_TIMESTAMP(3)), updated_at = UTC_TIMESTAMP(3)
+                         WHERE id = ? AND status = 'sending' AND claim_token = ? AND claim_until > UTC_TIMESTAMP(3)`,
+      [Number(sent) || 0, Number(failed) || 0, Number(skipped) || 0, Number(total) || 0, Number(cursor) || 0, id, token]);
+      if (r.affectedRows === 1) return true;
+      return !!(await q("SELECT id FROM campaigns WHERE id = ? AND status = 'sending' AND claim_token = ? AND claim_until > UTC_TIMESTAMP(3)", [id, token]))[0];
+    },
+    async finish(id, status, error = null, token = null) {
+      const where = token ? ' AND claim_token = ?' : '';
+      const values = [status, error ? String(error).slice(0, 300) : null, id, ...(token ? [token] : [])];
+      const r = await q(`UPDATE campaigns SET status = ?, error = ?, updated_at = UTC_TIMESTAMP(3), finished_at = UTC_TIMESTAMP(3), claim_token = NULL, claim_until = NULL WHERE id = ?${where}`, values);
+      return r.affectedRows === 1;
     },
     async list({ limit = 25 } = {}) { return (await q('SELECT * FROM campaigns ORDER BY created_at DESC LIMIT ?', [limit])).map(mapCampaign); },
-    /**
-     * Campaigns left unfinished (a deploy or crash mid-send). Only rows that have not moved for five
-     * minutes are returned, so a campaign another instance is actively sending is never picked up twice.
-     */
-    async unfinished() { return (await q("SELECT * FROM campaigns WHERE status IN ('queued','sending') AND is_test = 0 AND updated_at < UTC_TIMESTAMP(3) - INTERVAL 5 MINUTE ORDER BY created_at LIMIT 5")).map(mapCampaign); },
+    /** Rows eligible for takeover. The claim UPDATE is the final atomic arbiter when instances race. */
+    async unfinished() {
+      return (await q("SELECT * FROM campaigns WHERE status IN ('queued','sending') AND is_test = 0 AND (claim_token IS NULL OR claim_until IS NULL OR claim_until <= UTC_TIMESTAMP(3)) ORDER BY created_at LIMIT 5")).map(mapCampaign);
+    },
     async prune() { await q("DELETE FROM campaigns WHERE finished_at IS NOT NULL AND finished_at < UTC_TIMESTAMP(3) - INTERVAL 365 DAY"); },
   };
 

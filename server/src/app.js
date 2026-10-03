@@ -1,13 +1,11 @@
 // The HTTP application: builds the Express app that serves the JSON API under /api/v1, the admin console,
 // and the static website (with server-rendered SEO tags).
 //
-// How the file is organised (top to bottom):
-//   1. configuration and security headers
-//   2. public endpoints (health, catalog, plans, sign-up / login / social login)
-//   3. premium video streaming (Cloudflare R2), contact form, payment webhook
-//   4. the admin router, then authentication middleware: everything below it needs a signed-in user
-//   5. account, profiles, library, subscription and payment endpoints
-//   6. static files, SEO pages and the final error handler
+// This is the HTTP composition root, not a feature implementation:
+//   1. validate configuration and create domain/provider collaborators
+//   2. install cross-cutting middleware and register focused route modules in auth-safe order
+//   3. mount web/SEO delivery and the final error boundary
+// Route behavior lives under routes/, in features.js, and in the dedicated admin router.
 //
 // `createApp()` receives its collaborators (database, mailer, payments, R2 ...) as options so tests can
 // inject fakes; the defaults read real settings from environment variables (see .env.example).
@@ -16,29 +14,33 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { isDuplicate } from './db.js';
-import { hashPassword, verifyPassword, signToken, signJwt, verifyToken, sessionValid } from './auth.js';
+import { assertProductionSecret } from './auth.js';
 import { createFeatures } from './features.js';
 import { pushFromEnv } from './push.js';
 import { fcmFromEnv } from './fcm.js';
 import { campaignEmail } from './emails.js';
 import { createCampaigns } from './campaigns.js';
 import { createR2 } from './r2.js';
-import { socialFromEnv, SocialError } from './social.js';
-import { PLANS, paidPlan } from './plans.js';
+import { socialFromEnv } from './social.js';
+import { PLANS } from './plans.js';
 import { paymentsFromEnv } from './payments.js';
 import { mailerFromEnv } from './mailer.js';
 import { createBilling, billingConfigFromEnv } from './billing.js';
-import { STATES } from './gst.js';
-import { HttpError, bad, wrap, rateLimit } from './http.js';
-import { normalizeEmail } from './email-address.js';
+import { HttpError, bad, wrap, rateLimit, safeErrorUrl } from './http.js';
 import { createCatalogStore } from './catalog.js';
-import { FREE_KINDS } from './catalog-schema.js';
 import { createYouTubeFeed } from './youtube-feed.js';
-import { createSeo } from './seo.js';
-import compression from 'compression';
+import { installSecurityMiddleware } from './middleware/security.js';
 import { createAdminRouter } from './admin.js';
-import { UPLOAD_NAME, uploadType, cacheUpload } from './uploads.js';
+import { createSessionResolver, sessionForRequest } from './sessions.js';
+import { registerSystemRoutes } from './routes/system.js';
+import { registerAuthRoutes } from './routes/auth.js';
+import { registerMediaRoutes } from './routes/media.js';
+import { registerContactRoutes } from './routes/contact.js';
+import { registerPaymentWebhook } from './routes/payment-webhook.js';
+import { registerUnsubscribeRoute } from './routes/unsubscribe.js';
+import { registerAccountRoutes } from './routes/accounts.js';
+import { registerBillingRoutes } from './routes/billing.js';
+import { mountWebsite } from './web.js';
 
 // Repository root (two folders above server/src).
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -46,8 +48,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 // Each account may create up to 5 profiles; PALETTE is the number of avatar colours.
 const MAX_PROFILES = 5, PALETTE = 8;
-// A deliberately simple e-mail check (something@something.tld); real verification is the e-mail link.
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * @param {object} opts
@@ -79,94 +79,26 @@ export function createApp({
 } = {}) {
   // Fail fast on a bad setup.
   if (!db) throw new Error('createApp: a database (createDb()) is required');
-  // In production a real JWT secret is mandatory; in development a fixed insecure one is used with a warning.
+  // In production require a strong, non-example session key; development may use the warning-only fallback.
   const production = process.env.NODE_ENV === 'production';
-  if (production && !jwtSecret) throw new Error('JWT_SECRET must be set in production');
+  if (production) assertProductionSecret(jwtSecret);
   if (!jwtSecret) console.warn('[auth] JWT_SECRET not set — using an insecure development secret. Set JWT_SECRET before deploying.');
   const secret = jwtSecret || 'insecure-development-secret';
   // The catalog store reads shows/videos from MySQL (seeded once from data/catalog.json) with a small in-memory cache.
   const catalog = createCatalogStore({ db, catalogPath, studioPath });     // MySQL-backed (seeded once from the JSON files), edited in /admin
   // True if a catalog item of that type/id exists (used to validate My List and progress writes).
   const exists = (type, id) => catalog.exists(type, id);
+  const userFromRequest = createSessionResolver({ db, secret });
 
   // Now build the Express app itself.
   const app = express();
   app.disable('x-powered-by');
-  // Search-engine settings. Indexing is off unless explicitly allowed so staging copies never compete with the real site.
-  const seoCfg = {
-    siteUrl: seo.siteUrl ?? process.env.PUBLIC_SITE_URL ?? '',     // https://addabaaz.in — canonical URLs, sitemap and structured data use it
-    // Only the real production site should be indexed: staging/preview copies would compete with it (duplicate content).
-    indexable: seo.indexable ?? (process.env.ALLOW_INDEXING ? /^(1|true|yes)$/i.test(process.env.ALLOW_INDEXING) : production),
-    compress: seo.compress ?? !/^(1|true|yes)$/i.test(process.env.DISABLE_COMPRESSION || ''),
-    google: seo.googleVerification ?? process.env.GOOGLE_SITE_VERIFICATION ?? '',
-    bing: seo.bingVerification ?? process.env.BING_SITE_VERIFICATION ?? '',
-    ga4: seo.ga4 ?? process.env.GA4_MEASUREMENT_ID ?? '',          // optional Google Analytics 4 — loads only after the visitor accepts analytics
-  };
-  // gzip responses (but never server-sent-event streams, which must flush immediately).
-  if (seoCfg.compress) app.use(compression({ filter: (req, res) => !/event-stream/.test(res.getHeader('Content-Type') || '') && compression.filter(req, res) }));
-  // Behind nginx / a load balancer the real client IP comes from X-Forwarded-For; needed for rate limits.
-  app.set('trust proxy', process.env.TRUST_PROXY ? Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY : false);
-  // Keep API, admin and raw data files out of Google.
-  app.use(['/api', '/admin', '/data'], (_req, res, next) => { res.set('X-Robots-Tag', 'noindex, nofollow'); next(); });   // machine endpoints and the admin console never belong in search results
-  // Security headers on every response, then CORS: only origins listed in CORS_ORIGINS (or * ) may call the API from a browser.
-  // Content-Security-Policy for the website: only the origins the app actually uses (Google sign-in, YouTube,
-  // Razorpay, fonts, consent-gated analytics…). The admin console overwrites this with its own, stricter policy.
-  // Permissions-Policy disables every powerful browser feature the app never needs.
-  const CSP = [
-    "default-src 'self'", "base-uri 'self'", "object-src 'none'", "frame-ancestors 'self'", "form-action 'self'",
-    "img-src 'self' data: blob: https:",
-    "media-src 'self' data: blob: https:",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
-    "script-src 'self' https://accounts.google.com https://www.youtube.com https://checkout.razorpay.com https://connect.facebook.net https://appleid.cdn-apple.com https://cdn.jsdelivr.net https://www.googletagmanager.com",
-    "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
-    "connect-src 'self' https:",
-    "frame-src 'self' https://accounts.google.com https://www.youtube.com https://www.youtube-nocookie.com https://checkout.razorpay.com https://www.facebook.com",
-    "worker-src 'self' blob:", "manifest-src 'self'",
-  ].join('; ');
-  app.use((req, res, next) => {
-    res.set({
-      'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'SAMEORIGIN',
-      'Content-Security-Policy': CSP,
-      'Permissions-Policy': 'accelerometer=(), autoplay=*, camera=(), display-capture=(), encrypted-media=*, fullscreen=*, geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), picture-in-picture=*, usb=()',
-    });
-    if (process.env.NODE_ENV === 'production') res.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    const origin = req.headers.origin;
-    if (origin && (corsOrigins === '*' || corsOrigins.split(',').map((s) => s.trim()).includes(origin))) {
-      // X-Device-* / X-Parental-Pin are sent by the site AND the Android app WebView (origin app.addabaaz.in):
-      // without them in the allow-list the preflight fails and every API call looks "offline" in the app.
-      res.set({ 'Access-Control-Allow-Origin': corsOrigins === '*' ? '*' : origin, 'Vary': 'Origin', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Device-Id, X-Device-Label, X-Parental-Pin', 'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'Access-Control-Max-Age': '600' });
-    }
-    if (req.method === 'OPTIONS') return res.sendStatus(204);
-    next();
-  });
-
+  const seoCfg = installSecurityMiddleware(app, { corsOrigins, production, seo });
   // All JSON endpoints hang off this router, mounted at /api/v1 near the bottom.
   const api = express.Router();
   api.use(express.json({ limit: '50kb', verify: (req, _res, buf) => { req.rawBody = buf; } }));   // rawBody: payment webhooks are signed over the exact bytes
 
-  // Endpoints below need no sign-in.
-  /* ---------- public ---------- */
-  api.get('/health', wrap(async (_req, res) => {                 // liveness + discovery: always 200; `db` reports the database state
-    const dbUp = await db.ping().then(() => true, () => false);
-    res.json({ ok: true, service: 'addabaaz', version: VERSION, db: dbUp ? 'up' : 'down', storage: r2.configured ? 'r2' : 'none', payments: payments.provider, time: new Date().toISOString() });
-  }));
-  api.get('/health/ready', wrap(async (_req, res) => {           // readiness for load balancers / orchestrators: 503 when MySQL is unreachable
-    const dbUp = await db.ping().then(() => true, () => false);
-    res.status(dbUp ? 200 : 503).json({ ok: dbUp, db: dbUp ? 'up' : 'down' });
-  }));
-  // The whole catalog as JSON; cached for 15 s by browsers and CDNs.
-  api.get('/catalog', wrap(async (_req, res) => { res.set('Cache-Control', 'public, max-age=15'); res.json((await catalog.get()).catalog); }));
-  api.get('/studio', wrap(async (_req, res) => {
-    const s = (await catalog.get()).studio; if (!s) throw new HttpError(404, 'not_found', 'No studio profile.');
-    res.set('Cache-Control', 'public, max-age=15'); res.json(s);
-  }));
-  // Plans, plus how payments are configured so the front end knows which checkout UI to show (never secrets).
-  api.get('/plans', (_req, res) => res.json({
-    plans: PLANS,
-    payments: { provider: payments.provider, ...(payments.provider === 'razorpay' ? { keyId: payments.keyId } : {}), ...(payments.provider === 'mock' ? { demo: true } : {}) },
-    billing: { gst: billing.config.gstEnabled, coupons: payments.provider === 'razorpay', states: STATES },
-  }));
-
+  registerSystemRoutes(api, { db, catalog, payments, billing, r2, version: VERSION });
   // Rate limit for sign-up/login endpoints: 20 requests per minute per IP (disabled in tests with rate:false).
   const authLimit = rate ? rateLimit('auth', 20, 60_000) : (_q, _s, n) => n();
   // The user fields that are safe to send to the browser (no password hash).
@@ -174,7 +106,7 @@ export function createApp({
   // Blocks accounts an admin has disabled.
   const notDisabled = (u) => { if (u.disabledAt) throw new HttpError(403, 'account_disabled', 'This account has been disabled. Please contact support.'); return u; };
   // Optional engagement/security features (password reset, PIN, ratings, comments, push, ...) live in features.js.
-  const features = createFeatures({ db, secret, mailer, push, catalog, siteUrl: billing.config.siteUrl, rate, publicUser, notDisabled, userFromRequest: (req) => userFromRequest(req), plans: PLANS, options: { supportEmail: billing.config.supportEmail, ...featureOptions } });
+  const features = createFeatures({ db, secret, mailer, push, catalog, siteUrl: billing.config.siteUrl, rate, publicUser, notDisabled, userFromRequest, plans: PLANS, options: { supportEmail: billing.config.supportEmail, ...featureOptions } });
 
   /* ---------- broadcast campaigns (Admin → Notifications: push / e-mail) — see server/src/campaigns.js ---------- */
   // Signed one-click unsubscribe link put in the footer of every campaign e-mail; the audience queries skip
@@ -184,265 +116,14 @@ export function createApp({
   const unsubscribeUrlFor = (u) => (siteUrl ? `${siteUrl}/api/v1/notifications/unsubscribe?u=${encodeURIComponent(u.id)}&t=${unsubSig(u.id)}` : '');
   const campaigns = createCampaigns({ db, push, mailer, email: campaignEmail, log: console });
 
-  // Create an account with e-mail + password. A verification-mail failure must be visible to the user (the account is still created so they can sign in and retry).
-  api.post('/auth/signup', authLimit, wrap(async (req, res) => {
-    const { name = '', email = '', password = '' } = req.body || {};
-    // One address = one account: the address is normalized (case, full-width characters and invisible
-    // paste artefacts removed) before it is compared or stored — see server/src/email-address.js.
-    const norm = normalizeEmail(email);
-    // An address that only becomes usable after cleaning ("rupa @example.com", a full-width ＠) is fine:
-    // the stored address is always the normalized one.
-    if (typeof email !== 'string' || email.length > 254 || !norm.ok || (typeof email === 'string' && email.trim() === '')) throw bad('Please enter a valid email address.', 'invalid_email');
-    if (typeof password !== 'string' || password.length < 8 || password.length > 128) throw bad('Password must be 8–128 characters.', 'weak_password');
-    if (typeof name !== 'string' || !name.trim() || name.length > 60) throw bad('Please enter your name.', 'invalid_name');
-    // Passwords are hashed (scrypt) before they touch the database.
-    const user = { id: crypto.randomUUID(), email: norm.email, emailNorm: norm.email, name: name.trim(), passwordHash: hashPassword(password) };
-    const profile = { id: crypto.randomUUID(), name: user.name.split(/\s+/)[0].slice(0, 24), color: 0 };
-    // The unique e-mail index is the real duplicate check (safe against two simultaneous sign-ups).
-    try { await db.users.createWithProfile(user, profile); }
-    catch (e) {
-      if (!isDuplicate(e)) throw e;
-      const ex = await db.users.byEmail(user.email);
-      throw new HttpError(409, 'email_taken', ex && !ex.passwordHash ? 'This email is already registered — use “Continue with Google/Facebook” to sign in.' : 'An account with this email already exists.');
-    }
-    let verificationEmailSent = false;
-    try {
-      await features.sendVerification({ ...user, emailVerifiedAt: null }, { strict: true });
-      verificationEmailSent = mailer.provider === 'smtp';
-    } catch (e) {
-      // Keep the newly created account usable, but don't silently pretend its confirmation mail went out.
-      console.warn(`[auth] verification email failed${e.code ? ` (${e.code})` : ''}:`, e.message);
-    }
-    res.status(201).json({ token: signToken(user.id, secret), user: publicUser(user), profiles: [profile], verificationEmailSent });
-  }));
-  // Log in with e-mail + password. Returns a session token.
-  api.post('/auth/login', authLimit, wrap(async (req, res) => {
-    const { email = '', password = '' } = req.body || {};
-    const user = (await db.users.byEmailNorm(normalizeEmail(email).email)) || (await db.users.byEmail(String(email).trim().toLowerCase()));
-    // Always run a hash to keep timing similar whether or not the user exists.
-    const ok = user?.passwordHash ? verifyPassword(String(password), user.passwordHash) : (verifyPassword(String(password), 'scrypt$00$00'), false);   // social-only accounts have no password
-    if (!ok) throw new HttpError(401, 'invalid_credentials', 'Incorrect email or password.');
-    notDisabled(user);
-    res.json({ token: signToken(user.id, secret, undefined, user.sessionVersion), user: publicUser(user) });
-  }));
-
-  /* ---------- social sign-in ---------- */
-  // Tells the front end which social buttons to show.
-  api.get('/auth/providers', (_req, res) => res.json({ password: true, ...social.config }));
-  const LABEL = { google: 'Google', facebook: 'Facebook', apple: 'Apple' };
-  // Shared by Google, Facebook and Apple: verify the provider's token, then find or create our own account.
-  // An existing account with the same *verified* e-mail is linked rather than duplicated.
-  async function socialSignIn(provider, credential, opts = {}) {
-    const verifier = social.verifiers?.[provider];
-    if (!verifier) throw new HttpError(501, 'provider_not_configured', `${LABEL[provider]} sign-in isn’t enabled on this server.`);
-    let claims;
-    try { claims = await verifier(credential); }
-    catch (e) { if (e instanceof SocialError) throw new HttpError(e.code === 'provider_unavailable' ? 503 : 401, e.code, e.message); throw e; }
-    const ident = { provider, subject: claims.subject, email: claims.email };
-    let user = await db.identities.userFor(provider, claims.subject), isNew = false;
-    // First time we see this social identity.
-    if (!user) {
-      const norm = normalizeEmail(claims.email);
-      if (!claims.email || !norm.ok) throw bad(`${LABEL[provider]} didn’t share an email address. Please sign up with email instead.`, 'email_required');
-      if (!claims.emailVerified) throw bad('Your email address isn’t verified with the provider.', 'email_unverified');
-      claims.email = norm.email;
-      user = (await db.users.byEmailNorm(norm.email)) || (await db.users.byEmail(claims.email));
-      if (user) await db.identities.link(user.id, ident);              // same verified email → same person: link the provider
-      else {
-        const name = (claims.name || claims.email.split('@')[0]).trim().slice(0, 60);
-        const fresh = { id: crypto.randomUUID(), email: norm.email, emailNorm: norm.email, name };
-        const profile = { id: crypto.randomUUID(), name: name.split(/\s+/)[0].slice(0, 24), color: 0 };
-        try { await db.identities.createUser(fresh, profile, ident); user = fresh; isNew = true; }
-        catch (e) {
-          if (!isDuplicate(e)) throw e;                                   // lost a race with a parallel request: use the winner
-          user = (await db.identities.userFor(provider, claims.subject)) || (await db.users.byEmailNorm(norm.email));
-          if (user) await db.identities.link(user.id, ident);
-        }
-      }
-    }
-    // Should be unreachable; guards against an unexpected race.
-    if (!user) throw new HttpError(500, 'server_error', 'Something went wrong.');
-    notDisabled(user);
-    await db.identities.touch(provider, claims.subject);
-    if (!user.emailVerifiedAt) await db.accounts.markVerified(user.id);           // the provider already verified this address
-    // Native apps: instead of handing the session to the (external) browser that did the OAuth
-    // dance, hand back a 2-minute single-use ticket the app exchanges for its own session.
-    if (opts.ticket) return { ticket: signJwt({ aud: 'oauth-ticket', sub: user.id, sv: user.sessionVersion, jti: crypto.randomUUID() }, secret, 120) };
-    return { token: signToken(user.id, secret, undefined, user.sessionVersion), user: publicUser({ ...user, emailVerifiedAt: user.emailVerifiedAt || true }), profiles: await db.profiles.list(user.id), isNew };
-  }
-  // One endpoint per provider; the body carries the provider's ID token / access token.
-  api.post('/auth/google', authLimit, wrap(async (req, res) => res.json(await socialSignIn('google', req.body?.idToken, { ticket: req.body?.ticket === true }))));
-  api.post('/auth/facebook', authLimit, wrap(async (req, res) => res.json(await socialSignIn('facebook', req.body?.accessToken))));
-  api.post('/auth/apple', authLimit, wrap(async (req, res) => res.json(await socialSignIn('apple', { identityToken: req.body?.identityToken, name: req.body?.name }))));
-
-  /* ---------- native Google sign-in (Custom Tab + one-time ticket deep link) ----------
-   * Google refuses sign-in inside WebViews, and the native SDK needs every build keystore's
-   * SHA-1 registered in the Google console. So the app opens a same-origin page in real Chrome
-   * (Custom Tab) that shows the very same Google Identity Services button the website uses -
-   * the site origin is already an authorized JavaScript origin, so NO console change is needed
-   * (no redirect URIs, no SHA-1, no client secret). The verified id_token is exchanged for a
-   * 2-minute single-use ticket that is deep-linked back into the app for its own session. */
-  const APP_SCHEME = 'in.addabaaz.app';   // = the Capacitor appId; AndroidManifest gets this scheme as a redirect filter
-  const usedTickets = new Map();          // jti -> expiry (ms); single-use enforcement for /auth/ticket
-  const forgetUsedTickets = () => { const now = Date.now(); for (const [k, v] of usedTickets) if (v < now) usedTickets.delete(k); };
-  // The Custom Tab lands here: a tiny same-origin page (JS in an external file - the CSP forbids inline scripts).
-  api.get('/auth/google/native-page', (_req, res) => {
-    res.type('html').set('Cache-Control', 'no-store').send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ADDABAAZ</title><body style="margin:0;background:#050505;color:#eee;font:15px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;gap:14px">
-<div style="display:grid;justify-items:center;gap:14px"><p id="out">Continue with Google to sign in to the ADDABAAZ app.</p><div id="g"></div></div>
-<script src="/api/v1/auth/google-native.js"></script>`);
-  });
-  api.get('/auth/google-native.js', (_req, res) => {
-    res.type('application/javascript').set('Cache-Control', 'no-store').send(`(function () {
-  var out = document.getElementById('out');
-  var say = function (m) { out.textContent = m; };
-  fetch('/api/v1/auth/providers').then(function (r) { return r.json(); }).then(function (p) {
-    if (!p.google) { say('Google sign-in isn’t enabled on this server.'); return; }
-    var s = document.createElement('script');
-    s.src = 'https://accounts.google.com/gsi/client';
-    s.onerror = function () { say('Couldn’t reach Google — check the connection and try again.'); };
-    s.onload = function () {
-      window.google.accounts.id.initialize({ client_id: p.google.clientId, callback: onCred, use_fedcm_for_prompt: true });
-      window.google.accounts.id.renderButton(document.getElementById('g'), { type: 'standard', theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', logo_alignment: 'left' });
-      try { window.google.accounts.id.prompt(); } catch (e) { /* the button is always there */ }
-    };
-    document.head.appendChild(s);
-  }).catch(function () { say('Couldn’t reach the ADDABAAZ API — check the connection and try again.'); });
-  function onCred(r) {
-    if (!r.credential) return;
-    say('Signing you in — returning to the app…');
-    fetch('/api/v1/auth/google', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idToken: r.credential, ticket: true }) })
-      .then(function (res) { return res.json().then(function (j) { if (!res.ok) throw new Error((j.error && j.error.message) || 'Sign-in failed'); return j; }); })
-      .then(function (j) { location.replace('${APP_SCHEME}://oauth?ticket=' + encodeURIComponent(j.ticket)); })
-      .catch(function (e) { say(e.message || 'Sign-in failed — please try again in the app.'); });
-  }
-})();`);
-  });
-  // The app's WebView exchanges the single-use ticket for its own session token.
-  api.post('/auth/ticket', authLimit, wrap(async (req, res) => {
-    const claims = verifyToken(String(req.body?.ticket || ''), secret);
-    if (!claims || claims.aud !== 'oauth-ticket' || !claims.jti) throw new HttpError(401, 'invalid_ticket', 'Sign-in ticket invalid or expired.');
-    forgetUsedTickets();
-    if (usedTickets.has(claims.jti)) throw new HttpError(401, 'invalid_ticket', 'This sign-in ticket was already used.');
-    usedTickets.set(claims.jti, Date.now() + 130_000);
-    const user = notDisabled(await db.users.byId(String(claims.sub)));
-    if (!user) throw new HttpError(401, 'invalid_ticket', 'Sign-in ticket invalid or expired.');
-    res.json({ token: signToken(user.id, secret, undefined, user.sessionVersion), user: publicUser(user), profiles: await db.profiles.list(user.id), isNew: false });
-  }));
+  registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled });
   features.public(api);           // password reset, email verification, analytics, public ratings/comments
 
-  /* ---------- one-click unsubscribe from campaign e-mails (no sign-in needed: the link is signed) ---------- */
-  // GET so it works straight from a mail client; the reply is a small page, never JSON.
-  api.get('/notifications/unsubscribe', wrap(async (req, res) => {
-    const id = String(req.query.u || ''), t = String(req.query.t || '');
-    const ok = id && t && crypto.timingSafeEqual(Buffer.from(t.padEnd(64, '\u0000').slice(0, 64)), Buffer.from(unsubSig(id).padEnd(64, '\u0000').slice(0, 64)));
-    if (ok) await db.adminUsers.setEmailOptOut(id, true).catch(() => {});
-    res.set('Cache-Control', 'no-store').type('html').send(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ADDABAAZ</title><body style="margin:0;font:16px/1.6 system-ui,sans-serif;background:#0b0b0d;color:#eee;display:grid;place-items:center;min-height:100vh;text-align:center"><div style="padding:24px"><h1 style="font-size:22px;margin:0 0 8px">${ok ? 'You are unsubscribed' : 'That link didn’t work'}</h1><p style="margin:0 0 20px;color:#aaa">${ok ? 'You will no longer receive announcement e-mails. Receipts and account e-mails are not affected.' : 'Please open the unsubscribe link from the e-mail again, or contact support.'}</p><a href="/" style="color:#e50914;font-weight:600;text-decoration:none">Back to ADDABAAZ</a></div></body>`);
-  }));
-
+  registerUnsubscribeRoute(api, { db, unsubscribeSignature: unsubSig });
   /* ---------- Cloudflare R2 video streaming ---------- */
-  // ---- Cloudflare R2 video streaming ----
-  // Reads the optional `Authorization: Bearer` token without failing when it is missing (free videos need no login).
-  const userFromRequest = async (req) => {
-    const h = req.headers.authorization || '';
-    const payload = h.startsWith('Bearer ') ? verifyToken(h.slice(7), secret) : null;
-    const u = payload && !payload.aud && payload.sub ? await db.users.byId(String(payload.sub)) : null; return u && !u.disabledAt && sessionValid(payload, u) ? u : null;      // media/other scoped tokens are not sessions
-  };
-  // Small helpers: catalog lookup, the public base URL for links we hand out, and mp4-vs-HLS detection.
-  const findVideo = (id) => catalog.video(id);
-  const isPremiumVideo = async (v) => {
-    if (FREE_KINDS.includes(v.kind)) return false;   // trailers, clips and reels are never locked, even for premium shows
-    if (v.access === 'premium') return true;
-    if (!v.showId) return false;
-    const { catalog: snapshot } = await catalog.get();
-    return snapshot.shows.some((s) => s.id === v.showId && s.access === 'premium');
-  };
-  const originOf = (req) => (publicApiUrl || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
-  const r2Format = (src) => src.format || (/\.m3u8$/i.test(src.key) ? 'hls' : 'mp4');
-  /** Returns a playable URL for a video hosted in R2. Premium titles need a signed-in account with an active paid plan. */
-  api.post('/videos/:id/stream', wrap(async (req, res) => {
-    const v = await findVideo(req.params.id);
-    if (!v) throw new HttpError(404, 'not_found', 'Unknown video.');
-    if (v.source?.type !== 'r2') throw new HttpError(400, 'not_hosted', 'This video isn’t available right now.');
-    // Premium gate: must be signed in (401), have a paid plan (402) and be within the simultaneous-screens limit (429). Free videos skip all of this.
-    if (await isPremiumVideo(v)) {
-      const user = await userFromRequest(req);
-      if (!user) throw new HttpError(401, 'login_required', 'Please sign in to watch premium videos.');
-      if ((await db.subscriptions.get(user.id)).planId === 'free') throw new HttpError(402, 'subscription_required', 'Subscribe to ADDABAAZ Plus to watch this video.');   // premium = signed in AND paid
-      const dev = features.deviceOf(req);                                  // screens-at-once limit (premium playback only)
-      const seat = await db.playback.touch(user.id, dev.id, dev.label, v.id, { limit: features.cfg.streamLimit, windowSec: features.cfg.heartbeatWindowSec });
-      if (!seat.ok) throw new HttpError(429, 'stream_limit', `Your plan allows ${features.cfg.streamLimit} screens at once. Stop playback on another device to continue.`);
-      req.user = user;
-    }
-    // Only after the access checks: is storage set up at all, and does the video object exist in R2?
-    // Public viewer messages stay non-technical; detailed storage diagnostics are only shown in the Admin console.
-    if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'This video isn’t available right now — please try again later.');
-    if (typeof r2.head === 'function') {
-      const h = await r2.head(v.source.key).catch((e) => ({ status: 0, error: e?.message }));
-      if (h.status === 404) throw new HttpError(404, 'video_file_missing', 'This video isn’t available right now — please try again later.');
-      if (h.status === 403) throw new HttpError(502, 'storage_access_denied', 'This video isn’t available right now — please try again later.');
-      if (h.status === 0) throw new HttpError(502, 'storage_unreachable', 'This video isn’t available right now — please try again later.');
-      if (h.status !== 200) throw new HttpError(502, 'storage_error', 'This video isn’t available right now — please try again later.');
-    }
-    const format = r2Format(v.source), expiresAt = new Date(Date.now() + streamTtl * 1000).toISOString();
-    res.set('Cache-Control', 'no-store');
-    // HLS: return a short-lived token URL that points at our own gateway (below).
-    if (format === 'hls') {   // segments can't be pre-signed one by one, so playback goes through the token gateway below
-      const token = signJwt({ aud: 'media', vid: v.id, sub: req.user?.id || null }, secret, streamTtl);
-      return res.json({ type: 'hls', url: `${originOf(req)}/api/v1/media/${token}/${encodeURIComponent(v.source.key.split('/').pop())}`, expiresAt });
-    }
-    // Plain MP4: a time-limited signed R2 link the browser can play directly.
-    res.json({ type: 'mp4', url: r2.presignGet(v.source.key, { ttl: streamTtl }), expiresAt });
-  }));
-  /** HLS gateway: playlists are proxied (so relative URLs stay on this gateway); media segments are redirected to short-lived R2 URLs. */
-  api.get('/media/:token/*', wrap(async (req, res) => {
-    const claims = verifyToken(req.params.token, secret);
-    if (!claims || claims.aud !== 'media') throw new HttpError(401, 'invalid_token', 'This playback link has expired.');
-    const v = await findVideo(claims.vid);
-    if (!v || v.source?.type !== 'r2' || r2Format(v.source) !== 'hls') throw new HttpError(404, 'not_found', 'Unknown video.');
-    if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'Video playback isn’t available right now — please try again later.');
-    // Only files in the same folder (or below) as the video's master playlist may be requested; anything else is rejected as a path-traversal attempt.
-    const dir = path.posix.dirname(v.source.key);
-    const rest = req.params[0];                                  // Express has already URL-decoded it once
-    const target = path.posix.normalize(`${dir}/${rest}`);
-    if (rest.includes('\0') || rest.startsWith('/') || !target.startsWith(dir === '.' ? '' : dir + '/') || target.split('/').includes('..')) throw new HttpError(404, 'not_found', 'Not found.');
-    // Playlists are fetched from R2 and rewritten/proxied by us; everything else (video segments) is a 15-minute signed redirect straight to R2.
-    if (/\.m3u8$/i.test(target)) {
-      const text = await r2.getText(target);
-      if (text == null) throw new HttpError(404, 'not_found', 'Not found.');
-      return res.set({ 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'no-store' }).send(text);
-    }
-    res.set('Cache-Control', 'no-store').redirect(302, r2.presignGet(target, { ttl: 900 }));
-  }));
-
-  // Public contact form: rate limited (5 per 10 min), with a hidden `website` field as a spam trap (bots fill it in).
-  api.post('/contact', rate ? rateLimit('contact', 5, 10 * 60_000) : (_q, _s, n) => n(), wrap(async (req, res) => {
-    const { name = '', email = '', phone = '', message = '', website = '' } = req.body || {};
-    if (website) return res.status(202).json({ ok: true });          // honeypot
-    if (!String(name).trim() || !EMAIL.test(String(email).trim()) || !String(message).trim()) throw bad('Name, a valid email and a message are required.');
-    if (String(message).length > 5000 || String(name).length > 100 || String(phone).length > 40 || String(email).length > 254) throw bad('One of the fields is too long.');
-    const entry = { id: crypto.randomUUID(), name: String(name).trim(), email: String(email).trim(), phone: String(phone).trim(), message: String(message).trim(), at: new Date().toISOString() };
-    await db.contacts.add(entry);
-    if (contactWebhook) fetch(contactWebhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch((e) => console.warn('[contact] webhook failed', e.message));
-    res.status(202).json({ ok: true });
-  }));
-
-  /** Razorpay → us. Public but signed: activates the plan even if the buyer closed the tab after paying. */
-  api.post('/payments/webhook', wrap(async (req, res) => {
-    if (payments.provider !== 'razorpay') return res.sendStatus(404);
-    if (!payments.verifyWebhook(req.rawBody, req.headers['x-razorpay-signature'])) throw bad('Bad signature.', 'invalid_signature');
-    // Razorpay sends several event types; each one is routed to the billing module.
-    const ev = req.body?.event, pe = req.body?.payload?.payment?.entity, re = req.body?.payload?.refund?.entity;
-    // Payment succeeded: match our order, check amount and currency, then grant access (idempotent, so retries are harmless).
-    if ((ev === 'payment.captured' || ev === 'order.paid') && pe?.order_id && pe?.id && (pe.status === 'captured' || ev === 'order.paid')) {
-      const pay = await db.payments.byOrder('razorpay', pe.order_id);
-      if (pay && pay.amountPaise === pe.amount && pe.currency === 'INR') await billing.settle(pay, pe.id);
-      else console.warn('[payments] webhook for unknown order or amount mismatch', pe.order_id);
-    } else if (ev === 'payment.failed') await billing.onPaymentFailed(pe);
-    else if (/^refund\.(created|processed|failed)$/.test(ev || '')) await billing.onRefundEvent(re);
-    res.json({ ok: true });                                               // always 200 for valid signatures so Razorpay doesn't retry forever
-  }));
-
+  registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, r2, catalog, features, userFromRequest });
+  registerContactRoutes(api, { db, rate, contactWebhook });
+  registerPaymentWebhook(api, { db, billing, payments });
   /* ---------- admin console API (admin accounts, or ADMIN_TOKEN for scripts) — see server/src/admin.js ---------- */
   // Mount the admin console API. It does its own authentication (admin role or ADMIN_TOKEN).
   api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, campaigns, unsubscribeUrlFor, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate }));
@@ -450,238 +131,19 @@ export function createApp({
   /* ---------- authenticated ---------- */
   // AUTH MIDDLEWARE: every route registered after this line requires a valid session token whose session version still matches.
   api.use(wrap(async (req, _res, next) => {
-    const h = req.headers.authorization || '';
-    const payload = h.startsWith('Bearer ') ? verifyToken(h.slice(7), secret) : null;
-    const user = payload && !payload.aud && await db.users.byId(String(payload.sub));
-    if (!user || !sessionValid(payload, user)) throw new HttpError(401, 'unauthorized', 'Please sign in.');
-    notDisabled(user);
-    req.user = user; next();
+    const session = await sessionForRequest(req, { db, secret });
+    if (!session) throw new HttpError(401, 'unauthorized', 'Please sign in.');
+    notDisabled(session.user);
+    req.user = session.user; next();
   }));
   features.authed(api);           // account security, PIN, devices, ratings, comments, push, refund requests
-  // Loads a profile only if it belongs to the signed-in user (prevents reading someone else's data).
-  const ownProfile = async (req) => {
-    const p = await db.profiles.get(req.params.pid, req.user.id);
-    if (!p) throw new HttpError(404, 'not_found', 'Profile not found.');
-    return p;
-  };
-
-  // ---- Account ----
-  api.get('/me', wrap(async (req, res) => res.json({ user: publicUser(req.user), hasPassword: !!req.user.passwordHash, hasPin: !!req.user.hasPin, providers: await db.identities.providersOf(req.user.id), profiles: await db.profiles.list(req.user.id), subscription: await db.subscriptions.get(req.user.id) })));
-  api.patch('/me', wrap(async (req, res) => {
-    const n = req.body?.name; if (typeof n !== 'string' || !n.trim() || n.length > 60) throw bad('Please enter your name.');
-    await db.users.rename(req.user.id, n.trim()); res.json({ user: publicUser({ ...req.user, name: n.trim() }) });
-  }));
-  // Self-service account deletion.
-  api.delete('/me', wrap(async (req, res) => {           // required by Apple App Store guideline 5.1.1(v) & Google Play policy
-    await db.users.remove(req.user.id);                   // FK cascades remove profiles, library and subscription
-    res.sendStatus(204);
-  }));
-
-  /* profiles */
-  // Validates profile input; with `partial` only supplied fields are checked (used by PATCH).
-  const cleanProfile = (b, partial = false) => {
-    const out = {};
-    if (!partial || b.name !== undefined) { if (typeof b.name !== 'string' || !b.name.trim() || b.name.length > 24) throw bad('Profile name must be 1–24 characters.'); out.name = b.name.trim(); }
-    if (b.kids !== undefined) { if (typeof b.kids !== 'boolean') throw bad('kids must be true or false.'); out.kids = b.kids; }
-    if (b.color !== undefined) { if (!Number.isInteger(b.color) || b.color < 0 || b.color >= PALETTE) throw bad('Invalid colour.'); out.color = b.color; }
-    return out;
-  };
-  api.get('/profiles', wrap(async (req, res) => res.json({ profiles: await db.profiles.list(req.user.id) })));
-  // Adding, editing or deleting a profile asks for the parental PIN if one is set.
-  api.post('/profiles', wrap(async (req, res) => {
-    await features.requirePin(req);
-    const { name, kids } = cleanProfile(req.body || {});
-    const profile = await db.profiles.create(req.user.id, { id: crypto.randomUUID(), name, kids }, MAX_PROFILES, PALETTE);
-    if (!profile) throw new HttpError(409, 'profile_limit', `You can have up to ${MAX_PROFILES} profiles.`);
-    res.status(201).json({ profile });
-  }));
-  api.patch('/profiles/:pid', wrap(async (req, res) => {
-    await features.requirePin(req);
-    const p = await ownProfile(req); res.json({ profile: await db.profiles.update(p.id, cleanProfile(req.body || {}, true)) });
-  }));
-  api.delete('/profiles/:pid', wrap(async (req, res) => {
-    await features.requirePin(req);
-    const p = await ownProfile(req);
-    if (!(await db.profiles.remove(p.id, req.user.id))) throw new HttpError(409, 'last_profile', 'At least one profile is required.');
-    res.sendStatus(204);
-  }));
-
-  /* library: My List, progress, reminders */
-  api.get('/profiles/:pid/library', wrap(async (req, res) => { const p = await ownProfile(req); res.json(await db.library.get(p.id)); }));
-  // My List. Adding validates the title exists; PUT/DELETE are idempotent.
-  api.put('/profiles/:pid/list/:type/:id', wrap(async (req, res) => {
-    const p = await ownProfile(req); const { type, id } = req.params;
-    if (!(await exists(type, id))) throw new HttpError(404, 'not_found', 'Unknown title.');
-    await db.library.addListItem(p.id, type, id); res.sendStatus(204);
-  }));
-  api.delete('/profiles/:pid/list/:type/:id', wrap(async (req, res) => {
-    const p = await ownProfile(req); await db.library.removeListItem(p.id, req.params.type, req.params.id); res.sendStatus(204);
-  }));
-  // Continue-watching position, saved every few seconds by the player.
-  api.put('/profiles/:pid/progress/:videoId', wrap(async (req, res) => {
-    const p = await ownProfile(req); const { position, duration } = req.body || {};
-    if (!(await exists('video', req.params.videoId))) throw new HttpError(404, 'not_found', 'Unknown video.');
-    if (!Number.isFinite(position) || position < 0 || !Number.isFinite(duration ?? 0) || (duration ?? 0) < 0) throw bad('position and duration must be non-negative numbers.');
-    await db.library.saveProgress(p.id, req.params.videoId, Math.min(Math.floor(position), 4_294_967_295), Math.min(Math.floor(duration || 0), 4_294_967_295));
-    res.sendStatus(204);
-  }));
-  api.delete('/profiles/:pid/progress/:videoId', wrap(async (req, res) => { const p = await ownProfile(req); await db.library.removeProgress(p.id, req.params.videoId); res.sendStatus(204); }));
-  // "Remind me" for upcoming releases.
-  api.put('/profiles/:pid/reminders/:id', wrap(async (req, res) => {
-    const p = await ownProfile(req); if (!(await exists('upcoming', req.params.id))) throw new HttpError(404, 'not_found', 'Unknown title.');
-    await db.library.addReminder(p.id, req.params.id); res.sendStatus(204);
-  }));
-  api.delete('/profiles/:pid/reminders/:id', wrap(async (req, res) => { const p = await ownProfile(req); await db.library.removeReminder(p.id, req.params.id); res.sendStatus(204); }));
-
-  /* ---------- subscription & payments ---------- */
-  api.get('/subscription', wrap(async (req, res) => res.json({ subscription: await db.subscriptions.get(req.user.id) })));
-  // Payment endpoints are rate limited too (20 per minute per IP).
-  const payLimit = rate ? rateLimit('pay', 20, 60_000) : (_q, _s, n) => n();
-
-  /** Price preview: applies a coupon (and tells the viewer why it doesn't work). */
-  api.post('/payments/quote', payLimit, wrap(async (req, res) => {
-    if (payments.provider !== 'razorpay') throw new HttpError(501, 'payments_not_configured', 'Coupons aren’t available right now.');
-    res.json({ quote: billing.quoteView(await billing.quote(req.user.id, req.body?.planId, req.body?.couponCode)) });
-  }));
-
-  /** Step 1: start a purchase. Razorpay → returns the order for Checkout (coupon + GST billing details applied). Demo provider → activates immediately. */
-  api.post('/payments/checkout', payLimit, wrap(async (req, res) => {
-    features.requireVerified(req.user);
-    const plan = paidPlan(req.body?.planId);
-    if (!plan) throw bad('Choose a paid plan.', 'unknown_plan');
-    if (payments.provider === 'none') throw new HttpError(501, 'payments_not_configured', 'Payments aren’t available right now — please try again later.');
-    // Development only: no real payment, activate the plan immediately ("demo" subscription).
-    if (payments.provider === 'mock') {
-      await db.subscriptions.activateDemo(req.user.id, plan.id, plan.days);
-      return res.status(201).json({ provider: 'mock', demo: true, subscription: await db.subscriptions.get(req.user.id) });
-    }
-    res.status(201).json(await billing.checkout({ user: req.user, planId: plan.id, couponCode: req.body?.couponCode, billing: req.body?.billing }));
-  }));
-
-  /** Step 3: the browser reports a finished payment. Nothing is granted unless the signature is valid for OUR order. */
-  api.post('/payments/verify', payLimit, wrap(async (req, res) => {
-    if (payments.provider !== 'razorpay') throw new HttpError(501, 'payments_not_configured', 'Payments aren’t available right now — please try again later.');
-    // The signature proves Razorpay (not the browser) says this payment happened.
-    const { orderId, paymentId, signature } = req.body || {};
-    const pay = typeof orderId === 'string' ? await db.payments.byOrder('razorpay', orderId) : null;
-    if (!pay || pay.userId !== req.user.id) throw new HttpError(404, 'not_found', 'Unknown order.');            // also blocks using someone else's order
-    if (!payments.verifyPayment({ orderId, paymentId, signature })) throw new HttpError(400, 'invalid_signature', 'Payment could not be verified. If money was deducted it will be reversed automatically, or contact support.');
-    await billing.settle(pay, paymentId);                                                                          // idempotent; issues the invoice
-    res.json({ subscription: await db.subscriptions.get(req.user.id) });
-  }));
-
-  /* ---------- billing history & documents ---------- */
-  // Payment history and downloadable GST invoices / credit notes.
-  api.get('/billing', wrap(async (req, res) => res.json({ payments: await billing.history(req.user.id) })));
-  api.get('/invoices/:id/pdf', wrap(async (req, res) => {
-    const f = await billing.invoicePdf(req.user.id, req.params.id);
-    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${f.filename}"`, 'Cache-Control': 'private, no-store' }); res.send(f.content);
-  }));
-  api.post('/invoices/:id/email', payLimit, wrap(async (req, res) => { await billing.emailInvoice(req.user, req.params.id); res.sendStatus(204); }));
-
-  /** Cancelling only applies to demo plans: real plans are prepaid, don't renew and simply run out. */
-  api.delete('/subscription', wrap(async (req, res) => {
-    const sub = await db.subscriptions.get(req.user.id);
-    if (sub.planId !== 'free' && !sub.demo) throw new HttpError(409, 'not_cancellable', `Your plan is prepaid and doesn’t renew automatically — it stays active until ${new Date(sub.expiresAt).toDateString()}.`);
-    await db.subscriptions.clear(req.user.id);
-    res.json({ subscription: await db.subscriptions.get(req.user.id) });
-  }));
-
+  registerAccountRoutes(api, { db, publicUser, features, exists, maxProfiles: MAX_PROFILES, palette: PALETTE });
+  registerBillingRoutes(api, { db, billing, payments, features, rate });
   // Anything under /api/v1 not handled above is a JSON 404 (not the website).
   api.use((_req, _res, next) => next(new HttpError(404, 'not_found', 'Unknown endpoint.')));
   app.use('/api/v1', api);
 
-  /* ---------- static site (same origin => the web app auto-detects this API) ---------- */
-  // ---- Website ----
-  // Static files, plus server-rendered HTML for every page so search engines see real titles and content.
-  if (serveStatic) {
-    // Defence in depth: even though only the folders below are mounted, explicitly refuse anything that
-    // looks like repository internals (git, docs, tests, sources, keys, backups) so a future mount or
-    // route can never accidentally expose it.
-    const DENY = /(^\/\.(?:git|env|npm|ssh)|\/(?:server|scripts|docs|test|tests|mobile|resources|node_modules|\.github)(?:\/|$)|\/package(?:-lock)?\.json$|\.(?:map|md|mdx|ts|tsx|mjs|cjs|yml|yaml|toml|ini|cfg|log|sql|sqlite|pem|key|p12|keystore|bak|old)$)/i;
-    app.use((req, res, next) => {
-      let p; try { p = decodeURIComponent(req.path); } catch { return res.status(404).type('text/plain').send('Not found'); }
-      if (DENY.test(p)) return res.status(404).type('text/plain').send('Not found');
-      next();
-    });
-    // Common options for express.static: no directory index, ignore dotfiles.
-    const opts = (maxAge) => ({ maxAge, index: false, dotfiles: 'ignore' });
-    const seoSvc = createSeo({ catalog, root: ROOT, plans: PLANS, origin: seoCfg.siteUrl, indexable: seoCfg.indexable, verification: { google: seoCfg.google, bing: seoCfg.bing, ga4: seoCfg.ga4 } });
-    // robots.txt and sitemap.xml are generated (they depend on the catalog and on whether indexing is allowed).
-    app.get('/robots.txt', (req, res) => res.type('text/plain').set('Cache-Control', 'public, max-age=3600').send(seoSvc.robotsTxt(req)));
-    app.get('/sitemap.xml', wrap(async (req, res) => { res.type('application/xml').set('Cache-Control', 'public, max-age=3600').send(await seoSvc.sitemapXml(req)); }));
-    // The web app manifest: on this server the app uses real URLs, so an installed app should open on "/" rather than "/#/".
-    app.get('/manifest.webmanifest', (_q, res) => {
-      try { const m = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.webmanifest'), 'utf8')); m.start_url = '/'; m.scope = '/'; res.type('application/manifest+json').send(JSON.stringify(m)); }
-      catch { res.sendFile(path.join(ROOT, 'manifest.webmanifest')); }
-    });
-    // The service worker must never be cached hard, or updates would not reach users.
-    // Production serves the minified mirror prepared at boot (index.js) — same URLs, no readable source.
-    const built = fs.existsSync(path.join(ROOT, '.build', 'app', 'js', 'main.js')) && fs.existsSync(path.join(ROOT, '.build', 'sw.js'));
-    const appRoot = built ? path.join(ROOT, '.build', 'app') : path.join(ROOT, 'app');
-    const swRoot = built ? path.join(ROOT, '.build', 'sw.js') : path.join(ROOT, 'sw.js');
-    app.get('/sw.js', (_q, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(swRoot); });
-    // Images belong to this site: other pages may not hot-link them (crawlers for social previews and
-    // direct visits without a referrer keep working).
-    const HOTLINK_BOTS = /bot|crawler|spider|slurp|preview|embed|facebookexternalhit|twitterbot|whatsapp|telegrambot|slackbot|discordbot|linkedinbot|pinterest|snapchat|skypeuripreview|vkshare|w3c_validator|applebot|metadata/i;
-    // Pages that may show these images: this server's own host(s), plus the public site (PUBLIC_SITE_URL, with and without www), any explicit
-    // CORS_ORIGINS, the native apps' WebView (capacitor.config.json server.hostname - the app loads admin-uploaded posters from this API,
-    // and without this their requests, which carry that origin as the Referer, were refused) and IMAGE_ALLOWED_HOSTS (comma-separated extras).
-    const hostOf = (url) => { try { return new URL(url).host.toLowerCase(); } catch { return ''; } };
-    const imageHosts = new Set([
-      ...[hostOf(billing?.config?.siteUrl)].flatMap((h) => (h ? [h, h.startsWith('www.') ? h.slice(4) : `www.${h}`] : [])),
-      ...(corsOrigins === '*' ? [] : String(corsOrigins).split(',').map((s) => hostOf(s.trim()))),
-      'app.addabaaz.in',
-      ...String(process.env.IMAGE_ALLOWED_HOSTS || '').split(',').map((s) => s.trim().toLowerCase()),
-    ].filter(Boolean));
-    const guardImages = (req, res, next) => {
-      const ref = req.get('referer');
-      if (ref) {
-        let same = false;
-        try { const u = new URL(ref); same = u.host === req.headers.host || u.host === (req.get('x-forwarded-host') || '') || imageHosts.has(u.host.toLowerCase()); } catch { same = false; }
-        if (!same && !HOTLINK_BOTS.test(req.get('user-agent') || '')) return res.status(403).type('text/plain').send('Forbidden');
-      }
-      next();
-    };
-    // Admin uploads are stored in MySQL; the upload folder is only a cache that a restart or redeploy can empty (Render's free plan, a
-    // Hostinger redeploy, a second server). When a file is not on disk, serve it from MySQL and put a copy back on disk. The names are
-    // content hashes, so a URL never changes meaning and can be cached for a year.
-    const uploadFromDb = wrap(async (req, res, next) => {
-      if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-      const name = req.path.slice(1);
-      if (!UPLOAD_NAME.test(name)) return next();
-      const file = await db.uploads.get(name); if (!file) return next();
-      cacheUpload(uploadDir, name, file.data);
-      res.set({ 'Content-Type': uploadType(name), 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
-      res.send(file.data);
-    });
-    // Static asset folders. Longer cache times for rarely-changing ones.
-    app.use('/app', express.static(appRoot, { ...opts(0), etag: true }));
-    app.use('/data', express.static(path.join(ROOT, 'data'), opts(60_000)));
-    app.use('/media', guardImages, express.static(path.join(ROOT, 'media'), opts(7 * 86_400_000)));
-    app.use('/uploads', guardImages, express.static(uploadDir, { maxAge: '365d', immutable: true, index: false, dotfiles: 'ignore' }), uploadFromDb);   // admin-uploaded images and subtitles (content-hash names): disk cache first, then MySQL
-    // The admin console: its own page + scripts, never cached, locked down with a strict CSP (no inline script, no framing).
-    const adminHeaders = (_q, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'self'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' https://accounts.google.com https://connect.facebook.net https://appleid.cdn-apple.com; connect-src 'self' https:; frame-src 'self' https://accounts.google.com https://www.facebook.com https://appleid.apple.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" }); next(); };
-    // Admin console page + its scripts.
-    app.get(['/admin', '/admin/'], adminHeaders, (_q, res) => res.sendFile(path.join(ROOT, 'admin/index.html')));
-    app.use('/admin', adminHeaders, express.static(path.join(ROOT, 'admin'), { index: false, dotfiles: 'ignore', etag: true }));
-
-    // Every other GET is a page of the web app (/, /show/shahid …). Unknown pages get a REAL 404 status (with the app shell, so
-    // people still see the site) — otherwise search engines index every mistyped URL as a "soft 404".
-    app.get('*', async (req, res, next) => {
-      if (req.path !== '/index.html' && (/^\/(api|app|data|media|uploads|admin)(\/|$)/.test(req.path) || /\.[a-z0-9]{1,8}$/i.test(req.path))) return res.status(404).type('text/plain').send('Not found');
-      // Render the requested page (or redirect, or a real 404 status for unknown URLs).
-      try {
-        const r = await seoSvc.render(req);
-        if (r.redirect) return res.redirect(r.status || 301, r.redirect);
-        res.status(r.status).set(r.headers).send(r.body);
-      } catch (e) {
-        console.error('[seo] page render failed:', e.message);
-        res.status(503).set({ 'Cache-Control': 'no-store', 'Retry-After': '30' }).sendFile(path.join(ROOT, 'index.html'));   // 503, not 200: never let a crawler index a broken page
-      }
-    });
-  }
-
+  mountWebsite(app, { serveStatic, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg });
   // FINAL ERROR HANDLER: turns any thrown error into `{ error: { code, message } }`. Unexpected (500) errors are logged and hidden from the client.
   // Only errors that were *authored* for the client are ever shown — HttpError, PaymentError, BillingError
   // (integer status + string code). Library/driver messages and everything else are replaced with a plain,
@@ -690,7 +152,7 @@ export function createApp({
     if (err.type === 'entity.parse.failed') err = bad('Invalid JSON body.', 'invalid_json');
     if (err.type === 'entity.too.large') err = new HttpError(413, 'too_large', 'Request too large.');
     const status = err.status || 500;
-    if (status >= 500 && !(err instanceof HttpError)) { console.error(err); try { app.locals.captureError?.(err, req); } catch { /* monitoring must never break error handling */ } db.errors.add({ source: 'server', message: `${req.method} ${req.path}: ${err.message}`, stack: err.stack, url: req.originalUrl, userAgent: req.get('user-agent') }).catch(() => {}); }   // expected 5xx (provider down, storage off) are not logged as crashes
+    if (status >= 500 && !(err instanceof HttpError)) { console.error(err); try { app.locals.captureError?.(err, req); } catch { /* monitoring must never break error handling */ } db.errors.add({ source: 'server', message: `${req.method} ${safeErrorUrl(req.path)}: ${err.message}`, stack: err.stack, url: safeErrorUrl(req.originalUrl), userAgent: req.get('user-agent') }).catch(() => {}); }   // expected 5xx (provider down, storage off) are not logged as crashes
     const authored = err instanceof HttpError || (Number.isInteger(err?.status) && typeof err?.code === 'string');
     const message = authored && err.message ? err.message : (status >= 500 ? 'Something went wrong.' : 'That request couldn’t be completed.');
     const code = authored && typeof err.code === 'string' ? err.code : (status >= 500 ? 'server_error' : 'bad_request');

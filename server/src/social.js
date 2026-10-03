@@ -1,14 +1,13 @@
 import crypto from 'node:crypto';
 import { createAppleVerifier } from './apple.js';
+import { SocialError } from './social-errors.js';
+export { SocialError };
 
 /**
  * Server-side verification of social sign-in credentials. The client obtains a credential from the provider
  * (web: Google Identity Services / Facebook JS SDK; apps: native SDK via Capacitor) and we verify it here —
  * the API never trusts profile data sent by the client.
  */
-// Error type for sign-in problems: code `invalid_credential` (bad/expired token) or `provider_unavailable` (Google/Facebook unreachable).
-export class SocialError extends Error { constructor(code, message) { super(message); this.code = code; } }
-
 // Google publishes the public keys it signs ID tokens with at this URL.
 const GOOGLE_JWKS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
 const GOOGLE_ISSUERS = new Set(['https://accounts.google.com', 'accounts.google.com']);

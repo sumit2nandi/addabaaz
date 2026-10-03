@@ -4,6 +4,15 @@
 export class HttpError extends Error { constructor(status, code, message) { super(message); this.status = status; this.code = code; } }
 // Shortcut for a 400 Bad Request error.
 export const bad = (msg, code = 'bad_request') => new HttpError(400, code, msg);
+/** Removes query/fragment secrets and short-lived HLS bearer tokens before a URL is persisted in an error report. */
+export function safeErrorUrl(value) {
+  const input = String(value || '');
+  if (!input) return '';
+  let path;
+  try { path = new URL(input, 'http://error.invalid').pathname; }
+  catch { path = input.split(/[?#]/, 1)[0].replace(/^[a-z][a-z\d+.-]*:\/\/[^/]*|^\/\/[^/]*/i, '') || '/'; }
+  return path.replace(/(\/api\/v1\/media\/)[^/]+/i, '$1[redacted]').slice(0, 300);
+}
 // Wraps an async route handler so a rejected promise reaches Express's error middleware (Express 4 does not do this itself).
 export const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 

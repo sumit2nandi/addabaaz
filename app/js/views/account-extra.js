@@ -11,10 +11,45 @@ import { friendly } from '../errors.js';
 // Settings row markup (icon, label, sub-label) that opens a dialog when clicked.
 const row = (id, ic, label, sub) => html`<button class="row-link" id="${id}">${icon(ic, { size: 22 })}<span><b>${label}</b>${sub ? html`<small>${sub}</small>` : ''}</span>${icon('right', { size: 18, cls: 'chev' })}</button>`;
 
+// Shared notification control for account settings and connected guest settings. Native guest
+// notifications are general broadcasts only; local profile/list data never leaves the device.
+function wireNotifications(root, { guest = false, onCleanup = null } = {}) {
+  const slot = $('#notifySlot', root); if (!slot) return;
+  const draw = (s) => {
+    if (!s?.supported || !s.enabled) { slot.innerHTML = ''; return; }
+    const blocked = s.permission === 'denied'
+      ? (s.native ? 'Blocked in Android settings. Allow notifications for ADDABAAZ there.' : 'Blocked in your browser settings.')
+      : guest && s.native ? 'General updates only; your local profile and watch data stay on this phone.' : 'New episodes, launches and announcements.';
+    slot.innerHTML = html`<h2 class="sub-h">Notifications</h2><div class="card-panel list">
+      <label class="row-switch"><span><b>Notify me on this device</b><small>${blocked}</small></span><span class="switch"><input type="checkbox" id="pushOn" ${s.subscribed ? 'checked' : ''} ${s.permission === 'denied' ? 'disabled' : ''}><span class="track"></span></span></label>
+      ${s.subscribed && !s.native ? html`<label class="row-switch"><span><b>New episodes of shows I follow</b></span><span class="switch"><input type="checkbox" data-pp="episodes" ${s.prefs.episodes ? 'checked' : ''}><span class="track"></span></span></label>
+        <label class="row-switch"><span><b>When a Coming Soon title launches</b></span><span class="switch"><input type="checkbox" data-pp="launches" ${s.prefs.launches ? 'checked' : ''}><span class="track"></span></span></label>
+        <label class="row-switch"><span><b>Announcements &amp; offers</b></span><span class="switch"><input type="checkbox" data-pp="news" ${s.prefs.news ? 'checked' : ''}><span class="track"></span></span></label>` : ''}</div>`.s;
+  };
+  const refresh = () => pushState().then(draw).catch(() => {});
+  const unsubscribe = app.user.on('push', refresh);
+  onCleanup?.(unsubscribe);
+  refresh();
+  slot.addEventListener('change', async (e) => {
+    try {
+      if (e.target.id === 'pushOn') { if (e.target.checked) await enablePush(); else await disablePush(); }
+      else if (e.target.dataset.pp) await setPushPrefs({ [e.target.dataset.pp]: e.target.checked });
+      await refresh();
+    } catch (err) { toast(friendly(err)); await refresh(); }
+  });
+}
+
 /** Returns { banner, sections, wire(root) } — both go into the page, wire() attaches the handlers once it is in the DOM. */
 export function accountExtras() {
   const u = app.user, acc = u.account;
-  if (!u.supportsAuth || !acc) return { banner: '', sections: '', wire() {} };
+  if (!u.supportsAuth) return { banner: '', sections: '', wire() {} };
+  if (!acc) {
+    return {
+      banner: '',
+      sections: html`<div id="notifySlot"></div><h2 class="sub-h">Privacy</h2><div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}<a class="row-link" href="#/privacy">${icon('info', { size: 22 })}<span><b>Privacy Policy</b></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>`,
+      wire(root, ctx) { $('#consentBtn', root)?.addEventListener('click', openConsentDialog); wireNotifications(root, { guest: true, onCleanup: ctx?.onCleanup }); },
+    };
+  }
   const verified = acc.emailVerified !== false;
   const banner = verified ? '' : html`<section class="card-panel notice" id="verifyBanner"><div>${icon('mail', { size: 22 })}</div><div><b>Confirm your email</b><p class="muted">We sent a link to ${acc.email}. Confirming lets you buy a plan and post comments.</p></div><button class="btn btn-primary" id="resendVerify">Resend link</button></section>`;
   const sections = html`
@@ -33,7 +68,7 @@ export function accountExtras() {
     <h2 class="sub-h">Privacy</h2>
     <div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}<a class="row-link" href="#/privacy">${icon('info', { size: 22 })}<span><b>Privacy Policy</b></span>${icon('right', { size: 18, cls: 'chev' })}</a><a class="row-link" href="#/terms">${icon('info', { size: 22 })}<span><b>Terms of Use</b></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>`;
 
-  const wire = (root) => {
+  const wire = (root, ctx) => {
     $('#resendVerify', root)?.addEventListener('click', async (e) => { e.target.disabled = true; try { await u.remote.resendVerification(); toast('Sent — check your inbox.'); } catch (err) { toast(friendly(err)); e.target.disabled = false; } });
     $('#consentBtn', root)?.addEventListener('click', openConsentDialog);
 
@@ -89,25 +124,7 @@ export function accountExtras() {
       };
     });
 
-    // notifications (only where the browser and the server support them)
-    pushState().then((st) => {
-      const slot = $('#notifySlot', root); if (!slot || !st.supported || !st.enabled) return;
-      const draw = (s) => {
-        slot.innerHTML = html`<h2 class="sub-h">Notifications</h2><div class="card-panel list">
-          <label class="row-switch"><span><b>Notify me on this device</b><small>${s.permission === 'denied' ? 'Blocked in your browser settings.' : 'New episodes, launches and announcements.'}</small></span><span class="switch"><input type="checkbox" id="pushOn" ${s.subscribed ? 'checked' : ''} ${s.permission === 'denied' ? 'disabled' : ''}><span class="track"></span></span></label>
-          ${s.subscribed && !s.native ? html`<label class="row-switch"><span><b>New episodes of shows I follow</b></span><span class="switch"><input type="checkbox" data-pp="episodes" ${s.prefs.episodes ? 'checked' : ''}><span class="track"></span></span></label>
-            <label class="row-switch"><span><b>When a Coming Soon title launches</b></span><span class="switch"><input type="checkbox" data-pp="launches" ${s.prefs.launches ? 'checked' : ''}><span class="track"></span></span></label>
-            <label class="row-switch"><span><b>Announcements &amp; offers</b></span><span class="switch"><input type="checkbox" data-pp="news" ${s.prefs.news ? 'checked' : ''}><span class="track"></span></span></label>` : ''}</div>`.s;
-      };
-      draw(st);
-      slot.addEventListener('change', async (e) => {
-        try {
-          if (e.target.id === 'pushOn') { if (e.target.checked) await enablePush(); else await disablePush(); }
-          else if (e.target.dataset.pp) await setPushPrefs({ [e.target.dataset.pp]: e.target.checked });
-          draw(await pushState());
-        } catch (err) { toast(friendly(err)); draw(await pushState().catch(() => st)); }
-      });
-    }).catch(() => {});
+    wireNotifications(root, { onCleanup: ctx?.onCleanup });
   };
   return { banner, sections, wire };
 }

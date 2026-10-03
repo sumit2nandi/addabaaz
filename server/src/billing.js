@@ -198,7 +198,10 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
     if (!p || !p.userId || p.status !== 'created') return;
     if (!(await db.payments.claimFailedNotice(p.id))) return;
     const user = await db.users.byId(p.userId); if (!user) return;
-    track(mailer.send({ to: user.email, ...mail.paymentFailedEmail({ ...mailOpts, name: user.name, planName: planName(p.planId), reason: String(entity.error_description || '').slice(0, 120), retryUrl: `${config.siteUrl}/#/plans` }) }));
+    const release = () => db.payments.releaseFailedNotice(p.id).catch((releaseError) => log.error('[billing] failed-notice claim release failed:', releaseError?.message || releaseError));
+    track(mailer.send({ to: user.email, ...mail.paymentFailedEmail({ ...mailOpts, name: user.name, planName: planName(p.planId), reason: String(entity.error_description || '').slice(0, 120), retryUrl: `${config.siteUrl}/#/plans` }) }).then(async (r) => {
+      if (!r?.sent) await release();
+    }).catch(async (e) => { await release(); throw e; }));
   }
 
   /* ---------------- refunds ---------------- */
@@ -284,7 +287,10 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
     for (const s of await db.subscriptions.dueForReminder(config.reminderDays)) {
       if (!(await db.subscriptions.claimReminder(s.userId, s.expiresAt))) continue;
       sent++;
-      track(mailer.send({ to: s.email, ...mail.expiringEmail({ ...mailOpts, name: s.name, planName: planName(s.planId), expiresAt: s.expiresAt, renewUrl: `${config.siteUrl}/#/plans` }) }));
+      const release = () => db.subscriptions.releaseReminder(s.userId, s.expiresAt).catch((releaseError) => log.error('[billing] reminder claim release failed:', releaseError?.message || releaseError));
+      track(mailer.send({ to: s.email, ...mail.expiringEmail({ ...mailOpts, name: s.name, planName: planName(s.planId), expiresAt: s.expiresAt, renewUrl: `${config.siteUrl}/#/plans` }) }).then(async (r) => {
+        if (!r?.sent) await release();
+      }).catch(async (e) => { await release(); throw e; }));
     }
     return sent;
   }

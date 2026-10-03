@@ -141,6 +141,7 @@ test('admin panel surfaces technical R2 diagnostics while public app/website kee
   const contentView = read('admin/js/views/content.js');
   const adminServer = read('server/src/admin.js');
   const appServer = read('server/src/app.js');
+  const mediaRoutes = read('server/src/routes/media.js');
   const watchView = read('app/js/views/watch.js');
   const reelsView = read('app/js/views/reels.js');
 
@@ -153,7 +154,8 @@ test('admin panel surfaces technical R2 diagnostics while public app/website kee
   // Public app/website must never expose technical storage strings (bucket names, object keys, Admin panel path, env var names).
   assert.doesNotMatch(watchView, /was not found in Cloudflare R2|Admin → Videos|CORS policy/, 'watch page does not expose technical storage errors');
   assert.doesNotMatch(reelsView, /was not found in Cloudflare R2|Admin → Videos/, 'reels page does not expose technical storage errors');
-  assert.doesNotMatch(appServer, /Please upload the video file in Admin|Check the R2 API credentials/, 'public stream API returns friendly non-technical viewer messages');
+  assert.doesNotMatch(appServer, /Please upload the video file in Admin|Check the R2 API credentials/, 'public app server returns friendly non-technical viewer messages');
+  assert.doesNotMatch(mediaRoutes, /Please upload the video file in Admin|Check the R2 API credentials/, 'public stream API returns friendly non-technical viewer messages');
 });
 
 test('createHtml5Player renders a uniform YouTube-style player (.ytp) with Settings menu (Playback speed, Quality, Subtitles/CC, Loop)', async () => {

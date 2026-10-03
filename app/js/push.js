@@ -43,7 +43,7 @@ export async function enablePush(prefs = {}) {
 }
 // Unsubscribe on the server and in the browser (or drop the device token in the app).
 export async function disablePush() {
-  if (nativePushSupported()) { await detachNativePush(); return; }
+  if (nativePushSupported()) { await detachNativePush({ optOut: true }); return; }
   const sub = await currentSubscription(); if (!sub) return;
   await app.user.remote?.pushUnsubscribe(sub.endpoint).catch(() => {});
   await sub.unsubscribe().catch(() => {});
@@ -51,7 +51,7 @@ export async function disablePush() {
 export async function setPushPrefs(prefs) { if (nativePushSupported()) return; const sub = await currentSubscription(); if (sub) await app.user.remote.pushPrefs(sub.endpoint, prefs); }
 /** On sign-out this device stops receiving the account's notifications (shared devices!) — the browser permission stays. */
 export async function detachPush() {
-  if (nativePushSupported()) { await detachNativePush(); return; }     // a shared phone must not keep notifying the previous account
+  if (nativePushSupported()) { await detachNativePush({ optOut: false }); return; } // sign-out detaches the account; guest default-on can register anonymously
   const sub = await currentSubscription(); if (sub) await app.user.remote?.pushUnsubscribe(sub.endpoint).catch(() => {});
 }
 

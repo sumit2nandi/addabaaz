@@ -7,6 +7,7 @@ import { dbConfigFromEnv } from './config.js';
 import { migrate } from './migrate.js';
 import { runScheduledJobs } from './jobs.js';
 import { prepareWebAssets } from './web-assets.js';
+import { safeErrorUrl } from './http.js';
 
 // Listen port (PORT, default 3000).
 const port = Number(process.env.PORT) || 3000;
@@ -51,7 +52,7 @@ if (process.env.SENTRY_DSN) {
   try {
     const Sentry = await import('@sentry/node');
     Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV || 'development', tracesSampleRate: 0 });
-    app.locals.captureError = (err, req) => Sentry.captureException(err, { extra: { method: req?.method, path: req?.path } });
+    app.locals.captureError = (err, req) => Sentry.captureException(err, { extra: { method: req?.method, path: safeErrorUrl(req?.path) } });
     console.log('[sentry] error reporting enabled');
   } catch (e) { console.warn('[sentry] SENTRY_DSN is set but @sentry/node could not be loaded (npm i @sentry/node):', e.message); }
 }
