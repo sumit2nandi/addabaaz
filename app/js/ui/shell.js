@@ -5,7 +5,12 @@ import { html, $, $$, el } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast } from './components.js';
 import { CONFIG } from '../config.js';
+import { isNative } from '../platform.js';
 import { mayLeaveKids } from './parental.js';
+
+// Menu label for the plan/account page. The apps don't sell (docs/PAYMENTS.md), so there it reads as account
+// information rather than a store.
+const PLANS_LABEL = isNative ? 'Your plan' : 'Plans';
 
 // Menu definitions: [path, label] for the top bar, and [path, label, icon] for the mobile tab bar.
 const NAV = [
@@ -70,7 +75,7 @@ export function renderProfileMenu() {
         <a class="menu-item" href="#/signup">${icon('plus', { size: 18 })}<span>Create account</span></a>
         <hr>
         <a class="menu-item" href="#/list">${icon('list', { size: 18 })}<span>My List</span></a>
-        <a class="menu-item" href="#/plans">${icon('crown', { size: 18 })}<span>Plans</span></a>
+        <a class="menu-item" href="#/plans">${icon('crown', { size: 18 })}<span>${PLANS_LABEL}</span></a>
         <a class="menu-item" href="#/account">${icon('edit', { size: 18 })}<span>Settings &amp; privacy</span></a>
       </div>`.s;
     return;
@@ -83,7 +88,7 @@ export function renderProfileMenu() {
       <hr>
       <a class="menu-item" href="#/list">${icon('list', { size: 18 })}<span>My List</span></a>
       <a class="menu-item" href="#/account">${icon('user', { size: 18 })}<span>Account &amp; settings</span></a>
-      ${u.supportsAuth ? html`<a class="menu-item" href="#/plans">${icon('crown', { size: 18 })}<span>Plans</span></a>` : ''}
+      ${u.supportsAuth ? html`<a class="menu-item" href="#/plans">${icon('crown', { size: 18 })}<span>${PLANS_LABEL}</span></a>` : ''}
       ${u.supportsAuth ? (u.account
         ? html`<button type="button" class="menu-item" data-signout>${icon('logout', { size: 18 })}<span>Sign out</span></button>`
         : html`<a class="menu-item" href="#/signin">${icon('user', { size: 18 })}<span>Sign in</span></a>`) : ''}

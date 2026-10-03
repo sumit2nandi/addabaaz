@@ -6,7 +6,7 @@ import { icon } from '../icons.js';
 import { avatar, toast, sectionHeader } from '../ui/components.js';
 import { confirmDialog } from '../ui/dialog.js';
 import { go } from '../router.js';
-import { platform } from '../platform.js';
+import { isNative, platform } from '../platform.js';
 import { accountExtras } from './account-extra.js';
 import { friendly } from '../errors.js';
 
@@ -40,7 +40,11 @@ export default async function account(ctx) {
       <button class="row-link" id="clearHist">${icon('trash', { size: 22 })}<span><b>Clear watch history</b><small>Removes Continue Watching for this profile.</small></span></button>
     </div>
 
-    ${u.supportsAuth ? html`<h2 class="sub-h">Subscription</h2><div class="card-panel list">${link('#/plans', 'crown', plan === 'free' ? 'Free plan' : 'ADDABAAZ Plus', plan === 'free' ? 'Subscribe to watch premium originals' : (u.subscription.expiresAt ? `Active until ${fmtDate(u.subscription.expiresAt)}` : 'Manage your plan'))}${u.account ? link('#/billing', 'download', 'Billing & invoices', 'GST invoices, credit notes and refunds') : ''}</div>` : ''}
+    ${u.supportsAuth ? html`<h2 class="sub-h">Subscription</h2><div class="card-panel list">${isNative
+      // Store apps are consumption-only (docs/PAYMENTS.md): the plan is a statement about this account, never a
+      // purchase route — no link to the plans page, no "subscribe" wording. The website keeps the full row.
+      ? html`<div class="row-link static">${icon('crown', { size: 22 })}<span><b>${plan === 'free' ? 'Free plan' : 'ADDABAAZ Plus'}</b><small>${plan === 'free' ? 'Premium titles need an active plan on your account' : (u.subscription.expiresAt ? `Active until ${fmtDate(u.subscription.expiresAt)}` : 'Premium access is active')}</small></span></div>`
+      : link('#/plans', 'crown', plan === 'free' ? 'Free plan' : 'ADDABAAZ Plus', plan === 'free' ? 'Subscribe to watch premium originals' : (u.subscription.expiresAt ? `Active until ${fmtDate(u.subscription.expiresAt)}` : 'Manage your plan'))}${u.account ? link('#/billing', 'download', 'Billing & invoices', 'GST invoices, credit notes and refunds') : ''}</div>` : ''}
 
     <h2 class="sub-h">Explore</h2>
     <div class="card-panel list">

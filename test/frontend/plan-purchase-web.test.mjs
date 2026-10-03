@@ -1,11 +1,9 @@
-// Premium surfaces inside the store apps: they are consumption-only (docs/PAYMENTS.md).
+// The website keeps the full buying flow (docs/PAYMENTS.md — Razorpay is collected on the web only).
 //
-// The apps must never sell, price or steer to a purchase: Apple's reader-app model (3.1.3(a)) and Google's
-// consumption-only rule ("a user could log in ... and access content paid for somewhere else") both forbid it.
-// This test renders the premium lock wall and the plans page as the ANDROID APP and asserts that neither shows
-// a plans link, a price, or any checkout wording. The website keeps the full buying flow —
-// test/frontend/plan-purchase-web.test.mjs covers that side.
-// Run:  node --test test/frontend/watch-plan-wall.test.mjs
+// Its mirror image: test/frontend/watch-plan-wall.test.mjs proves the store apps sell nothing; this test proves
+// the browser still does — the premium lock wall offers "See plans" with a return link, and the plans page shows
+// prices, the Razorpay note and a buy button.
+// Run:  node --test test/frontend/plan-purchase-web.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { register } from 'node:module';
@@ -21,10 +19,9 @@ window.fetch = globalThis.fetch;
 Element.prototype.scrollIntoView = () => {};
 globalThis.ResizeObserver = class { observe() {} disconnect() {} };
 
-// The Android shell: the wall must offer "See plans" HERE too (that was the bug).
-window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android', Plugins: {} };
+// A normal browser: no Capacitor, so isNative is false.
 const { isNative } = await import('../../app/js/platform.js');
-assert.equal(isNative, true, 'this test runs as the native app');
+assert.equal(isNative, false, 'this test runs in a browser');
 
 register(new URL('./watch-mock-loader.mjs', import.meta.url));
 const { Catalog } = await import('../../app/js/data/catalog.js');
@@ -34,7 +31,6 @@ const plans = (await import('../../app/js/views/plans.js')).default;
 
 const PREMIUM_VIDEO = { id: 'vp', kind: 'episode', episode: 1, title: 'Premium episode', showId: 's1', duration: 100, views: 1, publishedAt: '2026-09-01T00:00:00Z', access: 'premium', poster: 'media/premium-vp.webp', source: { type: 'r2', key: 'premium/x.mp4' } };
 app.catalog = app.fullCatalog = new Catalog({ schema: 1, updatedAt: '', shows: [{ id: 's1', title: 'Show', titleEn: 'Show', genres: [], cast: [], type: 'series', poster: 'media/shows/s1.webp' }], videos: [PREMIUM_VIDEO], upcoming: [], gallery: [] });
-// Signed in, no active plan => gateFor says 'plan'.
 app.user = {
   remote: null, account: { id: 'u1', email: 's@x.in' }, profiles: [{ id: 'p1', name: 'S' }], profile: { id: 'p1', name: 'S' }, activeId: 'p1',
   supportsAuth: true, isPremium: false, isKids: false, subscription: { planId: 'free', status: 'active' },
@@ -51,9 +47,9 @@ app.user = {
   }),
 };
 
-const ctxFor = (hash, query = {}) => ({ root: document.createElement('div'), params: { id: 'vp' }, query, path: hash, setTitle: () => {}, onCleanup: () => {} });
+const ctxFor = (path, query = {}) => ({ root: document.createElement('div'), params: { id: 'vp' }, query, path, setTitle: () => {}, onCleanup: () => {} });
 
-test('the app lock wall explains the account — no plans button, no price', async () => {
+test('the browser lock wall offers the subscribe path, with a return link', async () => {
   const ctx = ctxFor('/watch/vp');
   document.getElementById('view').appendChild(ctx.root);
   await watch(ctx);
@@ -61,37 +57,23 @@ test('the app lock wall explains the account — no plans button, no price', asy
   const wall = ctx.root.querySelector('#playerMsg');
   assert.ok(wall, 'the lock wall is shown');
   assert.match(wall.textContent, /ADDABAAZ Plus exclusive/);
-  assert.match(wall.textContent, /managed on the ADDABAAZ website/i, 'it says where the plan is managed');
-  assert.equal(wall.querySelector('a[href^="#/plans"]'), null, 'no link to the plans page in the app');
-  assert.doesNotMatch(wall.textContent, /₹|\bPay\b|\bSubscribe\b|See plans|Checkout/, 'no price and no purchase wording');
+  const cta = wall.querySelector('a[href^="#/plans"]');
+  assert.ok(cta, 'a See plans button exists on the website');
+  assert.match(cta.textContent, /See plans/);
+  assert.match(cta.getAttribute('href'), /next=/, 'after subscribing the viewer lands back on this video');
   assert.equal(globalThis.__watchCtl ?? null, null, 'no player behind the wall');
 });
 
-test('the app plans page is account information: no prices, no checkout, no steering', async () => {
+test('the browser plans page still shows prices and a buy button', async () => {
   const ctx = ctxFor('/plans');
   document.getElementById('view').appendChild(ctx.root);
   await plans(ctx);
   await new Promise((r) => setTimeout(r, 20));
-  const text = ctx.root.textContent, html = ctx.root.innerHTML;
-  assert.match(text, /Your plan/, 'the page is titled as account information');
-  assert.match(text, /managed on the ADDABAAZ website/i);
-  assert.doesNotMatch(text, /₹/, 'no prices in the app');
-  assert.doesNotMatch(text, /Razorpay|\bPay\b|Checkout|Coupon/, 'no gateway, checkout or coupon wording');
-  assert.equal(/href="#\/plans"/.test(html), false, 'nothing links to a purchase surface');
-  assert.equal(ctx.root.querySelector('[data-plan]'), null, 'no buy button');
-});
-
-test('a signed-out viewer on the app plan page is offered sign-in, never a plan to buy', async () => {
-  const account = app.user.account;
-  app.user.account = null;
-  try {
-    const ctx = ctxFor('/plans');
-    document.getElementById('view').appendChild(ctx.root);
-    await plans(ctx);
-    await new Promise((r) => setTimeout(r, 20));
-    const html = ctx.root.innerHTML;
-    assert.match(html, /href="#\/signin\?next=/, 'signing in is the only account action');
-    assert.equal(/#\/plans/.test(html), false, 'still no purchase surface');
-    assert.doesNotMatch(ctx.root.textContent, /₹|\bPay\b|\bSubscribe\b/, 'no price or purchase wording');
-  } finally { app.user.account = account; }
+  const text = ctx.root.textContent;
+  assert.match(text, /₹99/, 'the monthly price is shown');
+  assert.match(text, /₹799/, 'the yearly price is shown');
+  assert.match(text, /Razorpay/, 'the payment method is disclosed');
+  const buy = ctx.root.querySelector('[data-plan="plus-monthly"]');
+  assert.ok(buy, 'a buy button exists for a signed-in viewer');
+  assert.match(buy.textContent, /Get monthly plan/);
 });

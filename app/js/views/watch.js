@@ -8,9 +8,9 @@ import { html, $, fmtDate, fmtViews, fmtDuration, timeAgo, shareOrCopy } from '.
 import { icon } from '../icons.js';
 import { createPlayer, loadYouTube } from '../players/index.js';
 import { go } from '../router.js';
-import { listBtn, videoCard, rail, enhanceRails, metaLine, toast, img, premiumMark } from '../ui/components.js';
+import { listBtn, videoCard, rail, enhanceRails, metaLine, toast, img, premiumMark, nativePlanText } from '../ui/components.js';
 import { epRow } from './show.js';
-import { shareUrl } from '../platform.js';
+import { isNative, shareUrl } from '../platform.js';
 import { lockPortrait } from '../orientation.js';
 
 // mountRating, mountComments removed: like/dislike/comments disabled per requirement
@@ -119,9 +119,11 @@ export default async function watch(ctx) {
     msg.innerHTML = kind === 'login'
       ? html`${icon('lock', { size: 40 })}<h2>Sign in to watch</h2><div class="row"><a class="btn btn-primary btn-lg" href="#/signin?next=${here}">Sign in</a><a class="btn btn-ghost btn-lg" href="#/signup?next=${here}">Create account</a></div>`.s
       : kind === 'plan'
-        // Signed in but no active plan: always offer the subscribe path (the plans page works in
-        // the app too), with the old escape hatch as the secondary action.
-        ? html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><div class="row"><a class="btn btn-primary btn-lg" href="#/plans?next=${here}">${icon('crown', { size: 20 })} See plans</a><a class="btn btn-ghost btn-lg" href="#/">Back to home</a></div>`.s
+        // Signed in without an active plan. The website offers the plans page; the store apps are
+        // consumption-only (docs/PAYMENTS.md), so there the wall explains the account instead of selling.
+        ? (isNative
+          ? html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><p>${nativePlanText}</p><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s
+          : html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><div class="row"><a class="btn btn-primary btn-lg" href="#/plans?next=${here}">${icon('crown', { size: 20 })} See plans</a><a class="btn btn-ghost btn-lg" href="#/">Back to home</a></div>`.s)
         : html`${icon('lock', { size: 40 })}<h2>Premium video needs an account</h2><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s;
   };
   // Locked: show the wall and stop; no player is created.

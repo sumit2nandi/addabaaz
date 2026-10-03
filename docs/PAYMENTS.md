@@ -164,21 +164,34 @@ invoices, coupons and refunds are unchanged.
 
 The website is by far the cheapest place to sell — which is exactly why the apps are consumption-only.
 
-## 7. Review risks in the current build (worth fixing before submission)
+## 7. What the apps show (review-safe since this build)
 
-- `app/js/views/plans.js` hides the **buy buttons** in the native app but still renders the **plan cards with
-  prices**. Neither store's wording allows an app to *encourage* an outside purchase, and Google's anti-steering
-  clause explicitly covers *"language that encourages a user to purchase the digital item outside of the app"*.
-  A price list with no way to buy is a grey area, not a safe harbour. The conservative build shows premium
-  information **without prices** in the apps — e.g. *"Premium titles need an account with an active plan. Sign in
-  with the account you subscribed with."* — and leaves the plans page to the website (where it already is).
-- The same applies to any "subscribe on our website", "cheaper online", URL or QR code inside the app for users
-  outside the US (where the 2026/2025 link programmes apply). Outside-the-app channels (e-mail, WhatsApp,
-  website, social) are unrestricted.
-- On iOS, if you request the External Link Account Entitlement, the link wording must be exactly the
-  account-management style above — no prices, no promotions, one per page.
-- Don't ship the same build to Play and to your own APK channel with different payment UI — keep a build flag,
-  not a runtime guess.
+A native build (Capacitor) is consumption-only on **every** premium surface — no price, no "See plans"/"Subscribe"
+wording, no link to a purchase:
+
+| Surface | In the apps | On the website |
+|---|---|---|
+| Premium lock wall — watch (`watch.js`) and reels (`reels.js`) | "ADDABAAZ Plus exclusive" + how the account unlocks it, "Back to home" | "See plans" → `#/plans?next=…` |
+| Plans page (`plans.js`) | "Your plan": active/expired state, billing link | Plans, ₹ prices, coupon, GST fields, Razorpay checkout |
+| Billing empty state (`billing.js`) | explains invoices appear after subscribing | "See plans" button |
+| Account → Subscription row (`account.js`) | a plain statement (no link) | links to the plans page |
+| Profile menu (`shell.js`) | labelled "Your plan" | "Plans" |
+
+One shared sentence holds the app wording (`nativePlanText` / `nativePlanNotice()` in `app/js/ui/components.js`).
+
+Guarded by tests: `test/frontend/watch-plan-wall.test.mjs` renders the app and fails if any of that leaks a
+plans link, a ₹ price or checkout wording; `test/frontend/plan-purchase-web.test.mjs` proves the browser still
+sells (prices, Razorpay note, buy button, return link).
+
+Still yours to keep true:
+
+- Don't add "subscribe on our website", a price, a URL or a QR code to the app for non-US storefronts. Promoting
+  the website **outside** the app (e-mail, WhatsApp, social, the site itself) is allowed and is where your
+  marketing belongs.
+- On iOS, if you apply for the External Link Account Entitlement, the one allowed link must be the plain
+  account-management link of §3 — no prices, one per page, opening in the browser.
+- If you also ship a self-distributed APK, keep that a **build flag**, not a runtime guess, so the Play build can
+  never show payment UI.
 
 ## 8. Recommendation
 

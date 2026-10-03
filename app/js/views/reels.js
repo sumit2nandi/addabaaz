@@ -3,8 +3,8 @@ import { app } from '../app.js';
 import { html, $, $$, shareOrCopy } from '../util.js';
 import { icon } from '../icons.js';
 import { createPlayer, loadYouTube } from '../players/index.js';
-import { img, toast, premiumMark } from '../ui/components.js';
-import { shareUrl } from '../platform.js';
+import { img, toast, premiumMark, nativePlanText } from '../ui/components.js';
+import { isNative, shareUrl } from '../platform.js';
 
 let soundOn = true;   // sticky: once the viewer unmutes, later reels start with sound
 let muteHinted = false; // one-time toast when a browser forces autoplay muted
@@ -62,7 +62,13 @@ export default async function reels(ctx) {
       ${icon('lock', { size: 38 })}<h2>Sign in to watch</h2><p>This is ADDABAAZ Premium. Sign in or create a free account to watch this reel.</p>
       <div class="row"><a class="btn btn-primary" href="#/signin?next=${next}">Sign in</a><a class="btn btn-glass" href="#/signup?next=${next}">Create account</a></div>
     </div></div>`;
-    if (state === 'plan') return html`<div class="reel-gate" role="status" aria-live="polite"><div>
+    if (state === 'plan') return isNative
+      // Consumption-only app (docs/PAYMENTS.md): explain the account, no prices and no plans link.
+      ? html`<div class="reel-gate" role="status" aria-live="polite"><div>
+      ${icon('lock', { size: 38 })}<h2>ADDABAAZ Plus exclusive</h2><p>${nativePlanText}</p>
+      <a class="btn btn-glass" href="#/">Back to home</a>
+    </div></div>`
+      : html`<div class="reel-gate" role="status" aria-live="polite"><div>
       ${icon('lock', { size: 38 })}<h2>ADDABAAZ Plus exclusive</h2><p>This reel needs an active paid plan.</p>
       <a class="btn btn-primary" href="#/plans?next=${next}">${icon('crown', { size: 18 })} See plans</a>
     </div></div>`;

@@ -2,7 +2,7 @@
 import { app } from '../app.js';
 import { html, fmtDate } from '../util.js';
 import { icon } from '../icons.js';
-import { sectionHeader, toast } from '../ui/components.js';
+import { sectionHeader, toast, nativePlanNotice } from '../ui/components.js';
 import { confirmDialog } from '../ui/dialog.js';
 import { go } from '../router.js';
 import { isNative } from '../platform.js';
@@ -66,17 +66,30 @@ export default async function plans(ctx) {
   }
   const { plans: list, payments, billing: bill } = await u.plans();
   const memo = {};
-  const canBuy = !isNative && payments.provider !== 'none';
+  const canBuy = payments.provider !== 'none';
   let busy = false;
 
   const draw = () => {
     const s = u.subscription || {}, active = u.isPremium, cur = active ? s.planId : 'free';
+    // Native (store) builds: consumption-only — the plan is account information, never a price or a checkout
+    // (Apple reader-app model, Google consumption-only rule; docs/PAYMENTS.md). The website keeps the full page.
+    if (isNative) {
+      const state = active
+        ? html`<div class="notice ok">${icon('check', { size: 18 })} Your plan is active until <b>${fmtDate(s.expiresAt)}</b>.</div>`
+        : s.status === 'expired' ? html`<div class="notice">${icon('info', { size: 18 })} Your plan expired on ${fmtDate(s.expiresAt)}.</div>` : '';
+      ctx.root.innerHTML = html`<div class="page">
+        ${sectionHeader({ tag: 'ADDABAAZ Plus', title: 'Your plan', subtitle: 'Account and billing, at a glance.' })}
+        ${state}${nativePlanNotice()}
+        ${u.account
+          ? html`<p class="muted" style="margin-top:18px;font-size:13px"><a href="#/billing">Billing & invoices</a></p>`
+          : html`<p style="margin-top:18px"><a class="btn btn-primary" href="#/signin?next=${encodeURIComponent('/plans')}">Sign in</a></p>`}
+      </div>`.s;
+      return;
+    }
     const status = active
       ? html`<div class="notice ok">${icon('check', { size: 18 })} Your plan is active until <b>${fmtDate(s.expiresAt)}</b>. Renew any time — the extra time is added to the end.</div>`
       : s.status === 'expired' ? html`<div class="notice">${icon('info', { size: 18 })} Your plan expired on ${fmtDate(s.expiresAt)}. Choose a plan to watch premium videos again.</div>` : '';
-    const why = isNative
-      ? html`<div class="notice">${icon('info', { size: 18 })} Plans are managed on the ADDABAAZ website. Once you’ve subscribed with this account, premium videos unlock here automatically.</div>`
-      : payments.provider === 'mock' ? html`<div class="notice">${icon('info', { size: 18 })} Demo checkout — no real payment is taken. Add Razorpay keys on the API to go live (docs/PREMIUM.md).</div>`
+    const why = payments.provider === 'mock' ? html`<div class="notice">${icon('info', { size: 18 })} Demo checkout — no real payment is taken. Add Razorpay keys on the API to go live (docs/PREMIUM.md).</div>`
       : payments.provider === 'none' ? html`<div class="notice">${icon('info', { size: 18 })} Payments aren’t available right now. Please try again later.</div>` : '';
     ctx.root.innerHTML = html`<div class="page">
       ${sectionHeader({ tag: 'ADDABAAZ Plus', title: 'Choose your plan', subtitle: 'Pay once for the period — no auto-renewal, nothing to cancel.' })}
@@ -94,6 +107,7 @@ export default async function plans(ctx) {
     </div>`.s;
   };
   draw();
+  if (isNative) return;                       // the store apps have nothing to buy here (docs/PAYMENTS.md)
 
   ctx.root.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-plan]'), c = e.target.closest('[data-cancel]');

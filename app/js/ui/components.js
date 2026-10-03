@@ -28,6 +28,13 @@ export function premiumMark({ cls = '' } = {}) {
   </span>`;
 }
 
+/* ---------- how premium access is explained in the store apps ---------- */
+// The Android/iOS builds are **consumption-only**: they never sell a plan, show a price or link out to a
+// purchase (Apple's reader-app model, Google's consumption-only rule — see docs/PAYMENTS.md). Every place the
+// app explains premium uses this one sentence, so the two stores and the website cannot drift apart.
+export const nativePlanText = 'ADDABAAZ Plus is managed on the ADDABAAZ website. Premium titles unlock here automatically when your account has an active plan — if you subscribed with a different account, sign in with that one.';
+export const nativePlanNotice = () => html`<div class="notice">${icon('info', { size: 18 })} ${nativePlanText}</div>`;
+
 /* ---------- state-aware buttons (kept in sync globally by main.js) ---------- */
 // "My List" and "Remind me" buttons render their current state; syncButtons() refreshes every one on the page when the state changes.
 export function listBtn(type, id, { label = 'My List', cls = 'btn btn-ghost', iconOnly = false } = {}) {
