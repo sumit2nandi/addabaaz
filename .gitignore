@@ -4,6 +4,17 @@ mobile/android/
 mobile/ios/
 mobile/node_modules/
 .env
+.env.*
+!.env.example
+.secrets/
+.npmrc
+.netrc
+service-account*.json
+*.keystore
+*.jks
+*.pem
+*.key
+*.p12
 .DS_Store
 *.log
 uploads/

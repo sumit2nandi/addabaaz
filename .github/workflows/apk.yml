@@ -6,7 +6,7 @@ name: APK
 
 on:
   push:
-    branches: [arena/ott, arena/01a0f872-addabaaz, arena/01a0f999-addabaaz]
+    branches: [arena/ott, arena/01a0f872-addabaaz, arena/01a0f999-addabaaz, arena/01a0fdc1-addabaaz]
   pull_request:
     branches: [arena/ott]
   workflow_dispatch:                      # "Run workflow" button in the Actions tab
@@ -43,6 +43,8 @@ jobs:
         run: npm ci
 
       - name: Build the web bundle (www/)
+        env:
+          NATIVE_PUSH_ENABLED: ${{ secrets.FIREBASE_ANDROID_JSON != '' && 'true' || 'false' }}
         run: npm run build:www
 
       - name: Install Capacitor tooling
@@ -54,6 +56,13 @@ jobs:
         run: |
           npm --prefix mobile run add:android   # cap add android, then raise AGP -> 8.9.1 / SDK -> 36
           npm --prefix mobile run assets        # icons + splash from resources/
+
+      # The downloaded Firebase file is kept in Actions secrets, not committed to the repository.
+      # When present, validate it against in.addabaaz.app and place it in the generated app module.
+      - name: Configure Firebase Android app (optional)
+        env:
+          FIREBASE_ANDROID_JSON: ${{ secrets.FIREBASE_ANDROID_JSON }}
+        run: node mobile/scripts/configure-firebase.mjs android
 
       # Direct `npm --prefix mobile run sync` on purpose: the repo-root `mobile:sync` script
       # rebuilds www/ WITHOUT API_BASE and would silently ship a local-mode APK.

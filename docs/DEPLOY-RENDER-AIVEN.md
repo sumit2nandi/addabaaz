@@ -99,6 +99,6 @@ With `autoDeploy: true` (the Blueprint default) every push to the branch deploys
 | `ETIMEDOUT` / `ECONNREFUSED` | Wrong host or port (the port is not 3306), the Aiven service is not **Running** (free services power off when idle: power it on in the Aiven console), or the Aiven allowed-IP list blocks Render. |
 | `ER_ACCESS_DENIED_ERROR` | Wrong `DB_USER` / `DB_PASSWORD`. Copy them again from Aiven. |
 | Deploy fails on the health check | Open the Logs: usually a missing environment variable, or the database could not be reached. |
-| `[auth] ... JWT_SECRET` error at start | `JWT_SECRET` is missing while `NODE_ENV=production`. |
+| `[auth] ... JWT_SECRET` error at start | `JWT_SECRET` is missing, shorter than 32 bytes, or still an example placeholder while `NODE_ENV=production`. Generate a random value (64 hex characters) and keep it stable between deploys. |
 | First visit is very slow | Free plan waking up. Normal; see the sleeping note in step 5. |
 | An uploaded poster shows on one device but not on others | It was uploaded before images were stored in the database (or the file was lost with the disk). Upload it again in Admin and save the title; new uploads are permanent. See step 5. |

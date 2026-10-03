@@ -11,9 +11,10 @@ COPY media ./media
 COPY server/src ./server/src
 COPY server/migrations ./server/migrations
 COPY scripts/catalog-cli.mjs scripts/validate-catalog.mjs scripts/backup.mjs scripts/restore.mjs ./scripts/
+COPY scripts/lib ./scripts/lib
 # Local cache of admin-uploaded images and subtitles. The real copies are stored in MySQL, so losing this folder loses nothing;
 # a volume (see docker-compose.yml) only saves re-reading them from the database after a restart.
-RUN mkdir -p /app/uploads /app/backups && chown node:node /app/uploads /app/backups
+RUN mkdir -p /app/uploads /app/backups /app/.build && chown -R node:node /app/uploads /app/backups /app/.build
 VOLUME ["/app/uploads", "/app/backups"]
 EXPOSE 3000
 USER node

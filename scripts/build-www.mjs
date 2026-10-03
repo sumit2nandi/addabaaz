@@ -27,8 +27,10 @@ for (const item of ['index.html', 'manifest.webmanifest', 'sw.js', 'app', 'data'
 const envFile = path.join(out, 'app/env.js');
 const src = fs.readFileSync(envFile, 'utf8');
 const apiBase = process.env.API_BASE ?? '';
+const nativePushEnabled = /^(1|true|yes)$/i.test(process.env.NATIVE_PUSH_ENABLED || '');
 const patched = src
-  .replace(/API_BASE:\s*'[^']*'/, `API_BASE: ${JSON.stringify(apiBase)}`);
+  .replace(/API_BASE:\s*'[^']*'/, `API_BASE: ${JSON.stringify(apiBase)}`)
+  .replace(/NATIVE_PUSH_ENABLED:\s*(?:true|false)/, `NATIVE_PUSH_ENABLED: ${nativePushEnabled}`);
 fs.writeFileSync(envFile, patched);
 
 // Stamp the service worker with the git commit so each build gets a fresh offline cache (old caches are deleted on activate).
@@ -45,4 +47,4 @@ await minifyTree(path.join(out, 'app'), path.join(out, 'app'));
 
 // Print the size of the finished bundle.
 const size = (dir) => fs.readdirSync(dir, { withFileTypes: true }).reduce((n, e) => n + (e.isDirectory() ? size(path.join(dir, e.name)) : fs.statSync(path.join(dir, e.name)).size), 0);
-console.log(`✔ www/ built (${(size(out) / 1048576).toFixed(1)} MB) · API_BASE=${apiBase || '(auto-detect)'} · sw=${stamp}`);
+console.log(`✔ www/ built (${(size(out) / 1048576).toFixed(1)} MB) · API_BASE=${apiBase || '(auto-detect)'} · native FCM=${nativePushEnabled ? 'on' : 'off'} · sw=${stamp}`);

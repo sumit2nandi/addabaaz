@@ -382,18 +382,38 @@ test('admin: app push reaches registered devices through FCM and drops dead toke
     assert.equal(mine.length, 1); assert.equal(mine[0].platform, 'android'); assert.equal(mine[0].label, 'Pixel 7');
     assert.equal((await call('DELETE', '/devices', { token: good }, u.token)).status, 204); assert.equal((await call('GET', '/devices', null, u.token)).body.devices.length, 0);
 
+    // A connected guest can register without an account. The row has no user, enters general
+    // broadcasts, and is deliberately absent from profile-based episode targeting.
+    const guestToken = 'guest-fcm-token-' + 'g'.repeat(30);
+    assert.equal((await call('POST', '/devices/guest', { token: 'short' })).status, 400);
+    assert.equal((await call('POST', '/devices/guest', { token: guestToken, platform: 'android', label: 'Guest Android' })).status, 201);
+    assert.equal((await call('POST', '/devices/guest', { token: guestToken })).status, 201, 'guest registration is idempotent');
+    const generalAudience = await db.devices.audienceFor({ kind: 'all' });
+    assert.ok(generalAudience.some((d) => d.token === guestToken && d.userId === null), 'guest token is anonymous');
+    const personalizedAudience = await db.devices.audienceFor({ kind: 'episodes', showId: 'guest-show', videoIds: [] });
+    assert.equal(personalizedAudience.some((d) => d.token === guestToken), false, 'guest device data is not used for episode targeting');
+
+    // Signing in associates the same installation with the account instead of duplicating it.
+    const movingToken = 'guest-transition-token-' + 'm'.repeat(20);
+    await call('POST', '/devices/guest', { token: movingToken });
+    await call('POST', '/devices', { token: movingToken }, u.token);
+    assert.ok((await db.devices.audienceFor({ kind: 'all' })).some((d) => d.token === movingToken && d.userId === u.user.id));
+    await call('DELETE', '/devices', { token: movingToken }, u.token);
+
     // A broadcast reaches every registered token (and the web subscriptions of the audience) in one go.
     const token2 = 'fcm-device-token-' + 'b'.repeat(30);
     await call('POST', '/devices', { token: token2 }, u.token);
     await db.devices.upsert(u.user.id, { hash: crypto.createHash('sha256').update(dead[0]).digest('hex'), token: dead[0], platform: 'android' });
-    assert.ok((await adm2('GET', '/notifications')).body.push.nativeDevices >= 2, 'app push is reported as configured');
+    assert.ok((await adm2('GET', '/notifications')).body.push.nativeDevices >= 3, 'app push is reported as configured');
     fcmSent.length = 0; pushed.length = 0;
     const c = await broadcast({ channel: 'push', title: 'App push', body: 'Hello phones', audience: 'all' }, adm2);
     assert.equal(c.status, 'sent');
     assert.equal(fcmSent.at(-1).message.title, 'App push'); assert.equal(fcmSent.at(-1).message.body, 'Hello phones'); assert.equal(fcmSent.at(-1).message.url, '/');
     assert.equal(fcmSent.at(-1).message.tag, `campaign-${c.id}`);
-    assert.deepEqual([...fcmSent.at(-1).tokens].sort(), [token2, dead[0]].sort());
-    assert.equal(await db.devices.count(), 1, 'the dead token was removed, the good one kept');
+    assert.deepEqual([...fcmSent.at(-1).tokens].sort(), [token2, dead[0], guestToken].sort());
+    assert.equal(await db.devices.count(), 2, 'the dead token was removed; account and guest tokens remain');
+    assert.equal((await call('DELETE', '/devices/guest', { token: guestToken })).status, 204);
+    assert.equal(await db.devices.count(), 1, 'guest opt-out removes the anonymous token');
 
     // E-mail campaigns: plain-text body becomes paragraphs, every mail carries a working unsubscribe link.
     mails.length = 0;

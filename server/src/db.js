@@ -12,7 +12,6 @@ import { extraDb } from './db-extra.js';
 // Converts a Date (or date string) to an ISO-8601 string for JSON responses; null stays null.
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
 // True when MySQL rejected an insert because of a UNIQUE key (e.g. the email already exists).
-export const isDuplicate = (e) => e?.code === 'ER_DUP_ENTRY';
 // How many "continue watching" rows are kept per profile.
 const MAX_PROGRESS = 500;
 // Converts a `payments` table row (snake_case) into the camelCase object the rest of the code uses.
@@ -204,6 +203,10 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       async claimReminder(userId, expiresAt) {
         return (await q('UPDATE subscriptions SET expiry_reminder_for = expires_at WHERE user_id = ? AND expires_at = ? AND (expiry_reminder_for IS NULL OR expiry_reminder_for <> expires_at)', [userId, expiresAt])).affectedRows === 1;
       },
+      /** Releases a reminder claim after a temporary delivery error so the next scheduled run can retry. */
+      async releaseReminder(userId, expiresAt) {
+        await q('UPDATE subscriptions SET expiry_reminder_for = NULL WHERE user_id = ? AND expires_at = ? AND expiry_reminder_for = expires_at', [userId, expiresAt]);
+      },
       /** Demo-only: activate for `days` without a payment. */
       async activateDemo(userId, planId, days) { await tx(async (t) => this.extend(userId, { planId, days, provider: 'mock', demo: true }, t)); },
     },
@@ -231,6 +234,8 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       async setBilling(id, billing) { await q("UPDATE payments SET billing = ? WHERE id = ? AND status = 'created'", [JSON.stringify(billing), id]); },
       /** Atomically claims the right to send the "payment failed" email for an order (once). */
       async claimFailedNotice(id) { return (await q('UPDATE payments SET failed_notified_at = UTC_TIMESTAMP(3) WHERE id = ? AND failed_notified_at IS NULL AND status = \'created\'', [id])).affectedRows === 1; },
+      /** Releases the one-time notice claim if SMTP failed, allowing a retried webhook to send the message. */
+      async releaseFailedNotice(id) { await q('UPDATE payments SET failed_notified_at = NULL WHERE id = ? AND status = \'created\'', [id]); },
       /**
        * Marks the order paid, grants the plan and (optionally) issues the tax invoice in ONE transaction. Safe to call repeatedly
        * (browser verify + webhook): only the call that flips created→paid grants access. `invoice(paymentRow)` returns the invoice
