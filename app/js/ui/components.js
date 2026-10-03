@@ -3,6 +3,7 @@ import { app } from '../app.js';
 import { html, raw, esc, fmtDuration, fmtViews, timeAgo, fmtRuntime } from '../util.js';
 import { icon } from '../icons.js';
 import { avatarColor } from '../data/user.js';
+import { confirmDialog } from './dialog.js';
 
 // If an image fails to load, main.js's delegated handler reads data-fb to pick a fallback (inline
 // onerror= scripts would be blocked by the site's Content-Security-Policy).
@@ -177,4 +178,17 @@ export function toast(msg, { action, onAction, ms = 3200 } = {}) {
   if (action) { const b = document.createElement('button'); b.textContent = action; b.onclick = () => { onAction?.(); t.remove(); }; t.appendChild(b); }
   host.appendChild(t); requestAnimationFrame(() => t.classList.add('show'));
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 250); }, ms);
+}
+
+/* ---------- confirmations ---------- */
+/** The sign-out confirmation popup, shared by the profile menu and the Account page so the two
+ *  "Sign out" buttons look and say exactly the same thing. Resolves true when the viewer confirms. */
+export function confirmSignOut() {
+  return confirmDialog({
+    icon: 'logout',
+    danger: true,
+    title: 'Sign out of ADDABAAZ?',
+    text: 'You can sign back in anytime — your My List and Continue Watching stay with your account.',
+    confirm: 'Sign out',
+  });
 }

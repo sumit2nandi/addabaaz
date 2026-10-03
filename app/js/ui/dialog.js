@@ -15,11 +15,12 @@ export function openDialog(content, { title = '', cls = '', onClose } = {}) {
   if (d.showModal) d.showModal(); else d.setAttribute('open', '');
   return { el: d, close: () => d.close() };
 }
-/** Promise-based confirm. */
-export function confirmDialog({ title, text = '', confirm = 'Confirm', danger = false }) {
+/** Promise-based confirm. Pass `icon` (icon name) for the centered glyph variant — a small,
+ * brand-tinted circle above the title, the app's confirmation look. */
+export function confirmDialog({ title, text = '', confirm = 'Confirm', danger = false, icon: glyph = '' }) {
   return new Promise((resolve) => {
     let result = false;
-    const { el } = openDialog(html`<h2>${title}</h2>${text ? html`<p class="muted">${text}</p>` : ''}<div class="row end"><button class="btn btn-ghost" data-close>Cancel</button><button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" id="ok">${confirm}</button></div>`, { title, cls: 'dialog-sm', onClose: () => resolve(result) });
+    const { el } = openDialog(html`${glyph ? html`<div class="dlg-icon${danger ? ' is-danger' : ''}">${icon(glyph, { size: 26 })}</div>` : ''}<h2>${title}</h2>${text ? html`<p class="muted">${text}</p>` : ''}<div class="row end"><button class="btn btn-ghost" data-close>Cancel</button><button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" id="ok">${confirm}</button></div>`, { title, cls: `dialog-sm${glyph ? ' dlg-centered' : ''}`, onClose: () => resolve(result) });
     $('#ok', el).onclick = () => { result = true; el.close(); };
   });
 }

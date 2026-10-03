@@ -91,7 +91,7 @@ export function accountExtras() {
       });
     });
     $('#signOutAll', root)?.addEventListener('click', async () => {
-      if (await confirmDialog({ title: 'Sign out everywhere?', text: 'Every device signed in to this account — including this one, after you confirm — will need to sign in again.', confirm: 'Sign out everywhere' })) {
+      if (await confirmDialog({ icon: 'logout', title: 'Sign out everywhere?', text: 'Every device signed in to this account — including this one, after you confirm — will need to sign in again.', confirm: 'Sign out everywhere', danger: true })) {
         try { await u.signOutEverywhere(); toast('Signed out on your other devices'); } catch (err) { toast(friendly(err)); }
       }
     });

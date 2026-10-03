@@ -79,7 +79,10 @@ async function softRefresh() {
     app.fullCatalog = catalog; app.catalog = catalog; applyKids();
     await app.user.init();
   } catch { /* offline or API hiccup: re-render with the data we already have */ }
-  app.router?.resolve();
+  // `rerender` re-draws the current screen in place: it must not touch the navigation depth or
+  // scroll bookkeeping (those are for forward/back navigation), or Back would go wrong after a
+  // pull-to-refresh.
+  app.router?.resolve({ rerender: true });
 }
 
 /** A Kids profile browses a filtered catalog (only titles rated U or 7+). */

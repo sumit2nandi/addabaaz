@@ -9,8 +9,11 @@
  * Move titles to your own CDN later by only changing `source` in data/catalog.json.
  *
  * Autoplay strategy:
- *   1. when sound is requested on iOS, try unmuted autoplay first; if WebKit blocks it, retry muted so
- *      the video still starts, then offer a deliberate sound control (iOS pauses timer-based unmute);
+ *   1. iOS browsers (Safari) block unmuted autoplay outright, and a JS play() retry without a
+ *      gesture is a no-op there — so the web starts the player MUTED at the embed level (the one
+ *      start iOS always allows: mute=1&autoplay=1) and offers a deliberate "tap for sound" control.
+ *      The app's WKWebView permits the sound-first attempt (its media playback policy is off), so
+ *      native iOS still tries unmuted autoplay first and falls back to muted inline playback.
  *   2. on other browsers, start muted/inline and try to lift mute at 600/1500/3000ms after PLAYING.
  * A "tap for sound" pill appears when iOS falls back to muted or other browsers refuse the lifts.
  * `onAutoplayBlocked` is reserved for cases where muted playback itself never starts.
@@ -58,9 +61,13 @@ export async function createPlayer(container, video, opts = {}) {
     },
   };
 
-  /* Prefer the sound-first attempt on iOS when the viewer has not chosen silence; all other autoplay
-   * starts muted. The adapters retry muted playback if that unmuted attempt is refused. */
-  const tryUnmutedOnIOS = autoplay && iosBrowser && wantSound;
+  /* Prefer the sound-first attempt on iOS ONLY in the native app (its WKWebView allows it); Safari
+   * blocks unmuted autoplay and ignores a gesture-less play() retry, so an iOS browser starts muted
+   * at the embed level — the one autoplay start iOS reliably allows — and the tap-for-sound pill
+   * offers audio. All other autoplay starts muted as well. The adapters retry muted playback if an
+   * unmuted attempt is refused. */
+  const nativeApp = typeof window !== 'undefined' && !!window.Capacitor?.isNativePlatform?.();
+  const tryUnmutedOnIOS = autoplay && iosBrowser && wantSound && nativeApp;
   const playerOpts = autoplay ? { ...wrapped, muted: !tryUnmutedOnIOS } : wrapped;
 
   let ctl;
