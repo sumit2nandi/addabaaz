@@ -16,7 +16,8 @@ window.location = globalThis.location;
 globalThis.localStorage = window.localStorage ?? { getItem: () => null, setItem: () => {} };
 globalThis.fetch = globalThis.fetch || (async () => { throw new Error('offline'); });
 window.fetch = globalThis.fetch;
-Element.prototype.scrollIntoView = () => {};
+const scrollIntoViewCalls = [];
+Element.prototype.scrollIntoView = function (...args) { scrollIntoViewCalls.push({ element: this, args }); };
 globalThis.ResizeObserver = class { observe() {} disconnect() {} };   // rails (related videos) measure themselves; linkedom has no layout
 
 register(new URL('./watch-mock-loader.mjs', import.meta.url));
@@ -53,6 +54,12 @@ before(() => assert.ok(watch, 'watch view imported'));
 test('page asks the player to start automatically on all devices', async () => {
   const { opts } = await mount();
   assert.equal(opts.autoplay, true, 'watch page must pass autoplay: true (mobile autostart is then muted-only, per browser policy)');
+});
+
+test('opening a watch page does not scroll the viewport down to the current episode row', async () => {
+  scrollIntoViewCalls.length = 0;
+  await mount('v1');
+  assert.equal(scrollIntoViewCalls.length, 0, 'the page stays at the top instead of scrolling to the episode list');
 });
 
 test('when even muted autoplay is blocked, a "Tap to play" pill starts playback with one tap', async () => {

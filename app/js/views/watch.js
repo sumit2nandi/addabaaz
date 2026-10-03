@@ -81,7 +81,14 @@ export default async function watch(ctx) {
     $('#watchSide', ctx.root).removeAttribute('aria-busy');
     $('#watchMore', ctx.root).innerHTML = rail({ title: 'More from ADDABAAZ', items: cat.latestEpisodes(10).filter((x) => x.id !== v.id).map((x) => videoCard(x)), cls: 'r-video mobile-only' }).s;
     enhanceRails(ctx.root);
-    $('#sideEps .current', ctx.root)?.scrollIntoView({ block: 'nearest' });
+    // Keep a later current episode visible in the desktop side panel without scrolling the document.
+    // scrollIntoView() here also moved the whole phone page down to the Episodes section after render.
+    const currentEpisode = $('#sideEps .current', ctx.root), side = $('#watchSide', ctx.root);
+    if (currentEpisode && side && typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1000px)').matches) {
+      const item = currentEpisode.getBoundingClientRect(), panel = side.getBoundingClientRect();
+      if (item.top < panel.top) side.scrollTop -= panel.top - item.top;
+      else if (item.bottom > panel.bottom) side.scrollTop += item.bottom - panel.bottom;
+    }
   };
 
   $('#autoNext', ctx.root).addEventListener('change', (e) => u.setPref('autoplayNext', e.target.checked));
