@@ -11,6 +11,10 @@ services:
     startCommand: npm start
     healthCheckPath: /api/v1/health/ready
     autoDeploy: true
+    # The live branch. Pushing to it deploys (autoDeploy above); changing this one line moves production to
+    # another branch. For a service that already exists, change the branch in the Render dashboard instead:
+    # your service -> Settings -> Build & Deploy -> Branch. See docs/DEPLOY-RENDER-AIVEN.md.
+    branch: arena/01a10339-addabaaz
     envVars:
       - key: NODE_VERSION
         value: "22"

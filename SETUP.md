@@ -211,7 +211,7 @@ Notes:
 ```powershell
 cd C:\path\to\addabaaz
 git fetch origin
-git checkout arena/01a0ec36-addabaaz        # the branch that has the latest code (or your merged production branch)
+git checkout arena/01a10339-addabaaz       # the live branch (see docs/DEPLOY-RENDER-AIVEN.md)
 git pull
 git archive --format=zip -o addabaaz.zip HEAD
 ```
@@ -600,7 +600,7 @@ Business hosting is shared hosting, so three things work differently from a norm
    | Field | Value |
    |---|---|
    | Application type / framework preset | **Express** (or *Other*) |
-   | Branch | `production` (or whichever branch you release from) |
+   | Branch | `arena/01a10339-addabaaz` (the live branch — see docs/DEPLOY-RENDER-AIVEN.md) |
    | Node.js version | **22** (20 or 24 also work) |
    | Root directory | `/` (leave empty) |
    | Build script | none needed. (For Express, Hostinger may pre-fill `npm run build:www` and not let you clear it — that's harmless: it only builds a static copy in `www/` and can print `fatal: not a git repository`, which you can ignore.) |
