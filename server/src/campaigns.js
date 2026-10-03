@@ -14,6 +14,15 @@ import { emailKey } from './email-address.js';
 const LEASE_SECONDS = 300;
 const HEARTBEAT_MS = 60_000;
 const leaseLost = () => Object.assign(new Error('Campaign lease was lost.'), { code: 'campaign_lease_lost' });
+// Devices (and mail clients) fetch the picture themselves, so a site-relative upload path has to become
+// an absolute URL before the message leaves the server.
+const absoluteImage = (image, siteUrl = '') => {
+  const v = String(image || '').trim();
+  if (!v) return null;
+  if (/^https?:\/\//i.test(v)) return v;
+  const base = String(siteUrl || '').replace(/\/+$/, '');
+  return base ? `${base}${v.startsWith('/') ? '' : '/'}${v}` : v;
+};
 
 /**
  * @param {object}   o
@@ -36,13 +45,16 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
     return null;
   }
 
-  async function runPush(campaign, { resolveAudience, claimToken, renewLease }) {
+  async function runPush(campaign, { resolveAudience, claimToken, renewLease, siteUrl = '' }) {
     const finish = (status, error = null) => db.campaigns.finish(campaign.id, status, error, claimToken);
     const audience = pushAudience(campaign.audience, resolveAudience);
     if (!audience) { await finish('failed', 'Unknown audience.'); return db.campaigns.get(campaign.id); }
     try {
       await renewLease();
-      const r = await push.notify(audience, { title: campaign.title, body: campaign.body, url: campaign.url || '/', tag: `campaign-${campaign.id}` });
+      const r = await push.notify(audience, {
+        title: campaign.title, body: campaign.body, url: campaign.url || '/', tag: `campaign-${campaign.id}`,
+        image: absoluteImage(campaign.imageUrl, siteUrl),   // devices load the picture themselves: it must be an absolute URL
+      });
       const total = (r.sent || 0) + (r.failed || 0) + (r.removed || 0);
       const recorded = await db.campaigns.progress(campaign.id, { sent: r.sent, failed: r.failed, skipped: r.removed, total }, claimToken);
       if (!recorded) throw leaseLost();
@@ -74,7 +86,7 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
           try {
             // Renew per recipient as well as on the timer; a slow SMTP call cannot silently outlive the lease.
             await renewLease();
-            const message = email({ name: u.name, email: u.email, subject: campaign.title, body: campaign.body, button: campaign.button ? { label: campaign.button, url: campaign.url } : null, siteUrl, unsubscribeUrl: unsubscribeUrlFor ? unsubscribeUrlFor(u) : '' });
+            const message = email({ name: u.name, email: u.email, subject: campaign.title, body: campaign.body, button: campaign.button ? { label: campaign.button, url: campaign.url } : null, siteUrl, unsubscribeUrl: unsubscribeUrlFor ? unsubscribeUrlFor(u) : '', image: absoluteImage(campaign.imageUrl, siteUrl), imageAlt: campaign.imageAlt || '' });
             const r = await mailer.send({ to: u.email, ...message });
             if (r?.sent) sent++; else skipped++;
           } catch (e) {
@@ -102,9 +114,9 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
 
   const svc = {
     /** Creates the campaign row and starts sending in the background. Returns the campaign as it was queued. */
-    async start({ channel, audience, title, body, url = null, button = null, by = null }, opts = {}) {
+    async start({ channel, audience, title, body, url = null, button = null, imageUrl = null, imageAlt = null, by = null }, opts = {}) {
       const ready = channel === 'push' ? pushReady() : mailReady();
-      const campaign = { id: crypto.randomUUID(), channel, audience, title, body, url, button, by };
+      const campaign = { id: crypto.randomUUID(), channel, audience, title, body, url, button, imageUrl, imageAlt, by };
       await db.campaigns.create({ ...campaign, status: ready ? 'queued' : 'failed' });
       if (!ready) {
         await db.campaigns.finish(campaign.id, 'failed', channel === 'push' ? 'Push is not configured on this server.' : 'E-mail is not configured on this server.');
@@ -156,15 +168,15 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
       } finally { clearInterval(heartbeat); running.delete(id); }
     },
     /** Sends one test message to the admin who asked — never to the audience, never recorded as a campaign. */
-    async sendTest({ channel, to, userId, name = 'there', title, body, url = null, button = null, siteUrl, unsubscribeUrlFor }) {
+    async sendTest({ channel, to, userId, name = 'there', title, body, url = null, button = null, imageUrl = null, imageAlt = null, siteUrl, unsubscribeUrlFor }) {
       if (channel === 'push') {
         if (!pushReady()) return { ok: false, error: 'Push is not configured on this server.' };
-        const r = await push.notify({ kind: 'user', userId }, { title, body, url: url || '/', tag: 'campaign-test' });
+        const r = await push.notify({ kind: 'user', userId }, { title, body, url: url || '/', tag: 'campaign-test', image: absoluteImage(imageUrl, siteUrl) });
         const delivered = (r.sent || 0) + (r.removed || 0);
         return delivered ? { ok: true, delivered } : { ok: false, error: 'No push-enabled device found for your account. Open the site/app and allow notifications first.' };
       }
       if (!mailReady()) return { ok: false, error: 'E-mail is not configured on this server.' };
-      const message = email({ name, email: to, subject: `[TEST] ${title}`, body, button: button ? { label: button, url } : null, siteUrl, unsubscribeUrl: unsubscribeUrlFor ? unsubscribeUrlFor({ id: userId, email: to }) : '' });
+      const message = email({ name, email: to, subject: `[TEST] ${title}`, body, button: button ? { label: button, url } : null, siteUrl, unsubscribeUrl: unsubscribeUrlFor ? unsubscribeUrlFor({ id: userId, email: to }) : '', image: absoluteImage(imageUrl, siteUrl), imageAlt: imageAlt || '' });
       const r = await mailer.send({ to, ...message });
       return r?.sent ? { ok: true } : { ok: false, error: 'The mail server did not accept the message.' };
     },

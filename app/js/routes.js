@@ -8,7 +8,7 @@ export const ROUTES = [
   ['/gallery', 'gallery'], ['/search', 'search'], ['/list', 'mylist'], ['/account', 'account'],
   ['/profiles', 'profiles'], ['/signin', 'auth'], ['/signup', 'auth'], ['/plans', 'plans'], ['/billing', 'billing'],
   ['/forgot', 'recover'], ['/reset', 'recover'], ['/verify', 'recover'], ['/privacy', 'legal'], ['/terms', 'legal'], ['/refunds', 'legal'],
-  ['/about', 'studio'], ['/services', 'studio'], ['/contact', 'studio'],
+  ['/about', 'studio'], ['/services', 'studio'], ['/contact', 'studio'], ['/support', 'support'],
 ].map(([pattern, view]) => ({
   pattern, view,
   keys: [...pattern.matchAll(/:(\w+)/g)].map((m) => m[1]),

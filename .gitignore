@@ -20,3 +20,5 @@ service-account*.json
 uploads/
 backups/
 .build/
+# local scratch (e.g. the sandbox preview server) — never part of the app
+.arena/

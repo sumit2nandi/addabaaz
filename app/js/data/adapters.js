@@ -53,6 +53,14 @@ export class LocalAdapter {
   async signOut() {}
   async deleteAccount() { Object.keys(localStorage).filter((k) => k.startsWith('ab.')).forEach((k) => localStorage.removeItem(k)); }
   async submitContact() { throw new ApiError(400, 'This form needs a connection to ADDABAAZ — check your internet and try again.'); }
+  // Support tickets and phone sign-in need the server (the UI hides them in local mode).
+  async requestOtp() { throw new ApiError(400, 'Sign-in by SMS needs a connection to ADDABAAZ.'); }
+  async verifyOtp() { return this.requestOtp(); }
+  async submitTicket() { return this.submitContact(); }
+  async myTickets() { return { tickets: [] }; }
+  async ticket() { throw new ApiError(400, 'Support tickets need a connection to ADDABAAZ — check your internet and try again.'); }
+  async lookupTicket() { return this.ticket(); }
+  async replyTicket() { return this.submitTicket(); }
   // Features that need the server are simply absent in local mode (the UI checks `user.supportsAuth`).
   async myRatings() { return {}; } async ratingCounts() { return { up: 0, down: 0 }; }
 }
@@ -118,6 +126,15 @@ export class RemoteAdapter {
   }
   async cancelSubscription() { return (await this.api.del('/subscription'))?.subscription ?? { planId: 'free', status: 'active' }; }
   submitContact(payload) { return this.api.post('/contact', payload); }
+
+  /* ----- phone sign-in (SMS OTP) and the support desk ----- */
+  requestOtp(phone) { return this.api.post('/auth/otp/request', { phone }); }
+  async verifyOtp(phone, code, name) { const r = await this.api.post('/auth/otp/verify', { phone, code, name }); this.api.setToken(r.token); return r; }
+  submitTicket(payload) { return this.api.post('/support/tickets', payload); }
+  myTickets({ limit = 25, offset = 0 } = {}) { return this.api.get(`/support/tickets?limit=${limit}&offset=${offset}`); }
+  ticket(id, email = '') { return this.api.get(`/support/tickets/${encodeURIComponent(id)}${email ? `?email=${encodeURIComponent(email)}` : ''}`); }
+  lookupTicket(reference, email) { return this.api.post('/support/lookup', { reference, email }); }
+  replyTicket(id, body, email = '') { return this.api.post(`/support/tickets/${encodeURIComponent(id)}/replies`, { body, email }); }
 
   /* ----- account security ----- */
   async signInApple(identityToken, name) { const r = await this.api.post('/auth/apple', { identityToken, name }); this.api.setToken(r.token); return r; }

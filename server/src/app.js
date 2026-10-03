@@ -40,6 +40,9 @@ import { registerPaymentWebhook } from './routes/payment-webhook.js';
 import { registerUnsubscribeRoute } from './routes/unsubscribe.js';
 import { registerAccountRoutes } from './routes/accounts.js';
 import { registerBillingRoutes } from './routes/billing.js';
+import { registerOtpRoutes } from './routes/otp.js';
+import { registerSupportRoutes, emailTemplates as supportEmails } from './routes/support.js';
+import { smsFromEnv, isPhoneEmail } from './sms.js';
 import { mountWebsite } from './web.js';
 
 // Repository root (two folders above server/src).
@@ -59,6 +62,7 @@ export function createApp({
   corsOrigins = process.env.CORS_ORIGINS || '*',
   serveStatic = true,
   payments = paymentsFromEnv(),                               // { provider: 'razorpay' | 'mock' | 'none' }
+  sms = smsFromEnv(),                                         // phone sign-in (MSG91); 'console' in development, 'none' in production without keys
   mailer = mailerFromEnv(),                                   // SMTP (receipts, refunds, reminders); no-op without SMTP_URL
   billing = createBilling({ db, payments, mailer, config: billingConfigFromEnv() }),   // coupons, GST invoices, refunds
   adminToken = process.env.ADMIN_TOKEN || '',                 // optional shared secret for scripts (≥24 chars); admin ACCOUNTS (users.is_admin) need no token
@@ -102,7 +106,9 @@ export function createApp({
   // Rate limit for sign-up/login endpoints: 20 requests per minute per IP (disabled in tests with rate:false).
   const authLimit = rate ? rateLimit('auth', 20, 60_000) : (_q, _s, n) => n();
   // The user fields that are safe to send to the browser (no password hash).
-  const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, emailVerified: !!u.emailVerifiedAt, ...(u.isAdmin ? { isAdmin: true } : {}) });
+  // `phone` lets the app show the number a phone-first account signed up with; `emailIsPlaceholder` marks
+  // the internal address such accounts carry (never a real inbox — see sms.js).
+  const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, emailVerified: !!u.emailVerifiedAt, ...(u.phone ? { phone: u.phone, phoneVerified: !!u.phoneVerifiedAt } : {}), ...(isPhoneEmail(u.email) ? { emailIsPlaceholder: true } : {}), ...(u.isAdmin ? { isAdmin: true } : {}) });
   // Blocks accounts an admin has disabled.
   const notDisabled = (u) => { if (u.disabledAt) throw new HttpError(403, 'account_disabled', 'This account has been disabled. Please contact support.'); return u; };
   // Optional engagement/security features (password reset, PIN, ratings, comments, push, ...) live in features.js.
@@ -116,8 +122,13 @@ export function createApp({
   const unsubscribeUrlFor = (u) => (siteUrl ? `${siteUrl}/api/v1/notifications/unsubscribe?u=${encodeURIComponent(u.id)}&t=${unsubSig(u.id)}` : '');
   const campaigns = createCampaigns({ db, push, mailer, email: campaignEmail, log: console });
 
-  registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled });
+  registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled, sms });
+  // Phone sign-in (SMS OTP). With no MSG91 keys the routes answer 503 and the sign-in page keeps offering
+  // email + password — the site never breaks because payments/SMS are missing.
+  registerOtpRoutes(api, { db, sms, secret, publicUser, notDisabled, authLimit });
   features.public(api);           // password reset, email verification, analytics, public ratings/comments
+  // Support tickets (the Support page). Guests can write in too; signing in links the ticket to the account.
+  registerSupportRoutes(api, { db, userFromRequest, mailer, email: supportEmails, supportEmail: billing.config.supportEmail, siteUrl: billing.config.siteUrl || '', rate, log: console });
 
   registerUnsubscribeRoute(api, { db, unsubscribeSignature: unsubSig });
   /* ---------- Cloudflare R2 video streaming ---------- */
@@ -126,7 +137,7 @@ export function createApp({
   registerPaymentWebhook(api, { db, billing, payments });
   /* ---------- admin console API (admin accounts, or ADMIN_TOKEN for scripts) — see server/src/admin.js ---------- */
   // Mount the admin console API. It does its own authentication (admin role or ADMIN_TOKEN).
-  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, campaigns, unsubscribeUrlFor, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate }));
+  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, campaigns, unsubscribeUrlFor, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate, sms, siteUrl: billing.config.siteUrl || '' }));
 
   /* ---------- authenticated ---------- */
   // AUTH MIDDLEWARE: every route registered after this line requires a valid session token whose session version still matches.
@@ -165,5 +176,7 @@ export function createApp({
   app.locals.features = features;
   app.locals.catalog = catalog;
   app.locals.billing = billing;          // exposed for jobs (expiry reminders) and tests
+  app.locals.sms = sms;                  // phone sign-in state (the console shows whether SMS is configured)
+  app.locals.supportEmails = supportEmails;
   return app;
 }

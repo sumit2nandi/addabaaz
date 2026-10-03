@@ -34,7 +34,7 @@ const page = (req, dflt = 25, max = 100) => ({ limit: Math.min(Math.max(Number(r
  */
 // Every route below runs after the authentication middleware, so `req.admin` is always set.
 // Write actions call `log(...)` so the audit log records who did what.
-export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2, payments, mailer, push = null, campaigns = null, unsubscribeUrlFor = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', env = process.env }) {
+export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2, payments, mailer, push = null, campaigns = null, unsubscribeUrlFor = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', sms = null, siteUrl = '', env = process.env }) {
   // The shared ADMIN_TOKEN (for scripts) only counts when it is long enough to be unguessable.
   const tokenOn = adminToken.length >= 24;
   if (adminToken && !tokenOn) console.warn('[admin] ADMIN_TOKEN is shorter than 24 characters — the token is ignored (admin accounts still work).');
@@ -534,6 +534,6 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   }));
 
   // More admin endpoints (analytics, comments moderation, refund requests, notifications, errors ...) live in admin-extra.js.
-  adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns, unsubscribeUrlFor, log, siteUrl: billing.config.siteUrl });
+  adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns, unsubscribeUrlFor, log, siteUrl: siteUrl || billing.config.siteUrl, sms });
   return router;
 }

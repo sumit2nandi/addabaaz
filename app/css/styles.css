@@ -120,7 +120,7 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .btn-primary { background: var(--accent); color: #fff; } .btn-primary:hover { background: var(--accent-2); }
 .btn-ghost { background: rgba(255,255,255,.07); border-color: var(--border-2); color: #fff; } .btn-ghost:hover { background: rgba(255,255,255,.14); }
 .btn-glass { background: rgba(120,120,130,.35); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; } .btn-glass:hover { background: rgba(140,140,150,.5); }
-.btn-danger { background: #5a1216; border-color: #8f1f25; color: #ffd4d4; } .btn-danger:hover { background: #7a1a20; }
+.btn-danger { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 800; } .btn-danger:hover { background: var(--accent-2); border-color: var(--accent-2); }
 .btn-sm { padding: 7px 13px; font-size: 13px; border-radius: 8px; }
 .btn-lg { padding: 13px 26px; font-size: 16px; border-radius: 12px; }
 .btn.block { width: 100%; }
@@ -402,6 +402,7 @@ body.reels-mode { overflow: hidden; padding-bottom: 0; } body.reels-mode .footer
 .dlg-icon { width: 58px; height: 58px; margin: -4px auto -2px; border-radius: 50%; display: grid; place-items: center; background: rgba(229, 9, 20, .14); color: var(--accent-2); }
 .dlg-icon.is-danger { background: rgba(229, 9, 20, .2); color: var(--accent-2); }
 .dlg-centered .dlg-body { text-align: center; } .dlg-centered .dlg-body .row.end { justify-content: center; margin-top: 4px; }
+.dlg-centered .dlg-body .row.end .btn, .dialog-sm .row.end .btn { min-width: 132px; justify-content: center; }
 .toasts { position: fixed; z-index: 500; left: 50%; bottom: calc(var(--tabbar-h) + var(--sab) + 16px); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 24px); pointer-events: none; }
 .toast { display: flex; align-items: center; gap: 14px; background: #f2f2f2; color: #111; padding: 12px 18px; border-radius: 12px; font-weight: 600; font-size: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.6); opacity: 0; transform: translateY(12px); transition: .25s var(--ease); pointer-events: auto; } .toast.show { opacity: 1; transform: none; } .toast button { background: none; border: 0; color: var(--accent); font-weight: 800; padding: 0; }
 
@@ -521,6 +522,17 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .fine { font-size: 12.5px; color: var(--muted); text-align: center; line-height: 1.5; } .fine a { color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; }
 .stack-sm { display: grid; gap: 10px; } .btn.block { width: 100%; justify-content: center; }
 .pin-input { text-align: center; letter-spacing: .5em; font-size: 22px; }
+/* Sign-in page: the mobile-number (SMS OTP) flow sits next to the email form. */
+.seg-full { display: flex; gap: 6px; padding: 4px; background: var(--bg-2); border: 1px solid var(--border-2); border-radius: 12px; }
+.seg-full button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; border: 0; border-radius: 9px; background: none; color: var(--text-2); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.seg-full button.on { background: var(--accent); color: #fff; }
+.otp-phone { display: flex; align-items: center; gap: 0; background: var(--bg-2); border: 1px solid var(--border-2); border-radius: 10px; overflow: hidden; }
+.otp-phone .otp-cc { padding: 0 12px; font-size: 16px; color: var(--text-2); border-right: 1px solid var(--border-2); align-self: stretch; display: flex; align-items: center; }
+.otp-phone input { border: 0 !important; background: none !important; border-radius: 0 !important; letter-spacing: 1px; }
+.otp-links { margin-top: 2px; } .otp-links .linklike { font-size: 14px; }
+.otp-links .linklike:disabled { color: var(--muted); cursor: default; text-decoration: none; }
+.auth-busy { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px; color: var(--text-2); }
+.auth-busy[hidden] { display: none; }
 .legal section { margin-top: 26px; } .legal h2 { font-size: 19px; margin-bottom: 8px; } .legal p { color: var(--text-2); margin-top: 8px; line-height: 1.7; max-width: 72ch; } .legal .lead { font-size: 16px; margin-top: 4px; } .legal-links { margin-top: 36px !important; }
 .consent-bar { position: fixed; z-index: 90; left: 12px; right: 12px; bottom: calc(var(--tabbar-h) + var(--sab) + 24px); max-width: 760px; margin: 0 auto; display: flex; gap: 14px 20px; align-items: center; flex-wrap: wrap; justify-content: space-between; padding: 14px 18px; border-radius: 16px; background: rgba(24,24,28,.97); border: 1px solid var(--border-2); box-shadow: 0 12px 40px rgba(0,0,0,.6); font-size: 13.5px; color: var(--text-2); } .consent-bar p { flex: 1 1 320px; } .consent-bar a { text-decoration: underline; } .consent-bar .row { display: flex; gap: 8px; }
 @media (min-width: 900px) { .consent-bar { bottom: 20px; } }
@@ -629,3 +641,14 @@ body:has(#consentBar) .auth-page { padding-bottom: 190px; } body:has(#consentBar
   .ytp-time { font-size: 12px; padding: 0 4px; }
   .ytp-menu { right: 8px; bottom: 48px; width: min(240px, calc(100% - 16px)); }
 }
+
+/* Support & help (#/support): raise a ticket, read the reply thread, look a guest ticket up by reference. */
+.sup-ref { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; letter-spacing: .04em; color: var(--muted); }
+.sup-empty { padding: 14px 16px; }
+.pill.warn { background: rgba(88,166,255,.16); color: #7cb0ff; }
+.tk-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tk-thread { display: grid; gap: 10px; max-height: 42dvh; overflow: auto; padding-right: 2px; }
+.tk-msg { background: var(--bg-2); border: 1px solid var(--border-2); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; }
+.tk-msg.admin { background: rgba(229,9,20,.08); border-color: rgba(229,9,20,.28); }
+.tk-msg header { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); }
+.tk-msg p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }

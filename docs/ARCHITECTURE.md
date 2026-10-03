@@ -10,7 +10,7 @@ flowchart LR
 
   subgraph clients[Client applications]
     web[Website / PWA<br/>index.html + app/ ES modules]
-    admin[Admin console<br/>admin/ SPA]
+    admin[Admin + Content studio<br/>admin/ · content/ SPA]
     native[Android and iOS<br/>Capacitor shell + shared www bundle]
     offline[Local mode<br/>localStorage adapters]
   end
@@ -217,7 +217,7 @@ flowchart TB
 |---|---|---|
 | Web and PWA | `app/js/main.js`, `app/js/router.js`, `app/js/views/` | UI and navigation; reads through `User` and the data adapters, not raw `fetch`/storage calls scattered through views. |
 | Client data | `app/js/data/user.js`, `app/js/data/adapters.js`, `app/js/data/api.js` | `User` is the UI-facing facade; `LocalAdapter` handles offline/guest state and `RemoteAdapter` speaks the versioned REST API. |
-| Admin UI | `admin/js/main.js`, `admin/js/views/` | Admin navigation and feature screens; calls `/api/v1/admin`, never queries storage directly. |
+| Console UI | `admin/js/console.js` (shared shell), `admin/js/main.js` (Admin), `content/js/main.js` (Content studio), `admin/js/views/` | Two consoles — business (`/admin`) and content (`/content`) — sharing the shell, sign-in, UI toolkit and API client; they call `/api/v1/admin`, never query storage directly. |
 | Native shell | `mobile/`, `mobile/scripts/`, `app/js/platform.js`, `app/js/push-native.js` | Capacitor packaging, OS permissions, deep links, native push and build-time Firebase setup. It reuses the web application bundle. |
 | HTTP composition | `server/src/app.js`, `middleware/security.js`, `routes/*.js`, `web.js` | Middleware order, API version prefix, route registration, static/SEO delivery and final error mapping. Route modules receive dependencies; they do not read environment variables or create a database connection. |
 | Use cases | `auth.js`, `sessions.js`, `features.js`, `billing.js`, `campaigns.js`, `catalog.js`, `jobs.js` | Identity/session policy, engagement rules, payment/invoice workflows, leased campaigns, catalog snapshots and scheduled work. |

@@ -6,7 +6,7 @@ import { HttpError, bad, wrap } from '../http.js';
 import { normalizeEmail } from '../email-address.js';
 import { SocialError } from '../social-errors.js';
 
-export function registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled }) {
+export function registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled, sms = null }) {
   // Create an account with e-mail + password. A verification-mail failure must be visible to the user (the account is still created so they can sign in and retry).
   api.post('/auth/signup', authLimit, wrap(async (req, res) => {
     const { name = '', email = '', password = '' } = req.body || {};
@@ -51,7 +51,15 @@ export function registerAuthRoutes(api, { db, secret, social, features, mailer, 
 
   /* ---------- social sign-in ---------- */
   // Tells the front end which social buttons to show.
-  api.get('/auth/providers', (_req, res) => res.json({ password: true, ...social.config }));
+  // `otp` tells the sign-in page whether to offer phone sign-in first (SMS OTP) and which country code
+  // the number field should assume. It is false whenever MSG91 is not configured, so the page falls back
+  // to email + password without any errors.
+  api.get('/auth/providers', (_req, res) => res.json({
+    password: true,
+    otp: !!sms?.configured && sms.provider !== 'none',
+    otpCountryCode: sms?.countryCode || '91',
+    ...social.config,
+  }));
   const LABEL = { google: 'Google', facebook: 'Facebook', apple: 'Apple' };
   // Shared by Google, Facebook and Apple: verify the provider's token, then find or create our own account.
   // An existing account with the same *verified* e-mail is linked rather than duplicated.

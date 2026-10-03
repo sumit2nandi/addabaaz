@@ -1,9 +1,23 @@
-# Admin console
+# The management consoles
 
-`/admin` is a web console for running the whole site: **content** (shows, episodes, reels, trailers, coming-soon, gallery, studio & team), **customers** (users, plans, payments, refunds, invoices, coupons, contact messages) and a **per-person audit log**. It is part of the same server as the site — no extra service.
+There are **two** consoles, both part of the same server as the site (no extra service) and both signed in
+with the same administrator account:
+
+| Console | URL | What it is for |
+| --- | --- | --- |
+| **Admin** | `https://your-site/admin` | Running the business: customers, plans, payments and refunds, coupons, contact messages, support tickets, comment moderation, analytics, broadcasts, errors, the audit log and the client-cache refresh |
+| **Content studio (CMS)** | `https://your-site/content` | Publishing: shows & seasons, videos & reels, the “coming soon” calendar, the gallery, and studio/team credits |
+
+They are deliberately separate pages: content work and business work are different jobs, and one sidebar with
+thirty entries is unusable — especially on a phone. Both share the same shell, sign-in and API client
+(`admin/js/console.js`, `admin/js/ui.js`, `admin/js/api.js`), and each one links to the other from its sidebar.
+Both work in a mobile browser: below 860 px the sidebar becomes a drawer, dialogs fill the screen, fields are
+16 px (so iOS does not zoom) and wide tables scroll inside their card.
+
+Both are also available to scripts: everything they do is under `/api/v1/admin/*`.
 
 ```
-https://your-site/admin
+https://your-site/admin      https://your-site/content
 ```
 
 ## 1. Give yourself access
@@ -30,20 +44,23 @@ Security notes
 | Section | |
 |---|---|
 | **Dashboard** | revenue and sign-ups for 30 days, active subscribers, plans expiring within 7 days, open messages, recent payments/users, and a *Finish setting up* list (GSTIN, SMTP, R2 if using private media, Razorpay keys, weak secrets…). When SMTP is configured, **Send test email** sends a real diagnostic message to the signed-in administrator. |
-| **Shows** | add / edit / delete / reorder; poster upload; "featured" on the home page. Deleting a show also deletes its videos (you are told how many first) |
-| **Videos & reels** (also) | each video has *Publish at* (scheduled release), *Maturity rating* (U / 7+ / 13+ / 16+ / 18+ — Kids profiles show only U and 7+) and *Subtitles* (upload .srt/.vtt). Shows have a rating too. |
-| **Videos & reels** | Episodes, reels, trailers and clips. Filter by show/kind/access/source/rating/duration/website status; 25 per page. **Preview YouTube channel** scans every public upload, compares it with the catalog, and lets you select missing videos or import all missing. Shorts appear in Reels and landscape uploads join the home page's Latest Episodes & Videos rail. Imports start free, unrated and show-less with unknown duration (shown as —); set show, rating, access and runtime in Edit when needed. Select videos across pages to hide, restore or delete in bulk. **Undo last import** and **Remove today's imports** delete only tracked YouTube videos (India Standard Time). Public page loads never fetch YouTube. Sources can also be added directly as YouTube URLs, MP4/HLS links or R2 objects; premium access is selected separately. |
-| **Coming soon** | Edit the homepage **Releasing This Month** desktop/mobile banner artwork; add / edit / delete / reorder upcoming titles and their carousel posters. New titles are placed first; use the order controls to adjust the list. **Releasing This Month** titles play in the homepage slideshow as a full landscape (16:9) banner that shows the whole artwork, uncropped and with nothing drawn over it (posters carry their own title): upload the 16:9 artwork as the **Backdrop (wide)**; if there is no backdrop the large poster is used, then the card poster. |
-| **Gallery** | add / edit / delete / reorder; photo upload |
-| **Studio & team** | the About, Services and Contact pages: address, phones, WhatsApp, social links, mission text, services, team members with photos |
+| **Content studio → Content overview** | the state of the catalog: how many shows, episodes, reels and coming-soon titles, and what still needs artwork, a source or a duration before publishing |
+| **Content studio → Shows** | add / edit / delete / reorder; poster upload; "featured" on the home page. Deleting a show also deletes its videos (you are told how many first) |
+| **Content studio → Videos & reels** (also) | each video has *Publish at* (scheduled release), *Maturity rating* (U / 7+ / 13+ / 16+ / 18+ — Kids profiles show only U and 7+) and *Subtitles* (upload .srt/.vtt). Shows have a rating too. |
+| **Content studio → Videos & reels** | Episodes, reels, trailers and clips. Filter by show/kind/access/source/rating/duration/website status; 25 per page. **Preview YouTube channel** scans every public upload, compares it with the catalog, and lets you select missing videos or import all missing. Shorts appear in Reels and landscape uploads join the home page's Latest Episodes & Videos rail. Imports start free, unrated and show-less with unknown duration (shown as —); set show, rating, access and runtime in Edit when needed. Select videos across pages to hide, restore or delete in bulk. **Undo last import** and **Remove today's imports** delete only tracked YouTube videos (India Standard Time). Public page loads never fetch YouTube. Sources can also be added directly as YouTube URLs, MP4/HLS links or R2 objects; premium access is selected separately. |
+| **Content studio → Coming soon** | Edit the homepage **Releasing This Month** desktop/mobile banner artwork; add / edit / delete / reorder upcoming titles and their carousel posters. New titles are placed first; use the order controls to adjust the list. **Releasing This Month** titles play in the homepage slideshow as a full landscape (16:9) banner that shows the whole artwork, uncropped and with nothing drawn over it (posters carry their own title): upload the 16:9 artwork as the **Backdrop (wide)**; if there is no backdrop the large poster is used, then the card poster. |
+| **Content studio → Gallery** | add / edit / delete / reorder; photo upload |
+| **Content studio → Studio & team** | the About, Services and Contact pages: address, phones, WhatsApp, social links, mission text, services, team members with photos |
 | **Users** | search, filter (paid, expiring, expired, free, admins, disabled); rename, make/remove admin, disable/enable, delete; **give free access** (N days, no payment or invoice); end a plan. Accounts that share one e-mail address are listed at the top with the offending characters made visible (`rupa⟨U+00A0⟩@example.com`, `rupa⟨space⟩@example.com`) — a copy-pasted non-breaking space or a full-width ＠ is a different string for MySQL, and a table created before the unique e-mail index can even hold two identical rows. **Merge** folds the extras into the account you keep: profiles, watch history, devices, plan, payments, invoices and comments move over, then they are deleted. Merges are audited (`user.merge`) |
 | **Payments & refunds** | every checkout with buyer, coupon, status, invoice/credit-note PDFs; **Refund…** (full or partial, via Razorpay; credit note issued when it is processed); GST **sales register CSV** by date range |
 | **Coupons** | create percent / flat codes with plan, date, per-user and total limits; turn off, edit limits, delete (used codes can only be turned off) |
 | **Refund requests** | customers' self-service requests: approve (runs the Razorpay refund + credit note) or decline with a note; sidebar badge for pending ones |
+| **Support** | the tickets viewers raise from the site's Support page: wait-for-an-answer queue, search and category filters, the full conversation, replies (e-mailed to the viewer when SMTP is configured), status/priority triage, an internal note the viewer never sees, and delete |
 | **Messages** | contact-form inbox: reply by email, mark handled, delete; unread count in the sidebar |
 | **Comments** | moderation queue: comments auto-hidden after 3 reports or reported once; restore, hide, delete, search |
 | **Analytics** | plays and watch time per day, top shows/videos (7/30/90 days), revenue |
-| **Broadcast** | send an announcement as an **app push notification** (Android/iOS apps and browsers) or an **e-mail** (all accounts, active subscribers, free/expiring/expired plans) — live progress, per-channel test send, recent broadcasts with results |
+| **Broadcast** | send an announcement as an **app push notification** (Android/iOS apps and browsers) or an **e-mail** (all accounts, active subscribers, free/expiring/expired plans) — a **live preview** of what will be sent (the notification as it appears on a phone, or the real e-mail), an optional **image** (large-picture notification + e-mail banner), a test send to yourself, live progress and the recent broadcasts with results |
+| **Client cache** | invalidate what browsers and installed apps have cached: *Clear app files* (the site's HTML/JS/CSS/catalog) or *Clear everything* (also offline artwork). Everybody re-downloads on their next launch; nobody is signed out and no preference changes |
 | **Errors** | grouped browser and server errors of the last 7 days with stack traces |
 | **Audit log** | who did what, when, to what (`catalog.show.update`, `payment.refund`, `user.grant`, `coupon.create`, …). Append-only from the UI |
 

@@ -252,6 +252,149 @@ export function extraDb({ q, tx, iso }) {
     async pendingCount() { return Number((await q("SELECT COUNT(*) AS n FROM refund_requests WHERE status = 'pending'"))[0].n); },
   };
 
+  // ---- Phone sign-in: one row per OTP sent (only a hash of the code is stored) ----
+  const phoneOtps = {
+    /** Issues a code: earlier live codes for the same number stop working immediately. */
+    async issue(phone, codeHash, ttlMs) {
+      await tx(async (t) => {
+        await t.query('UPDATE phone_otps SET consumed_at = UTC_TIMESTAMP(3) WHERE phone = ? AND consumed_at IS NULL', [phone]);
+        await t.query('INSERT INTO phone_otps (id, phone, code_hash, expires_at) VALUES (UUID(),?,?,?)', [phone, codeHash, new Date(Date.now() + ttlMs)]);
+      });
+    },
+    /** When a code was last sent to this number (per-number cooldown). */
+    async lastIssuedAt(phone) { const r = (await q('SELECT MAX(created_at) AS at FROM phone_otps WHERE phone = ?', [phone]))[0]; return r?.at ? new Date(r.at) : null; },
+    /** How many codes were sent to this number in the last `seconds` (flood guard). */
+    async recentCount(phone, seconds) { return Number((await q('SELECT COUNT(*) AS n FROM phone_otps WHERE phone = ? AND created_at > UTC_TIMESTAMP(3) - INTERVAL ? SECOND', [phone, seconds]))[0].n); },
+    /** The newest live code row for a number, or null. */
+    async active(phone) {
+      const r = (await q('SELECT id, code_hash, attempts, expires_at FROM phone_otps WHERE phone = ? AND consumed_at IS NULL AND expires_at > UTC_TIMESTAMP(3) ORDER BY created_at DESC LIMIT 1', [phone]))[0];
+      return r ? { id: r.id, codeHash: r.code_hash, attempts: Number(r.attempts), expiresAt: iso(r.expires_at) } : null;
+    },
+    /** Counts a wrong attempt; after `max` wrong tries the code is burnt. */
+    async fail(id, max = 5) {
+      await q('UPDATE phone_otps SET attempts = attempts + 1 WHERE id = ?', [id]);
+      await q('UPDATE phone_otps SET consumed_at = UTC_TIMESTAMP(3) WHERE id = ? AND attempts >= ?', [id, max]);
+    },
+    /** Spends a code (single use). Returns false when another request already used it. */
+    async consume(id) { return (await q('UPDATE phone_otps SET consumed_at = UTC_TIMESTAMP(3) WHERE id = ? AND consumed_at IS NULL', [id])).affectedRows === 1; },
+    async purge() { await q('DELETE FROM phone_otps WHERE expires_at < UTC_TIMESTAMP(3) - INTERVAL 1 DAY'); },
+  };
+
+  // ---- Accounts that carry a verified phone number (phone sign-in / sign-up) ----
+  const phones = {
+    async byPhone(phone) {
+      const r = (await q('SELECT * FROM users WHERE phone = ?', [phone]))[0];
+      if (!r) return null;
+      return { id: r.id, email: r.email, name: r.name, passwordHash: r.password_hash, createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabledAt: iso(r.disabled_at), emailVerifiedAt: iso(r.email_verified_at), sessionVersion: r.session_version || 0, hasPin: !!r.parental_pin_hash, phone: r.phone, phoneVerifiedAt: iso(r.phone_verified_at) };
+    },
+    /** Links a verified number to an account (sign-in from a new browser, or "add my number" later). */
+    async attach(userId, phone) {
+      const r = await q('UPDATE users SET phone = ?, phone_verified_at = UTC_TIMESTAMP(3) WHERE id = ? AND (phone IS NULL OR phone = ?)', [phone, userId, phone]);
+      return r.affectedRows === 1;
+    },
+    /** Creates an account whose only credential is a verified phone number (email stays NULL). */
+    async createWithPhone(user, profile) {
+      await tx(async (t) => {
+        await t.query('INSERT INTO users (id, email, email_norm, name, phone, phone_verified_at) VALUES (?,NULL,NULL,?,?,UTC_TIMESTAMP(3))', [user.id, user.name, user.phone]);
+        await t.query('INSERT INTO profiles (id, user_id, name, color, kids) VALUES (?,?,?,?,0)', [profile.id, user.id, profile.name, profile.color ?? 0]);
+      });
+    },
+    /** Replaces the email of a phone-only account once the viewer shares one. */
+    async setEmail(userId, email, emailNorm) { await q('UPDATE users SET email = ?, email_norm = ? WHERE id = ? AND email IS NULL', [email, emailNorm, userId]); },
+  };
+
+  // ---- Support tickets (the Support page → Admin → Support) ----
+  const mapReply = (r) => ({ id: r.id, ticketId: r.ticket_id, author: r.author, authorName: r.author_name, body: r.body, createdAt: iso(r.created_at) });
+  const mapTicket = (r) => ({
+    id: r.id, userId: r.user_id, name: r.name, email: r.email, phone: r.phone, category: r.category,
+    subject: r.subject, body: r.body, status: r.status, priority: r.priority,
+    appVersion: r.app_version, platform: r.platform, device: r.device,
+    adminNote: r.admin_note, handledBy: r.handled_by, replies: Number(r.replies || 0),
+    lastReplyBy: r.last_reply_by, lastReplyAt: iso(r.last_reply_at),
+    createdAt: iso(r.created_at), updatedAt: iso(r.updated_at), resolvedAt: iso(r.resolved_at),
+  });
+  // A ticket list row carries the latest activity so the console can sort/paint without a second query.
+  const ticketSelect = `SELECT t.*, (SELECT r2.created_at FROM support_ticket_replies r2 WHERE r2.ticket_id = t.id ORDER BY r2.created_at DESC LIMIT 1) AS last_reply_at,
+    (SELECT r3.author FROM support_ticket_replies r3 WHERE r3.ticket_id = t.id ORDER BY r3.created_at DESC LIMIT 1) AS last_reply_by,
+    (SELECT COUNT(*) FROM support_ticket_replies r4 WHERE r4.ticket_id = t.id) AS replies FROM support_tickets t`;
+  const tickets = {
+    async create(t) {
+      await q(`INSERT INTO support_tickets (id, user_id, name, email, phone, category, subject, body, priority, app_version, platform, device)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [t.id, t.userId || null, String(t.name).slice(0, 80), String(t.email).slice(0, 254), t.phone ? String(t.phone).slice(0, 24) : null,
+        t.category, String(t.subject).slice(0, 160), String(t.body).slice(0, 20_000), t.priority || 'normal',
+        t.appVersion ? String(t.appVersion).slice(0, 40) : null, t.platform ? String(t.platform).slice(0, 40) : null, t.device ? String(t.device).slice(0, 120) : null]);
+    },
+    async get(id) { const r = (await q(`${ticketSelect} WHERE t.id = ?`, [id]))[0]; return r ? mapTicket(r) : null; },
+    /** A guest's ticket, found from the short reference ("ADD-1A2B3C4D") plus the e-mail that raised it. */
+    async byReference(ref, email) {
+      const prefix = String(ref || '').replace(/^ADD-?/i, '').toLowerCase();
+      if (!/^[0-9a-f]{8}$/.test(prefix)) return null;
+      const r = (await q(`${ticketSelect} WHERE t.id LIKE ? AND LOWER(t.email) = ? LIMIT 1`, [`${prefix}%`, String(email || '').toLowerCase()]))[0];
+      return r ? mapTicket(r) : null;
+    },
+    async replies(ticketId) { return (await q('SELECT * FROM support_ticket_replies WHERE ticket_id = ? ORDER BY created_at, id', [ticketId])).map(mapReply); },
+    /** Adds a message to the thread and moves the ticket's status/last-activity accordingly. */
+    async addReply({ id, ticketId, author, authorName = null, authorId = null, body, status = null }) {
+      await tx(async (t) => {
+        await t.query('INSERT INTO support_ticket_replies (id, ticket_id, author, author_name, author_id, body) VALUES (?,?,?,?,?,?)', [id, ticketId, author, authorName, authorId, String(body).slice(0, 10_000)]);
+        await t.query(`UPDATE support_tickets SET replies = replies + 1, last_reply_by = ?, last_reply_at = UTC_TIMESTAMP(3), updated_at = UTC_TIMESTAMP(3),
+          status = COALESCE(?, status), resolved_at = IF(? = 'resolved', COALESCE(resolved_at, UTC_TIMESTAMP(3)), IF(? IN ('open','pending'), NULL, resolved_at))
+          WHERE id = ?`, [author, status, status, status, ticketId]);
+      });
+    },
+    /** A viewer's own tickets. Guests have none (they get the reference by e-mail). */
+    async forUser(userId, { limit = 25, offset = 0 } = {}) {
+      const [rows, [{ n }]] = await Promise.all([
+        q(`${ticketSelect} WHERE t.user_id = ? ORDER BY t.updated_at DESC LIMIT ? OFFSET ?`, [userId, limit, offset]),
+        q('SELECT COUNT(*) AS n FROM support_tickets WHERE user_id = ?', [userId]),
+      ]);
+      return { total: Number(n), items: rows.map(mapTicket) };
+    },
+    /** Console list with the usual filters. `q` searches subject, body, email and name. */
+    async list({ status = 'all', category = 'all', search = '', userId = null, limit = 25, offset = 0 } = {}) {
+      const where = [], params = [];
+      if (status !== 'all') { where.push('t.status = ?'); params.push(status); }
+      if (category !== 'all') { where.push('t.category = ?'); params.push(category); }
+      if (userId) { where.push('t.user_id = ?'); params.push(userId); }
+      if (search) { where.push('(t.subject LIKE ? OR t.body LIKE ? OR t.email LIKE ? OR t.name LIKE ?)'); const like = `%${search}%`; params.push(like, like, like, like); }
+      const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
+      const [rows, [{ n }], counts] = await Promise.all([
+        q(`${ticketSelect} ${w} ORDER BY FIELD(t.status,'open','pending','resolved','closed'), t.updated_at DESC LIMIT ? OFFSET ?`, [...params, limit, offset]),
+        q(`SELECT COUNT(*) AS n FROM support_tickets t ${w}`, params),
+        q("SELECT status, COUNT(*) AS n FROM support_tickets GROUP BY status"),
+      ]);
+      const byStatus = Object.fromEntries(counts.map((r) => [r.status, Number(r.n)]));
+      return { total: Number(n), items: rows.map(mapTicket), counts: { open: byStatus.open || 0, pending: byStatus.pending || 0, resolved: byStatus.resolved || 0, closed: byStatus.closed || 0 } };
+    },
+    /** Updates the triage fields an admin owns (status, priority, internal note, who handled it). */
+    async update(id, { status, priority, adminNote, handledBy = null }) {
+      const sets = [], params = [];
+      if (status) { sets.push('status = ?'); params.push(status); sets.push("resolved_at = IF(? = 'resolved', COALESCE(resolved_at, UTC_TIMESTAMP(3)), IF(? IN ('open','pending'), NULL, resolved_at))"); params.push(status, status); }
+      if (priority) { sets.push('priority = ?'); params.push(priority); }
+      if (adminNote !== undefined) { sets.push('admin_note = ?'); params.push(adminNote ? String(adminNote).slice(0, 300) : null); }
+      if (handledBy) { sets.push('handled_by = ?'); params.push(String(handledBy).slice(0, 254)); }
+      if (!sets.length) return false;
+      sets.push('updated_at = UTC_TIMESTAMP(3)');
+      return (await q(`UPDATE support_tickets SET ${sets.join(', ')} WHERE id = ?`, [...params, id])).affectedRows === 1;
+    },
+    async remove(id) { return (await q('DELETE FROM support_tickets WHERE id = ?', [id])).affectedRows === 1; },
+    /** Badge on the console: tickets nobody has picked up yet (new viewer messages count as activity). */
+    async openCount() { return Number((await q("SELECT COUNT(*) AS n FROM support_tickets WHERE status IN ('open','pending')"))[0].n); },
+    /** Tickets whose last message was from the viewer (the admin's "needs an answer" queue). */
+    async awaitingCount() { return Number((await q("SELECT COUNT(*) AS n FROM support_tickets WHERE status = 'open'"))[0].n); },
+    async prune() { await q("DELETE FROM support_tickets WHERE status = 'closed' AND updated_at < UTC_TIMESTAMP(3) - INTERVAL 365 DAY"); },
+  };
+
+  // ---- Server-side settings (app_settings): currently the client cache version behind the console button ----
+  const settings = {
+    async get(k, dflt = null) { const r = (await q('SELECT v FROM app_settings WHERE k = ?', [k]))[0]; return r ? r.v : dflt; },
+    async set(k, v) { await q('INSERT INTO app_settings (k, v) VALUES (?,?) ON DUPLICATE KEY UPDATE v = VALUES(v)', [k, String(v).slice(0, 255)]); },
+    /** Read + write in one step (used by the cache-purge button so two admins cannot write the same value). */
+    async bump(k) { const next = String(Date.now()); await q('INSERT INTO app_settings (k, v) VALUES (?,?) ON DUPLICATE KEY UPDATE v = VALUES(v)', [k, next]); return next; },
+    async all() { return Object.fromEntries((await q('SELECT k, v FROM app_settings')).map((r) => [r.k, r.v])); },
+  };
+
   // ---- Client/server error reports shown in the admin "Errors" page ----
   const errors = {
     async add(e) {
@@ -274,15 +417,17 @@ export function extraDb({ q, tx, iso }) {
   // ---- Broadcast campaigns: one row per admin broadcast, updated as it sends ----
   const mapCampaign = (r) => ({
     id: r.id, channel: r.channel, audience: r.audience, title: r.title, body: r.body, url: r.url, button: r.button,
+    imageUrl: r.image_url || null, imageAlt: r.image_alt || null,
     status: r.status, total: Number(r.total), sent: Number(r.sent), failed: Number(r.failed), skipped: Number(r.skipped),
     cursor: Number(r.page_cursor), test: !!r.is_test, error: r.error, by: r.created_by,
     createdAt: iso(r.created_at), updatedAt: iso(r.updated_at), finishedAt: iso(r.finished_at),
   });
   const campaigns = {
     async create(c) {
-      await q(`INSERT INTO campaigns (id, channel, audience, title, body, url, button, status, is_test, created_by)
-        VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      [c.id, c.channel, String(c.audience).slice(0, 120), String(c.title).slice(0, 200), String(c.body).slice(0, 20_000), c.url || null, c.button || null, c.status || 'queued', c.test ? 1 : 0, c.by || null]);
+      await q(`INSERT INTO campaigns (id, channel, audience, title, body, url, button, image_url, image_alt, status, is_test, created_by)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [c.id, c.channel, String(c.audience).slice(0, 120), String(c.title).slice(0, 200), String(c.body).slice(0, 20_000), c.url || null, c.button || null,
+        c.imageUrl ? String(c.imageUrl).slice(0, 500) : null, c.imageAlt ? String(c.imageAlt).slice(0, 200) : null, c.status || 'queued', c.test ? 1 : 0, c.by || null]);
     },
     async get(id) { const r = (await q('SELECT * FROM campaigns WHERE id = ?', [id]))[0]; return r ? mapCampaign(r) : null; },
     /** Claims a queued campaign, or takes over only after another instance's lease expires. */
@@ -324,5 +469,5 @@ export function extraDb({ q, tx, iso }) {
     async prune() { await q("DELETE FROM campaigns WHERE finished_at IS NOT NULL AND finished_at < UTC_TIMESTAMP(3) - INTERVAL 365 DAY"); },
   };
 
-  return { authTokens, accounts, ratings, comments, push, devices, campaigns, playback, playStats, refundRequests, errors };
+  return { authTokens, accounts, ratings, comments, push, devices, campaigns, playback, playStats, refundRequests, tickets, phoneOtps, phones, settings, errors };
 }

@@ -32,7 +32,8 @@ Everything you need to install, configure, run, deploy and operate ADDABAAZ, in 
 |---|---|---|
 | **Website (PWA)** | Plain HTML + JavaScript modules in `index.html`, `app/`, `sw.js`. No build step. | Everything |
 | **API + web server** | Node.js / Express in `server/src/`, storing data in **MySQL**. Also serves the website, the admin console and SEO pages. | Accounts, premium video, payments, admin, comments, notifications … |
-| **Admin console** | `/admin` (files in `admin/`). Manage shows, videos, users, payments, coupons, comments, refunds, analytics. | Running the business |
+| **Admin console** | `/admin` (files in `admin/`). Users, payments and refunds, coupons, the contact inbox, support tickets, comments, analytics, broadcasts, errors, audit log, client-cache refresh. | Running the business |
+| **Content studio (CMS)** | `/content` (files in `content/`, sharing `admin/js/*`). Shows and seasons, videos and reels, the “coming soon” calendar, the gallery, studio credits. | Publishing content |
 | **Mobile apps** | A Capacitor wrapper in `mobile/` that packages the same website as Android / iOS apps. | Play Store / App Store |
 
 Two ways to run it:
@@ -275,6 +276,8 @@ All settings are environment variables (see `.env.example`, which has the same l
 | `FACEBOOK_CLIENT_TOKEN`, `FACEBOOK_GRAPH_VERSION` | Only for the native apps / to pin the Graph API version. |
 | `APPLE_SERVICE_ID` | Sign in with Apple on the **website** (a Services ID). |
 | `APPLE_CLIENT_ID` | Sign in with Apple in the **iOS app** (the app's bundle id). |
+| `MSG91_AUTH_KEY`, `MSG91_OTP_TEMPLATE_ID` | Enable **phone sign-in (SMS OTP)** — the primary sign-in/register method once both are set. See [docs/MSG91.md](docs/MSG91.md). |
+| `MSG91_SENDER_ID`, `MSG91_COUNTRY_CODE` | Optional DLT-approved 6-character header, and the country code assumed for numbers typed without one (`91`). |
 | `ADMIN_SESSION_HOURS` | `12` — admin console sessions are shorter than viewer sessions. |
 | `ADMIN_TOKEN` | Optional 24+ character secret for scripts/curl to call `/api/v1/admin/*`. Leave empty otherwise. |
 
@@ -397,7 +400,25 @@ Premium is an app-level access setting and is independent of source. This walkth
 
 For Premium titles stored in R2, playback is protected by login, plan and short-lived signed links. It is **not DRM**; a determined person can still record their screen.
 
-### 8.5 Payments (Razorpay, prepaid plans)
+### 8.5 Phone sign-in with SMS OTP (MSG91)
+
+Viewers can sign in — and sign up — with a mobile number and a 6-digit code. This is offered **first** on the
+sign-in page whenever MSG91 is configured; email + password and the social buttons stay as alternatives, and
+when the keys are absent production simply hides the mobile-number tab (development prints the code in the
+server log instead, so the flow is still testable).
+
+1. Get an MSG91 account and, in India, complete **DLT registration** (business entity, 6-character header,
+   SMS template). One-time cost is around ₹5,000–5,900 + GST.
+2. In MSG91 create an **OTP template** whose variable is exactly `##OTP##` and copy its **Template ID**.
+3. Set `MSG91_AUTH_KEY` and `MSG91_OTP_TEMPLATE_ID` (optionally `MSG91_SENDER_ID`), then restart.
+4. Check `curl -s https://<host>/api/v1/auth/providers` shows `"otp":true`, then request a code for your own
+   number: `curl -X POST https://<host>/api/v1/auth/otp/request -H 'Content-Type: application/json' -d '{"phone":"9812345678"}'`.
+
+Codes are generated and verified by ADDABAAZ (only a hash is stored), last 10 minutes, and are limited to one
+per number per minute and five per hour. The step-by-step guide, DLT notes and troubleshooting:
+[docs/MSG91.md](docs/MSG91.md).
+
+### 8.6 Payments (Razorpay, prepaid plans)
 
 Plans are ₹99 for 30 days and ₹799 for 365 days (prices include GST); they don't auto-renew. Change them in `server/src/plans.js`.
 
@@ -407,23 +428,33 @@ Plans are ₹99 for 30 days and ₹799 for 365 days (prices include GST); they d
 4. Restart, and **make a real test-mode payment** (Razorpay's test cards/UPI), check the invoice PDF and the refund flow in `/admin → Payments`.
 5. Switch to `rzp_live_…` keys only after the test passes.
 
-Without keys: development shows a labelled demo checkout; production has no checkout at all.
+**The apps never show a checkout.** Google Play and the App Store require digital goods to be bought through
+them, so the native builds list plans read-only with the note “Plans are managed on the ADDABAAZ website”.
+There is no purchase button, no external payment link and no payment-provider name in the app. Full detail,
+including the exact wording and the store-policy reasoning: [docs/PAYMENTS.md](docs/PAYMENTS.md).
 
-### 8.6 GST invoices and refunds
+Without keys: development shows a labelled demo checkout; production has no checkout at all (the API answers
+`501 payments_not_configured` and the page says payments aren’t available) — nothing else breaks.
+
+### 8.7 GST invoices and refunds
 
 Set `GSTIN` (15 characters, checked for format, state code and check character), `GST_LEGAL_NAME`, `BUSINESS_ADDRESS` (and the other `GST_*` / `INVOICE_*` values). The server refuses to start with a malformed GSTIN. Every paid plan then gets a numbered tax invoice (`AB/2627/000001`, gapless per financial year); refunds produce credit notes. Download the sales register CSV from `/admin → Payments` for your accountant.
 
 Not included: GST e-invoice/IRN and return filing (they need a GST Suvidha Provider).
 
-### 8.7 Email (receipts, password reset, verification, refunds)
+### 8.8 Email (receipts, password reset, verification, refunds)
 
 Set `SMTP_URL`, `MAIL_FROM`, `SUPPORT_EMAIL` and `PUBLIC_SITE_URL` (links in emails use it). Any SMTP provider works (Amazon SES, Brevo, Mailgun, Zoho, Gmail app password…). Once SMTP is set, viewers must confirm their email before buying or commenting. Set up SPF/DKIM for your sending domain so mail doesn't land in spam. After deploy, use `/admin` → Dashboard → System status → **Send test email** to verify the actual SMTP connection and delivery. On Render Free, ports 25/465/587 are blocked: use a provider with port 2525 (`SMTP_URL=smtp://username:password@smtp-host:2525`, STARTTLS) or a paid Render instance; URL-encode special characters in the username/password.
 
-### 8.8 Notifications & broadcasts (app push + e-mail)
+### 8.9 Notifications & broadcasts (app push + e-mail)
 
 Everything is sent from `/admin → Broadcast`: choose *App push* or *E-mail*, pick an audience, write the
-message, send a test to yourself, then send. Progress (sent / total / failed / skipped) is shown live and
-kept in the Campaigns list.
+message, look at the **live preview** (the notification as it will appear on a phone — picture included — or
+the actual e-mail HTML), send a test to yourself, then send. Progress (sent / total / failed / skipped) is
+shown live and kept in the Campaigns list. A **preview never sends anything**: it renders through the same
+builders the sender uses, so what you see is what goes out. An optional image can be attached to either
+channel — it becomes a large-picture notification in the app/browser and a banner at the top of the e-mail
+(upload it in the composer, or paste a `/media/…`, `/uploads/…` or `https://…` address).
 
 1. **Browsers (Web Push):** `npx web-push generate-vapid-keys`, then set `VAPID_PUBLIC_KEY`,
    `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:support@addabaaz.in`, restart. Signed-in viewers switch it
@@ -439,13 +470,32 @@ kept in the Campaigns list.
 4. New episodes and launch reminders are sent automatically to signed-in people who follow a show or
    set a reminder (web push + app push); guest device-local lists and reminders are never uploaded.
 
-### 8.9 Analytics and error monitoring
+### 8.10 Support tickets and the “clear client cache” button
+
+**Support tickets.** The **Support** page on the site (`/support`, linked from the footer, the account menu
+and the sign-in page) lets anyone raise a ticket — trouble signing in, registration, payments, playback,
+content, account — with a short form. Guests can use it too: they give an e-mail, receive the reference
+(`ADD-1A2B3C4D`) by e-mail and can reopen the conversation later with the reference + their address. Signed-in
+viewers see their tickets and the whole conversation on the same page.
+
+Tickets land in **`/admin → Support`**, with the same categories, search, status/priority triage, an internal
+note that the viewer never sees, and replies that are e-mailed to the viewer as `emailTemplates.adminAnswered`
+when SMTP is configured (without SMTP the reply is still stored, and the console says it was not e-mailed).
+Set `SUPPORT_EMAIL` so new tickets and viewer replies also land in your inbox.
+
+**Clear client caches.** `/admin → Client cache` invalidates what browsers and installed apps have cached: the
+button bumps a version number, and every client that checks in drops its cached files (and, for *Clear
+everything*, its offline artwork) and downloads them again. Use it after deploying a fix that viewers are not
+seeing. Nobody is signed out and no setting is changed. An open tab notices within seconds and offers a
+restart; a closed browser or installed app picks it up on its next launch.
+
+### 8.11 Analytics and error monitoring
 
 * Built in: `/admin → Analytics` (plays, watch time, top titles, revenue) and `/admin → Errors`. Nothing to set up.
 * Optional Google Analytics 4: create a GA4 property, set `GA4_MEASUREMENT_ID=G-XXXXXXX`. A consent banner then appears and GA loads only after a visitor accepts.
 * Optional Sentry: `npm i @sentry/node`, set `SENTRY_DSN`.
 
-### 8.10 Legal pages (do this before taking money)
+### 8.12 Legal pages (do this before taking money)
 
 The site serves `/privacy`, `/terms` and `/refunds`. **They are templates, not legal advice.** Have a lawyer review them, then edit the wording in `app/js/legal-text.js` (one file used by the site and the search-engine renderer) and update `LEGAL_UPDATED`. See `docs/COMPLIANCE.md` for what the software stores and what the policies must say.
 
@@ -582,7 +632,7 @@ Hostinger stops a Web App's process after a period without traffic and starts it
 
 1. `https://your-domain/api/v1/health/ready` answers `{"ok":true,"db":"up"}` (a 503 means the database connection is wrong — check the runtime log).
 2. Open the home page, sign up, sign in, and open `/admin` → **Dashboard** → *System status*.
-3. In `/admin → Content` add a show, reload the public site, and see it appear.
+3. In `/content` (Content studio) add a show, reload the public site, and see it appear.
 4. View `https://your-domain/sitemap.xml` and `https://your-domain/robots.txt` (with `NODE_ENV=production` it must **allow** indexing).
 
 **G. Updating**

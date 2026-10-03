@@ -254,3 +254,79 @@ details.card > summary { cursor: pointer; } details.card { padding: 12px 16px; }
   .yt-preview-submit .btn { flex: 1 1 auto; white-space: normal; }
   .video-bulk-bar { align-items: flex-start; flex-direction: column; }
 }
+
+/* ---------- v2.11: support tickets, content overview, broadcast preview, client cache ---------- */
+/* Filter bar shared by the Support queue and the ticket reply form. */
+.filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.filters > input, .filters > select { flex: 1 1 200px; min-width: 0; }
+.filters label.inline { display: grid; gap: 5px; flex: 1 1 150px; font-size: 12px; color: var(--text-2); font-weight: 600; }
+/* Support queue: one card per ticket, tappable, with quick triage in the footer. */
+.tk { cursor: pointer; }
+.tk:hover { border-color: var(--border-2); background: var(--panel-2); }
+.tk .card-head { align-items: flex-start; }
+.tk-sub { min-width: 0; } .tk-sub strong { overflow-wrap: anywhere; }
+.tk-badges { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.tk-preview { color: var(--text-2); margin: 0 0 10px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.tk-meta { gap: 8px; } .spacer { flex: 1; }
+.tk-detail-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px; }
+.tk-detail-head h3 { margin: 0 0 4px; }
+.tk-thread { display: grid; gap: 10px; max-height: 40dvh; overflow: auto; padding: 4px 2px; margin: 12px 0; }
+.tk-msg { background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 12px 14px; display: grid; gap: 6px; }
+.tk-msg.staff { background: rgba(229,9,20,.08); border-color: rgba(229,9,20,.28); }
+.tk-msg header { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); }
+.tk-msg p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tk-reply { margin-top: 6px; }
+.tk-note { margin-top: 10px; } .tk-note summary { cursor: pointer; font-size: 13px; color: var(--muted); padding: 6px 0; }
+/* Content studio overview. */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 16px; }
+.tile { display: grid; gap: 4px; padding: 16px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); color: var(--text); }
+.tile:hover { border-color: var(--border-2); background: var(--panel-2); text-decoration: none; }
+.tile svg { color: var(--accent-2); } .tile b { font-size: 26px; line-height: 1.1; } .tile span { color: var(--muted); font-size: 13px; }
+.tile-issue { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.tile-issue:last-of-type { border-bottom: 0; padding-bottom: 4px; }
+.tile-issue small { display: block; margin-top: 3px; }
+.rows { display: grid; gap: 2px; }
+.row-item { display: flex; align-items: center; gap: 12px; padding: 9px 6px; border-radius: 10px; color: var(--text); }
+.row-item:hover { background: var(--panel-2); text-decoration: none; }
+.row-thumb { flex: none; width: 76px; height: 44px; border-radius: 6px; object-fit: cover; background: var(--panel-3); }
+.row-thumb.blank { display: grid; place-items: center; color: var(--muted); }
+.row-main { min-width: 0; flex: 1; } .row-main b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Broadcast preview: a phone-style notification and the real e-mail body. */
+.push-row { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.push-mock { background: #17181c; border: 1px solid var(--border-2); border-radius: 16px; padding: 12px 14px; display: grid; gap: 6px; box-shadow: 0 18px 40px rgba(0,0,0,.45); }
+.push-app { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.push-app img { border-radius: 50%; } .push-app small { margin-left: auto; }
+.push-title { font-size: 15px; } .push-body { color: var(--text-2); font-size: 14px; overflow-wrap: anywhere; }
+.push-img { width: 100%; border-radius: 10px; margin-top: 4px; }
+.pv-json { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 12px; overflow: auto; max-height: 220px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.mail-subj { padding: 8px 2px; } .mail-frame { width: 100%; height: 460px; border: 1px solid var(--border-2); border-radius: 10px; background: #fff; }
+/* Client cache page. */
+.cache-version { display: grid; gap: 2px; margin: 0 0 8px; } .cache-version strong { font-size: 30px; line-height: 1.1; }
+.cache-notes { margin: 0; padding-left: 18px; display: grid; gap: 7px; }
+
+/* ---------- phones: an admin often works from one, so every page has to work at 360px wide ---------- */
+.card.flush { -webkit-overflow-scrolling: touch; }
+main#main { overflow-x: clip; }
+@media (max-width: 640px) {
+  main#main { padding: 16px 12px 90px; }
+  .page-head { gap: 10px; margin-bottom: 16px; }
+  .page-head h1 { font-size: 22px; }
+  .card { padding: 14px; }
+  .card-head { flex-wrap: wrap; }
+  .stats, .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .stat { padding: 12px; gap: 10px; } .stat strong { font-size: 19px; } .stat-ic { width: 36px; height: 36px; }
+  /* Fields and buttons must stay usable with a thumb: 16px text stops iOS zooming mid-page. */
+  input, select, textarea { font-size: 16px; }
+  .btn { min-height: 40px; }
+  .row.end { flex-wrap: wrap; } .row.end .btn, .row.wrap .btn { flex: 1 1 auto; justify-content: center; }
+  .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; } .tab { white-space: nowrap; }
+  /* Dialogs fill the screen — the console's forms are too tall for a centred card. */
+  dialog.modal, dialog.modal.wide { width: 100vw; max-width: none; height: 100dvh; max-height: none; margin: 0; border-radius: 0; border: 0; }
+  .modal-body { padding: 14px; }
+  .push-row { grid-template-columns: 1fr; }
+  .mail-frame { height: 360px; }
+  .tk-badges { justify-content: flex-start; }
+  .side-foot .btn { min-height: 44px; }
+}
+@media (max-width: 420px) { .stats, .tiles { grid-template-columns: 1fr; } }

@@ -57,6 +57,7 @@ export function accountExtras() {
     <div class="card-panel list">
       ${row('chgPw', 'lock', acc.hasPassword === false ? 'Set a password' : 'Change password', acc.hasPassword === false ? 'You signed up with a social account — add a password too.' : 'Signs you out on your other devices.')}
       ${row('signOutAll', 'logout', 'Sign out everywhere', 'Ends your session on every phone, TV and browser.')}
+      ${row('supportBtn', 'chat', 'Help & support', 'Trouble signing in, payments, playback — raise a ticket.')}
       ${row('devices', 'tv', 'Your devices', 'See where you’re watching and how many screens your plan allows.')}
     </div>
     <h2 class="sub-h">Kids &amp; parental controls</h2>
@@ -71,6 +72,7 @@ export function accountExtras() {
   const wire = (root, ctx) => {
     $('#resendVerify', root)?.addEventListener('click', async (e) => { e.target.disabled = true; try { await u.remote.resendVerification(); toast('Sent — check your inbox.'); } catch (err) { toast(friendly(err)); e.target.disabled = false; } });
     $('#consentBtn', root)?.addEventListener('click', openConsentDialog);
+    $('#supportBtn', root)?.addEventListener('click', () => { location.hash = '#/support'; });
 
     $('#chgPw', root)?.addEventListener('click', () => {
       if (acc.hasPassword === false) {

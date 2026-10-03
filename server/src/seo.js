@@ -178,7 +178,7 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
 
   // robots.txt: staging/preview deployments block everything; production allows all but /admin and /api.
   const robotsTxt = (req) => indexable
-    ? `User-agent: *\nDisallow: /admin\nDisallow: /api/\n\nSitemap: ${originOf(req)}/sitemap.xml\n`
+    ? `User-agent: *\nDisallow: /admin\nDisallow: /content\nDisallow: /api/\n\nSitemap: ${originOf(req)}/sitemap.xml\n`
     : 'User-agent: *\nDisallow: /\n';
 
   // sitemap.xml lists every indexable page, with last-modified dates and video info for watch pages.

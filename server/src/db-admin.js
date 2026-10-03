@@ -221,6 +221,7 @@ export function adminDb({ q, tx, self, iso }) {
   // ---- User management ----
   const mapUserRow = (r) => ({
     id: r.id, email: r.email, name: r.name, createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabledAt: iso(r.disabled_at),
+    phone: r.phone || null, phoneVerifiedAt: iso(r.phone_verified_at),
     planId: r.plan_id && r.expires_at && r.expires_at.getTime() > Date.now() ? r.plan_id : 'free', expiresAt: iso(r.expires_at), planSource: r.provider || null,
     profiles: r.profiles ?? undefined, providers: r.providers ? r.providers.split(',') : [],
   });
@@ -403,13 +404,13 @@ export function adminDb({ q, tx, self, iso }) {
      * mailed, and neither is anyone who clicked the unsubscribe link in an earlier campaign. */
     async emailAudienceCount(filter = 'all') {
       const f = USER_FILTERS[filter] ? filter : 'all';
-      const [{ n }] = await q(`SELECT COUNT(*) AS n FROM users u LEFT JOIN subscriptions s ON s.user_id = u.id WHERE (${USER_FILTERS[f]}) AND u.disabled_at IS NULL AND u.email_opt_out_at IS NULL`);
+      const [{ n }] = await q(`SELECT COUNT(*) AS n FROM users u LEFT JOIN subscriptions s ON s.user_id = u.id WHERE (${USER_FILTERS[f]}) AND u.disabled_at IS NULL AND u.email_opt_out_at IS NULL AND u.email NOT LIKE '%@phone.addabaaz.in'`);
       return Number(n);
     },
     async emailAudience(filter = 'all', { limit = 200, offset = 0 } = {}) {
       const f = USER_FILTERS[filter] ? filter : 'all';
       return (await q(`SELECT u.id, u.email, u.name FROM users u LEFT JOIN subscriptions s ON s.user_id = u.id
-        WHERE (${USER_FILTERS[f]}) AND u.disabled_at IS NULL AND u.email_opt_out_at IS NULL
+        WHERE (${USER_FILTERS[f]}) AND u.disabled_at IS NULL AND u.email_opt_out_at IS NULL AND u.email NOT LIKE '%@phone.addabaaz.in'
         ORDER BY u.created_at, u.id LIMIT ? OFFSET ?`, [limit, offset])).map((r) => ({ id: r.id, email: r.email, name: r.name }));
     },
     async emailOptOutCount() { return Number((await q('SELECT COUNT(*) AS n FROM users WHERE email_opt_out_at IS NOT NULL'))[0].n); },

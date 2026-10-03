@@ -90,7 +90,9 @@ export default async function plans(ctx) {
           : html`<button class="btn btn-primary block" data-plan="${p.id}">${p.id === cur ? 'Extend' : active ? 'Switch to' : 'Get'} ${p.interval === 'year' ? 'yearly' : 'monthly'} plan</button>`}
       </article>`)}</div>
       ${s.demo ? html`<p class="muted" style="margin-top:18px"><button class="btn btn-ghost" data-cancel>End demo plan</button></p>` : ''}
-      <p class="muted" style="margin-top:18px;font-size:13px">Prices in INR, inclusive of GST. UPI, cards, netbanking and wallets via Razorpay. ${u.account ? html`<a href="#/billing">Billing & invoices</a>` : ''}</p>
+      <p class="muted" style="margin-top:18px;font-size:13px">${isNative
+        ? html`Prices in INR, inclusive of GST. Subscriptions are bought on the ADDABAAZ website, never inside this app — your plan unlocks premium video here as soon as the payment is confirmed. ${u.account ? html`<a href="#/billing">Billing & invoices</a>` : ''}`
+        : html`Prices in INR, inclusive of GST. UPI, cards, netbanking and wallets via Razorpay. ${u.account ? html`<a href="#/billing">Billing & invoices</a>` : ''}`}</p>
     </div>`.s;
   };
   draw();

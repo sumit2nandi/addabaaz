@@ -87,7 +87,9 @@ const I = {
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/>', chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
   chart: '<path d="M3 3v18h18M7 15v3M12 9v9M17 5v13"/>', bug: '<path d="M8 2l1.9 1.9M16 2l-1.9 1.9M9 7.1V6a3 3 0 0 1 6 0v1.1M6 13H2M22 13h-4M6 17l-3 2M18 17l3 2M6 9l-3-2M18 9l3-2"/><rect x="6" y="7" width="12" height="14" rx="6"/>',
   refund: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/>',
-  crown: '<path d="M4.1 17.6 3 8.9l4.7 3.7L12 5.7l4.3 6.9 4.7-3.7-1.1 8.7Z"/><path d="M5.3 20.7h13.4"/>', mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>', star: '<path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>',
+  crown: '<path d="M4.1 17.6 3 8.9l4.7 3.7L12 5.7l4.3 6.9 4.7-3.7-1.1 8.7Z"/><path d="M5.3 20.7h13.4"/>',
+  play: '<path d="M5 3.5v17l15-8.5z"/>', send: '<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/>', mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>', star: '<path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>',
 };
 export const icon = (n, size = 18) => raw(`<svg class="i" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n] || ''}</svg>`);
 

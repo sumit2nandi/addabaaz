@@ -55,7 +55,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
   }
 
   // Row mappers: database column names -> API field names.
-  const userRow = (r) => r && { id: r.id, email: r.email, emailNorm: r.email_norm || null, emailDup: !!r.email_dup, name: r.name, passwordHash: r.password_hash, createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabledAt: iso(r.disabled_at), emailVerifiedAt: iso(r.email_verified_at), sessionVersion: r.session_version || 0, hasPin: !!r.parental_pin_hash };
+  const userRow = (r) => r && { id: r.id, email: r.email, emailNorm: r.email_norm || null, emailDup: !!r.email_dup, name: r.name, passwordHash: r.password_hash, createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabledAt: iso(r.disabled_at), emailVerifiedAt: iso(r.email_verified_at), sessionVersion: r.session_version || 0, hasPin: !!r.parental_pin_hash, phone: r.phone || null, phoneVerifiedAt: iso(r.phone_verified_at) };
   const profileRow = (r) => ({ id: r.id, name: r.name, color: r.color, ...(r.kids ? { kids: true } : {}) });
 
   // The public object. `self` is also handed to the extension modules so they can call each other's methods.

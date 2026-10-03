@@ -10,13 +10,17 @@ const day = (iso) => new Date(iso).toLocaleDateString('en-IN', { timeZone: 'Asia
 const inr = (paise) => `Rs. ${rupees(paise)}`;
 
 /** Every email is { subject, text, html }. Plain-text first; the HTML is the same content in a simple, client-safe layout. */
-export function layout({ subject, paragraphs, button, footer, footerHtml = null }) {
+export function layout({ subject, paragraphs, button, footer, footerHtml = null, image = null, imageAlt = '' }) {
   const text = [...paragraphs, button ? `${button.label}: ${button.url}` : null, footer].filter(Boolean).join('\n\n');
+  // An optional picture at the top of the message (broadcast e-mails). Plain <img>: mail clients strip
+  // everything else, and the URL is escaped so a crafted path cannot break out of the attribute.
+  const hero = image ? `<img src="${esc(image)}" alt="${esc(imageAlt || subject)}" style="width:100%;max-width:512px;height:auto;border-radius:8px;display:block;margin:0 0 16px" />` : '';
   const html = `<!doctype html><html><body style="margin:0;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#111">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border-radius:12px;overflow:hidden">
 <tr><td style="background:#050505;padding:18px 24px;font-size:20px;font-weight:700;letter-spacing:1px;color:#fff">ADDA<span style="color:#e50914">BAAZ</span></td></tr>
 <tr><td style="padding:24px;font-size:15px;line-height:1.55">
+${hero}
 <h1 style="font-size:20px;margin:0 0 14px">${esc(subject)}</h1>
 ${paragraphs.map((p) => `<p style="margin:0 0 14px">${esc(p).replace(/\n/g, '<br>')}</p>`).join('')}
 ${button ? `<p style="margin:22px 0"><a href="${esc(button.url)}" style="background:#e50914;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:700;display:inline-block">${esc(button.label)}</a></p>` : ''}
@@ -148,5 +152,5 @@ export function campaignEmail(o) {
   const footer = [o.unsubscribeUrl ? `${line} Unsubscribe from announcement emails: ${o.unsubscribeUrl}` : line, help(o)].filter(Boolean).join(' ');
   // The HTML version gets a clickable one-click unsubscribe link; the text version the bare URL (mail clients linkify it).
   const footerHtml = esc([line, help(o)].filter(Boolean).join(' ')) + (o.unsubscribeUrl ? ` <a href="${esc(o.unsubscribeUrl)}" style="color:#666">Unsubscribe</a>` : '');
-  return layout({ subject: o.subject, paragraphs, footer, footerHtml, button: o.button?.url ? { label: o.button.label || 'Open ADDABAAZ', url: o.button.url } : (o.siteUrl ? { label: 'Open ADDABAAZ', url: o.siteUrl } : null) });
+  return layout({ subject: o.subject, paragraphs, footer, footerHtml, image: o.image || null, imageAlt: o.imageAlt || '', button: o.button?.url ? { label: o.button.label || 'Open ADDABAAZ', url: o.button.url } : (o.siteUrl ? { label: 'Open ADDABAAZ', url: o.siteUrl } : null) });
 }
