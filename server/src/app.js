@@ -32,7 +32,6 @@ import { createCatalogStore } from './catalog.js';
 import { createYouTubeFeed } from './youtube-feed.js';
 import { installSecurityMiddleware } from './middleware/security.js';
 import { createAdminRouter } from './admin.js';
-import { adminPromoRoutes } from './admin-promos.js';
 import { createSessionResolver, sessionForRequest } from './sessions.js';
 import { registerSystemRoutes } from './routes/system.js';
 import { registerAuthRoutes } from './routes/auth.js';

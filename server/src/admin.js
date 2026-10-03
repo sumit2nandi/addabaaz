@@ -10,6 +10,7 @@ import { PLANS, paidPlan } from './plans.js';
 import { validate, TYPES } from './catalog-schema.js';
 import { describeImage, describeSubtitle, cacheUpload, UPLOAD_NAME, videoKey } from './uploads.js';
 import { adminExtraRoutes } from './admin-extra.js';
+import { adminPromoRoutes } from './admin-promos.js';
 import { suggestYouTubeKind } from './youtube-feed.js';
 
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
