@@ -115,9 +115,11 @@ it down.
 
 - The installed app is named **Addabaaz** (`capacitor.config.json` appName,
   re-asserted on `strings.xml` by `patch-android.mjs`).
-- Launcher/install icons are the website logo (`mobile/android-icons/`,
-  stamped over the stock Capacitor icons on every sync; regenerate with
-  `bash mobile/scripts/gen-launcher-icons.sh`).
+- Launcher/install icons are the website’s circular logo with transparent
+  outside corners (`mobile/android-icons/`, stamped over the stock Capacitor
+  icons on every sync; regenerate with `bash mobile/scripts/gen-launcher-icons.sh`).
+  Do not composite these icon PNGs onto a square background: Android's installer
+  and Credential Manager display that square as black corners around the logo.
 - The Android 12+ system splash shows the dark logo artwork
   (`windowSplashScreenAnimatedIcon` = the splash drawable), so launching never
   shows white squares around the logo.

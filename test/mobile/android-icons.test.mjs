@@ -6,9 +6,32 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { inflateSync } from 'node:zlib';
 import { stampLauncherIcons, ICON_SOURCE } from '../../mobile/scripts/android-icons.mjs';
 
 const DENSITIES = ['mdpi', 'hdpi', 'xxhdpi', 'xxxhdpi', 'xhdpi'];
+
+// Read the top-left pixel's alpha from the first PNG scanline. Its filter predictor is zero for
+// the first pixel, so the stored alpha byte is also the decoded alpha for that corner.
+function topLeftAlpha(file) {
+  const png = fs.readFileSync(file);
+  assert.deepEqual(png.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), `${file} is PNG`);
+  let offset = 8, bitDepth, colorType, interlace;
+  const idat = [];
+  while (offset < png.length) {
+    const length = png.readUInt32BE(offset);
+    const type = png.toString('ascii', offset + 4, offset + 8);
+    const data = png.subarray(offset + 8, offset + 8 + length);
+    if (type === 'IHDR') { bitDepth = data[8]; colorType = data[9]; interlace = data[12]; }
+    if (type === 'IDAT') idat.push(data);
+    offset += length + 12;
+    if (type === 'IEND') break;
+  }
+  assert.equal(bitDepth, 8, `${file} uses 8-bit channels`);
+  assert.equal(colorType, 6, `${file} has an RGBA alpha channel`);
+  assert.equal(interlace, 0, `${file} is non-interlaced`);
+  return inflateSync(Buffer.concat(idat))[4];
+}
 
 test('the repo ships a full logo icon set (all densities + playstore)', () => {
   for (const d of DENSITIES) {
@@ -17,6 +40,15 @@ test('the repo ships a full logo icon set (all densities + playstore)', () => {
     }
   }
   assert.ok(fs.existsSync(path.join(ICON_SOURCE, 'ic_launcher_playstore.png')), 'playstore icon exists');
+});
+
+test('Android and OAuth logo assets have transparent corners around the round mark', () => {
+  const files = [
+    ...DENSITIES.flatMap((d) => ['ic_launcher.png', 'ic_launcher_round.png'].map((f) => path.join(ICON_SOURCE, d, f))),
+    path.join(ICON_SOURCE, 'ic_launcher_playstore.png'),
+    new URL('../../resources/icon-only.png', import.meta.url),
+  ];
+  for (const file of files) assert.equal(topLeftAlpha(file), 0, `${file} has no opaque square corner`);
 });
 
 test('stampLauncherIcons replaces the stock icons and drops the adaptive XML', () => {
