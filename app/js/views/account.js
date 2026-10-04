@@ -19,7 +19,7 @@ export default async function account(ctx) {
   const link = (href, ic, label, sub = '') => html`<a class="row-link" href="${href}">${icon(ic, { size: 22 })}<span><b>${label}</b>${sub ? html`<small>${sub}</small>` : ''}</span>${icon('right', { size: 18, cls: 'chev' })}</a>`;
 
   const extras = accountExtras();
-  ctx.root.innerHTML = html`<div class="page page-narrow">
+  ctx.root.innerHTML = html`<div class="page page-narrow account-page">
     ${sectionHeader({ tag: 'You', title: u.supportsAuth ? 'Account & settings' : 'Profile & settings' })}
     ${!u.supportsAuth ? html`<section class="card-panel notice" role="status"><div>${icon('info', { size: 22 })}</div><div><b>Local-only mode</b><p class="muted">This app isn’t connected to ADDABAAZ cloud. Profiles and settings stay on this phone; sign-in, sync, and push notifications need a cloud connection.</p></div></section>` : ''}
     ${extras.banner}

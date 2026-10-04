@@ -16,7 +16,7 @@ export async function openCheckout(order) {
   return new Promise((resolve, reject) => {
     const rzp = new window.Razorpay({
       key: order.keyId, order_id: order.orderId, amount: order.amount, currency: order.currency,
-      name: 'ADDABAAZ', description: order.plan?.name || 'ADDABAAZ Plus', prefill: order.prefill || {}, theme: { color: '#c90000' },
+      name: 'ADDABAAZ', description: order.plan?.name || 'ADDABAAZ Plus', prefill: order.prefill || {}, theme: { color: '#b80000' },
       handler: resolve,
       modal: { ondismiss: () => reject(Object.assign(new Error('Payment cancelled.'), { cancelled: true })) },
     });
