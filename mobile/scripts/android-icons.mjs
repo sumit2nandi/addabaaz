@@ -10,7 +10,7 @@ export const ICON_SOURCE = path.join(HERE, '..', 'android-icons');
 const DENSITIES = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi'];
 
 // Copies the legacy logo PNGs into <androidRoot>/app/src/main/res and replaces Capacitor's
-// adaptive icon with a branded dark background + full-size circular foreground. Returns what it did.
+// adaptive icon with the white tile + enlarged circular foreground. Returns what it did.
 export function stampLauncherIcons(androidRoot) {
   const res = path.join(androidRoot, 'app', 'src', 'main', 'res');
   fs.mkdirSync(res, { recursive: true });   // a fresh `cap add android` always has one; create it if a minimal fixture doesn't
@@ -23,8 +23,8 @@ export function stampLauncherIcons(androidRoot) {
       done.push(`mipmap-${d}/${f}`);
     }
   }
-  // Replace the stock Capacitor adaptive icon (the blue bot) instead of deleting it. A solid brand
-  // background prevents Android's legacy-icon fallback from placing white behind transparent corners.
+  // Replace the stock Capacitor adaptive icon (the blue bot) instead of deleting it. A deliberate
+  // white background reproduces the earlier tile; the larger foreground leaves only small corner gaps.
   const adaptive = path.join(res, 'mipmap-anydpi-v26');
   fs.rmSync(adaptive, { recursive: true, force: true });
   fs.mkdirSync(adaptive, { recursive: true });
@@ -35,7 +35,7 @@ export function stampLauncherIcons(androidRoot) {
   }
   const values = path.join(res, 'values');
   fs.mkdirSync(values, { recursive: true });
-  fs.writeFileSync(path.join(values, 'addabaaz_icon_colors.xml'), '<?xml version="1.0" encoding="utf-8"?>\n<resources><color name="addabaaz_icon_background">#050505</color></resources>\n');
+  fs.writeFileSync(path.join(values, 'addabaaz_icon_colors.xml'), '<?xml version="1.0" encoding="utf-8"?>\n<resources><color name="addabaaz_icon_background">#FFFFFF</color></resources>\n');
   done.push('values/addabaaz_icon_colors.xml');
   fs.mkdirSync(path.join(res, 'drawable'), { recursive: true });
   fs.copyFileSync(path.join(ICON_SOURCE, 'ic_launcher_playstore.png'), path.join(res, 'drawable', 'ic_launcher_playstore.png'));

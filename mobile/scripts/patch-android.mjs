@@ -142,7 +142,7 @@ patch('app/build.gradle', 'debug builds signed with the shared CI key (new APKs 
 
 // The APK installs with the website logo as its launcher icon (not the stock Capacitor bot):
 // pre-rendered fallback PNGs and full-size adaptive foregrounds are stamped at every density, with
-// a dark adaptive background so Android never fills transparent icon corners with white.
+// a white adaptive background to keep the earlier tile look while the circular mark fills more of it.
 for (const line of stampLauncherIcons(root)) console.log(`[android:patch] res: ${line}`);
 
 console.log('[android:patch] done. In Android Studio: SDK Manager -> install "Android 16 (API 36)" if asked, then File -> Sync Project with Gradle Files.');

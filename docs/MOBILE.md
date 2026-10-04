@@ -115,12 +115,12 @@ it down.
 
 - The installed app is named **Addabaaz** (`capacitor.config.json` appName,
   re-asserted on `strings.xml` by `patch-android.mjs`).
-- Launcher/install icons use a large circular logo on a full-bleed near-black
-  tile (`mobile/android-icons/`, stamped over the stock Capacitor icons on every
-  sync; regenerate with `bash mobile/scripts/gen-launcher-icons.sh`). Android 8+
-  gets a branded adaptive icon with an explicit dark background and transparent
-  foreground; older launchers use the opaque dark PNG fallback. This prevents
-  white padding and lets Android apply its rounded-square/circle icon mask.
+- Launcher/install icons keep the earlier white rounded-square tile, with the
+  circular logo enlarged to 86% of the icon canvas (`mobile/android-icons/`,
+  stamped over the stock Capacitor icons on every sync; regenerate with
+  `bash mobile/scripts/gen-launcher-icons.sh`). Android 8+ gets a white adaptive
+  background and transparent foreground; older launchers use the same white-tile
+  PNG fallback.
 - The Android 12+ system splash shows the dark logo artwork
   (`windowSplashScreenAnimatedIcon` = the splash drawable), so launching never
   shows white squares around the logo.

@@ -71,6 +71,22 @@ test('Coming Soon keeps the artwork expand button beside My List on phones', () 
     'the same row adapts for especially narrow phones');
 });
 
+test('show details keep the artwork-view button beside My List on phones', () => {
+  const show = read('app/js/views/show.js');
+  const actions = show.match(/<div class="show-art-actions">([\s\S]*?)<\/div>/)?.[1] || '';
+  assert.ok(actions, 'My List and the artwork button share a compact action group');
+  assert.ok(actions.indexOf('listBtn(') < actions.indexOf('id="artBtn"'), 'the artwork control follows My List');
+  assert.match(show, /id="shareBtn"/, 'Share remains available outside the grouped pair');
+
+  const css = read('app/css/styles.css');
+  assert.match(css, /\.show-art-actions \{ display: flex; align-items: center; gap: 8px; flex: none; \}/,
+    'the My List and artwork controls stay together when the action row wraps');
+  assert.match(css, /\.detail-hero \.hero-actions > \.btn-lg \{ padding: 10px 12px; font-size: 14px; \}/,
+    'compact mobile button padding helps the primary action and the paired controls fit');
+  assert.match(css, /\.detail-hero \.hero-shade \{[^}]*rgba\(5,5,5,\.72\) 60%/,
+    'a stronger lower scrim keeps poster lettering from colliding visually with the title and facts');
+});
+
 test('the artwork popup shows the banner and the poster, each once', async () => {
   const { artworkItems, openArtwork } = await import('../../app/js/ui/lightbox.js');
   assert.deepEqual(artworkItems({ poster: 'p.jpg', backdrop: 'b.jpg' }).map((x) => [x.id, x.image, x.caption]),

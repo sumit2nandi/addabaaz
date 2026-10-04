@@ -163,6 +163,9 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .hero-title-en { font-size: 16px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-2); font-weight: 700; margin-top: -6px; }
 .hero-desc { color: var(--text-2); font-size: 15.5px; max-width: 56ch; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; }
+.show-art-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.show-art-actions .list-btn { white-space: nowrap; }
+.show-art-actions > #artBtn { display: grid; place-items: center; flex: 0 0 48px; width: 48px; height: 48px; padding: 0; }
 .hero-poster { display: none; flex: none; width: clamp(200px, 20vw, 290px); aspect-ratio: 2/3; border-radius: var(--radius-lg); overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.7), 0 0 0 1px var(--border-2); transform: perspective(900px) rotateY(-6deg); transition: transform .5s var(--ease); }
 .hero-poster:hover { transform: perspective(900px) rotateY(0) scale(1.02); }
 .hero-poster img { width: 100%; height: 100%; object-fit: cover; }
@@ -484,7 +487,7 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 @media (max-width: 899px) {
   .topbar { gap: 12px; } .brand-text { font-size: 17px; } #installBtn { display: none !important; }
   .hero { min-height: 74vh; min-height: 74svh; } .hero-inner { padding-bottom: 60px; } .hero-desc { -webkit-line-clamp: 3; font-size: 14.5px; }
-  .hero-actions .btn-lg { padding: 11px 18px; font-size: 15px; } .hero-actions .btn-glass:last-child { display: none; }
+  .hero-actions .btn-lg { padding: 11px 18px; font-size: 15px; } .hero-actions > .btn-glass:last-child { display: none; }
   /* The "Have a story to tell? / Start a project" band is for producers finding us on desktop — drop it on phones. */
   .cta-band { display: none; }
 }
@@ -492,6 +495,13 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
   .hero-bg img { object-position: center 15%; }
   .hero-shade { background: linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.88) 30%, rgba(5,5,5,.35) 58%, rgba(5,5,5,0) 78%), linear-gradient(180deg, rgba(5,5,5,.75), rgba(5,5,5,0) 20%); }
   .detail-hero { min-height: 70vh; min-height: 70svh; }
+  .detail-hero .hero-shade { background: linear-gradient(90deg, rgba(5,5,5,.34), rgba(5,5,5,.1)), linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.94) 30%, rgba(5,5,5,.72) 60%, rgba(5,5,5,.18) 83%, transparent 100%), linear-gradient(180deg, rgba(5,5,5,.8), transparent 20%); }
+  .detail-hero .hero-copy { width: 100%; min-width: 0; }
+  .detail-hero .hero-actions { gap: 8px; }
+  .detail-hero .hero-actions > .btn-lg { padding: 10px 12px; font-size: 14px; }
+  .show-art-actions { gap: 6px; }
+  .show-art-actions .list-btn { padding: 10px; font-size: 14px; }
+  .show-art-actions > #artBtn { flex-basis: 48px; width: 48px; height: 48px; padding: 0; }
 }
 /* Keep the Coming Soon reminder, list and artwork actions together on one row on phones. */
 @media (max-width: 759px) {
@@ -504,6 +514,8 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
   .soon-hero-actions { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 44px; gap: 6px; }
   .soon-hero-actions > .remind-btn, .soon-hero-actions > .list-btn { gap: 5px; padding: 10px 5px; font-size: 13px; }
   .soon-hero-actions > #artBtn { width: 44px; height: 44px; }
+  .show-art-actions .list-btn { padding: 9px 8px; font-size: 13px; }
+  .show-art-actions > #artBtn { flex-basis: 44px; width: 44px; height: 44px; }
 }
 @media (max-width: 480px) { .ep-row { grid-template-columns: 26px 112px 1fr; gap: 10px; padding: 8px 4px; } .watch-actions .btn { padding: 9px 13px; } }
 [data-platform="ios"] .rail-arrow, [data-platform="android"] .rail-arrow { display: none !important; }

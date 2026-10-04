@@ -47,8 +47,10 @@ export default async function showView(ctx) {
           <div class="hero-actions">
             ${t ? html`<a class="btn btn-primary btn-lg" href="#/watch/${t.video.id}">${icon('play', { size: 20 })} ${label}</a>` : ''}
             ${trailer ? html`<a class="btn btn-glass btn-lg" href="#/watch/${trailer.id}">${icon('film', { size: 20 })} Trailer</a>` : ''}
-            ${listBtn('show', s.id, { cls: 'btn btn-glass btn-lg' })}
-            <button type="button" class="btn btn-glass btn-lg icon-only" id="artBtn" aria-label="View the full artwork" title="View the full artwork">${icon('expand', { size: 20 })}</button>
+            <div class="show-art-actions">
+              ${listBtn('show', s.id, { cls: 'btn btn-glass btn-lg' })}
+              <button type="button" class="btn btn-glass btn-lg icon-only" id="artBtn" aria-label="View the full artwork" title="View the full artwork">${icon('expand', { size: 20 })}</button>
+            </div>
             <button type="button" class="btn btn-glass btn-lg icon-only" id="shareBtn" aria-label="Share">${icon('share', { size: 20 })}</button>
           </div>
           <dl class="facts">
