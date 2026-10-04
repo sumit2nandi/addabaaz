@@ -67,6 +67,36 @@ test('every banner is a still image and the slideshow ticks every 5 seconds', as
   });
 });
 
+test('each hero banner links to its own show details without covering the action buttons', async () => {
+  await withHome(async (root) => {
+    const slides = [...root.querySelectorAll('.hero-slide')];
+    assert.ok(slides.length >= 2, 'featured shows have slides');
+    for (const slide of slides) {
+      const link = slide.querySelector('.hero-banner-link');
+      assert.ok(link, 'the banner image is an accessible link');
+      assert.equal(link.getAttribute('href'), `#/show/${slide.dataset.showId}`, 'the link targets the show on this slide');
+      assert.match(link.getAttribute('aria-label'), /details$/, 'the image link has an accessible name');
+      assert.ok(link.querySelector('.hero-bg img'), 'the slideshow artwork is inside the link');
+      assert.ok(slide.querySelector('.hero-actions a[href^="#/watch/"]'), 'Watch Now remains a separate action');
+      assert.ok(slide.querySelector('.hero-actions [data-list]'), 'My List remains a separate action');
+      assert.ok(slide.querySelector('.hero-actions a[href^="#/show/"]'), 'More info remains a separate action');
+    }
+  });
+});
+
+test('a horizontal swipe changes slides without following the banner link', async () => {
+  await withHome(async (root, window) => {
+    const hero = root.querySelector('.hero');
+    const link = root.querySelector('.hero-slide.active .hero-banner-link');
+    const down = new window.Event('pointerdown', { bubbles: true }); down.clientX = 300;
+    const up = new window.Event('pointerup', { bubbles: true }); up.clientX = 120;
+    hero.dispatchEvent(down); hero.dispatchEvent(up);
+    const click = new window.Event('click', { bubbles: true, cancelable: true });
+    link.dispatchEvent(click);
+    assert.equal(click.defaultPrevented, true, 'a swipe-generated click cannot navigate to the show');
+  });
+});
+
 test('the slideshow crossfades between the featured shows and drops no media when it moves on', async () => {
   await withHome(async (root, window) => {
     await sleep(60);
@@ -92,5 +122,8 @@ test('the hero CSS keeps the swipe working and carries no player styling', async
     assert.match(css, /\.hero \{ touch-action: pan-y; \}/, 'touch-action lets touch WebViews deliver the swipe');
     assert.doesNotMatch(css, /\.hero-video|\.hero-sound/, 'the banner player styling is gone');
     assert.match(css, /\.hero-bg img \{[^}]*object-fit: cover/, 'the banner image fills the banner');
+    assert.match(css, /\.hero-banner-link \.hero-bg \{ z-index: 0; \}/, 'the banner link remains the clickable image layer');
+    assert.match(css, /\.hero-slide > \.hero-shade \{ z-index: 1; pointer-events: none; \}/, 'the visual scrim does not block the link');
+    assert.match(css, /\.hero-slide > \.hero-inner a, \.hero-slide > \.hero-inner button \{ pointer-events: auto; \}/, 'the existing hero actions stay clickable above the banner link');
   });
 });

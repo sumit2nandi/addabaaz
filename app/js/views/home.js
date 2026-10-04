@@ -21,8 +21,10 @@ function heroHtml(slides) {
   return html`<section class="hero" aria-roledescription="carousel" aria-label="Featured shows">
     ${slides.map(({ show, latest }, i) => {
       const t = u.resumeTarget(cat, show.id);
-      return html`<article class="hero-slide ${i === 0 ? 'active' : ''}" data-i="${i}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
-        <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault') })}</div>
+      return html`<article class="hero-slide ${i === 0 ? 'active' : ''}" data-i="${i}" data-show-id="${show.id}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
+        <a class="hero-banner-link" href="#/show/${show.id}" aria-label="View ${show.titleEn || show.title} details">
+          <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault') })}</div>
+        </a>
         <div class="hero-shade"></div>
         ${show.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
         <div class="hero-inner">
@@ -67,11 +69,22 @@ function mountHero(root, ctx) {
     hero.addEventListener('mouseenter', () => (paused = true)); hero.addEventListener('mouseleave', () => (paused = false));
     hero.addEventListener('focusin', () => (paused = true)); hero.addEventListener('focusout', () => (paused = false));
   }
-  let x0 = null;
+  let x0 = null, suppressClick = false, clickTimer;
+  hero.addEventListener('click', (e) => {
+    if (!suppressClick) return;
+    suppressClick = false; clearTimeout(clickTimer);
+    e.preventDefault(); e.stopPropagation();
+  }, true);
   hero.addEventListener('pointerdown', (e) => { x0 = e.clientX; });
-  hero.addEventListener('pointerup', (e) => { if (x0 != null && Math.abs(e.clientX - x0) > 60) { show(i + (e.clientX < x0 ? 1 : -1)); schedule(); } x0 = null; });
-  hero.addEventListener('pointercancel', () => { x0 = null; });    // touch drags handed to scrolling must not leave a stale swipe
-  schedule(); ctx.onCleanup(() => clearInterval(timer));
+  hero.addEventListener('pointerup', (e) => {
+    if (x0 != null && Math.abs(e.clientX - x0) > 60) {
+      suppressClick = true; clearTimeout(clickTimer); clickTimer = setTimeout(() => { suppressClick = false; }, 500);
+      show(i + (e.clientX < x0 ? 1 : -1)); schedule();
+    }
+    x0 = null;
+  });
+  hero.addEventListener('pointercancel', () => { x0 = null; suppressClick = false; clearTimeout(clickTimer); });    // touch drags handed to scrolling must not leave a stale swipe
+  schedule(); ctx.onCleanup(() => { clearInterval(timer); clearTimeout(clickTimer); });
 }
 
 // Homepage poster slideshow: pauses while hovered/focused and does not auto-advance for reduced-motion users.

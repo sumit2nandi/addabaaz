@@ -146,8 +146,13 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 /* pan-y: vertical scrolling stays native while horizontal finger drags reach the carousel's
    pointer handlers - without this, touch WebViews (the Android app) cancel the swipe. */
 .hero { touch-action: pan-y; }
-.hero-slide { grid-area: 1 / 1; position: relative; display: flex; align-items: flex-end; opacity: 0; visibility: hidden; transition: opacity .8s var(--ease), visibility .8s; }
+.hero-slide { grid-area: 1 / 1; position: relative; display: flex; align-items: flex-end; isolation: isolate; opacity: 0; visibility: hidden; transition: opacity .8s var(--ease), visibility .8s; }
 .hero-slide.active { opacity: 1; visibility: visible; }
+.hero-banner-link { position: absolute; inset: 0; z-index: 0; display: block; cursor: pointer; }
+.hero-banner-link .hero-bg { z-index: 0; }
+.hero-slide > .hero-shade { z-index: 1; pointer-events: none; }
+.hero-slide > .hero-inner { position: relative; z-index: 2; pointer-events: none; }
+.hero-slide > .hero-inner a, .hero-slide > .hero-inner button { pointer-events: auto; }
 .hero-bg { position: absolute; inset: 0; z-index: -2; }
 .hero-bg img { width: 100%; height: 100%; object-fit: cover; object-position: center 25%; animation: kenburns 24s ease-out both; filter: saturate(1.05); }
 .hero-slide:not(.active) .hero-bg img { animation: none; }
