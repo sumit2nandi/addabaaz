@@ -61,7 +61,7 @@ export default async function watch(ctx) {
             ${next ? html`<a class="btn btn-ghost" href="#/watch/${next.id}">${icon('next', { size: 18 })} Next: ${cat.label(next)}</a>` : ''}
             <button type="button" class="btn btn-ghost" id="castBtn" hidden>${icon('cast', { size: 18 })} Cast</button>
             <button type="button" class="btn btn-ghost" id="shareBtn">${icon('share', { size: 18 })} Share</button>
-            <label class="switch" title="Play the next episode automatically"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span><span>Autoplay next</span></label>
+            <label class="switch" title="Play the next episode or a related recommendation automatically"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span><span>Autoplay next</span></label>
           </div>
           ${show ? html`<p class="watch-desc">${show.description}</p>` : ''}
           <details class="orig-title"><summary>Original title</summary><p class="bn">${v.title}</p></details>
@@ -91,7 +91,6 @@ export default async function watch(ctx) {
     }
   };
 
-  $('#autoNext', ctx.root).addEventListener('change', (e) => u.setPref('autoplayNext', e.target.checked));
   $('#shareBtn', ctx.root).addEventListener('click', async () => {
     const r = await shareOrCopy({ title, text: `${title} — ADDABAAZ`, url: shareUrl('/watch/' + v.id) });
     if (r === 'copied') toast('Link copied');
@@ -132,6 +131,10 @@ export default async function watch(ctx) {
   const prog = u.progressOf(v.id);
   const start = prog && prog.position >= CONFIG.resumeMinSeconds && !u.isFinished(v.id, v.duration) ? prog.position : 0;
   let ctl = null, lastSaved = 0, dead = false, countdown = null, lastT = start, lastD = v.duration;
+  $('#autoNext', ctx.root).addEventListener('change', (e) => {
+    u.setPref('autoplayNext', e.target.checked);
+    if (!e.target.checked) { clearInterval(countdown); countdown = null; $('#nextUp', ctx.root).hidden = true; }
+  });
 
   // Save watch position at most every 5 s (or immediately when `flush` is set, e.g. on pause or leaving the page).
   // Do not let an initial sub-second tick (t < 1s) consume the 5s throttle window before 1s of playback is reached.
@@ -183,15 +186,41 @@ export default async function watch(ctx) {
    * button (app/js/orientation.js locks the orientation there, and the native fullscreen client
    * hides both system bars). Leaving the page always lands back in portrait. */
 
-  // Autoplay: a countdown card for the next episode; tapping cancels or plays now.
-  const showNextUp = () => {
+  // If the episode list ends, prefer a first episode from a genre-related show; otherwise fall back
+  // to other recent playable videos. Never send the viewer backward to an earlier episode of this show.
+  const recommendedAutoplay = () => {
+    const candidates = [];
+    if (v.kind !== 'episode') candidates.push(...cat.relatedVideos(v, 12));
+    if (show) for (const relatedShow of cat.related(show, 12)) {
+      const episode = cat.firstEpisode(relatedShow.id);
+      if (episode) candidates.push(episode);
+    }
+    candidates.push(...(v.kind === 'episode'
+      ? cat.latestEpisodes(24).filter((candidate) => !v.showId || candidate.showId !== v.showId)
+      : cat.latestVideos(24)));
+    const seen = new Set([v.id]);
+    return candidates.find((candidate) => {
+      if (!candidate || seen.has(candidate.id)) return false;
+      seen.add(candidate.id);
+      if (v.kind === 'episode' && v.showId && candidate.kind === 'episode' && candidate.showId === v.showId) return false;
+      return u.gateFor(candidate, cat) === 'ok';
+    }) || null;
+  };
+  const autoplayTarget = () => {
+    if (next && u.gateFor(next, cat) === 'ok') return { video: next, recommended: false };
+    const video = recommendedAutoplay();
+    return video ? { video, recommended: true } : null;
+  };
+
+  // Autoplay: a countdown card for the next episode, or a related recommendation when the series ends.
+  const showNextUp = ({ video: target, recommended }) => {
     const box = $('#nextUp', ctx.root);
     let n = CONFIG.autoplayCountdown;
-    const draw = () => { box.innerHTML = html`<div class="next-card">${img(cat.thumb(next, 'hqdefault'), '')}<div><div class="eyebrow">Up next in ${n}s</div><strong>${cat.label(next)} \u00b7 ${cat.displayTitle(next)}</strong><div class="row"><button class="btn btn-primary btn-sm" id="nuPlay">${icon('play', { size: 16 })} Play now</button><button class="btn btn-ghost btn-sm" id="nuCancel">Cancel</button></div></div></div>`.s; };
+    const draw = () => { box.innerHTML = html`<div class="next-card">${img(cat.thumb(target, 'hqdefault'), '')}<div><div class="eyebrow">${recommended ? 'Recommended next' : 'Up next'} in ${n}s</div><strong>${cat.label(target)} \u00b7 ${cat.displayTitle(target)}</strong><div class="row"><button class="btn btn-primary btn-sm" id="nuPlay">${icon('play', { size: 16 })} Play now</button><button class="btn btn-ghost btn-sm" id="nuCancel">Cancel</button></div></div></div>`.s; };
     box.hidden = false; draw();
-    const stop = () => { clearInterval(countdown); box.hidden = true; };
-    countdown = setInterval(() => { n -= 1; if (n <= 0) { stop(); go('/watch/' + next.id, { replace: true }); } else draw(); }, 1000);
-    box.onclick = (e) => { if (e.target.closest('#nuPlay')) { stop(); go('/watch/' + next.id, { replace: true }); } else if (e.target.closest('#nuCancel')) stop(); };
+    const stop = () => { clearInterval(countdown); countdown = null; box.hidden = true; };
+    countdown = setInterval(() => { n -= 1; if (n <= 0) { stop(); go('/watch/' + target.id, { replace: true }); } else draw(); }, 1000);
+    box.onclick = (e) => { if (e.target.closest('#nuPlay')) { stop(); go('/watch/' + target.id, { replace: true }); } else if (e.target.closest('#nuCancel')) stop(); };
   };
   // Create the player. R2 videos first ask the API for a short-lived signed URL (this is where login and payment are enforced server-side);
   // errors map to the matching wall (401 sign in, 402 needs plan, stream_limit) or a generic failure.
@@ -207,8 +236,8 @@ export default async function watch(ctx) {
         start, autoplay: true,
         // The player keeps its own controls (like the YouTube app): their fullscreen button is the
         // one way into full screen, where the screen may turn (see the rotation note above).
-        // The player still runs muted after main's unmute lifts (rare — the browser refused sound):
-        // offer one tap to turn the sound on.
+        // If the browser rejects sound-first autoplay and its muted retry starts, offer a deliberate
+        // tap for sound; the player never unmutes itself later.
         onAutoplayMuted: () => {
           if (dead || $('#unmutePill', ctx.root)) return;
           const b = document.createElement('button'); b.type = 'button'; b.id = 'unmutePill'; b.className = 'unmute-pill';
@@ -225,10 +254,13 @@ export default async function watch(ctx) {
           b.onclick = () => { Promise.resolve(ctl?.play?.()).catch(() => {}); b.remove(); };
           $('#playerBox', ctx.root).appendChild(b);
         },
-        // The player's first-gesture auto-unmute fired: sound is on, the pill is obsolete.
+        // A user gesture enabled sound: the fallback prompt is now obsolete.
         onGestureUnmuted: () => { if (dead) return; $('#unmutePill', ctx.root)?.remove(); },
         onProgress: persist,
-        onEnded: () => { u.saveProgress(v.id, lastD || v.duration, lastD || v.duration, { flush: true }); if (next && u.pref('autoplayNext')) showNextUp(); },
+        onEnded: () => {
+          u.saveProgress(v.id, lastD || v.duration, lastD || v.duration, { flush: true });
+          if (u.pref('autoplayNext')) { const target = autoplayTarget(); if (target) showNextUp(target); }
+        },
         onState: (s, code) => {
           if (s === 'playing') {
             markPlaying(true);

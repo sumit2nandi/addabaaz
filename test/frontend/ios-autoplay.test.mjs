@@ -136,7 +136,7 @@ test('YouTube autoplay explicitly mutes the iOS iframe before asking it to play 
   } finally { restore(); }
 });
 
-test('YouTube falls back to an immediately playable muted iframe when the API script fails', async () => {
+test('YouTube iframe fallback honors the requested sound-first mode when the API script fails', async () => {
   const restore = saveGlobals(['document', 'location', 'window']);
   globalThis.document = {
     createElement() { return {}; },
@@ -149,7 +149,7 @@ test('YouTube falls back to an immediately playable muted iframe when the API sc
     const ctl = await createYouTubePlayer(container, 'test-video', { autoplay: true, muted: false, controls: false });
     assert.equal(ctl.engine, 'iframe', 'slow/blocked API does not hold the video behind its 8-second timeout');
     assert.match(container.innerHTML, /autoplay=1/);
-    assert.match(container.innerHTML, /mute=1/, 'fallback favors immediate muted autoplay over a stalled sound-first attempt');
+    assert.match(container.innerHTML, /mute=0/, 'fallback does not force the viewer into muted autoplay');
     assert.match(container.innerHTML, /playsinline=1/);
     ctl.destroy();
   } finally { restore(); }
@@ -170,7 +170,7 @@ test('YouTube does not wait for the API network timeout before using its iframe 
     const container = { innerHTML: '', appendChild() {}, querySelector() { return null; } };
     const ctl = await createYouTubePlayer(container, 'slow-api-video', { autoplay: true, muted: false, controls: false });
     assert.equal(ctl.engine, 'iframe', 'the playback budget expires while the API script request is still pending');
-    assert.match(container.innerHTML, /mute=1/, 'fallback still preserves autoplay with sound-safe mute');
+    assert.match(container.innerHTML, /mute=0/, 'fallback honors the requested unmuted mode when the API is still loading');
     ctl.destroy();
   } finally { restore(); }
 });

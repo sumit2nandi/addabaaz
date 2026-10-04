@@ -396,6 +396,23 @@ test('R2 videos (including short clips like 6s Cricket and newly started videos)
   }
 });
 
+test('createR2.getObject fetches signed objects server-side and forwards HLS byte ranges', async () => {
+  const originalFetch = globalThis.fetch;
+  let requested = null;
+  globalThis.fetch = async (url, options) => {
+    requested = { url: String(url), options };
+    return new Response(Buffer.from('segment'), { status: 206, headers: { 'Content-Range': 'bytes 0-6/7' } });
+  };
+  try {
+    const r2 = createR2({ R2_ACCOUNT_ID: 'acct123', R2_ACCESS_KEY_ID: 'AK', R2_SECRET_ACCESS_KEY: 'SK', R2_BUCKET: 'bucket' });
+    const response = await r2.getObject('premium/hls/seg0.ts', { ttl: 900, range: 'bytes=0-6' });
+    assert.equal(response.status, 206);
+    assert.equal(new URL(requested.url).pathname, '/bucket/premium/hls/seg0.ts');
+    assert.equal(new URL(requested.url).searchParams.get('X-Amz-Expires'), '900');
+    assert.equal(requested.options.headers.Range, 'bytes=0-6');
+  } finally { globalThis.fetch = originalFetch; }
+});
+
 test('createR2.head signs HEAD requests with method=HEAD (not GET) and falls back to 1-byte Range GET if HEAD is rejected', async () => {
   const now = new Date('2026-10-03T12:00:00Z');
   const r2 = createR2({

@@ -28,7 +28,11 @@ const watch = (await import('../../app/js/views/watch.js')).default;
 const VIDEO = { id: 'v1', kind: 'episode', episode: 1, title: 'Test episode', showId: 's1', duration: 100, views: 1, publishedAt: '2026-09-01T00:00:00Z', source: { type: 'youtube', id: 'abc' } };
 const PREMIUM_VIDEO = { ...VIDEO, id: 'vp', episode: 2, title: 'Premium episode', access: 'premium', poster: 'media/premium-vp.webp', source: { type: 'r2', key: 'premium/x.mp4' } };
 const PREMIUM_YT = { ...VIDEO, id: 'vpy', episode: 3, title: 'Premium on YouTube', access: 'premium', source: { type: 'youtube', id: 'zzz' } };
-app.catalog = app.fullCatalog = new Catalog({ schema: 1, updatedAt: '', shows: [{ id: 's1', title: 'Show', titleEn: 'Show', genres: [], cast: [], type: 'series', poster: 'media/shows/s1.webp' }], videos: [VIDEO, PREMIUM_VIDEO, PREMIUM_YT], upcoming: [], gallery: [] });
+const RELATED_EPISODE = { ...VIDEO, id: 'r1', episode: 1, title: 'Related show premiere', showId: 's2', source: { type: 'youtube', id: 'def' } };
+app.catalog = app.fullCatalog = new Catalog({ schema: 1, updatedAt: '', shows: [
+  { id: 's1', title: 'Show', titleEn: 'Show', genres: ['comedy'], cast: [], type: 'series', poster: 'media/shows/s1.webp' },
+  { id: 's2', title: 'Related Show', titleEn: 'Related Show', genres: ['comedy'], cast: [], type: 'series' },
+], videos: [VIDEO, PREMIUM_VIDEO, PREMIUM_YT, RELATED_EPISODE], upcoming: [], gallery: [] });
 app.user = {
   remote: null, account: null, profiles: [], profile: { id: 'p1', name: 'T' }, activeId: 'p1', supportsAuth: false, isKids: false,
   gateFor: () => 'ok', progressOf: () => null, isFinished: () => false, pref: () => true, setPref: () => {},
@@ -53,7 +57,39 @@ before(() => assert.ok(watch, 'watch view imported'));
 
 test('page asks the player to start automatically on all devices', async () => {
   const { opts } = await mount();
-  assert.equal(opts.autoplay, true, 'watch page must pass autoplay: true (mobile autostart is then muted-only, per browser policy)');
+  assert.equal(opts.autoplay, true, 'watch page requests autoplay and lets the player attempt the preferred sound mode first');
+});
+
+test('Autoplay next counts down to the next episode when one exists', async () => {
+  const { opts } = await mount('v1');
+  opts.onEnded();
+  const card = document.querySelector('#nextUp');
+  assert.ok(card && !card.hidden, 'the next-up countdown appears when the video ends');
+  assert.match(card.textContent, /Up next in/);
+  assert.match(card.textContent, /EP 02.*Premium episode/, 'the next episode is selected ahead of recommendations');
+  card.querySelector('#nuCancel').dispatchEvent(new window.Event('click', { bubbles: true }));
+  assert.equal(card.hidden, true, 'Cancel stops the countdown');
+});
+
+test('when the series has no next episode, Autoplay next recommends a related show episode', async () => {
+  const { opts } = await mount('vpy');
+  opts.onEnded();
+  const card = document.querySelector('#nextUp');
+  assert.ok(card && !card.hidden, 'a related recommendation appears at the end of the playlist');
+  assert.match(card.textContent, /Recommended next in/);
+  assert.match(card.textContent, /EP 01.*Related show premiere/, 'recommendations start with a related show episode');
+  card.querySelector('#nuCancel').dispatchEvent(new window.Event('click', { bubbles: true }));
+  assert.equal(card.hidden, true);
+});
+
+test('Autoplay next disabled does not start an episode or recommendation countdown', async () => {
+  const pref = app.user.pref;
+  app.user.pref = () => false;
+  try {
+    const { opts } = await mount('vpy');
+    opts.onEnded();
+    assert.equal(document.querySelector('#nextUp').hidden, true);
+  } finally { app.user.pref = pref; }
 });
 
 test('opening a watch page does not scroll the viewport down to the current episode row', async () => {

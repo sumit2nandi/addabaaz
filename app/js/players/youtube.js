@@ -53,10 +53,9 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
   let YT;
   try { YT = await loadYouTubeForPlayback(autoplay); }
   catch (e) {
-    // Without the API there is no onAutoplayBlocked signal to recover an unmuted iOS attempt, so
-    // preserve automatic motion in the simple iframe by making that fallback muted.
-    const fallbackMuted = autoplay ? true : muted;
-    return plainIframe(container, videoId, start, autoplay, fallbackMuted, controls);
+    // The plain iframe must honor the requested sound mode too. If browser policy blocks unmuted
+    // autoplay, the browser requires a user gesture; do not silently change the viewer's preference.
+    return plainIframe(container, videoId, start, autoplay, muted, controls);
   }
 
   let player, timer, mutedFallbackTimer, mutedFallbackStartedAt = 0, destroyed = false, ready = false, mutedFallbackAttempted = false;
@@ -78,7 +77,7 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
       events: {
         onReady: (event) => {
           ready = true;
-          // Start explicitly in the requested mode; iOS gets a sound-first attempt when requested.
+          // Start explicitly in the requested mode; a muted retry is only for a refused sound-first attempt.
           if (autoplay) {
             try { if (muted) event.target.mute(); event.target.playVideo(); }
             catch { /* the browser may still require a tap */ }
@@ -133,8 +132,7 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
   };
 }
 
-// Last-resort embed with no API (no progress tracking). Keep the requested inline/autoplay parameters;
-// createYouTubePlayer passes muted=true for autoplay when sound-block detection is unavailable.
+// Last-resort embed with no API (no progress tracking). Keep the requested mute mode and inline/autoplay parameters.
 function plainIframe(container, videoId, start, autoplay, muted, controls) {
   const o = httpOrigin();
   container.innerHTML = `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=${autoplay ? 1 : 0}&mute=${muted ? 1 : 0}&enablejsapi=1&controls=${controls ? 1 : 0}&fs=${controls ? 1 : 0}&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&cc_load_policy=0&hl=en&start=${Math.floor(start)}${o ? '&origin=' + encodeURIComponent(o) : ''}" title="Video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
