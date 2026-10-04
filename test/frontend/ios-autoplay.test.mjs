@@ -253,7 +253,7 @@ test('YouTube watchdog retries muted when iOS omits the blocked-autoplay event',
   } finally { restore(); }
 });
 
-test('YouTube embeds keep native controls and offer app-owned fullscreen and settings for speed and loop', async () => {
+test('YouTube embeds keep native controls and offer app-owned settings for speed and loop', async () => {
   const restore = saveGlobals(['document', 'location', 'window']);
   const { document, window } = parseHTML('<!doctype html><html><head></head><body><div id="slot"></div></body></html>');
   const calls = [];
@@ -280,12 +280,6 @@ test('YouTube embeds keep native controls and offer app-owned fullscreen and set
     isMuted() { return false; }
     destroy() {}
   }
-  let fullscreenElement = null;
-  Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fullscreenElement });
-  document.exitFullscreen = async () => {
-    fullscreenElement = null;
-    document.dispatchEvent(new window.Event('fullscreenchange'));
-  };
   globalThis.document = document;
   globalThis.location = { protocol: 'https:', origin: 'https://addabaaz.example' };
   globalThis.window = { YT: { Player: FakePlayer, PlayerState } };
@@ -297,22 +291,8 @@ test('YouTube embeds keep native controls and offer app-owned fullscreen and set
       onEnded: () => ended++,
     });
     assert.equal(config.playerVars.controls, 1, 'YouTube built-in controls stay enabled for native quality and captions');
-    assert.equal(config.playerVars.fs, 1, 'YouTube native fullscreen remains enabled too');
-    const shell = container.querySelector('.ytp-youtube-shell');
-    const fullscreen = container.querySelector('.ytp-youtube-fullscreen-btn');
-    assert.ok(fullscreen, 'a visible app-owned fullscreen button sits beside Settings');
-    shell.requestFullscreen = async () => {
-      fullscreenElement = shell;
-      document.dispatchEvent(new window.Event('fullscreenchange'));
-    };
-    fullscreen.click();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(fullscreenElement, shell, 'the visible fullscreen button expands the YouTube player shell');
-    assert.equal(fullscreen.getAttribute('aria-label'), 'Exit full screen');
-    fullscreen.click();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(fullscreenElement, null, 'the app-owned control can exit its fullscreen mode');
-    assert.equal(fullscreen.getAttribute('aria-label'), 'Full screen');
+    assert.equal(config.playerVars.fs, 1, 'the native YouTube fullscreen option stays enabled');
+    assert.equal(container.querySelector('.ytp-youtube-fullscreen-btn'), null, 'there is no extra app-owned maximize button');
     const launcher = container.querySelector('.ytp-youtube-settings-btn');
     assert.ok(launcher, 'the app-owned settings launcher is visible outside the YouTube iframe');
     launcher.click();

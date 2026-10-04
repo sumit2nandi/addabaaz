@@ -46,8 +46,6 @@ async function loadYouTubeForPlayback(autoplay) {
 const httpOrigin = () => (/^https?:$/.test(location.protocol) ? location.origin : undefined);
 
 const YT_SETTINGS_ICONS = {
-  fullscreen: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>',
-  fullscreenExit: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"/></svg>',
   gear: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>',
   speed: '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M10 8v8l6-4-6-4zm1.5-6C6.25 2 2 6.25 2 11.5S6.25 21 11.5 21 21 16.75 21 11.5 16.75 2 11.5 2zm0 17C7.36 19 4 15.64 4 11.5S7.36 4 11.5 4 19 7.36 19 11.5 15.64 19 11.5 19z"/></svg>',
   loop: '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>',
@@ -196,51 +194,6 @@ function createYouTubeSettingsSheet(shell, { getPlayer, getLoop, setLoop }) {
   };
 }
 
-// YouTube's native controls auto-hide during playback, so keep an app-owned fullscreen action visible beside Settings.
-function createYouTubeFullscreenButton(shell) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'ytp-youtube-fullscreen-btn';
-  button.setAttribute('aria-label', 'Full screen');
-  button.title = 'Full screen';
-  button.innerHTML = YT_SETTINGS_ICONS.fullscreen;
-  shell.appendChild(button);
-
-  const isFullscreen = () => document.fullscreenElement === shell || document.webkitFullscreenElement === shell;
-  const sync = () => {
-    const active = isFullscreen();
-    const label = active ? 'Exit full screen' : 'Full screen';
-    button.setAttribute('aria-label', label);
-    button.title = label;
-    button.innerHTML = active ? YT_SETTINGS_ICONS.fullscreenExit : YT_SETTINGS_ICONS.fullscreen;
-  };
-  const onFullscreenChange = () => sync();
-  const toggle = async (event) => {
-    event.stopPropagation();
-    try {
-      if (isFullscreen()) {
-        const exit = document.exitFullscreen || document.webkitExitFullscreen;
-        if (exit) await exit.call(document);
-      } else {
-        const request = shell.requestFullscreen || shell.webkitRequestFullscreen;
-        if (request) await request.call(shell);
-      }
-    } catch { /* YouTube's built-in full-screen control remains available as a fallback. */ }
-    sync();
-  };
-  button.addEventListener('click', toggle);
-  document.addEventListener('fullscreenchange', onFullscreenChange);
-  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
-  return {
-    destroy() {
-      button.removeEventListener('click', toggle);
-      button.remove();
-      document.removeEventListener('fullscreenchange', onFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
-    },
-  };
-}
-
 // Creates the player and a timer that reports playback position (used for Continue Watching and analytics).
 export async function createYouTubePlayer(container, videoId, { start = 0, autoplay = true, muted = false, controls = true, onProgress, onEnded, onState } = {}) {
   container.innerHTML = '';
@@ -261,7 +214,6 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
   }
 
   let player, timer, mutedFallbackTimer, mutedFallbackStartedAt = 0, destroyed = false, ready = false, mutedFallbackAttempted = false, loopEnabled = false;
-  const fullscreenUI = controls && shell ? createYouTubeFullscreenButton(shell) : null;
   const settingsUI = controls && shell ? createYouTubeSettingsSheet(shell, {
     getPlayer: () => player,
     getLoop: () => loopEnabled,
@@ -344,7 +296,7 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
     mute: () => player.mute?.(), unmute: () => { player.unMute?.(); player.setVolume?.(100); }, isMuted: () => !!player.isMuted?.(),
     play: () => player.playVideo?.(),
     pause: () => { clearTimeout(mutedFallbackTimer); mutedFallbackTimer = null; player.pauseVideo?.(); },
-    destroy() { destroyed = true; settingsUI?.destroy(); fullscreenUI?.destroy(); clearTimeout(mutedFallbackTimer); clearInterval(timer); try { player.destroy(); } catch {} container.innerHTML = ''; },
+    destroy() { destroyed = true; settingsUI?.destroy(); clearTimeout(mutedFallbackTimer); clearInterval(timer); try { player.destroy(); } catch {} container.innerHTML = ''; },
   };
 }
 
