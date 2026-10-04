@@ -411,6 +411,11 @@ body.reels-mode { overflow: hidden; padding-bottom: 0; } body.reels-mode .footer
 .dlg-icon.is-danger { background: rgba(229, 9, 20, .2); color: var(--accent-2); }
 .dlg-centered .dlg-body { text-align: center; } .dlg-centered .dlg-body .row.end { justify-content: center; margin-top: 4px; }
 .dlg-centered .dlg-body .row.end .btn, .dialog-sm .row.end .btn { min-width: 132px; justify-content: center; }
+@media (max-width: 640px) {
+  .dialog .dlg-body .row.end { flex-wrap: nowrap; align-items: stretch; gap: 8px; width: 100%; }
+  .dialog .dlg-body .row.end > .btn { flex: 1 1 0; min-width: 0; padding: 10px 8px; font-size: 14px; line-height: 1.25; white-space: normal; }
+  .dialog .dlg-body .row.end > .btn:only-child { flex: 0 1 auto; }
+}
 .toasts { position: fixed; z-index: 500; left: 50%; bottom: calc(var(--tabbar-h) + var(--sab) + 16px); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 24px); pointer-events: none; }
 .toast { display: flex; align-items: center; gap: 14px; background: #f2f2f2; color: #111; padding: 12px 18px; border-radius: 12px; font-weight: 600; font-size: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.6); opacity: 0; transform: translateY(12px); transition: .25s var(--ease); pointer-events: auto; } .toast.show { opacity: 1; transform: none; } .toast button { background: none; border: 0; color: var(--accent); font-weight: 800; padding: 0; }
 

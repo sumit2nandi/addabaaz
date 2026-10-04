@@ -324,6 +324,9 @@ main#main { overflow-x: clip; }
   /* Dialogs fill the screen — the console's forms are too tall for a centred card. */
   dialog.modal, dialog.modal.wide { width: 100vw; max-width: none; height: 100dvh; max-height: none; margin: 0; border-radius: 0; border: 0; }
   .modal-body { padding: 14px; }
+  dialog.modal .modal-body .row.end { flex-wrap: nowrap; align-items: stretch; gap: 8px; width: 100%; }
+  dialog.modal .modal-body .row.end > .btn { flex: 1 1 0; min-width: 0; padding: 10px 8px; white-space: normal; }
+  dialog.modal .modal-body .row.end > .btn:only-child { flex: 0 1 auto; }
   .push-row { grid-template-columns: 1fr; }
   .mail-frame { height: 360px; }
   .tk-badges { justify-content: flex-start; }
