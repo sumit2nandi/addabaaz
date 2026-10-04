@@ -25,6 +25,10 @@ test('Admin Errors shows account context and copies a complete individual report
     'the page clearly states that bound values are not stored');
   assert.match(view, /SQL template \(bound values omitted; \$\{e\.sqlParamCount \?\? 'unknown'\} parameter\(s\)\):/,
     'copy includes the SQL template and safe parameter count');
+  assert.match(view, /SQL exception details/,
+    'the screen explicitly displays structured SQL driver exception details');
+  assert.match(view, /\['SQL exception:', JSON\.stringify\(e\.sqlException, null, 2\)\]/,
+    'the copied report includes the SQL exception metadata');
   assert.match(view, /navigator\.clipboard\?\.writeText/, 'copy uses the secure clipboard API when available');
   assert.match(view, /document\.execCommand\?\.\('copy'\)/, 'older browsers have a selection-based fallback');
   assert.match(ui, /copy: '<rect/, 'the button has a clipboard icon');

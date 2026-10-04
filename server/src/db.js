@@ -22,6 +22,15 @@ export async function queryRows(target, sql, params) {
         error.sqlParamCount = Array.isArray(params) ? params.length
           : params && typeof params === 'object' ? Object.keys(params).length
             : params == null ? 0 : 1;
+        // mysql2's `sql` property can contain interpolated values, so copy only safe exception metadata.
+        const message = (value) => typeof value === 'string' ? value.slice(0, 2000) : null;
+        const errno = error.errno == null ? null : Number(error.errno);
+        error.sqlException = {
+          name: message(error.name) || 'Error', message: message(error.message), sqlMessage: message(error.sqlMessage),
+          code: message(error.code), errno: Number.isSafeInteger(errno) ? errno : null,
+          sqlState: message(error.sqlState)?.slice(0, 5) || null,
+          fatal: typeof error.fatal === 'boolean' ? error.fatal : null,
+        };
       } catch { /* retain the original database exception if it is immutable */ }
     }
     throw error;

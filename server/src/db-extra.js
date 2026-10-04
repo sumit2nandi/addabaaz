@@ -639,21 +639,28 @@ export function extraDb({ q, tx, iso }) {
   };
 
   // ---- Client/server error reports shown in the admin "Errors" page ----
+  const parseSqlException = (value) => {
+    if (!value) return null;
+    try { return typeof value === 'string' ? JSON.parse(value) : value; }
+    catch { return { message: String(value).slice(0, 2000) }; }
+  };
   const errors = {
     async add(e) {
       const sqlQuery = e.sqlQuery ? String(e.sqlQuery).slice(0, 8000) : null;
       const sqlParamCount = Number.isSafeInteger(e.sqlParamCount) && e.sqlParamCount >= 0 ? e.sqlParamCount : null;
-      await q(`INSERT INTO error_log (source, message, stack, sql_query, sql_param_count, url, user_agent, user_id)
-        VALUES (?,?,?,?,?,?,?,?)`, [e.source, String(e.message || '').slice(0, 500), e.stack ? String(e.stack).slice(0, 4000) : null,
-        sqlQuery, sqlParamCount, String(e.url || '').slice(0, 300), String(e.userAgent || '').slice(0, 200), e.userId || null]);
+      let sqlException = null;
+      try { sqlException = e.sqlException ? JSON.stringify(e.sqlException).slice(0, 8000) : null; } catch { /* never let malformed diagnostics block the report */ }
+      await q(`INSERT INTO error_log (source, message, stack, sql_query, sql_param_count, sql_exception, url, user_agent, user_id)
+        VALUES (?,?,?,?,?,?,?,?,?)`, [e.source, String(e.message || '').slice(0, 500), e.stack ? String(e.stack).slice(0, 4000) : null,
+        sqlQuery, sqlParamCount, sqlException, String(e.url || '').slice(0, 300), String(e.userAgent || '').slice(0, 200), e.userId || null]);
     },
     async list({ limit = 100 } = {}) {
       const [groups, recent] = await Promise.all([
         q('SELECT source, message, COUNT(*) AS n, MAX(created_at) AS last_at, MIN(created_at) AS first_at, MAX(url) AS url FROM error_log WHERE created_at > UTC_TIMESTAMP(3) - INTERVAL 7 DAY GROUP BY source, message ORDER BY last_at DESC LIMIT ?', [limit]),
-        q(`SELECT e.id, e.source, e.message, e.stack, e.sql_query, e.sql_param_count, e.url, e.user_agent, e.user_id, u.name AS account_name, u.email AS account_email, e.created_at
+        q(`SELECT e.id, e.source, e.message, e.stack, e.sql_query, e.sql_param_count, e.sql_exception, e.url, e.user_agent, e.user_id, u.name AS account_name, u.email AS account_email, e.created_at
            FROM error_log e LEFT JOIN users u ON u.id = e.user_id ORDER BY e.id DESC LIMIT 20`),
       ]);
-      return { groups: groups.map((r) => ({ source: r.source, message: r.message, count: Number(r.n), lastAt: iso(r.last_at), firstAt: iso(r.first_at), url: r.url })), recent: recent.map((r) => ({ id: r.id, source: r.source, message: r.message, stack: r.stack, sqlQuery: r.sql_query || null, sqlParamCount: r.sql_param_count == null ? null : Number(r.sql_param_count), url: r.url, userAgent: r.user_agent, userId: r.user_id || null, accountName: r.account_name || null, accountEmail: r.account_email || null, at: iso(r.created_at) })) };
+      return { groups: groups.map((r) => ({ source: r.source, message: r.message, count: Number(r.n), lastAt: iso(r.last_at), firstAt: iso(r.first_at), url: r.url })), recent: recent.map((r) => ({ id: r.id, source: r.source, message: r.message, stack: r.stack, sqlQuery: r.sql_query || null, sqlParamCount: r.sql_param_count == null ? null : Number(r.sql_param_count), sqlException: parseSqlException(r.sql_exception), url: r.url, userAgent: r.user_agent, userId: r.user_id || null, accountName: r.account_name || null, accountEmail: r.account_email || null, at: iso(r.created_at) })) };
     },
     async clear() { await q('DELETE FROM error_log'); },
     async prune() { await q('DELETE FROM error_log WHERE created_at < UTC_TIMESTAMP(3) - INTERVAL 30 DAY'); },

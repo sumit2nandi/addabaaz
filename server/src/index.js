@@ -29,6 +29,8 @@ catch (e) {
 if (process.env.DB_MIGRATE !== 'false') {                       // set DB_MIGRATE=false to run `npm run db:migrate` as a separate deploy step
   const applied = await migrate(db, { log: (m) => console.log('[migrate]', m) });
   if (applied.length) console.log(`[migrate] applied ${applied.length} migration(s)`);
+} else {
+  console.warn('[migrate] DB_MIGRATE=false — migrations and schema-drift checks are skipped at startup; run `npm run db:migrate` as a deploy step.');
 }
 // One address = one account: rewrite stored addresses in the normalized form (migration 012 could only
 // lower-case and trim them in SQL). Rows that collide are flagged for Admin → Users → merge.
