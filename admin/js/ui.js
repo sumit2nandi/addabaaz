@@ -1,7 +1,7 @@
 /* Small UI toolkit for the admin console: templating, icons, formatting, toasts, modals and a schema-driven form builder. */
-import { html, raw, esc, $, $$, debounce } from '../../app/js/util.js';
+import { html, raw, esc, $, $$, debounce, fmtViews } from '../../app/js/util.js';
 import { api, prepareImage, putFile, ApiError } from './api.js';
-export { html, raw, esc, $, $$, debounce, ApiError };
+export { html, raw, esc, $, $$, debounce, fmtViews, ApiError };
 
 /* ---------- formatting ---------- */
 export const inr = (paise) => { const n = (Number(paise) || 0) / 100; return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 }); };

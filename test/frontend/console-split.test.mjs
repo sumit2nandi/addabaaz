@@ -49,6 +49,18 @@ test('content management and administration are two separate consoles', () => {
   assert.match(read('sw.js'), /'\/admin', '\/content'/, 'the service worker skips both');
 });
 
+test('the Content Studio page can resolve its shared view-count formatter', async () => {
+  // Importing the route reproduces browser ESM linking: a missing named export in ui.js must fail here,
+  // before the Shows & seasons page can load.
+  const [content, ui] = await Promise.all([
+    import('../../admin/js/views/content.js'),
+    import('../../admin/js/ui.js'),
+  ]);
+  assert.equal(typeof content.default, 'function');
+  assert.equal(ui.fmtViews(1250), '1.3K');
+  assert.equal(ui.fmtViews(1_200_000), '1.2M');
+});
+
 test('both consoles are usable on a phone', () => {
   // Sidebar becomes a drawer, top bar appears — the behaviour both consoles inherit.
   assert.match(adminCss, /@media \(max-width: 860px\) \{\n  \.layout \{ display: block; \}/, 'the sidebar turns into a drawer');
