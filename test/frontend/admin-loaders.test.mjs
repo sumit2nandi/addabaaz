@@ -17,7 +17,7 @@ const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
 test('the console shows a named loader until the page has painted', () => {
   const console_ = read('admin/js/console.js');
-  assert.match(console_, /import \{ html, \$, \$\$, icon, errMsg, guard, loadingPage \} from '\.\/ui\.js';/);
+  assert.match(console_, /import \{ html, \$, \$\$, icon, errMsg, guard, loadingPage, applyResponsiveTableLabels \} from '\.\/ui\.js';/);
   assert.match(console_, /const pageLabel = \(id\) => \{ for \(const \[, items\] of nav\)/, 'the loader can name the page');
   assert.match(console_, /main\.innerHTML = loadingPage\(pageLabel\(path\.split\('\/'\)\[0\]\)\)\.s;/, 'it is set before the page module is even fetched');
   // The old code emptied the column before running the page — that is what caused the blank screen.

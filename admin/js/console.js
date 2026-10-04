@@ -10,17 +10,18 @@
  * the page frame (sidebar + content), the hash router, the sidebar badges and session-loss handling.
  */
 import { api, getToken, setToken } from './api.js';
-import { html, $, $$, icon, errMsg, guard, loadingPage } from './ui.js';
+import { html, $, $$, icon, errMsg, guard, loadingPage, applyResponsiveTableLabels } from './ui.js';
 import { mountSocialButtons } from '/app/js/social.js';
 
 /** Boots a console. `nav` and `routes` come from the entry point; the rest is presentation. */
 export function startConsole({ nav, routes, name = 'Admin', title = 'ADDABAAZ Admin', switchTo = null, badges = true }) {
   // `admin` = the signed-in administrator; `navToken` lets a slow page load detect that the user already navigated away.
   const app = $('#app');
-  let admin = null, navToken = 0;
+  let admin = null, navToken = 0, tableLabelsObserver = null;
 
   /* ---------- sign-in ---------- */
   function showLogin(message = '', { emailValue = '' } = {}) {
+    tableLabelsObserver?.disconnect(); tableLabelsObserver = null;
     admin = null;
     app.innerHTML = html`<main class="login"><form class="card login-card" novalidate>
       <img src="/media/icons/logo-96.webp" width="56" height="56" alt="" class="login-logo">
@@ -80,6 +81,14 @@ export function startConsole({ nav, routes, name = 'Admin', title = 'ADDABAAZ Ad
         <main id="main" tabindex="-1"></main>
       </div>
     </div>`.s;
+    tableLabelsObserver?.disconnect();
+    const pageRoot = $('#main');
+    const labelTables = () => applyResponsiveTableLabels(pageRoot);
+    labelTables();
+    if (typeof MutationObserver !== 'undefined') {
+      tableLabelsObserver = new MutationObserver(labelTables);
+      tableLabelsObserver.observe(pageRoot, { childList: true, subtree: true });
+    }
     $('#logout').onclick = () => { setToken(null); showLogin('You’re signed out.'); };
     const layout = $('.layout'), side = $('#side'), menu = $('#menu');
     const toggle = (open) => {

@@ -89,15 +89,15 @@ test('both consoles are usable on a phone', () => {
   // Phone-specific rules.
   assert.match(adminCss, /@media \(max-width: 640px\) \{[\s\S]*?input, select, textarea \{ font-size: 16px; \}/, 'fields are 16px so iOS does not zoom the page');
   assert.match(adminCss, /dialog\.modal, dialog\.modal\.wide \{ width: 100vw; max-width: none; height: 100dvh;/, 'dialogs fill a phone screen');
-  assert.match(adminCss, /\.tabs \{ flex-wrap: nowrap; overflow-x: auto;/, 'tab strips scroll sideways instead of wrapping');
+  assert.match(adminCss, /\.tabs \{ display: flex; flex-wrap: wrap;/, 'tab strips wrap instead of scrolling sideways');
   assert.match(adminCss, /\.stats, \.tiles \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/, 'stat tiles stay two-up, then one-up');
   assert.match(adminCss, /@media \(max-width: 420px\) \{ \.stats, \.tiles \{ grid-template-columns: 1fr; \} \}/, 'and go single column on small phones');
   assert.match(adminCss, /\.row\.end \.btn, \.row\.wrap \.btn \{ flex: 1 1 auto; justify-content: center; \}/, 'action buttons become full-width and thumb-sized');
-  assert.match(adminCss, /\.card\.flush \{ -webkit-overflow-scrolling: touch; \}/, 'wide tables scroll inside their card');
+  assert.match(adminCss, /\.card\.flush \{ min-width: 0; padding: 0; overflow-x: clip; \}/, 'wide tables are contained without a horizontal scroll area');
   assert.match(adminCss, /main#main \{ overflow-x: clip; \}/, 'the page itself never scrolls sideways');
   // The views that matter on the road: the ticket queue and its thread.
   assert.match(adminCss, /\.tk \{ cursor: pointer; \}/, 'ticket cards are tappable');
-  assert.match(adminCss, /\.tk-thread \{[\s\S]*?overflow: auto;/, 'the conversation scrolls inside the dialog');
+  assert.match(adminCss, /\.tk-thread \{[\s\S]*?overflow-x: clip; overflow-y: auto;/, 'the conversation scrolls vertically only');
 });
 
 test('a broadcast can be previewed, and images go out with it', () => {

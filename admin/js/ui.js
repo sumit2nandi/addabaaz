@@ -3,6 +3,29 @@ import { html, raw, esc, $, $$, debounce, fmtViews } from '../../app/js/util.js'
 import { api, prepareImage, putFile, ApiError } from './api.js';
 export { html, raw, esc, $, $$, debounce, fmtViews, ApiError };
 
+/** Adds the column heading to each table cell so narrow-console table cards remain self-explanatory. */
+export function applyResponsiveTableLabels(root) {
+  if (!root?.querySelectorAll) return;
+  for (const table of root.querySelectorAll('table.tbl')) {
+    const header = table.querySelector('thead tr');
+    if (!header) continue;
+    const labels = [...header.querySelectorAll('th')].map((cell) => {
+      const labelled = cell.getAttribute('aria-label') || cell.querySelector('[aria-label]')?.getAttribute('aria-label');
+      return String(labelled || cell.textContent || '').replace(/\s+/g, ' ').trim();
+    });
+    for (const row of table.querySelectorAll('tbody tr')) {
+      let column = 0;
+      for (const cell of row.querySelectorAll('td')) {
+        const span = Math.max(1, Number(cell.getAttribute('colspan')) || cell.colSpan || 1);
+        const label = labels.slice(column, column + span).filter(Boolean).join(' / ');
+        if (label) cell.setAttribute('data-label', label);
+        else cell.removeAttribute('data-label');
+        column += span;
+      }
+    }
+  }
+}
+
 /* ---------- formatting ---------- */
 export const inr = (paise) => { const n = (Number(paise) || 0) / 100; return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 }); };
 // Dates are always displayed in Indian Standard Time.
