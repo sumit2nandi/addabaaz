@@ -87,8 +87,8 @@ test('show details keep all four hero controls in one row on phones', () => {
   const css = read('app/css/styles.css');
   assert.match(css, /\.detail-hero \.hero-actions \{ gap: 8px; flex-wrap: nowrap; \}/,
     'the detail-page actions never wrap on phones');
-  assert.match(css, /\.detail-hero \.hero-actions > \.btn-primary \{ flex: 1 1 0; \}/,
-    'the main action takes the remaining width');
+  assert.match(css, /\.detail-hero \.hero-actions > \.btn-primary \{ flex: 0 1 auto; \}/,
+    'the main action stays content-sized instead of stretching into empty space');
   assert.match(css, /\.detail-hero \.hero-actions > \.btn-lg\.icon-only \{ flex: 0 0 48px; width: 48px; padding: 0; \}/,
     'the other three controls use equal compact columns');
   assert.match(css, /\.detail-hero \.hero-actions > \.btn-lg\.icon-only \{ flex-basis: 44px; width: 44px; \}/,

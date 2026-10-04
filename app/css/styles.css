@@ -531,7 +531,7 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
   .detail-hero .hero-copy { width: 100%; min-width: 0; }
   .detail-hero .hero-actions { gap: 8px; flex-wrap: nowrap; }
   .detail-hero .hero-actions > .btn-lg { flex: 0 1 auto; min-width: 0; padding: 10px 12px; font-size: 14px; }
-  .detail-hero .hero-actions > .btn-primary { flex: 1 1 0; }
+  .detail-hero .hero-actions > .btn-primary { flex: 0 1 auto; }
   .detail-hero .hero-actions > .btn-lg.icon-only { flex: 0 0 48px; width: 48px; padding: 0; }
 }
 /* Keep the Coming Soon reminder, list and artwork actions together on one row on phones. */
