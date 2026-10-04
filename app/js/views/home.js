@@ -5,8 +5,40 @@ import { icon } from '../icons.js';
 import { CONFIG } from '../config.js';
 import { rail, enhanceRails, showCard, videoCard, reelCard, soonCard, listBtn, img, heroBg, showMeta, premiumMark } from '../ui/components.js';
 
+// Place the inactive slides just off one side of the active slide. Recomputing the positions on
+// every change gives the browser a direction-aware transform to animate for autoplay, dots and swipes.
+function slideSide(index, activeIndex, count, tieDirection = 1) {
+  if (index === activeIndex) return 'active';
+  const forward = (index - activeIndex + count) % count;
+  const backward = count - forward;
+  if (forward === backward) return tieDirection >= 0 ? 'after' : 'before';
+  return forward < backward ? 'after' : 'before';
+}
+
+const initialSlideClass = (index, count) => slideSide(index, 0, count, 1);
+
+function positionSlides(slides, activeIndex, direction = 1, previousIndex = -1, focusable = false) {
+  slides.forEach((slide, index) => {
+    const state = index === activeIndex ? 'active'
+      : index === previousIndex ? (direction > 0 ? 'before' : 'after')
+        : slideSide(index, activeIndex, slides.length, direction);
+    slide.classList.toggle('active', state === 'active');
+    slide.classList.toggle('before', state === 'before');
+    slide.classList.toggle('after', state === 'after');
+    slide.setAttribute('aria-hidden', String(state !== 'active'));
+    if (focusable) slide.tabIndex = state === 'active' ? 0 : -1;
+  });
+}
+
+function primeIncomingSlide(slide, direction) {
+  slide.classList.remove('active', 'before', 'after');
+  slide.classList.add(direction > 0 ? 'after' : 'before');
+  // Establish the incoming edge before applying .active, including when wrapping a two-slide carousel.
+  void slide.offsetWidth;
+}
+
 // Picks the featured shows for the carousel. Every banner is a still image - the latest episode's
-// backdrop, with the show's poster as fallback - and the slideshow only crossfades between them:
+// backdrop, with the show's poster as fallback - and the slideshow moves smoothly between them:
 // the banners play no trailer or episode video.
 function heroSlides() {
   const cat = app.catalog;
@@ -21,7 +53,7 @@ function heroHtml(slides) {
   return html`<section class="hero" aria-roledescription="carousel" aria-label="Featured shows">
     ${slides.map(({ show, latest }, i) => {
       const t = u.resumeTarget(cat, show.id);
-      return html`<article class="hero-slide ${i === 0 ? 'active' : ''}" data-i="${i}" data-show-id="${show.id}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
+      return html`<article class="hero-slide ${initialSlideClass(i, slides.length)}" data-i="${i}" data-show-id="${show.id}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
         <a class="hero-banner-link" href="#/show/${show.id}" aria-label="View ${show.titleEn || show.title} details">
           <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault') })}</div>
         </a>
@@ -46,21 +78,29 @@ function heroHtml(slides) {
   </section>`;
 }
 
-// Carousel behaviour: crossfades between the banner images every 5 seconds; dots, swipe, and a
-// pause on hover/focus (pointer devices) or while the tab is hidden. No media is mounted on the
-// banners - they are images only.
+// Slow, direction-aware banner slides with dots and swipe; pause on hover/focus (pointer devices)
+// avoids freezing on touch. Banners remain images only.
 function mountHero(root, ctx) {
   const hero = $('.hero', root); if (!hero) return;
   const slides = $$('.hero-slide', hero), dots = $$('[data-dot]', hero);
   let i = 0, timer, paused = false;
-  const SLIDE_MS = 5000;   // a banner slide never lasts longer than 5 seconds
-  const show = (n) => {
-    i = (n + slides.length) % slides.length;
-    slides.forEach((s, k) => s.classList.toggle('active', k === i));
-    dots.forEach((d, k) => { d.classList.toggle('active', k === i); d.setAttribute('aria-selected', k === i); });
+  const SLIDE_MS = 8000;
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  positionSlides(slides, i);
+  const show = (n, directionHint = 0) => {
+    const next = (n + slides.length) % slides.length;
+    if (next === i) return;
+    const forward = (next - i + slides.length) % slides.length;
+    const direction = directionHint || (forward * 2 < slides.length ? 1
+      : forward * 2 > slides.length ? -1 : (next > i ? 1 : -1));
+    const previous = i;
+    primeIncomingSlide(slides[next], direction);
+    i = next;
+    positionSlides(slides, i, direction, previous);
+    dots.forEach((d, k) => { d.classList.toggle('active', k === i); d.setAttribute('aria-selected', String(k === i)); });
     $$('img[loading=lazy]', slides[i]).forEach((im) => (im.loading = 'eager'));
   };
-  const schedule = () => { clearInterval(timer); if (slides.length > 1) timer = setInterval(() => { if (!paused && !document.hidden) show(i + 1); }, SLIDE_MS); };
+  const schedule = () => { clearInterval(timer); if (slides.length > 1 && !reducedMotion) timer = setInterval(() => { if (!paused && !document.hidden) show(i + 1, 1); }, SLIDE_MS); };
   dots.forEach((d) => d.addEventListener('click', () => { show(+d.dataset.dot); schedule(); }));
   // Hover/focus pause is for pointer devices only: on touch, a tap fires mouseenter/focusin with no
   // matching leave, which would freeze the slideshow forever.
@@ -78,7 +118,8 @@ function mountHero(root, ctx) {
   hero.addEventListener('pointerup', (e) => {
     if (x0 != null && Math.abs(e.clientX - x0) > 60) {
       suppressClick = true; clearTimeout(clickTimer); clickTimer = setTimeout(() => { suppressClick = false; }, 500);
-      show(i + (e.clientX < x0 ? 1 : -1)); schedule();
+      const direction = e.clientX < x0 ? 1 : -1;
+      show(i + direction, direction); schedule();
     }
     x0 = null;
   });
@@ -86,7 +127,8 @@ function mountHero(root, ctx) {
   schedule(); ctx.onCleanup(() => { clearInterval(timer); clearTimeout(clickTimer); });
 }
 
-// Homepage poster slideshow: pauses while hovered/focused and does not auto-advance for reduced-motion users.
+// Homepage release slideshow: slow horizontal slides, pausing while hovered/focused and respecting
+// reduced-motion preferences. Arrows, dots, mouse/touch swipes all use the same animated transition.
 function mountReleaseSlideshow(root, ctx) {
   const carousel = $('[data-release-carousel]', root); if (!carousel) return;
   const region = carousel.parentElement;
@@ -95,14 +137,16 @@ function mountReleaseSlideshow(root, ctx) {
   let i = 0, timer, paused = false, hovering = false, focused = false;
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const updatePause = () => { paused = hovering || focused; };
-  const show = (n) => {
-    i = (n + slides.length) % slides.length;
-    slides.forEach((slide, k) => {
-      const active = k === i;
-      slide.classList.toggle('active', active);
-      slide.setAttribute('aria-hidden', String(!active));
-      slide.tabIndex = active ? 0 : -1;
-    });
+  const show = (n, directionHint = 0) => {
+    const next = (n + slides.length) % slides.length;
+    if (next === i) return;
+    const forward = (next - i + slides.length) % slides.length;
+    const direction = directionHint || (forward * 2 < slides.length ? 1
+      : forward * 2 > slides.length ? -1 : (next > i ? 1 : -1));
+    const previous = i;
+    primeIncomingSlide(slides[next], direction);
+    i = next;
+    positionSlides(slides, i, direction, previous, true);
     dots.forEach((dot, k) => {
       dot.classList.toggle('active', k === i);
       dot.setAttribute('aria-selected', String(k === i));
@@ -111,18 +155,40 @@ function mountReleaseSlideshow(root, ctx) {
   };
   const schedule = () => {
     clearInterval(timer);
-    if (!reducedMotion) timer = setInterval(() => { if (!paused && !document.hidden) show(i + 1); }, 7000);
+    if (!reducedMotion) timer = setInterval(() => { if (!paused && !document.hidden) show(i + 1, 1); }, 9000);
   };
-  $('[data-release-prev]', carousel).addEventListener('click', () => { show(i - 1); schedule(); });
-  $('[data-release-next]', carousel).addEventListener('click', () => { show(i + 1); schedule(); });
+  $('[data-release-prev]', carousel).addEventListener('click', () => { show(i - 1, -1); schedule(); });
+  $('[data-release-next]', carousel).addEventListener('click', () => { show(i + 1, 1); schedule(); });
   dots.forEach((dot) => dot.addEventListener('click', () => { show(+dot.dataset.releaseDot); schedule(); }));
+  let pointerStart = null, suppressClick = false, clickTimer;
+  carousel.addEventListener('click', (event) => {
+    if (!suppressClick) return;
+    suppressClick = false; clearTimeout(clickTimer);
+    event.preventDefault(); event.stopPropagation();
+  }, true);
+  carousel.addEventListener('pointerdown', (event) => {
+    if (event.isPrimary === false) return;
+    pointerStart = { x: event.clientX, y: event.clientY };
+  });
+  carousel.addEventListener('pointerup', (event) => {
+    if (!pointerStart) return;
+    const start = pointerStart; pointerStart = null;
+    const dx = event.clientX - start.x, dy = event.clientY - start.y;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
+      suppressClick = true; clearTimeout(clickTimer);
+      clickTimer = setTimeout(() => { suppressClick = false; }, 500);
+      const direction = dx < 0 ? 1 : -1;
+      show(i + direction, direction); schedule();
+    }
+  });
+  carousel.addEventListener('pointercancel', () => { pointerStart = null; suppressClick = false; clearTimeout(clickTimer); });
   region.addEventListener('mouseenter', () => { hovering = true; updatePause(); });
   region.addEventListener('mouseleave', () => { hovering = false; updatePause(); });
   region.addEventListener('focusin', () => { focused = true; updatePause(); });
   region.addEventListener('focusout', (event) => { if (!region.contains(event.relatedTarget)) { focused = false; updatePause(); } });
-  show(0);
+  positionSlides(slides, 0, 1, -1, true);
   schedule();
-  ctx.onCleanup(() => clearInterval(timer));
+  ctx.onCleanup(() => { clearInterval(timer); clearTimeout(clickTimer); });
 }
 
 // One Recently Added section with reels first, followed by full-length episodes and videos.
@@ -149,7 +215,7 @@ function releaseSlideshow(items) {
     <div class="home-release-carousel" data-release-carousel role="region" aria-roledescription="carousel" aria-label="Releasing This Month">
       ${items.map((item, i) => {
         const title = item.titleEn || item.title, art = releaseArt(item);
-        return html`<a class="home-release-slide ${i === 0 ? 'active' : ''}" data-release-slide="${i}" href="#/soon/${item.id}" aria-label="${title} — Releasing This Month" aria-hidden="${i !== 0}">
+        return html`<a class="home-release-slide ${initialSlideClass(i, items.length)}" data-release-slide="${i}" href="#/soon/${item.id}" aria-label="${title} — Releasing This Month" aria-hidden="${i !== 0}">
           ${img(art, '', { cls: 'home-release-bg', lazy: i > 0 })}
           ${img(art, `${title} — Releasing This Month`, { cls: 'home-release-art', lazy: i > 0 })}
         </a>`;

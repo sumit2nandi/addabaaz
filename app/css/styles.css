@@ -153,8 +153,9 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 /* pan-y: vertical scrolling stays native while horizontal finger drags reach the carousel's
    pointer handlers - without this, touch WebViews (the Android app) cancel the swipe. */
 .hero { touch-action: pan-y; }
-.hero-slide { grid-area: 1 / 1; position: relative; display: flex; align-items: flex-end; isolation: isolate; opacity: 0; visibility: hidden; transition: opacity .8s var(--ease), visibility .8s; }
-.hero-slide.active { opacity: 1; visibility: visible; }
+.hero-slide { grid-area: 1 / 1; position: relative; display: flex; align-items: flex-end; isolation: isolate; opacity: 1; visibility: hidden; transform: translateX(100%); transition: transform 1.2s cubic-bezier(.22,.68,0,1), visibility 1.2s linear; }
+.hero-slide.before { transform: translateX(-100%); } .hero-slide.after { transform: translateX(100%); }
+.hero-slide.active { visibility: visible; transform: translateX(0); z-index: 2; }
 .hero-banner-link { position: absolute; inset: 0; z-index: 0; display: block; cursor: pointer; }
 .hero-banner-link .hero-bg { z-index: 0; }
 .hero-slide > .hero-shade { z-index: 1; pointer-events: none; }
@@ -273,9 +274,10 @@ img.img-failed { opacity: 0; }
 .rail-head h2 { font-size: clamp(18px, 2.4vw, 23px); font-weight: 700; } .rail-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
 .home-release-showcase { display: block; margin: 0 var(--pad) 20px; }
 /* Full landscape (16:9) banner: the width of the page content (capped on very wide screens so it never fills a whole monitor). */
-.home-release-carousel { position: relative; width: 100%; max-width: 1240px; margin: 0 auto; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--border-2); border-radius: 18px; background: var(--panel); box-shadow: 0 18px 48px rgba(0,0,0,.4); }
-.home-release-slide { position: absolute; inset: 0; display: block; opacity: 0; visibility: hidden; transform: scale(1.025); transition: opacity .45s ease, transform .6s var(--ease), visibility .45s; }
-.home-release-slide.active { opacity: 1; visibility: visible; transform: scale(1); }
+.home-release-carousel { position: relative; width: 100%; max-width: 1240px; margin: 0 auto; aspect-ratio: 16 / 9; overflow: hidden; touch-action: pan-y; border: 1px solid var(--border-2); border-radius: 18px; background: var(--panel); box-shadow: 0 18px 48px rgba(0,0,0,.4); }
+.home-release-slide { position: absolute; inset: 0; display: block; opacity: 1; visibility: hidden; transform: translateX(100%); transition: transform 1.2s cubic-bezier(.22,.68,0,1), visibility 1.2s linear; }
+.home-release-slide.before { transform: translateX(-100%); } .home-release-slide.after { transform: translateX(100%); }
+.home-release-slide.active { visibility: visible; transform: translateX(0); z-index: 1; }
 /* The whole artwork is always visible. `contain` shows 16:9 art edge to edge; any other shape (e.g. a portrait poster) sits centred over a
    blurred copy of itself, so nothing is ever cropped. Nothing is drawn over the art: release posters carry their own title and logo. */
 .home-release-slide > img { position: absolute; inset: 0; width: 100%; height: 100%; }

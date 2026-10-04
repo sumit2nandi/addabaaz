@@ -1,6 +1,6 @@
 // The home hero is an IMAGE slideshow: every featured show contributes one still banner (its
-// latest episode's backdrop, the show's poster as fallback), the carousel crossfades between them
-// every 5 seconds, and no trailer/episode media is ever mounted on a banner. Dots, swipe (touch
+// latest episode's backdrop, the show's poster as fallback), the carousel moves between them
+// every 8 seconds, and no trailer/episode media is ever mounted on a banner. Dots, swipe (touch
 // WebViews in the Android app) and the pointer-only hover pause keep working.
 // Run: node --test test/frontend/hero-slideshow.test.mjs
 import { test } from 'node:test';
@@ -51,7 +51,7 @@ async function withHome(check) {
   }
 }
 
-test('every banner is a still image and the slideshow ticks every 5 seconds', async () => {
+test('every banner is a still image and the slideshow ticks every 8 seconds', async () => {
   await withHome(async (root, window, { intervals }) => {
     await sleep(1100);
     const active = root.querySelector('.hero-slide.active');
@@ -63,7 +63,7 @@ test('every banner is a still image and the slideshow ticks every 5 seconds', as
     const heroSrc = fs.readFileSync(new URL('../../app/js/views/home.js', import.meta.url), 'utf8');
     assert.doesNotMatch(heroSrc, /youtube\.com\/embed|heroTrailerSrc|createElement|innerHTML = `<video/, 'the hero carries no video playback code');
     assert.match(heroSrc, /pause on hover\/focus \(pointer devices\)/, 'the hover pause stays pointer-devices-only (touch must not freeze the slideshow)');
-    assert.ok(intervals.includes(5000), 'the slideshow advances every 5 seconds');
+    assert.ok(intervals.includes(8000), 'the slideshow advances every 8 seconds');
   });
 });
 
@@ -116,16 +116,18 @@ test('the home banner omits its type eyebrow, shows one genre and uses a plus-on
   });
 });
 
-test('the slideshow crossfades between the featured shows and drops no media when it moves on', async () => {
+test('the slideshow moves horizontally between featured shows and drops no media when it moves on', async () => {
   await withHome(async (root, window) => {
     await sleep(60);
-    const before = root.querySelector('.hero-slide.active').dataset.i;
+    const outgoing = root.querySelector('.hero-slide.active');
+    const before = outgoing.dataset.i;
     // Swipe to the next slide (the touch path the Android WebView uses).
     const hero = root.querySelector('.hero');
     const down = new window.Event('pointerdown', { bubbles: true }); down.clientX = 300;
     const up = new window.Event('pointerup', { bubbles: true }); up.clientX = 120;
     hero.dispatchEvent(down); hero.dispatchEvent(up);
     assert.notEqual(root.querySelector('.hero-slide.active').dataset.i, before, 'a horizontal swipe moves to the next banner');
+    assert.equal(outgoing.classList.contains('before'), true, 'the outgoing banner glides to the left');
     assert.ok(!root.querySelector('.hero-slide video'), 'no slide behind it mounted a video');
     const dots = root.querySelectorAll('[data-dot]');
     assert.ok(dots.length >= 2, 'the dots are there to pick a slide');
@@ -144,5 +146,8 @@ test('the hero CSS keeps the swipe working and carries no player styling', async
     assert.match(css, /\.hero-banner-link \.hero-bg \{ z-index: 0; \}/, 'the banner link remains the clickable image layer');
     assert.match(css, /\.hero-slide > \.hero-shade \{ z-index: 1; pointer-events: none; \}/, 'the visual scrim does not block the link');
     assert.match(css, /\.hero-slide > \.hero-inner a, \.hero-slide > \.hero-inner button \{ pointer-events: auto; \}/, 'the existing hero actions stay clickable above the banner link');
+    assert.match(css, /\.hero-slide \{[^}]*transform: translateX\(100%\); transition: transform 1\.2s cubic-bezier/, 'banner slides move slowly with a smooth easing curve');
+    assert.match(css, /\.hero-slide\.before \{ transform: translateX\(-100%\); \}/, 'the previous slide moves off to the left');
+    assert.match(css, /\.hero-slide\.active \{ visibility: visible; transform: translateX\(0\); z-index: 2; \}/, 'the active banner settles in the frame');
   });
 });
