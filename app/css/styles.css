@@ -640,7 +640,13 @@ body:has(#consentBar) .auth-page { padding-bottom: 190px; } body:has(#consentBar
 .ytp-time { font-size: 13px; font-weight: 500; color: rgba(255,255,255,.92); padding: 0 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ytp-sep, .ytp-dur { color: rgba(255,255,255,.72); }
 
-/* Viewport-level settings sheet for the custom HTML5/R2 player. */
+/* App-owned settings entry over YouTube embeds; the cross-origin iframe keeps its native controls too. */
+.ytp-youtube-shell { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+.ytp-youtube-shell > div, .ytp-youtube-shell iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
+.ytp-youtube-settings-btn { position: absolute; z-index: 4; top: 12px; right: 12px; width: 42px; height: 42px; display: grid; place-items: center; padding: 0; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; background: rgba(0,0,0,.72); color: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.35); -webkit-tap-highlight-color: transparent; }
+.ytp-youtube-settings-btn:hover, .ytp-youtube-settings-btn:active { background: rgba(42,42,42,.94); }
+.ytp-youtube-settings-btn svg { width: 22px; height: 22px; }
+/* Viewport-level settings sheet for the custom HTML5/R2 player and YouTube's app-owned settings entry. */
 body.player-settings-open { overflow: hidden; }
 .ytp-settings-overlay { position: fixed; inset: 0; z-index: 8500; display: flex; align-items: flex-end; justify-content: center; color: #fff; font-family: Roboto, system-ui, -apple-system, sans-serif; isolation: isolate; }
 .ytp-settings-overlay[hidden] { display: none !important; }
@@ -656,6 +662,7 @@ body.player-settings-open { overflow: hidden; }
 .ytp-settings-header button[hidden] { display: none !important; }
 .ytp-settings-header button:focus-visible, .ytp-menu-item:focus-visible, .ytp-menu-opt:focus-visible { outline: 2px solid rgba(255,255,255,.9); outline-offset: -3px; }
 .ytp-settings-body { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 8px 0; scrollbar-width: thin; }
+.ytp-settings-note { margin: 12px 22px 6px; color: rgba(255,255,255,.58); font-size: 12.5px; line-height: 1.45; }
 .ytp-menu-list { display: block; }
 .ytp-menu-item, .ytp-menu-opt { width: 100%; min-height: 58px; border: 0; background: transparent; color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 22px; font-size: 15px; font-weight: 500; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .ytp-menu-item:hover, .ytp-menu-opt:hover { background: rgba(255,255,255,.09); }

@@ -1,6 +1,7 @@
 // iOS/WebKit may reject unmuted autoplay; adapters should try sound first and fall back to muted inline playback.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { parseHTML } from 'linkedom';
 import { createHtml5Player } from '../../app/js/players/html5.js';
 import { createYouTubePlayer } from '../../app/js/players/youtube.js';
 
@@ -246,5 +247,73 @@ test('YouTube watchdog retries muted when iOS omits the blocked-autoplay event',
     fallbackCheck(); // no onAutoplayBlocked callback; the player remains UNSTARTED
     assert.deepEqual(actions, ['play', 'mute', 'play'], 'retry inline playback muted instead of leaving the poster stuck');
     ctl.destroy();
+  } finally { restore(); }
+});
+
+test('YouTube embeds keep native quality controls and offer app-owned viewport settings for speed and loop', async () => {
+  const restore = saveGlobals(['document', 'location', 'window']);
+  const { document, window } = parseHTML('<!doctype html><html><head></head><body><div id="slot"></div></body></html>');
+  const calls = [];
+  let config, rate = 1, ended = 0;
+  const PlayerState = { ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3 };
+  class FakePlayer {
+    constructor(_mount, options) {
+      config = options;
+      this.options = options;
+      setTimeout(() => options.events.onReady({ target: this }), 0);
+    }
+    getAvailablePlaybackRates() { return [0.5, 1, 1.5, 2]; }
+    getPlaybackRate() { return rate; }
+    setPlaybackRate(value) { rate = value; calls.push(['rate', value]); this.options.events.onPlaybackRateChange({ data: value }); }
+    getPlayerState() { return PlayerState.PAUSED; }
+    getCurrentTime() { return 0; }
+    getDuration() { return 10; }
+    seekTo(value) { calls.push(['seek', value]); }
+    playVideo() { calls.push(['play']); }
+    pauseVideo() {}
+    mute() {}
+    unMute() {}
+    setVolume() {}
+    isMuted() { return false; }
+    destroy() {}
+  }
+  globalThis.document = document;
+  globalThis.location = { protocol: 'https:', origin: 'https://addabaaz.example' };
+  globalThis.window = { YT: { Player: FakePlayer, PlayerState } };
+  try {
+    const container = document.getElementById('slot');
+    const ctl = await createYouTubePlayer(container, 'settings-video', {
+      autoplay: false,
+      controls: true,
+      onEnded: () => ended++,
+    });
+    assert.equal(config.playerVars.controls, 1, 'YouTube built-in controls stay enabled for native quality and captions');
+    const launcher = container.querySelector('.ytp-youtube-settings-btn');
+    assert.ok(launcher, 'the app-owned settings launcher is visible outside the YouTube iframe');
+    launcher.click();
+    const sheet = document.body.querySelector('.ytp-settings-overlay');
+    assert.ok(sheet);
+    assert.equal(container.contains(sheet), false, 'the settings sheet is portalled outside the embedded player');
+    assert.match(sheet.querySelector('.ytp-settings-title').textContent, /^Settings$/, 'the full Settings title is displayed');
+    assert.match(sheet.textContent, /Playback speed/);
+    assert.match(sheet.textContent, /Loop/);
+    assert.match(sheet.textContent, /Quality and subtitles remain in YouTube/);
+    sheet.querySelector('[data-nav="speed"]').click();
+    assert.ok(sheet.querySelector('[data-speed="1.5"]'));
+    sheet.querySelector('[data-speed="1.5"]').click();
+    assert.deepEqual(calls[0], ['rate', 1.5], 'the sheet applies supported playback rates through the IFrame API');
+    assert.equal(sheet.hidden, true);
+
+    launcher.click();
+    sheet.querySelector('[data-act="loop"]').click();
+    assert.match(sheet.querySelector('.ytp-menu-pill').textContent, /On/);
+    config.events.onStateChange({ data: PlayerState.ENDED });
+    assert.deepEqual(calls.slice(1), [['seek', 0], ['play']], 'loop restarts the video without signalling the watch page as ended');
+    assert.equal(ended, 0);
+    sheet.querySelector('[data-settings-close]').click();
+    assert.equal(sheet.hidden, true);
+    assert.equal(document.body.classList.contains('player-settings-open'), false);
+    ctl.destroy();
+    assert.equal(document.body.querySelector('.ytp-settings-overlay'), null, 'destroy removes the portal');
   } finally { restore(); }
 });
