@@ -451,8 +451,11 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     res.json({ action, affected: affectedIds.length, skipped: ids.length - affectedIds.length, ids: affectedIds });
   }));
 
-  // Full catalog including drafts and scheduled items (the public API hides those).
-  router.get('/catalog', wrap(async (_req, res) => { const s = await catalog.get({ all: true }); res.json({ ...s.catalog, studio: s.studio }); }));
+  // Full catalog including drafts and scheduled items (the public API hides those), plus first-party all-time play counts.
+  router.get('/catalog', wrap(async (_req, res) => {
+    const [s, playCounts] = await Promise.all([catalog.get({ all: true }), db.playStats.allTimeCounts()]);
+    res.json({ ...s.catalog, playCounts, studio: s.studio });
+  }));
   // Verify that an R2 video object actually exists in the configured bucket before saving a catalog entry pointing to it.
   const verifyR2Source = async (doc) => {
     if (doc?.source?.type !== 'r2') return;

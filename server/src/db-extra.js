@@ -238,6 +238,11 @@ export function extraDb({ q, tx, iso }) {
     async record(videoId, showId, { play = false, seconds = 0 }) {
       await q('INSERT INTO play_stats (day, video_id, show_id, plays, seconds) VALUES (UTC_DATE(),?,?,?,?) ON DUPLICATE KEY UPDATE plays = plays + VALUES(plays), seconds = seconds + VALUES(seconds)', [videoId, showId || null, play ? 1 : 0, Math.max(0, Math.floor(seconds))]);
     },
+    // Admin content lists need each video's accumulated first-party starts, not just a recent analytics window.
+    async allTimeCounts() {
+      const rows = await q('SELECT video_id, SUM(plays) AS plays FROM play_stats GROUP BY video_id');
+      return Object.fromEntries(rows.map((r) => [r.video_id, Number(r.plays)]));
+    },
     async overview(days = 30) {
       const [daily, byShow, byVideo, [tot]] = await Promise.all([
         q('SELECT day, SUM(plays) AS plays, SUM(seconds) AS seconds FROM play_stats WHERE day >= UTC_DATE() - INTERVAL ? DAY GROUP BY day ORDER BY day', [days - 1]),

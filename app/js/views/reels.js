@@ -101,13 +101,20 @@ export default async function reels(ctx) {
       return;
     }
     const h = document.createElement('div'); h.className = 'reel-player'; slot.appendChild(h);   // poster stays underneath
+    let started = false;
     try {
       const media = v.source.type === 'r2' ? await prepareMedia(v) : v;
       if (my !== token) { h.remove(); return; }
       const c = await createPlayer(h, media, {
         autoplay: true, muted: !soundOn, controls: false,
         onEnded: () => sections[i + 1]?.scrollIntoView({ behavior: 'smooth' }),
-        onState: (st) => { if (my !== token) return; if (st === 'playing') sec.classList.remove('paused'); else if (st === 'paused') sec.classList.add('paused'); },
+        onState: (st) => {
+          if (my !== token) return;
+          if (st === 'playing') {
+            sec.classList.remove('paused');
+            if (!started) { started = true; app.user?.remote?.playEvent(v.id, 'start'); }
+          } else if (st === 'paused') sec.classList.add('paused');
+        },
         // The player starts muted for instant motion and lifts the mute on main's 600/1500/3000ms
         // schedule; if it is STILL muted by then, the reel runs muted, the sound button must say so,
         // and a one-time pill tells the viewer exactly how to get sound back.

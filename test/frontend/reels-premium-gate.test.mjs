@@ -98,6 +98,20 @@ test('the Reels feed plays a premium-show reel with no lock wall and no crown', 
   cleanup?.();
 });
 
+test('Reels record a first-party view when an active reel starts playing', async () => {
+  const user = await guestUser(), previousRemote = user.remote, events = [];
+  user.remote = { playEvent: (...args) => events.push(args) };
+  app.user = user;
+  const { default: reels } = await import('../../app/js/views/reels.js');
+  const root = document.createElement('main'); document.body.appendChild(root);
+  let cleanup;
+  try {
+    await reels({ root, params: { id: 'premium-reel' }, setTitle() {}, onCleanup(fn) { cleanup = fn; } });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.deepEqual(events, [['premium-reel', 'start']]);
+  } finally { cleanup?.(); user.remote = previousRemote; }
+});
+
 test('mobile Reels fill the screen and continue behind the floating tab bar', () => {
   const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
   const mobileQuery = '@media (max-width: 899px), (pointer: coarse)';

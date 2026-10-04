@@ -4,7 +4,7 @@
 import { app } from '../app.js';
 import { CONFIG } from '../config.js';
 import { ApiError } from '../data/api.js';
-import { html, $, fmtDate, fmtViews, fmtDuration, timeAgo, shareOrCopy } from '../util.js';
+import { html, $, fmtDate, fmtDuration, timeAgo, shareOrCopy } from '../util.js';
 import { icon } from '../icons.js';
 import { createPlayer, loadYouTube } from '../players/index.js';
 import { go } from '../router.js';
@@ -54,7 +54,7 @@ export default async function watch(ctx) {
         <div class="watch-info">
           <div class="crumbs">${show ? html`<a href="#/show/${show.id}">${icon('left', { size: 16 })} ${show.titleEn || show.title}</a>` : soon ? html`<a href="#/soon/${soon.id}">${icon('left', { size: 16 })} ${soon.titleEn || soon.title}</a>` : html`<a href="#/">${icon('left', { size: 16 })} Home</a>`}</div>
           <h1 class="watch-title">${title}</h1>
-          ${metaLine([cat.label(v), fmtDate(v.publishedAt), `${fmtViews(v.views)} views`, v.duration > 0 ? fmtDuration(v.duration) : ''])}
+          ${metaLine([cat.label(v), fmtDate(v.publishedAt), v.duration > 0 ? fmtDuration(v.duration) : ''])}
           <div class="watch-actions">
             ${show ? listBtn('show', show.id, { label: 'Add show to My List', cls: 'btn btn-ghost' }) : ''}
             ${listBtn('video', v.id, { label: 'Save video', cls: 'btn btn-ghost' })}

@@ -139,6 +139,7 @@ const stored = { schema: 1, updatedAt: null, shows: [], videos: [], upcoming: []
 let catalogVersion = 0, feedCalls = 0, feedUnavailable = false, server, root;
 const db = {
   errors: { add: async () => {} },
+  playStats: { allTimeCounts: async () => ({}) },
   users: { byId: async (id) => id === 'viewer' ? { id, email: 'viewer@example.com', name: 'Viewer', sessionVersion: 0, isAdmin: false, disabledAt: null } : null },
   audit: { add: async (entry) => { auditEntries.push(entry); } },
   catalog: {
@@ -337,6 +338,7 @@ test('admins can bulk hide, restore and delete selected videos without publishin
   assert.deepEqual(publicHidden.body.videos.map((v) => v.id), ['AAAAAAAAAAA']);
   const adminHidden = await call('GET', '/api/v1/admin/catalog', undefined, ADMIN_TOKEN);
   assert.equal(adminHidden.body.videos.find((v) => v.id === 'BBBBBBBBBBB').hidden, true);
+  assert.deepEqual(adminHidden.body.playCounts, {}, 'the admin catalog receives first-party live view totals');
 
   const restore = await call('POST', '/api/v1/admin/catalog/videos/bulk', { action: 'show', ids: ['BBBBBBBBBBB'] }, ADMIN_TOKEN);
   assert.equal(restore.body.affected, 1);

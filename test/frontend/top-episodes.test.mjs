@@ -79,6 +79,14 @@ test('the Content studio has a Top 10 page that writes ranks', () => {
   assert.match(view, /const VIEWS = \{ shows: drawShows, videos: drawVideos, upcoming: drawUpcoming, top: drawTop \};/);
 });
 
+test('the Content studio shows and ranks videos by the catalog baseline plus recorded database plays', () => {
+  const view = read('admin/js/views/content.js');
+  assert.match(view, /const totalViews = \(v\) => Number\(v\.views \|\| 0\) \+ Number\(data\.playCounts\?\.\[v\.id\] \|\| 0\)/);
+  assert.match(view, /totalViews\(v\)\.toLocaleString\('en-IN'\)/, 'the videos table shows the all-time total');
+  assert.match(view, /sort\(\(a, b\) => totalViews\(b\) - totalViews\(a\)\)/, 'automatic Top 10 uses the live total');
+  assert.match(view, /fmtViews\(totalViews\(v\)\)/, 'Top 10 rows show the same total');
+});
+
 test('the video editor can set the position too, so saving a video never loses its rank', () => {
   const view = read('admin/js/views/content.js');
   assert.match(view, /\{ k: 'topRank', label: 'Top 10 position \(optional\)', type: 'number', min: 1, max: 10/);

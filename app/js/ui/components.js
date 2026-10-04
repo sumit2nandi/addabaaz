@@ -1,6 +1,6 @@
 // Reusable UI pieces (cards, rails, buttons, toasts) returned as safe HTML strings. Pages compose these instead of repeating markup.
 import { app } from '../app.js';
-import { html, raw, esc, fmtDuration, fmtViews, timeAgo, fmtRuntime } from '../util.js';
+import { html, raw, esc, fmtDuration, timeAgo, fmtRuntime } from '../util.js';
 import { icon } from '../icons.js';
 import { avatarColor } from '../data/user.js';
 import { confirmDialog } from './dialog.js';
@@ -83,7 +83,7 @@ export function videoCard(v, { progress = true, rank = 0, showName = true, showD
     </div>
     <div class="card-body">
       <div class="card-title">${cat.displayTitle(v)}</div>
-      <div class="card-meta">${showName && show ? html`<span>${show.titleEn || show.title}</span>` : ''}<span>${fmtViews(v.views)} views</span><span>${timeAgo(v.publishedAt)}</span></div>
+      <div class="card-meta">${showName && show ? html`<span>${show.titleEn || show.title}</span>` : ''}<span>${timeAgo(v.publishedAt)}</span></div>
     </div>
   </a>`;
 }

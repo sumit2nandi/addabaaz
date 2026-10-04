@@ -60,6 +60,25 @@ test('page asks the player to start automatically on all devices', async () => {
   assert.equal(opts.autoplay, true, 'watch page requests autoplay and lets the player attempt the preferred sound mode first');
 });
 
+test('public watch metadata does not show the catalog view count', async () => {
+  const { ctx } = await mount('v1');
+  const meta = ctx.root.querySelector('.meta-line');
+  assert.ok(meta);
+  assert.doesNotMatch(meta.textContent, /views?/i);
+  assert.doesNotMatch(meta.textContent, /\b1\s+views?\b/i, 'the fixture has one catalog view, which is no longer exposed');
+});
+
+test('the first successful playback records one database view start for this watch page', async () => {
+  const previousRemote = app.user.remote, events = [];
+  app.user.remote = { playEvent: (...args) => events.push(args) };
+  try {
+    const { opts } = await mount('v1');
+    opts.onState('playing'); opts.onState('playing');
+    assert.deepEqual(events, [['v1', 'start']], 'resumes/buffering within the page do not add duplicate views');
+    opts.onState('paused');
+  } finally { app.user.remote = previousRemote; }
+});
+
 test('Autoplay next counts down to the next episode when one exists', async () => {
   const { opts } = await mount('v1');
   opts.onEnded();

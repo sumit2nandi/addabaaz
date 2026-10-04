@@ -625,12 +625,9 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
   ccBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
     const tracks = getTracks();
-    if (tracks.length) {
-      const cur = activeTrack();
-      setTrack(cur ? null : tracks[0].language);
-    } else {
-      renderMenu(menuView === 'subs' ? null : 'subs');
-    }
+    if (!tracks.length) return;
+    const cur = activeTrack();
+    setTrack(cur ? null : tracks[0].language);
     showControls();
   });
 
@@ -720,13 +717,14 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
 
   const renderMenu = (view = 'main') => {
     if (!view) { closeMenu(); return; }
+    const tracks = getTracks();
+    if (view === 'subs' && !tracks.length) view = 'main';
     menuView = view;
     menu.hidden = false;
     gearBtn.classList.add('is-open');
     gearBtn.setAttribute('aria-expanded', 'true');
     clearTimeout(hideTimer);
     wrap.classList.add('show-controls');
-    const tracks = getTracks();
     const curSub = activeTrack();
 
     if (view === 'main') {
@@ -739,10 +737,10 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
           <span class="ytp-menu-lead">${YT_ICONS.quality}<span>Quality</span></span>
           <span class="ytp-menu-val"><span>${currentQualitySummary()}</span>${YT_ICONS.chevRight}</span>
         </button>
-        <button type="button" class="ytp-menu-item" data-nav="subs">
+        ${tracks.length ? `<button type="button" class="ytp-menu-item" data-nav="subs">
           <span class="ytp-menu-lead">${YT_ICONS.cc}<span>Subtitles/CC</span></span>
           <span class="ytp-menu-val"><span>${curSub ? curSub.label || curSub.language : 'Off'}</span>${YT_ICONS.chevRight}</span>
-        </button>
+        </button>` : ''}
         <button type="button" class="ytp-menu-item" data-act="loop">
           <span class="ytp-menu-lead">${YT_ICONS.loop}<span>Loop</span></span>
           <span class="ytp-menu-val"><span class="ytp-menu-pill ${v.loop ? 'on' : ''}">${v.loop ? 'On' : 'Off'}</span></span>
@@ -874,6 +872,7 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
     }
 
     if (ccBtn) {
+      ccBtn.hidden = getTracks().length === 0;
       ccBtn.classList.toggle('is-active', !!activeTrack());
     }
     if (gearBadge) {

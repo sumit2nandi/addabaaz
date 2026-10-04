@@ -275,11 +275,22 @@ test('push: subscribe, preferences, notify audiences, send-once automatic notifi
 });
 
 test('analytics events are aggregated, validated and capped', async () => {
-  const v = (await call('GET', '/catalog')).body.videos.find((x) => x.kind === 'episode');
+  const catalog = (await call('GET', '/catalog')).body;
+  assert.equal(catalog.playCounts, undefined, 'all-time database counts are exposed to Admin, not the public API');
+  const v = catalog.videos.find((x) => x.kind === 'episode'), reel = catalog.videos.find((x) => x.kind === 'reel');
+  const before = await db.playStats.allTimeCounts();
   assert.equal((await call('POST', '/events/play', { videoId: v.id, event: 'start' })).status, 204);
+  assert.equal((await call('POST', '/events/play', { videoId: reel.id, event: 'start' })).status, 204, 'reels count as video starts too');
   await call('POST', '/events/play', { videoId: v.id, event: 'progress', seconds: 60 }); await call('POST', '/events/play', { videoId: v.id, event: 'progress', seconds: 999999 });
   await call('POST', '/events/play', { videoId: 'nope', event: 'start' }); await call('POST', '/events/play', { videoId: v.id, event: 'hack' });
-  const o = await db.playStats.overview(7); assert.equal(o.totals.plays, 1); assert.equal(o.totals.seconds, 60 + Math.min(v.duration, 600)); assert.equal(o.videos[0].videoId, v.id);
+  const counts = await db.playStats.allTimeCounts();
+  assert.equal(counts[v.id], Number(before[v.id] || 0) + 1);
+  assert.equal(counts[reel.id], Number(before[reel.id] || 0) + 1);
+  const adminCatalog = await adm('GET', '/catalog');
+  assert.equal(adminCatalog.status, 200);
+  assert.equal(adminCatalog.body.playCounts[v.id], counts[v.id], 'the current database count is available only to Admin');
+  assert.equal(adminCatalog.body.playCounts[reel.id], counts[reel.id]);
+  const o = await db.playStats.overview(7); assert.equal(o.totals.plays, 2); assert.equal(o.totals.seconds, 60 + Math.min(v.duration, 600)); assert.equal(o.videos[0].videoId, v.id);
 });
 
 test('client error reports are stored and grouped; server errors are logged', async () => {
