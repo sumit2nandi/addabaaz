@@ -71,20 +71,28 @@ test('Coming Soon keeps the artwork expand button beside My List on phones', () 
     'the same row adapts for especially narrow phones');
 });
 
-test('show details keep the artwork-view button beside My List on phones', () => {
+test('show details keep all four hero controls in one row on phones', () => {
   const show = read('app/js/views/show.js');
-  const actions = show.match(/<div class="show-art-actions">([\s\S]*?)<\/div>/)?.[1] || '';
-  assert.ok(actions, 'My List and the artwork button share a compact action group');
+  const actions = show.match(/<div class="hero-actions">([\s\S]*?)<\/div>/)?.[1] || '';
+  assert.ok(actions, 'the show page has one hero action row');
+  assert.ok(actions.indexOf('trailer.id') < actions.indexOf('listBtn('), 'the trailer icon comes before My List');
   assert.ok(actions.indexOf('listBtn(') < actions.indexOf('id="artBtn"'), 'the artwork control follows My List');
+  assert.match(actions, /href="#\/watch\/\$\{trailer\.id\}" aria-label="Watch trailer" title="Watch trailer"/,
+    'Trailer stays available as an accessible icon-only button');
+  assert.doesNotMatch(actions, /\} Trailer<\/a>/, 'the Trailer text is removed');
   assert.match(actions, /listBtn\('show', s\.id, \{ cls: 'btn btn-glass btn-lg icon-only', iconOnly: true \}\)/,
     'the show-page My List action is the accessible plus/check icon only');
-  assert.match(show, /id="shareBtn"/, 'Share remains available outside the grouped pair');
+  assert.match(show, /id="shareBtn"/, 'Share remains available outside the compact mobile row');
 
   const css = read('app/css/styles.css');
-  assert.match(css, /\.show-art-actions \{ display: flex; align-items: center; gap: 8px; flex: none; \}/,
-    'the My List and artwork controls stay together when the action row wraps');
-  assert.match(css, /\.detail-hero \.hero-actions > \.btn-lg \{ padding: 10px 12px; font-size: 14px; \}/,
-    'compact mobile button padding helps the primary action and the paired controls fit');
+  assert.match(css, /\.detail-hero \.hero-actions \{ gap: 8px; flex-wrap: nowrap; \}/,
+    'the detail-page actions never wrap on phones');
+  assert.match(css, /\.detail-hero \.hero-actions > \.btn-primary \{ flex: 1 1 0; \}/,
+    'the main action takes the remaining width');
+  assert.match(css, /\.detail-hero \.hero-actions > \.btn-lg\.icon-only \{ flex: 0 0 48px; width: 48px; padding: 0; \}/,
+    'the other three controls use equal compact columns');
+  assert.match(css, /\.detail-hero \.hero-actions > \.btn-lg\.icon-only \{ flex-basis: 44px; width: 44px; \}/,
+    'the compact controls narrow further on very small phones without shrinking in height');
   assert.match(css, /\.detail-hero \.hero-shade \{[^}]*rgba\(5,5,5,\.72\) 60%/,
     'a stronger lower scrim keeps poster lettering from colliding with the remaining hero text');
 });
