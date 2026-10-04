@@ -36,11 +36,11 @@ test('the poster box, the expand button and the banner all open the full artwork
     assert.match(view, /#detailPoster'[^\n]*openArtwork\(art, 'poster'\)/, `${file}: the poster box opens the poster`);
     assert.match(view, /<section class="detail-hero" id="detailHero">/, `${file}: the banner has an id to hang the tap handler on`);
     assert.match(view, /tapArtwork\(.{0,40}art\);/, `${file}: and tapping the banner opens the artwork`);
-    assert.match(view, /id="artBtn" aria-label="View the full artwork"/, `${file}: an expand button sits with Share (the only visible way in on a phone)`);
+    assert.match(view, /id="artBtn" aria-label="View the full artwork"/, `${file}: an expand button remains available`);
     assert.match(view, /#artBtn'[^\n]*openArtwork\(art, 'poster'\)/, `${file}: the expand button opens the poster`);
   }
-  // On a phone the poster box is display:none, so the banner tap is the way in — but it must never steal
-  // clicks from the buttons in the hero, and it must not fire when the viewer was selecting text.
+  // On a phone the poster box is display:none, so the banner remains another easy artwork entry point —
+  // but it must never steal clicks from the buttons in the hero or fire when the viewer was selecting text.
   const lightbox = read('app/js/ui/lightbox.js');
   assert.match(lightbox, /export function tapArtwork\(hero, art\)/, 'tapArtwork exists');
   assert.match(lightbox, /if \(e\.target\.closest\('a, button, input, select, textarea, label'\)\) return;/, 'buttons and links keep their own job');
@@ -48,10 +48,72 @@ test('the poster box, the expand button and the banner all open the full artwork
   assert.match(lightbox, /openArtwork\(art, 'backdrop'\)/, 'and it opens what the banner is showing');
   // The popup itself: a single image has no arrows and no counter; tapping the dark background closes it.
   assert.match(lightbox, /const many = items\.length > 1;/, 'a single image has no arrows');
-  assert.match(lightbox, /cap\.textContent = many \?/, 'and no "1 / 1" counter');
+  assert.match(lightbox, /cap\.textContent = !showCaption \? '' : many \?/, 'gallery counters remain conditional while artwork popups can hide captions');
   assert.match(lightbox, /e\.target\.closest\('\.lb-close'\) \|\| e\.target === root/, 'the X and the backdrop close it');
   // And the phone layout itself is untouched: the poster box stays hidden, the banner carries the feature.
   assert.match(read('app/css/styles.css'), /@media \(min-width: 760px\) \{ \.hero-poster, \.detail-poster \{ display: block; \} \}/, 'the poster box is still desktop-only');
+});
+
+test('Coming Soon keeps the artwork expand button beside My List on phones', () => {
+  const soon = read('app/js/views/soon.js');
+  const actions = soon.match(/<div class="hero-actions soon-hero-actions">([\s\S]*?)<\/div>/)?.[1] || '';
+  assert.ok(actions, 'the Coming Soon page has its own action row');
+  assert.ok(actions.indexOf('remindBtn(') < actions.indexOf('listBtn('), 'Remind me remains first');
+  assert.ok(actions.indexOf('listBtn(') < actions.indexOf('id="artBtn"'), 'the artwork action follows My List');
+  assert.match(soon, /id="shareBtn"/, 'the Share action is preserved');
+
+  const css = read('app/css/styles.css');
+  assert.match(css, /\.soon-hero-actions \{ display: grid; grid-template-columns: minmax\(0,1fr\) minmax\(0,1fr\) 48px;/,
+    'mobile Coming Soon actions use two flexible button columns and a fixed artwork-button column');
+  assert.match(css, /\.soon-hero-actions > #artBtn \{ width: 48px; height: 48px; padding: 0; \}/,
+    'the artwork control keeps its compact, fixed size beside My List');
+  assert.match(css, /@media \(max-width: 359px\) \{\n  \.soon-hero-actions \{ grid-template-columns: minmax\(0,1fr\) minmax\(0,1fr\) 48px; gap: 6px; \}/,
+    'the same row adapts for especially narrow phones');
+});
+
+test('show details keep all four hero controls in one row on phones', () => {
+  const show = read('app/js/views/show.js');
+  const actions = show.match(/<div class="hero-actions">([\s\S]*?)<\/div>/)?.[1] || '';
+  assert.ok(actions, 'the show page has one hero action row');
+  assert.ok(actions.indexOf('trailer.id') < actions.indexOf('listBtn('), 'the trailer icon comes before My List');
+  assert.ok(actions.indexOf('listBtn(') < actions.indexOf('id="artBtn"'), 'the artwork control follows My List');
+  assert.match(actions, /href="#\/watch\/\$\{trailer\.id\}" aria-label="Watch trailer" title="Watch trailer"/,
+    'Trailer stays available as an accessible icon-only button');
+  assert.doesNotMatch(actions, /\} Trailer<\/a>/, 'the Trailer text is removed');
+  assert.match(actions, /listBtn\('show', s\.id, \{ cls: 'btn btn-glass btn-lg icon-only', iconOnly: true \}\)/,
+    'the show-page My List action is the accessible plus/check icon only');
+  assert.match(show, /id="shareBtn"/, 'Share remains available outside the compact mobile row');
+
+  const css = read('app/css/styles.css');
+  assert.match(css, /\.detail-hero \.hero-actions \{ gap: 8px; flex-wrap: nowrap; \}/,
+    'the detail-page actions never wrap on phones');
+  assert.match(css, /\.detail-hero \.hero-actions > \.btn-primary \{ flex: 0 1 auto; \}/,
+    'the main action stays content-sized instead of stretching into empty space');
+  assert.match(css, /\.detail-hero \.hero-actions > \.btn-lg\.icon-only \{ flex: 0 0 48px; width: 48px; padding: 0; \}/,
+    'the other three controls use equal compact columns');
+  assert.match(css, /\.detail-hero \.hero-actions > \.btn-lg\.icon-only \{ flex-basis: 44px; width: 44px; \}/,
+    'the compact controls narrow further on very small phones without shrinking in height');
+  assert.match(css, /\.detail-hero \.hero-shade \{[^}]*rgba\(5,5,5,\.72\) 60%/,
+    'a stronger lower scrim keeps poster lettering from colliding with the remaining hero text');
+});
+
+test('show facts sit below the banner and the tagline uses the page font', () => {
+  const show = read('app/js/views/show.js');
+  const heroStart = show.indexOf('<section class="detail-hero"');
+  const heroEnd = show.indexOf('</section>', heroStart);
+  const facts = show.indexOf('<dl class="facts show-facts-below">');
+  const tagline = show.indexOf('class="show-tagline-below"');
+  const description = show.indexOf('<section class="show-description"');
+  assert.ok(heroStart >= 0 && facts > heroEnd, 'cast and episode facts no longer cover the banner artwork');
+  assert.ok(facts < tagline && tagline < description, 'facts and tagline stay together before the description');
+  assert.doesNotMatch(show, /show-tagline-below bn/, 'the tagline no longer uses the Bengali serif display override');
+
+  const css = read('app/css/styles.css');
+  assert.match(css, /\.page-tight\.show-details-page \{ padding-top: 12px; \}/, 'desktop below-banner information has a small gap');
+  assert.match(css, /\.show-tagline-below \{[^}]*font-family: var\(--font\)/, 'the tagline uses the same font stack as the rest of the page');
+  assert.match(css, /\.detail-hero \{ min-height: 74vh; min-height: 74svh; \}/, 'the phone detail banner matches the home banner height');
+  assert.match(css, /\.detail-hero \.hero-inner \{ padding-bottom: 12px; \}/, 'the hero text block sits lower to align with the home banner');
+  assert.match(css, /\.page-tight\.show-details-page \{ padding-top: 0; \}/, 'mobile show facts start directly under the banner with no dead gap');
 });
 
 test('the artwork popup shows the banner and the poster, each once', async () => {
@@ -91,7 +153,8 @@ test('a tap on the banner really opens the popup (the reported bug)', async () =
   assert.ok(lb, 'tapping the banner artwork opens the popup');
   assert.equal(lb.querySelector('img').getAttribute('src'), 'b.jpg', 'and shows the banner full size first');
   assert.equal(lb.querySelectorAll('.lb-nav').length, 2, 'the poster is one swipe away');
-  assert.equal(lb.querySelector('figcaption').textContent, 'Artwork · 1 / 2');
+  assert.equal(lb.querySelector('figcaption').textContent, '', 'the banner popup has no visible Artwork caption or counter');
+  assert.equal(lb.querySelector('figcaption').hidden, true, 'the artwork and poster labels stay hidden in this popup');
   assert.equal(lb.querySelector('.lb-close') !== null, true, 'with a close button');
 });
 

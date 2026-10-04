@@ -3,16 +3,20 @@ import { HttpError, wrap } from '../http.js';
 import { PLANS } from '../plans.js';
 import { STATES } from '../gst.js';
 
-export function registerSystemRoutes(api, { db, catalog, payments, billing, r2, version, maintenance = null }) {
+export function registerSystemRoutes(api, { db, catalog, payments, billing, r2, version, release = '', maintenance = null }) {
+  const releaseSha = /^[0-9a-f]{7,40}$/i.test(String(release || '')) ? String(release).toLowerCase() : null;
+  const releaseInfo = releaseSha ? { commit: releaseSha } : {};
   // Endpoints below need no sign-in.
   /* ---------- public ---------- */
   api.get('/health', wrap(async (_req, res) => {                 // liveness + discovery: always 200; `db` reports the database state
     const dbUp = await db.ping().then(() => true, () => false);
-    res.json({ ok: true, service: 'addabaaz', version, db: dbUp ? 'up' : 'down', storage: r2.configured ? 'r2' : 'none', payments: payments.provider, time: new Date().toISOString() });
+    res.set('Cache-Control', 'no-store, max-age=0');
+    res.json({ ok: true, service: 'addabaaz', version, ...releaseInfo, db: dbUp ? 'up' : 'down', storage: r2.configured ? 'r2' : 'none', payments: payments.provider, time: new Date().toISOString() });
   }));
   api.get('/health/ready', wrap(async (_req, res) => {           // readiness for load balancers / orchestrators: 503 when MySQL is unreachable
     const dbUp = await db.ping().then(() => true, () => false);
-    res.status(dbUp ? 200 : 503).json({ ok: dbUp, db: dbUp ? 'up' : 'down' });
+    res.set('Cache-Control', 'no-store, max-age=0');
+    res.status(dbUp ? 200 : 503).json({ ok: dbUp, db: dbUp ? 'up' : 'down', ...releaseInfo });
   }));
   // Public status probe: what the site and the apps poll to know whether the service is up, whether it is in
   // maintenance and when it is expected back. Never blocked by the maintenance switch (server/src/maintenance.js).
@@ -20,8 +24,9 @@ export function registerSystemRoutes(api, { db, catalog, payments, billing, r2, 
     const m = maintenance ? await maintenance.state() : { active: false, enabled: false, message: '', until: null };
     res.set('Cache-Control', 'no-store, max-age=0').json({ ok: true, service: 'addabaaz', version, maintenance: m, time: new Date().toISOString() });
   }));
-  // The whole catalog as JSON; cached for 15 s by browsers and CDNs.
-  api.get('/catalog', wrap(async (_req, res) => { res.set('Cache-Control', 'public, max-age=15'); res.json((await catalog.get()).catalog); }));
+  // The app fetches this after a page reload so edits made in Admin appear immediately, including
+  // when the request lands on another server with an in-memory catalog snapshot.
+  api.get('/catalog', wrap(async (_req, res) => { res.set('Cache-Control', 'no-store, max-age=0'); res.json((await catalog.get({ fresh: true })).catalog); }));
   api.get('/studio', wrap(async (_req, res) => {
     const s = (await catalog.get()).studio; if (!s) throw new HttpError(404, 'not_found', 'No studio profile.');
     res.set('Cache-Control', 'public, max-age=15'); res.json(s);

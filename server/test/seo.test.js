@@ -82,6 +82,7 @@ test('pageMeta: JSON-LD for home, show, watch, listings', () => {
   assert.equal(show.find((n) => n['@type'] === 'BreadcrumbList').itemListElement.length, 3);
   const ep = cat.episodes('shahid')[0]; const v = meta(`/watch/${ep.id}`).jsonld.find((n) => n['@type'] === 'VideoObject');
   assert.match(v.duration, /^PT(\d+H)?(\d+M)?(\d+S)?$/); assert.equal(v.embedUrl, `https://www.youtube.com/embed/${ep.source.id}`); assert.ok(v.uploadDate && v.thumbnailUrl[0] && v.name && v.description);
+  assert.equal(v.interactionStatistic, undefined, 'search metadata must not publish the public view count');
   assert.equal(meta('/shows').jsonld.find((n) => n['@type'] === 'ItemList').numberOfItems, cat.shows.length);
   assert.equal(isoDuration(3725), 'PT1H2M5S'); assert.equal(isoDuration(60), 'PT1M'); assert.equal(isoDuration(0), 'PT0S');
   const premium = new Catalog({ ...catalogJson, videos: catalogJson.videos.map((x) => (x.id === ep.id ? { ...x, access: 'premium', source: { type: 'r2', key: 'premium/a/master.m3u8' } } : x)) });

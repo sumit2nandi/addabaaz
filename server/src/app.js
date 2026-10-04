@@ -75,6 +75,7 @@ export function createApp({
   contactWebhook = process.env.CONTACT_WEBHOOK_URL || '',
   youtubeFeed = createYouTubeFeed(),                         // fetched only after an administrator explicitly previews uploads
   rate = true,
+  release = '',                                               // deployment commit SHA, exposed by public health checks (never a secret)
   catalogPath = path.join(ROOT, 'data/catalog.json'),
   studioPath = path.join(path.dirname(catalogPath), 'studio.json'),
   r2 = createR2(),                                            // Cloudflare R2 (private storage for video files)
@@ -116,7 +117,7 @@ export function createApp({
   // Before every other route on this router: the guard must see viewer calls first. Only /health, /status,
   // /admin, /auth, payment webhooks and unsubscribe links pass while the switch is on (maintenance.js).
   api.use(maintenance.guard());
-  registerSystemRoutes(api, { db, catalog, payments, billing, r2, version: VERSION, maintenance });
+  registerSystemRoutes(api, { db, catalog, payments, billing, r2, version: VERSION, release, maintenance });
   // Rate limit for sign-up/login endpoints: 20 requests per minute per IP (disabled in tests with rate:false).
   const authLimit = rate ? rateLimit('auth', 20, 60_000) : (_q, _s, n) => n();
   // The user fields that are safe to send to the browser (no password hash).
@@ -180,7 +181,26 @@ export function createApp({
     if (err.type === 'entity.parse.failed') err = bad('Invalid JSON body.', 'invalid_json');
     if (err.type === 'entity.too.large') err = new HttpError(413, 'too_large', 'Request too large.');
     const status = err.status || 500;
-    if (status >= 500 && !(err instanceof HttpError)) { console.error(err); try { app.locals.captureError?.(err, req); } catch { /* monitoring must never break error handling */ } db.errors.add({ source: 'server', message: `${req.method} ${safeErrorUrl(req.path)}: ${err.message}`, stack: err.stack, url: safeErrorUrl(req.originalUrl), userAgent: req.get('user-agent') }).catch(() => {}); }   // expected 5xx (provider down, storage off) are not logged as crashes
+    if (status >= 500 && !(err instanceof HttpError)) {
+      console.error(err);
+      try { app.locals.captureError?.(err, req); } catch { /* monitoring must never break error handling */ }
+      const userId = req.user?.id || req.admin?.id || null;
+      const diagnostic = [
+        `HTTP ${status} ${req.method} ${safeErrorUrl(req.path)}`,
+        `userId=${userId || 'anonymous'}`,
+        ...(req.admin ? [`adminId=${req.admin.id || 'ADMIN_TOKEN'}`] : []),
+        `errorCode=${err.code || 'unknown'}`,
+        ...(err.errno ? [`errno=${err.errno}`] : []),
+        ...(err.sqlState ? [`sqlState=${err.sqlState}`] : []),
+        ...(err.sqlParamCount != null ? [`sqlParamCount=${err.sqlParamCount} (bound values omitted)`] : []),
+      ].join('\n');
+      db.errors.add({
+        source: 'server', message: `${req.method} ${safeErrorUrl(req.path)} [${status}${err.code ? ` ${err.code}` : ''}]: ${err.message}`,
+        stack: `Request diagnostics:\n${diagnostic}\n\n${err.stack || 'No stack trace.'}`,
+        sqlQuery: err.sqlTemplate || null, sqlParamCount: err.sqlParamCount ?? null, sqlException: err.sqlException || null,
+        url: safeErrorUrl(req.originalUrl), userAgent: req.get('user-agent'), userId,
+      }).catch(() => {});
+    }   // expected 5xx (provider down, storage off) are not logged as crashes
     const authored = err instanceof HttpError || (Number.isInteger(err?.status) && typeof err?.code === 'string');
     const message = authored && err.message ? err.message : (status >= 500 ? 'Something went wrong.' : 'That request couldn’t be completed.');
     const code = authored && typeof err.code === 'string' ? err.code : (status >= 500 ? 'server_error' : 'bad_request');

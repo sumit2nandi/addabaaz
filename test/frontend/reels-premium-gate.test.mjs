@@ -98,6 +98,54 @@ test('the Reels feed plays a premium-show reel with no lock wall and no crown', 
   cleanup?.();
 });
 
+test('Reels ignore an initial paused event until autoplay has actually started', async () => {
+  app.user = await guestUser();
+  const originalPlayer = window.YT.Player;
+  let pauseCalls = 0, playCalls = 0, cleanup;
+  window.YT.Player = function Player(_mount, options) {
+    this.getPlayerState = () => 2;
+    this.getCurrentTime = () => 0; this.getDuration = () => 30;
+    this.isMuted = () => true; this.mute = () => {}; this.unMute = () => {}; this.setVolume = () => {};
+    this.playVideo = () => { playCalls++; }; this.pauseVideo = () => { pauseCalls++; }; this.destroy = () => {};
+    options.events.onReady({ target: this });
+    queueMicrotask(() => options.events.onStateChange({ data: 2 }));
+    setTimeout(() => options.events.onStateChange({ data: 1 }), 10);
+  };
+
+  try {
+    const { default: reels } = await import('../../app/js/views/reels.js');
+    const root = document.createElement('main'); document.body.appendChild(root);
+    await reels({ root, params: { id: 'premium-reel' }, setTitle() {}, onCleanup(fn) { cleanup = fn; } });
+    const section = root.querySelector('.reel[data-i="1"]');
+    await new Promise((r) => setTimeout(r, 5));
+    assert.ok(playCalls > 0, 'Reels still request autoplay');
+    assert.equal(section.classList.contains('paused'), false, 'an initial PAUSED event does not show a center control over the reel');
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(section.classList.contains('paused'), false, 'the reel remains clear after playback starts');
+
+    section.querySelector('[data-reel-tap]').dispatchEvent(new window.Event('click', { bubbles: true }));
+    assert.equal(pauseCalls, 1, 'tapping still pauses a reel that has played');
+    assert.equal(section.classList.contains('paused'), true, 'the paused affordance appears for an intentional pause');
+  } finally {
+    cleanup?.();
+    window.YT.Player = originalPlayer;
+  }
+});
+
+test('Reels record a first-party view when an active reel starts playing', async () => {
+  const user = await guestUser(), previousRemote = user.remote, events = [];
+  user.remote = { playEvent: (...args) => events.push(args) };
+  app.user = user;
+  const { default: reels } = await import('../../app/js/views/reels.js');
+  const root = document.createElement('main'); document.body.appendChild(root);
+  let cleanup;
+  try {
+    await reels({ root, params: { id: 'premium-reel' }, setTitle() {}, onCleanup(fn) { cleanup = fn; } });
+    await new Promise((r) => setTimeout(r, 20));
+    assert.deepEqual(events, [['premium-reel', 'start']]);
+  } finally { cleanup?.(); user.remote = previousRemote; }
+});
+
 test('mobile Reels fill the screen and continue behind the floating tab bar', () => {
   const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
   const mobileQuery = '@media (max-width: 899px), (pointer: coarse)';

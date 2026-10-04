@@ -4,7 +4,7 @@
 import { app } from '../app.js';
 import { CONFIG } from '../config.js';
 import { ApiError } from '../data/api.js';
-import { html, $, fmtDate, fmtViews, fmtDuration, timeAgo, shareOrCopy } from '../util.js';
+import { html, $, fmtDate, fmtDuration, timeAgo, shareOrCopy } from '../util.js';
 import { icon } from '../icons.js';
 import { createPlayer, loadYouTube } from '../players/index.js';
 import { go } from '../router.js';
@@ -21,6 +21,7 @@ export default async function watch(ctx) {
   const v = cat.video(ctx.params.id);
   if (!v) throw new Error('This video is not available.');
   const show = cat.show(v.showId), soon = !show && cat.soon(v.showId);
+  const isYouTube = v.source.type === 'youtube', isR2 = v.source.type === 'r2';
   const next = cat.nextEpisode(v);
   const title = cat.displayTitle(v);
   // Can this viewer play it? 'ok' | 'login' | 'plan' | 'unavailable' (premium in static mode).
@@ -54,14 +55,14 @@ export default async function watch(ctx) {
         <div class="watch-info">
           <div class="crumbs">${show ? html`<a href="#/show/${show.id}">${icon('left', { size: 16 })} ${show.titleEn || show.title}</a>` : soon ? html`<a href="#/soon/${soon.id}">${icon('left', { size: 16 })} ${soon.titleEn || soon.title}</a>` : html`<a href="#/">${icon('left', { size: 16 })} Home</a>`}</div>
           <h1 class="watch-title">${title}</h1>
-          ${metaLine([cat.label(v), fmtDate(v.publishedAt), `${fmtViews(v.views)} views`, v.duration > 0 ? fmtDuration(v.duration) : ''])}
+          ${metaLine([cat.label(v), fmtDate(v.publishedAt), v.duration > 0 ? fmtDuration(v.duration) : ''])}
           <div class="watch-actions">
             ${show ? listBtn('show', show.id, { label: 'Add show to My List', cls: 'btn btn-ghost' }) : ''}
-            ${listBtn('video', v.id, { label: 'Save video', cls: 'btn btn-ghost' })}
+            ${!isYouTube && !isR2 ? listBtn('video', v.id, { label: 'Save video', cls: 'btn btn-ghost' }) : ''}
             ${next ? html`<a class="btn btn-ghost" href="#/watch/${next.id}">${icon('next', { size: 18 })} Next: ${cat.label(next)}</a>` : ''}
-            <button type="button" class="btn btn-ghost" id="castBtn" hidden>${icon('cast', { size: 18 })} Cast</button>
+            ${!isR2 ? html`<button type="button" class="btn btn-ghost" id="castBtn" hidden>${icon('cast', { size: 18 })} Cast</button>` : ''}
             <button type="button" class="btn btn-ghost" id="shareBtn">${icon('share', { size: 18 })} Share</button>
-            <label class="switch" title="Play the next episode automatically"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span><span>Autoplay next</span></label>
+            <label class="switch" title="Play the next episode or a related recommendation automatically"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span><span>Autoplay next</span></label>
           </div>
           ${show ? html`<p class="watch-desc">${show.description}</p>` : ''}
           <details class="orig-title"><summary>Original title</summary><p class="bn">${v.title}</p></details>
@@ -91,7 +92,6 @@ export default async function watch(ctx) {
     }
   };
 
-  $('#autoNext', ctx.root).addEventListener('change', (e) => u.setPref('autoplayNext', e.target.checked));
   $('#shareBtn', ctx.root).addEventListener('click', async () => {
     const r = await shareOrCopy({ title, text: `${title} — ADDABAAZ`, url: shareUrl('/watch/' + v.id) });
     if (r === 'copied') toast('Link copied');
@@ -132,6 +132,10 @@ export default async function watch(ctx) {
   const prog = u.progressOf(v.id);
   const start = prog && prog.position >= CONFIG.resumeMinSeconds && !u.isFinished(v.id, v.duration) ? prog.position : 0;
   let ctl = null, lastSaved = 0, dead = false, countdown = null, lastT = start, lastD = v.duration;
+  $('#autoNext', ctx.root).addEventListener('change', (e) => {
+    u.setPref('autoplayNext', e.target.checked);
+    if (!e.target.checked) { clearInterval(countdown); countdown = null; $('#nextUp', ctx.root).hidden = true; }
+  });
 
   // Save watch position at most every 5 s (or immediately when `flush` is set, e.g. on pause or leaving the page).
   // Do not let an initial sub-second tick (t < 1s) consume the 5s throttle window before 1s of playback is reached.
@@ -183,15 +187,54 @@ export default async function watch(ctx) {
    * button (app/js/orientation.js locks the orientation there, and the native fullscreen client
    * hides both system bars). Leaving the page always lands back in portrait. */
 
-  // Autoplay: a countdown card for the next episode; tapping cancels or plays now.
-  const showNextUp = () => {
+  // If the episode list ends, prefer a first episode from a genre-related show; otherwise fall back
+  // to other recent playable videos. Never send the viewer backward to an earlier episode of this show.
+  const recommendedAutoplay = () => {
+    const candidates = [];
+    if (v.kind !== 'episode') candidates.push(...cat.relatedVideos(v, 12));
+    if (show) for (const relatedShow of cat.related(show, 12)) {
+      const episode = cat.firstEpisode(relatedShow.id);
+      if (episode) candidates.push(episode);
+    }
+    candidates.push(...(v.kind === 'episode'
+      ? cat.latestEpisodes(24).filter((candidate) => !v.showId || candidate.showId !== v.showId)
+      : cat.latestVideos(24)));
+    const seen = new Set([v.id]);
+    return candidates.find((candidate) => {
+      if (!candidate || seen.has(candidate.id)) return false;
+      seen.add(candidate.id);
+      if (v.kind === 'episode' && v.showId && candidate.kind === 'episode' && candidate.showId === v.showId) return false;
+      return u.gateFor(candidate, cat) === 'ok';
+    }) || null;
+  };
+  const autoplayTarget = () => {
+    if (next && u.gateFor(next, cat) === 'ok') return { video: next };
+    const video = recommendedAutoplay();
+    return video ? { video } : null;
+  };
+
+  // Autoplay: a countdown card for the next episode, or a related recommendation when the series ends.
+  const showNextUp = ({ video: target }) => {
     const box = $('#nextUp', ctx.root);
     let n = CONFIG.autoplayCountdown;
-    const draw = () => { box.innerHTML = html`<div class="next-card">${img(cat.thumb(next, 'hqdefault'), '')}<div><div class="eyebrow">Up next in ${n}s</div><strong>${cat.label(next)} \u00b7 ${cat.displayTitle(next)}</strong><div class="row"><button class="btn btn-primary btn-sm" id="nuPlay">${icon('play', { size: 16 })} Play now</button><button class="btn btn-ghost btn-sm" id="nuCancel">Cancel</button></div></div></div>`.s; };
-    box.hidden = false; draw();
-    const stop = () => { clearInterval(countdown); box.hidden = true; };
-    countdown = setInterval(() => { n -= 1; if (n <= 0) { stop(); go('/watch/' + next.id, { replace: true }); } else draw(); }, 1000);
-    box.onclick = (e) => { if (e.target.closest('#nuPlay')) { stop(); go('/watch/' + next.id, { replace: true }); } else if (e.target.closest('#nuCancel')) stop(); };
+    // Render once: replacing the markup each second reloads the thumbnail and makes it blink.
+    box.innerHTML = html`<div class="next-card">
+      ${img(cat.thumb(target, 'hqdefault'), '')}
+      <div class="next-card-copy"><div class="eyebrow" data-next-countdown>Next in ${n}s</div>
+        <strong>${cat.displayTitle(target)}</strong>
+        <button type="button" class="btn btn-primary btn-sm" id="nuPlay">${icon('play', { size: 16 })} Play now</button>
+      </div>
+      <button type="button" class="next-close icon-btn" id="nuClose" aria-label="Dismiss next video">${icon('x', { size: 18 })}</button>
+    </div>`.s;
+    const countdownLabel = box.querySelector('[data-next-countdown]');
+    box.hidden = false;
+    const stop = () => { clearInterval(countdown); countdown = null; box.hidden = true; };
+    countdown = setInterval(() => {
+      n -= 1;
+      if (n <= 0) { stop(); go('/watch/' + target.id, { replace: true }); }
+      else countdownLabel.textContent = `Next in ${n}s`;
+    }, 1000);
+    box.onclick = (e) => { if (e.target.closest('#nuPlay')) { stop(); go('/watch/' + target.id, { replace: true }); } else if (e.target.closest('#nuClose')) stop(); };
   };
   // Create the player. R2 videos first ask the API for a short-lived signed URL (this is where login and payment are enforced server-side);
   // errors map to the matching wall (401 sign in, 402 needs plan, stream_limit) or a generic failure.
@@ -202,20 +245,11 @@ export default async function watch(ctx) {
         const s = await getStreamUrl();
         media = { ...v, source: { type: s.type, url: s.url }, poster: cat.thumb(v) };
       }
-      $('#unmutePill', ctx.root)?.remove(); $('#playPill', ctx.root)?.remove();
+      $('#playPill', ctx.root)?.remove();
       ctl = await createPlayer(slot, media, {
         start, autoplay: true,
-        // The player keeps its own controls (like the YouTube app): their fullscreen button is the
-        // one way into full screen, where the screen may turn (see the rotation note above).
-        // The player still runs muted after main's unmute lifts (rare — the browser refused sound):
-        // offer one tap to turn the sound on.
-        onAutoplayMuted: () => {
-          if (dead || $('#unmutePill', ctx.root)) return;
-          const b = document.createElement('button'); b.type = 'button'; b.id = 'unmutePill'; b.className = 'unmute-pill';
-          b.innerHTML = icon('mute', { size: 18 }).s + '<span>Tap to unmute</span>';
-          b.onclick = () => { ctl?.unmute(); b.remove(); };
-          $('#playerBox', ctx.root).appendChild(b);
-        },
+        // The player keeps its own controls (like the YouTube app): its volume button handles mute/unmute,
+        // and its fullscreen button is the one way into full screen (see the rotation note above).
         // Even muted autoplay was refused (Low Power Mode, aggressive data saver): one obvious tap starts it —
         // the tap itself is the gesture the browser was waiting for (reels shows a play glyph in this case).
         onAutoplayBlocked: () => {
@@ -225,10 +259,11 @@ export default async function watch(ctx) {
           b.onclick = () => { Promise.resolve(ctl?.play?.()).catch(() => {}); b.remove(); };
           $('#playerBox', ctx.root).appendChild(b);
         },
-        // The player's first-gesture auto-unmute fired: sound is on, the pill is obsolete.
-        onGestureUnmuted: () => { if (dead) return; $('#unmutePill', ctx.root)?.remove(); },
         onProgress: persist,
-        onEnded: () => { u.saveProgress(v.id, lastD || v.duration, lastD || v.duration, { flush: true }); if (next && u.pref('autoplayNext')) showNextUp(); },
+        onEnded: () => {
+          u.saveProgress(v.id, lastD || v.duration, lastD || v.duration, { flush: true });
+          if (u.pref('autoplayNext')) { const target = autoplayTarget(); if (target) showNextUp(target); }
+        },
         onState: (s, code) => {
           if (s === 'playing') {
             markPlaying(true);
@@ -250,7 +285,8 @@ export default async function watch(ctx) {
         },
       });
       if (dead) ctl.destroy();
-      if (ctl.castSupported?.()) { const cb = $('#castBtn', ctx.root); cb.hidden = false; cb.onclick = () => ctl.cast().catch((e) => { if (e?.name !== 'NotAllowedError') toast('No cast devices found nearby.'); }); }
+      const cb = $('#castBtn', ctx.root);
+      if (cb && ctl.castSupported?.()) { cb.hidden = false; cb.onclick = () => ctl.cast().catch((e) => { if (e?.name !== 'NotAllowedError') toast('No cast devices found nearby.'); }); }
     } catch (e) {
       console.warn(e);
       if (e instanceof ApiError && e.status === 401) return wall('login');       // session expired or never signed in

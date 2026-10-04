@@ -76,7 +76,6 @@ const video = (origin, v, cat, show, { url, full = true } = {}) => ({
   ...(url ? { url } : {}),
   ...(v.source?.type === 'youtube' ? { embedUrl: `https://www.youtube.com/embed/${v.source.id}` } : {}),
   ...(cat.isPremium(v) ? { isAccessibleForFree: false } : { isAccessibleForFree: true }),
-  ...(v.views ? { interactionStatistic: { '@type': 'InteractionCounter', interactionType: { '@type': 'WatchAction' }, userInteractionCount: v.views } } : {}),
 });
 
 // MAIN FUNCTION: given a URL path, returns everything a page's <head> needs. One `if` branch per page type below.

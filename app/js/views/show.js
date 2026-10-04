@@ -1,7 +1,7 @@
 // Show page (#/show/:id): banner, action buttons, episode list, extras (trailers/clips), cast and related shows.
 import { app } from '../app.js';
 import { go } from '../router.js';
-import { html, $, fmtDuration, fmtViews, fmtDate, timeAgo, fmtRuntime } from '../util.js';
+import { html, $, fmtDuration, fmtDate, timeAgo, fmtRuntime } from '../util.js';
 import { icon } from '../icons.js';
 import { rail, enhanceRails, showCard, videoCard, reelCard, listBtn, img, heroBg, showMeta, premiumMark, toast, fitPoster } from '../ui/components.js';
 import { openArtwork, tapArtwork } from '../ui/lightbox.js';
@@ -16,7 +16,7 @@ export function epRow(v, { current = false } = {}) {
     <span class="ep-num">${v.episode || '•'}</span>
     <span class="ep-thumb">${img(cat.thumb(v), '')}${cat.isPremium(v) ? premiumMark({ cls: 'premium-mark-compact' }) : ''}${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}<span class="play-overlay">${icon('play', { size: 18 })}</span></span>
     <span class="ep-info"><span class="ep-title">${cat.displayTitle(v)}</span>
-      <span class="ep-meta">${fmtDuration(v.duration)} · ${fmtDate(v.publishedAt)} · ${fmtViews(v.views)} views ${frac >= 0.94 ? html`<em class="watched">${icon('check', { size: 12 })} Watched</em>` : ''}</span></span>
+      <span class="ep-meta">${fmtDuration(v.duration)} · ${fmtDate(v.publishedAt)} ${frac >= 0.94 ? html`<em class="watched">${icon('check', { size: 12 })} Watched</em>` : ''}</span></span>
   </a>`;
 }
 
@@ -46,22 +46,22 @@ export default async function showView(ctx) {
           ${showMeta(s)}
           <div class="hero-actions">
             ${t ? html`<a class="btn btn-primary btn-lg" href="#/watch/${t.video.id}">${icon('play', { size: 20 })} ${label}</a>` : ''}
-            ${trailer ? html`<a class="btn btn-glass btn-lg" href="#/watch/${trailer.id}">${icon('film', { size: 20 })} Trailer</a>` : ''}
-            ${listBtn('show', s.id, { cls: 'btn btn-glass btn-lg' })}
+            ${trailer ? html`<a class="btn btn-glass btn-lg icon-only" href="#/watch/${trailer.id}" aria-label="Watch trailer" title="Watch trailer">${icon('film', { size: 20 })}</a>` : ''}
+            ${listBtn('show', s.id, { cls: 'btn btn-glass btn-lg icon-only', iconOnly: true })}
             <button type="button" class="btn btn-glass btn-lg icon-only" id="artBtn" aria-label="View the full artwork" title="View the full artwork">${icon('expand', { size: 20 })}</button>
             <button type="button" class="btn btn-glass btn-lg icon-only" id="shareBtn" aria-label="Share">${icon('share', { size: 20 })}</button>
           </div>
-          <dl class="facts">
-            ${s.cast?.length ? html`<div><dt>Featuring</dt><dd>${s.cast.join(', ')}</dd></div>` : ''}
-            <div><dt>Genres</dt><dd>${(s.genres || []).join(', ')}</dd></div>
-            ${eps.length ? html`<div><dt>Runtime</dt><dd>${eps.length} episodes · ${fmtRuntime(totalRun)}</dd></div>` : ''}
-            ${latest ? html`<div><dt>Latest</dt><dd>${fmtDate(latest.publishedAt)} (${timeAgo(latest.publishedAt)})</dd></div>` : ''}
-          </dl>
         </div>
       </div>
     </section>
-    <div class="page page-tight">
-      ${s.tagline ? html`<p class="show-tagline-below bn">${s.tagline}</p>` : ''}
+    <div class="page page-tight show-details-page">
+      <dl class="facts show-facts-below">
+        ${s.cast?.length ? html`<div><dt>Featuring</dt><dd>${s.cast.join(', ')}</dd></div>` : ''}
+        <div><dt>Genres</dt><dd>${(s.genres || []).join(', ')}</dd></div>
+        ${eps.length ? html`<div><dt>Runtime</dt><dd>${eps.length} episodes · ${fmtRuntime(totalRun)}</dd></div>` : ''}
+        ${latest ? html`<div><dt>Latest</dt><dd>${fmtDate(latest.publishedAt)} (${timeAgo(latest.publishedAt)})</dd></div>` : ''}
+      </dl>
+      ${s.tagline ? html`<p class="show-tagline-below">${s.tagline}</p>` : ''}
       ${s.description ? html`<section class="show-description" aria-labelledby="showDescriptionTitle"><h2 id="showDescriptionTitle">Description</h2><p>${s.description}</p></section>` : ''}
       ${eps.length ? html`<section class="ep-section" aria-label="Episodes">
         <div class="section-bar"><h2>Episodes <span class="count">${eps.length}</span></h2>

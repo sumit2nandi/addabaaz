@@ -35,6 +35,7 @@ export default async function content(root, [section], ctx) {
   const videosOf = (id) => data.videos.filter((v) => v.showId === id);
   const episodesOf = (id) => data.videos.filter((v) => v.showId === id && v.kind === 'episode');
   const showTitle = (id) => { const s = data.shows.find((x) => x.id === id) || data.upcoming.find((x) => x.id === id); return s ? (s.titleEn || s.title) : ''; };
+  const totalViews = (v) => Number(v.views || 0) + Number(data.playCounts?.[v.id] || 0);
   const isPremiumVideo = (v) => v.access === 'premium' || data.shows.some((s) => s.id === v.showId && s.access === 'premium');
   const move = (list, id, dir) => {
     const ids = list.map((x) => x.id), i = ids.indexOf(id), j = i + dir; if (j < 0 || j >= ids.length) return;
@@ -153,7 +154,7 @@ export default async function content(root, [section], ctx) {
     { k: 'publishAt', label: 'Publish at (optional)', type: 'datetime', help: 'Leave empty to publish now. A future time hides the video from viewers, Google and the API until then — admins still see it, and followers get a notification when it goes live.' },
     { k: 'hidden', label: 'Hide from the public website', type: 'bool', wide: true, help: 'Hidden videos stay in the admin catalog and can be restored later.' },
     ratingField, subtitlesField(),
-    { k: 'views', label: 'Views', type: 'number', min: 0 },
+    { k: 'views', label: 'Starting views', type: 'number', min: 0, help: 'Imported/catalog baseline. Plays recorded on ADDABAAZ are counted separately and included in the total shown in the video list.' },
     { k: 'topRank', label: 'Top 10 position (optional)', type: 'number', min: 1, max: 10, help: 'Pins this episode into the homepage “Top 10 Episodes” rail: 1 is first. Leave empty to rank it by views. Content studio → Top 10 arranges them all at once.' },
     { k: 'id', label: 'ID', req: true, readonly: !create, max: 64, help: create ? 'Filled in automatically; letters, digits, - and _.' : '', wide: true },
   ];
@@ -405,7 +406,7 @@ export default async function content(root, [section], ctx) {
       ${pageRows.map((v) => html`<tr><td class="select-col"><input type="checkbox" data-video-select="${v.id}" aria-label="Select ${v.title}" ${selectedVideoIds.has(v.id) ? 'checked' : ''}></td><td class="thumb wide">${thumb(v) ? html`<img src="${thumb(v)}" alt="" loading="lazy">` : ''}</td>
         <td class="title-cell"><strong class="clip">${v.shortTitle || v.title}</strong><br>${badge(youtubeKindLabel(v))} ${badge(v.source?.type === 'youtube' ? 'YouTube' : v.source?.type === 'r2' ? 'R2' : v.source?.type?.toUpperCase() || 'Video')} ${isPremiumVideo(v) ? badge('premium', 'gold') : ''}</td>
         <td>${showTitle(v.showId) || html`<span class="muted">—</span>`}</td><td>${videoVisibility(v) === 'hidden' ? badge('Hidden', 'bad') : videoVisibility(v) === 'scheduled' ? badge('Scheduled', 'warn') : badge('Visible', 'ok')}</td>
-        <td>${v.duration > 0 ? fmtDur(v.duration) : '—'}</td><td class="small">${fmtDT(v.publishedAt)}</td><td class="end">${Number(v.views || 0).toLocaleString('en-IN')}</td>
+        <td>${v.duration > 0 ? fmtDur(v.duration) : '—'}</td><td class="small">${fmtDT(v.publishedAt)}</td><td class="end">${totalViews(v).toLocaleString('en-IN')}</td>
         <td class="end nowrap"><a class="icon-btn" href="/watch/${v.id}" target="_blank" rel="noopener" title="Open on site">${icon('external', 16)}</a><button class="icon-btn" data-edit="${v.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${v.id}" title="Delete">${icon('trash', 16)}</button></td></tr>`)}</tbody></table>` : empty('No videos match.')}</div>
       ${pager({ total: rows.length, offset: F.offset, limit: PAGE })}`.s;
     const pageChecks = $$('[data-video-select]', $('#list'));
@@ -505,26 +506,26 @@ export default async function content(root, [section], ctx) {
   function drawTop() {
     const picks = ranked();
     const picked = new Set(picks.map((v) => v.id));
-    const byViews = data.videos.filter((v) => v.kind === 'episode' && !picked.has(v.id)).sort((a, b) => (b.views || 0) - (a.views || 0));
+    const byViews = data.videos.filter((v) => v.kind === 'episode' && !picked.has(v.id)).sort((a, b) => totalViews(b) - totalViews(a));
     const q = TOP.q.trim().toLowerCase();
     const matches = (v) => !q || `${v.title} ${v.shortTitle || ''} ${showTitle(v.showId)}`.toLowerCase().includes(q);
     const candidates = byViews.filter(matches).slice(0, 40);
     const row = (v, i) => html`<li class="top-row">${i != null ? html`<span class="top-rank">${i + 1}</span>` : ''}
       <img src="${thumb(v)}" alt="" loading="lazy" class="top-thumb">
-      <div class="top-info"><b>${v.title}</b><small class="muted">${showTitle(v.showId) || 'No show'}${v.episode ? ` · EP ${v.episode}` : ''} · ${fmtViews(v.views || 0)} views${v.hidden ? ' · hidden' : ''}</small></div>
+      <div class="top-info"><b>${v.title}</b><small class="muted">${showTitle(v.showId) || 'No show'}${v.episode ? ` · EP ${v.episode}` : ''} · ${fmtViews(totalViews(v))} views${v.hidden ? ' · hidden' : ''}</small></div>
       <div class="row end">${i != null ? html`<button class="icon-btn" data-top-up="${v.id}" title="Move up" ${i === 0 ? 'disabled' : ''}>${icon('up', 16)}</button><button class="icon-btn" data-top-down="${v.id}" title="Move down" ${i === picks.length - 1 ? 'disabled' : ''}>${icon('down', 16)}</button><button class="icon-btn danger" data-top-out="${v.id}" title="Take it out of the rail">${icon('x', 16)}</button>`
         : html`<button class="btn sm" data-top-in="${v.id}">${icon('plus', 14)} Add</button>`}</div></li>`;
     root.innerHTML = html`${pageHead('Top 10 episodes', 'What the homepage rail shows, in this order. Episodes you do not pick are filled in by most-watched, so the rail is never empty.', html`<button class="btn" id="topReset" ${picks.length ? '' : 'disabled'}>${icon('refresh', 16)} Rank by views</button>`)}
       <div class="grid two">
         <section class="card">
           <h2>${icon('crown', 18)} In the rail <span class="muted small">${picks.length} / 10</span></h2>
-          ${picks.length ? html`<ol class="top-list">${picks.map((v, i) => row(v, i)).join('')}</ol>` : empty('Nothing picked yet — the rail currently shows the ten most-watched episodes.')}
+          ${picks.length ? html`<ol class="top-list">${picks.map((v, i) => row(v, i))}</ol>` : empty('Nothing picked yet — the rail currently shows the ten most-watched episodes.')}
           <p class="muted small">A picked episode always appears, mature or not: it is an editorial choice, not a recommendation.</p>
         </section>
         <section class="card">
           <h2>${icon('play', 18)} Most watched</h2>
           <input type="search" id="topSearch" placeholder="Search episodes…" value="${TOP.q.replace(/"/g, '&quot;')}" autocomplete="off">
-          ${candidates.length ? html`<ul class="top-list">${candidates.map((v) => row(v)).join('')}</ul>` : html`<p class="empty">${q ? 'No episode matches that search.' : 'Every episode is already in the rail.'}</p>`}
+          ${candidates.length ? html`<ul class="top-list">${candidates.map((v) => row(v))}</ul>` : html`<p class="empty">${q ? 'No episode matches that search.' : 'Every episode is already in the rail.'}</p>`}
         </section>
       </div>
       <p class="muted small">${note}</p>`.s;
@@ -536,10 +537,10 @@ export default async function content(root, [section], ctx) {
     });
     const ids = picks.map((v) => v.id);
     const swap = (id, dir) => { const i = ids.indexOf(id), j = i + dir; if (i < 0 || j < 0 || j >= ids.length) return; [ids[i], ids[j]] = [ids[j], ids[i]]; mutate(() => saveTop(ids), 'Order saved'); };
-    $('[data-top-up]', root).forEach((b) => b.onclick = () => swap(b.dataset.topUp, -1));
-    $('[data-top-down]', root).forEach((b) => b.onclick = () => swap(b.dataset.topDown, 1));
-    $('[data-top-out]', root).forEach((b) => b.onclick = () => mutate(() => saveTop(ids.filter((x) => x !== b.dataset.topOut)), 'Removed from the rail'));
-    $('[data-top-in]', root).forEach((b) => b.onclick = () => mutate(() => saveTop([...ids, b.dataset.topIn]), 'Added to the rail'));
+    $$('[data-top-up]', root).forEach((b) => b.onclick = () => swap(b.dataset.topUp, -1));
+    $$('[data-top-down]', root).forEach((b) => b.onclick = () => swap(b.dataset.topDown, 1));
+    $$('[data-top-out]', root).forEach((b) => b.onclick = () => mutate(() => saveTop(ids.filter((x) => x !== b.dataset.topOut)), 'Removed from the rail'));
+    $$('[data-top-in]', root).forEach((b) => b.onclick = () => mutate(() => saveTop([...ids, b.dataset.topIn]), 'Added to the rail'));
     $('#topReset', root)?.addEventListener('click', () => mutate(clearTop, 'The rail is ranked by views again'));
   }
 

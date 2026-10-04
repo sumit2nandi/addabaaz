@@ -3,13 +3,14 @@
 // that turned notifications on; "E-mail" reaches accounts by their Users-page filter. Sending happens
 // in the background, so the page polls the campaign row and shows live progress.
 import { api } from '../api.js';
-import { empty, html, $, icon, pageHead, toast, errMsg, guard, fmtDT, badge, wireImages, imgSrc } from '../ui.js';
+import { empty, html, $, icon, pageHead, toast, errMsg, guard, fmtDT, badge, wireImages, openModal } from '../ui.js';
 
 // Status badge for a campaign row.
 const STATUS = { queued: ['Queued', 'warn'], sending: ['Sending…', 'warn'], sent: ['Sent', 'ok'], partial: ['Partly sent', 'warn'], failed: ['Failed', 'bad'], cancelled: ['Cancelled', ''] };
 const statusBadge = (s) => badge(...(STATUS[s] || [s, '']));
 const CHANNEL = { push: 'App push', email: 'E-mail' };
 const k = (n) => (Number(n) || 0).toLocaleString('en-IN');
+const campaignImageSrc = (path) => (!path ? '' : /^https?:\/\//i.test(path) ? path : `/${String(path).replace(/^\/+/, '')}`);
 const done = (s) => ['sent', 'partial', 'failed', 'cancelled'].includes(s);
 // The optional image attached to a broadcast: shown inside the notification (rich push) and at the top of
 // the e-mail. The markup matches the console's other image controls, so `wireImages()` gives it upload + preview.
@@ -38,14 +39,19 @@ export default async function notifications(root, _p, ctx) {
     <section class="card flush" style="margin-top:16px"><div class="card-head pad"><h2>Recent broadcasts</h2><span class="muted small" id="bclive"></span></div><div id="bchistory"></div></section>`.s;
 
   const body = $('#bcbody', root), history = $('#bchistory', root), live = $('#bclive', root);
+  history.addEventListener('click', (e) => {
+    const button = e.target.closest('[data-campaign-open]');
+    const row = button || e.target.closest('tr[data-campaign]');
+    if (row && history.contains(row)) openBroadcast(button?.dataset.campaignOpen || row.dataset.campaign);
+  });
   for (const t of [...root.querySelectorAll('[data-ch]')]) {
     t.classList.toggle('on', t.dataset.ch === channel);
     t.addEventListener('click', () => { channel = t.dataset.ch; for (const x of [...root.querySelectorAll('[data-ch]')]) x.classList.toggle('on', x === t); paint(); });
   }
 
   /* ---------- recent broadcasts (with live progress while one is sending) ---------- */
-  const row = (c) => html`<tr>
-    <td>${badge(CHANNEL[c.channel] || c.channel)} <strong>${c.title}</strong><br><small class="muted">${(c.body || '').slice(0, 110)}${(c.body || '').length > 110 ? '…' : ''}</small></td>
+  const row = (c) => html`<tr class="link broadcast-row" data-campaign="${c.id}">
+    <td>${badge(CHANNEL[c.channel] || c.channel)} <button class="broadcast-open" type="button" data-campaign-open="${c.id}" aria-label="View details for ${c.title || 'broadcast'}" aria-haspopup="dialog">${icon('eye', 14)} <strong>${c.title || 'Untitled broadcast'}</strong></button><br><small class="muted">${(c.body || '').slice(0, 110)}${(c.body || '').length > 110 ? '…' : ''}</small></td>
     <td class="small">${c.audience}${c.test ? html` ${badge('test')}` : ''}</td>
     <td class="small">${k(c.sent)}${c.total ? html` / ${k(c.total)}` : ''} sent${c.failed ? html` ${badge(`${k(c.failed)} failed`, 'warn')}` : ''}${c.skipped ? html`<br><small class="muted">${k(c.skipped)} skipped</small>` : ''}</td>
     <td>${statusBadge(c.status)}${c.error ? html`<br><small class="muted">${c.error}</small>` : ''}</td>
@@ -58,6 +64,141 @@ export default async function notifications(root, _p, ctx) {
     const active = list.filter((c) => !done(c.status)).length;
     live.textContent = active ? `${active} sending…` : '';
   };
+
+  const DELIVERY = {
+    pending: ['Pending', 'warn'], sent: ['Sent', 'ok'], failed: ['Failed', 'bad'], skipped: ['Skipped', ''],
+  };
+  const deliveryBadge = (status) => badge(...(DELIVERY[status] || [status || 'Unknown', '']));
+
+  function deliveryRows(page, state, campaign) {
+    const list = page.deliveries || [];
+    const offset = Number(page.offset) || 0, limit = Number(page.limit) || 50, total = Number(page.total) || 0;
+    const from = total ? offset + 1 : 0, to = Math.min(total, offset + list.length);
+    return html`<div class="broadcast-delivery-list">
+      <div class="toolbar broadcast-delivery-toolbar">
+        <select data-delivery-status aria-label="Filter recipient outcomes">
+          ${[['all', 'All outcomes'], ['pending', 'Pending'], ['sent', 'Sent'], ['failed', 'Failed'], ['skipped', 'Skipped']].map(([value, label]) => html`<option value="${value}" ${state.status === value ? 'selected' : ''}>${label}</option>`)}
+        </select>
+        <label class="search"><input type="search" data-delivery-query value="${state.search}" placeholder="Search name, email or account ID" aria-label="Search recipients"></label>
+        <button class="btn sm" type="button" data-delivery-search>Search</button>
+      </div>
+      ${list.length ? html`<div class="broadcast-delivery-table-wrap"><table class="tbl compact broadcast-delivery-table">
+        <thead><tr><th>Recipient</th><th>Account ID</th><th>Destination</th><th>Outcome</th></tr></thead>
+        <tbody>${list.map((d) => html`<tr>
+          <td><strong>${d.name || d.email || (d.userId ? 'Account' : 'Guest device')}</strong>${d.email && d.name ? html`<br><small class="muted">${d.email}</small>` : ''}</td>
+          <td class="small">${d.userId ? html`<code>${d.userId}</code>` : html`<span class="muted">No linked account</span>`}</td>
+          <td class="small">${d.destination || d.transport || '—'}</td>
+          <td>${deliveryBadge(d.status)}${d.error ? html`<br><small class="broadcast-delivery-error">${d.error}</small>` : ''}</td>
+        </tr>`)}</tbody>
+      </table></div>` : empty(state.search || state.status !== 'all' ? 'No recipients match this filter.' : Number(campaign.total) > 0 && done(campaign.status) ? 'Recipient-level outcomes were not recorded for this older broadcast.' : 'No recipient results recorded yet.')}
+      <div class="broadcast-delivery-count muted small">${k(from)}–${k(to)} of ${k(total)} recipient results</div>
+      ${total > limit ? html`<div class="row end broadcast-delivery-pager">
+        <button class="btn sm" type="button" data-delivery-page="${Math.max(0, offset - limit)}" ${offset <= 0 ? 'disabled' : ''}>Previous</button>
+        <button class="btn sm" type="button" data-delivery-page="${offset + limit}" ${offset + limit >= total ? 'disabled' : ''}>Next</button>
+      </div>` : ''}
+    </div>`;
+  }
+
+  function campaignDetails(c) {
+    const audiences = c.channel === 'email' ? (meta.email?.audiences || []) : (meta.audiences || []);
+    const audience = audiences.find((a) => a.id === c.audience)?.label || c.audience || '—';
+    const details = [
+      ['Audience', audience], ['Created', fmtDT(c.createdAt || c.at)], ['Updated', fmtDT(c.updatedAt)],
+      ['Finished', fmtDT(c.finishedAt)], ['Sent by', c.by || '—'],
+      ...(c.channel !== 'email' || c.button ? [[c.channel === 'email' ? 'Button opens' : 'Opens', c.url || '/']] : []),
+      ...(c.button ? [['Button label', c.button]] : []), ['Campaign ID', c.id || '—'],
+    ];
+    return html`<div class="broadcast-detail">
+      <div class="broadcast-detail-head">${badge(CHANNEL[c.channel] || c.channel)} ${c.test ? badge('test') : ''}<span data-campaign-status>${statusBadge(c.status)}</span></div>
+      <div><h3>${c.title || 'Untitled broadcast'}</h3><p class="muted small">${c.channel === 'email' ? 'E-mail subject' : 'Push notification title'}</p></div>
+      <div class="broadcast-detail-stats">${[['Recipients', c.total], ['Sent', c.sent], ['Failed', c.failed], ['Skipped', c.skipped]].map(([label, value]) => html`<div class="broadcast-detail-stat"><span class="muted small">${label}</span><strong data-campaign-stat="${label.toLowerCase()}">${k(value)}</strong></div>`)}</div>
+      <section><b>Message</b><p class="broadcast-detail-message">${c.body || '—'}</p></section>
+      <dl class="broadcast-detail-meta">${details.map(([label, value]) => html`<div><dt>${label}</dt><dd>${label === 'Opens' || label === 'Button opens' || label === 'Campaign ID' ? html`<code class="broadcast-detail-code">${value}</code>` : value}</dd></div>`)}</dl>
+      ${c.imageUrl ? html`<section><b>Attached image</b><div class="broadcast-detail-image"><img src="${campaignImageSrc(c.imageUrl)}" alt="${c.imageAlt || ''}" loading="lazy"></div>${c.imageAlt ? html`<p class="muted small">${c.imageAlt}</p>` : ''}</section>` : ''}
+      <section class="broadcast-recipient-panel">
+        <div class="card-head"><div><h3>Recipients and outcomes</h3><p class="muted small">Accounts and devices reached by this broadcast, with individual delivery status.</p></div></div>
+        <div data-campaign-deliveries><p class="muted small">Loading recipient results…</p></div>
+        <p class="muted small">Sent means the mail or push provider accepted the request; it is not a read receipt.</p>
+      </section>
+      <div data-campaign-error>${c.error ? html`<p class="form-err broadcast-detail-error"><b>Campaign error:</b> ${c.error}</p>` : ''}</div>
+    </div>`;
+  }
+
+  function updateCampaignSummary(container, c) {
+    const status = $('[data-campaign-status]', container);
+    if (status) status.innerHTML = statusBadge(c.status).s;
+    for (const [key, value] of [['recipients', c.total], ['sent', c.sent], ['failed', c.failed], ['skipped', c.skipped]]) {
+      const target = $(`[data-campaign-stat="${key}"]`, container);
+      if (target) target.textContent = k(value);
+    }
+    const error = $('[data-campaign-error]', container);
+    if (error) error.innerHTML = c.error ? html`<p class="form-err broadcast-detail-error"><b>Campaign error:</b> ${c.error}</p>`.s : '';
+  }
+
+  async function openBroadcast(id) {
+    const initial = (meta.campaigns || []).find((c) => String(c.id) === String(id));
+    if (!initial) return;
+    const modal = openModal(campaignDetails(initial), { title: 'Broadcast details', wide: true });
+    const state = { status: 'all', search: '', offset: 0 };
+    let active = true, timer = null, request = 0, campaign = initial, firstRefresh = true;
+    modal.el.addEventListener('close', () => { active = false; clearTimeout(timer); });
+
+    const loadRecipients = async () => {
+      const sequence = ++request, section = $('[data-campaign-deliveries]', modal.body);
+      if (!section || !active) return;
+      const queryInput = $('[data-delivery-query]', section), keepFocus = queryInput && document.activeElement === queryInput;
+      const caret = keepFocus ? queryInput.selectionStart : null;
+      section.innerHTML = '<p class="muted small">Loading recipient results…</p>';
+      const params = new URLSearchParams({ status: state.status, q: state.search, limit: '50', offset: String(state.offset) });
+      try {
+        const result = await api.get(`/notifications/${encodeURIComponent(id)}/deliveries?${params}`);
+        if (!active || sequence !== request) return;
+        section.innerHTML = deliveryRows(result, state, campaign).s;
+        if (keepFocus) {
+          const next = $('[data-delivery-query]', section);
+          next?.focus();
+          if (next && caret !== null) next.setSelectionRange(caret, caret);
+        }
+      } catch (e) {
+        if (active && sequence === request) section.innerHTML = html`<p class="form-err">Could not load recipient results: ${errMsg(e)}</p>`.s;
+      }
+    };
+    modal.body.addEventListener('input', (event) => {
+      if (event.target.matches('[data-delivery-query]')) state.search = event.target.value;
+    });
+    modal.body.addEventListener('change', (event) => {
+      if (!event.target.matches('[data-delivery-status]')) return;
+      state.status = event.target.value; state.offset = 0; loadRecipients();
+    });
+    modal.body.addEventListener('click', (event) => {
+      if (event.target.closest('[data-delivery-search]')) {
+        state.search = $('[data-delivery-query]', modal.body)?.value?.trim() || ''; state.offset = 0; loadRecipients();
+        return;
+      }
+      const page = event.target.closest('[data-delivery-page]');
+      if (page && !page.disabled) { state.offset = Number(page.dataset.deliveryPage) || 0; loadRecipients(); }
+    });
+    modal.body.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && event.target.matches('[data-delivery-query]')) {
+        event.preventDefault(); state.search = event.target.value.trim(); state.offset = 0; loadRecipients();
+      }
+    });
+
+    const refresh = async () => {
+      if (!active) return;
+      try {
+        const latest = await api.get(`/notifications/${encodeURIComponent(id)}`);
+        if (!active) return;
+        campaign = latest;
+        if (firstRefresh) { modal.body.innerHTML = campaignDetails(campaign).s; firstRefresh = false; }
+        else updateCampaignSummary(modal.body, campaign);
+      } catch { /* the saved history snapshot remains useful if status refresh fails */ }
+      await loadRecipients();
+      if (active && !done(campaign.status)) timer = setTimeout(refresh, 3000);
+    };
+    await refresh();
+  }
+
   // While something is sending, refresh the list every few seconds (and stop when the page changes).
   function schedule() {
     clearTimeout(timer);
@@ -88,9 +229,8 @@ export default async function notifications(root, _p, ctx) {
     <div id="bcPvBody"><p class="muted small">Nothing is sent by previewing.</p></div>
   </section>`;
 
-  function previewText() {
-    const p = { channel, title: (form.title?.value || '').trim(), body: (form.body?.value || '').trim(), url: (form.url?.value || '').trim(), button: (form.button?.value || '').trim(), imageUrl: (form.imageUrl?.value || '').trim(), imageAlt: (form.imageAlt?.value || '').trim() };
-    return p;
+  function previewText(form) {
+    return { channel, title: (form.title?.value || '').trim(), body: (form.body?.value || '').trim(), url: (form.url?.value || '').trim(), button: (form.button?.value || '').trim(), imageUrl: (form.imageUrl?.value || '').trim(), imageAlt: (form.imageAlt?.value || '').trim() };
   }
 
   let previewTimer = null;
@@ -102,7 +242,7 @@ export default async function notifications(root, _p, ctx) {
   async function runPreview() {
     const form = $('#bcf', body), pvBody = $('#bcPvBody', body), state = $('#bcPvState', body);
     if (!form || !pvBody) return;
-    const p = previewText();
+    const p = previewText(form);
     if (!p.title && !p.body) { pvBody.innerHTML = '<p class="muted small">Write a title and a message to see the preview.</p>'; state.textContent = ''; return; }
     state.textContent = 'Rendering…';
     let r;

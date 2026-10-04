@@ -1,6 +1,6 @@
 // Front-end settings. Values that differ per deployment come from app/env.js (`window.ADDABAAZ_ENV`); the rest are tuning constants.
 // app/env.js is loaded before this module; it may be missing or empty.
-const env = window.ADDABAAZ_ENV || {};
+const env = globalThis.window?.ADDABAAZ_ENV || {};
 export const CONFIG = {
   appName: 'ADDABAAZ',
   version: '2.0.1',

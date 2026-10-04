@@ -1,4 +1,4 @@
-/* Sends uncaught browser errors to the ADDABAAZ API (admin console → Errors). Throttled and de-duplicated; nothing personal is attached.
+/* Sends uncaught browser errors to the ADDABAAZ API (admin console → Errors). Reports are throttled and de-duplicated; the browser sends no account identifier (the server may associate a verified session).
  * Also owns `friendly()` — the one place that decides what a user may see when something throws:
  * server-authored and deliberately-written messages pass through, browser/JS internals never do. */
 import { app } from './app.js';
@@ -29,10 +29,13 @@ export function friendly(e, fallback = 'Something went wrong. Please try again.'
 // Reports one error (at most 5 per page load, each message once), and only when signed in to the API. Known-harmless browser noise is ignored.
 export function reportClientError(err, extra = {}) {
   try {
+    // Explicit playback diagnostics may be expected network/media failures, but are useful to operators
+    // when investigating a broken stream. `force` only bypasses the generic-noise filter; it is not sent.
+    const { force = false, ...details } = extra;
     const message = String(err?.message || err || 'Unknown error').slice(0, 300);
-    if (!app.user?.remote || sent >= 5 || seen.has(message) || NOISE.test(message)) return;
+    if (!app.user?.remote || sent >= 5 || seen.has(message) || (!force && NOISE.test(message))) return;
     seen.add(message); sent++;
-    app.user.remote.reportError({ message, stack: String(err?.stack || '').slice(0, 3000), url: location.pathname + location.search + location.hash, ...extra });
+    app.user.remote.reportError({ message, stack: String(err?.stack || '').slice(0, 3000), url: location.pathname + location.search + location.hash, ...details });
   } catch { /* never throw from the reporter */ }
 }
 

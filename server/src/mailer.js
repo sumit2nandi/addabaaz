@@ -16,7 +16,12 @@ export function createMailer({ url = '', from = 'ADDABAAZ <no-reply@localhost>',
     async send({ to, subject, text, html, attachments = [] }) {
       if (!to) return { sent: false };
       if (!t) { if (process.env.NODE_ENV !== 'production') log.log(`[mail:dev] to=${to} subject="${subject}" attachments=${attachments.map((a) => a.filename).join(',') || '-'}`); return { sent: false }; }
-      await t.sendMail({ from, to, subject, text, html, attachments });
+      const info = await t.sendMail({ from, to, subject, text, html, attachments });
+      // SMTP can resolve while rejecting a recipient (for example when other addresses in a message were accepted).
+      // Campaigns send one address at a time, so surface that as an individual failure instead of a false success.
+      if (info?.rejected?.length || (Array.isArray(info?.accepted) && info.accepted.length === 0)) {
+        throw Object.assign(new Error('The SMTP server rejected this recipient.'), { code: 'smtp_recipient_rejected' });
+      }
       return { sent: true };
     },
   };

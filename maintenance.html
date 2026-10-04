@@ -16,7 +16,7 @@
 <style>
   :root {
     --bg: #0b0b10; --panel: #14141c; --line: #262633; --ink: #f4f4f8; --muted: #9b9bad;
-    --brand: #e50914; --brand-2: #ff5f6d; --brand-soft: rgba(229, 9, 20, .16);
+    --brand: #b80000; --brand-2: #d00000; --brand-soft: rgba(184, 0, 0, .16);
     --ok: #38d39f;
   }
   * { box-sizing: border-box; }
@@ -32,7 +32,7 @@
     position: fixed; inset: -30vmax; z-index: 0; pointer-events: none;
     background:
       radial-gradient(circle at 30% 25%, var(--brand-soft), transparent 42%),
-      radial-gradient(circle at 72% 70%, rgba(229, 9, 20, .10), transparent 45%);
+      radial-gradient(circle at 72% 70%, rgba(184, 0, 0, .10), transparent 45%);
     animation: drift 18s ease-in-out infinite alternate;
   }
   @keyframes drift { from { transform: translate3d(-2%, -1%, 0) } to { transform: translate3d(2%, 1%, 0) } }

@@ -25,6 +25,8 @@ test('floating mobile tabs stay pinned while scrolling, including the nested Ree
   renderShell();
   const bar = document.querySelector('#tabbar');
   assert.ok(bar.querySelector('a'), 'the tab bar is drawn');
+  assert.equal(bar.querySelectorAll('a').length, 5, 'signed-in visitors see all five tabs');
+  assert.equal(bar.querySelector('[data-tab="/account"] span')?.textContent, 'Profile', 'the personal tab is not labelled Me');
   const snapshot = () => JSON.stringify({ cls: bar.getAttribute('class'), style: bar.getAttribute('style') });
   const before = snapshot();
 
@@ -59,7 +61,20 @@ test('floating mobile tabs stay pinned while scrolling, including the nested Ree
   }
 });
 
-test('local-only mode labels the personal tab Profile, not Me', async () => {
+test('signed-out visitors keep the profile icon in the floating bar as a Sign in option', async () => {
+  const { app } = await import('../../app/js/app.js');
+  const { renderTabbar } = await import('../../app/js/ui/shell.js');
+  app.user = { supportsAuth: true, account: null };
+  renderTabbar();
+  const bar = document.querySelector('#tabbar');
+  const personalTab = bar.querySelector('[data-tab="/signin"]');
+  assert.equal(bar.querySelectorAll('a').length, 5, 'the signed-out tab bar still has all five items');
+  assert.equal(personalTab?.getAttribute('href'), '#/signin', 'the personal tab opens sign-in');
+  assert.equal(personalTab?.querySelector('span')?.textContent, 'Sign in');
+  assert.ok(personalTab?.querySelector('svg'), 'the user/profile icon remains visible');
+});
+
+test('local-only mode labels the personal tab Profile', async () => {
   const { app } = await import('../../app/js/app.js');
   const { renderTabbar } = await import('../../app/js/ui/shell.js');
   app.user = { supportsAuth: false };

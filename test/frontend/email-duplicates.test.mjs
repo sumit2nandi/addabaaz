@@ -85,6 +85,6 @@ test('the admin console reports look-alike duplicates and merges them into one a
 
 test('a broadcast sends one message per address (duplicates cannot receive it twice)', () => {
   assert.match(campaigns, /const seen = new Set\(\)/, 'addresses already sent to are remembered');
-  assert.match(campaigns, /if \(seen\.has\(address\)\) \{ skipped\+\+; continue; \}/, 'the second account row is skipped');
+  assert.match(campaigns, /if \(seen\.has\(address\)\) \{\s*skipped\+\+;\s*await recordDelivery\(campaign\.id, 'email', \{ \.\.\.recipient, status: 'skipped', error: 'This address was already included for another account in the same campaign\.' \}\);\s*continue;\s*\}/, 'the duplicate row is logged and skipped');
   assert.match(campaigns, /const address = emailKey\(u\.email\)/, 'compared by normalized address');
 });

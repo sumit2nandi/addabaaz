@@ -1,15 +1,14 @@
 // Admin console entry point (http://…/admin/).
 //
-// The Admin console is the *business* half of the management tools: customers, payments and refunds,
-// coupons, the contact inbox, support tickets, comment moderation, analytics, broadcasts, errors and the
-// audit log. The *content* half lives in its own console at /content/ (the Content studio) — see
-// admin/js/console.js for why the two are separate pages.
+// The Admin console includes both business operations and the full content CMS. The same CMS pages are
+// also available in a focused Content studio at /content/ for editors who prefer a shorter sidebar.
 //
 // Sidebar menu. Grouped exactly as the pages are used day to day.
 import { startConsole } from './console.js';
 
 const NAV = [
   ['Overview', [['dashboard', 'Dashboard', 'dashboard']]],
+  ['Content', [['catalog', 'Content overview', 'dashboard'], ['shows', 'Shows & seasons', 'film'], ['videos', 'Videos & reels', 'tv'], ['upcoming', 'Coming soon', 'clock'], ['top', 'Top 10', 'crown'], ['studio', 'Studio & team', 'building']]],
   ['Customers', [['users', 'Users', 'users'], ['payments', 'Payments & refunds', 'card'], ['refunds', 'Refund requests', 'refund'], ['coupons', 'Coupons', 'ticket'], ['support', 'Support', 'chat'], ['messages', 'Messages', 'inbox'], ['comments', 'Comments', 'chat']]],
   ['Growth', [['analytics', 'Analytics', 'chart'], ['promos', 'Promotions', 'gift'], ['notifications', 'Broadcast', 'bell']]],
   ['System', [['cache', 'Client cache', 'refresh'], ['maintenance', 'Maintenance', 'power'], ['errors', 'Errors', 'bug'], ['audit', 'Audit log', 'log']]],
@@ -17,6 +16,9 @@ const NAV = [
 // URL pattern -> page module. Each module's default export is `render(root, params, ctx)`.
 const ROUTES = [
   [/^dashboard$/, () => import('./views/dashboard.js')],
+  [/^catalog$/, () => import('./views/content-overview.js')],
+  [/^(shows|videos|upcoming|top)$/, () => import('./views/content.js')],
+  [/^studio$/, () => import('./views/studio.js')],
   [/^users$/, () => import('./views/users.js')],
   [/^users\/([^/]+)$/, () => import('./views/user.js')],
   [/^payments$/, () => import('./views/payments.js')],

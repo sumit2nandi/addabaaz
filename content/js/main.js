@@ -1,11 +1,11 @@
-// Content studio entry point (http://…/content/) — the CMS half of the management tools.
+// Focused Content studio entry point (http://…/content/).
 //
 // Everything that shapes what viewers see: shows and seasons, videos and reels, the "coming soon"
-// calendar and the studio/team credits. The business half (customers, payments and refunds,
-// support tickets, broadcasts, errors) lives in the Admin console at /admin/.
+// calendar and the studio/team credits. These same CMS pages are also available inside Admin at /admin/;
+// this standalone route remains a shorter workspace for editors.
 //
-// Both consoles share the shell (admin/js/console.js), the API client (admin/js/api.js) and the page
-// modules (admin/js/views/*.js) — this file only decides which pages exist and what the sidebar shows.
+// Both entry points share the shell (admin/js/console.js), API client (admin/js/api.js) and page modules
+// (admin/js/views/*.js) — this file only decides which pages exist and what the sidebar shows.
 import { startConsole } from '/admin/js/console.js';
 
 const NAV = [

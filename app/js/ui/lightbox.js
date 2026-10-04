@@ -1,13 +1,13 @@
 /* Full-screen viewer: the photo gallery's lightbox, and the "tap the poster to see it whole" popup.
  *
- * One item = a single image (the poster on a details page): the arrows are hidden and the caption is just
- * the label. Several items = the gallery viewer, with arrows, keyboard, swipe and a 1 / n counter.
+ * One item = a single image, with arrows hidden; gallery captions remain optional. Several items = the
+ * gallery viewer, with arrows, keyboard, swipe and a 1 / n counter.
  */
 import { html, $ } from '../util.js';
 import { icon } from '../icons.js';
 
 /** Full-screen image viewer for a list of `{ id, image, imageLg, caption, group }` items. */
-export function openLightbox(items, startId, { label = 'Image viewer' } = {}) {
+export function openLightbox(items, startId, { label = 'Image viewer', showCaption = true } = {}) {
   const many = items.length > 1;
   let i = Math.max(0, items.findIndex((g) => g.id === startId));
   const prevFocus = document.activeElement;
@@ -19,12 +19,13 @@ export function openLightbox(items, startId, { label = 'Image viewer' } = {}) {
     ${many ? html`<button class="lb-nav lb-next icon-btn" aria-label="Next image">${icon('right', { size: 30 })}</button>` : ''}`.s;
   document.body.appendChild(root); document.body.classList.add('no-scroll');
   const im = $('img', root), cap = $('figcaption', root);
+  cap.hidden = !showCaption;
   const show = (n) => {
     i = (n + items.length) % items.length; const g = items[i];
     im.classList.add('loading'); im.onload = () => im.classList.remove('loading');
     im.src = g.imageLg || g.image; im.alt = g.caption || g.group || '';
     // One image: just its label (a poster has no "1 / 1"). Several: the group and the position.
-    cap.textContent = many ? `${g.group || ''}${g.group && g.caption ? ' · ' : ''}${g.caption || ''}${g.caption || g.group ? ' · ' : ''}${i + 1} / ${items.length}`.trim()
+    cap.textContent = !showCaption ? '' : many ? `${g.group || ''}${g.group && g.caption ? ' · ' : ''}${g.caption || ''}${g.caption || g.group ? ' · ' : ''}${i + 1} / ${items.length}`.trim()
       : (g.caption || g.group || '');
     [items[(i + 1) % items.length], items[(i - 1 + items.length) % items.length]].forEach((x) => { if (x) new Image().src = x.imageLg || x.image; });
   };
@@ -48,8 +49,8 @@ export function openLightbox(items, startId, { label = 'Image viewer' } = {}) {
 }
 
 /**
- * The images a title's artwork popup shows, each once: the banner still the page displays ("Artwork") and
- * the poster ("Poster"). Used by the banner tap, the poster box and the expand button.
+ * The images a title's artwork popup shows, each once: the banner still and the poster. Captions provide
+ * accessible image names but are kept out of the visible popup UI.
  */
 export function artworkItems({ poster = '', backdrop = '' } = {}) {
   const items = [];
@@ -67,7 +68,7 @@ export function openArtwork({ title = '', poster = '', backdrop = '' } = {}, sta
   const items = artworkItems({ poster, backdrop });
   if (!items.length) return;
   const at = items.some((x) => x.id === start) ? start : items[0].id;
-  openLightbox(items, at, { label: title ? `${title} — artwork` : 'Artwork' });
+  openLightbox(items, at, { label: title ? `${title} — artwork` : 'Artwork', showCaption: false });
 }
 
 /**

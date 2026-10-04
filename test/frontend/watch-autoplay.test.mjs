@@ -1,6 +1,6 @@
 // Watch page (#/watch/:id) autoplay fallbacks: when a phone refuses even muted autoplay (Low Power Mode,
 // data saver...), the page must offer an obvious "Tap to play" pill — and the tap itself is the gesture
-// the browser needs. The muted-start case must offer "Tap to unmute".
+// the browser needs. When muted autoplay works, the player’s own volume control handles unmuting.
 // Run:  node --test test/frontend/watch-autoplay.test.mjs
 import { test, before } from 'node:test';
 import assert from 'node:assert';
@@ -28,7 +28,12 @@ const watch = (await import('../../app/js/views/watch.js')).default;
 const VIDEO = { id: 'v1', kind: 'episode', episode: 1, title: 'Test episode', showId: 's1', duration: 100, views: 1, publishedAt: '2026-09-01T00:00:00Z', source: { type: 'youtube', id: 'abc' } };
 const PREMIUM_VIDEO = { ...VIDEO, id: 'vp', episode: 2, title: 'Premium episode', access: 'premium', poster: 'media/premium-vp.webp', source: { type: 'r2', key: 'premium/x.mp4' } };
 const PREMIUM_YT = { ...VIDEO, id: 'vpy', episode: 3, title: 'Premium on YouTube', access: 'premium', source: { type: 'youtube', id: 'zzz' } };
-app.catalog = app.fullCatalog = new Catalog({ schema: 1, updatedAt: '', shows: [{ id: 's1', title: 'Show', titleEn: 'Show', genres: [], cast: [], type: 'series', poster: 'media/shows/s1.webp' }], videos: [VIDEO, PREMIUM_VIDEO, PREMIUM_YT], upcoming: [], gallery: [] });
+const RELATED_EPISODE = { ...VIDEO, id: 'r1', episode: 1, title: 'Related show premiere', showId: 's2', source: { type: 'youtube', id: 'def' } };
+const R2_STANDALONE = { ...VIDEO, id: 'r2-standalone', title: 'Standalone R2', showId: null, source: { type: 'r2', key: 'testing/standalone.mp4' } };
+app.catalog = app.fullCatalog = new Catalog({ schema: 1, updatedAt: '', shows: [
+  { id: 's1', title: 'Show', titleEn: 'Show', genres: ['comedy'], cast: [], type: 'series', poster: 'media/shows/s1.webp' },
+  { id: 's2', title: 'Related Show', titleEn: 'Related Show', genres: ['comedy'], cast: [], type: 'series' },
+], videos: [VIDEO, PREMIUM_VIDEO, PREMIUM_YT, RELATED_EPISODE, R2_STANDALONE], upcoming: [], gallery: [] });
 app.user = {
   remote: null, account: null, profiles: [], profile: { id: 'p1', name: 'T' }, activeId: 'p1', supportsAuth: false, isKids: false,
   gateFor: () => 'ok', progressOf: () => null, isFinished: () => false, pref: () => true, setPref: () => {},
@@ -53,7 +58,144 @@ before(() => assert.ok(watch, 'watch view imported'));
 
 test('page asks the player to start automatically on all devices', async () => {
   const { opts } = await mount();
-  assert.equal(opts.autoplay, true, 'watch page must pass autoplay: true (mobile autostart is then muted-only, per browser policy)');
+  assert.equal(opts.autoplay, true, 'watch page requests autoplay and lets the player attempt the preferred sound mode first');
+});
+
+test('public watch metadata does not show the catalog view count', async () => {
+  const { ctx } = await mount('v1');
+  const meta = ctx.root.querySelector('.meta-line');
+  assert.ok(meta);
+  assert.doesNotMatch(meta.textContent, /views?/i);
+  assert.doesNotMatch(meta.textContent, /\b1\s+views?\b/i, 'the fixture has one catalog view, which is no longer exposed');
+});
+
+test('watch actions are source-specific for YouTube and R2 videos', async () => {
+  const { ctx: youtube } = await mount('v1');
+  const ytActions = youtube.root.querySelector('.watch-actions');
+  assert.equal(ytActions.querySelector('[data-list="video:v1"]'), null, 'YouTube has no Save video action');
+  assert.equal(ytActions.querySelectorAll('[data-list="show:s1"]').length, 1, 'the show-level My List action remains');
+  assert.ok(ytActions.querySelector('#castBtn'), 'the cast action is still available for other sources when supported');
+  assert.ok(ytActions.querySelector('#shareBtn'), 'Share is preserved');
+  assert.ok(ytActions.querySelector('#autoNext'), 'Autoplay next is preserved');
+
+  streamUrlRequests = 0;
+  const { ctx: r2 } = await mount('vp');
+  const r2Actions = r2.root.querySelector('.watch-actions');
+  assert.equal(streamUrlRequests, 1, 'the R2 media still uses its signed stream URL');
+  assert.equal(r2Actions.querySelector('#castBtn'), null, 'R2 has no Cast action');
+  assert.equal(r2Actions.querySelector('[data-list="video:vp"]'), null, 'R2 no longer saves just the episode');
+  assert.equal(r2Actions.querySelectorAll('[data-list="show:s1"]').length, 1, 'R2 offers one show-level My List action');
+  assert.match(r2Actions.querySelector('[data-list="show:s1"]').textContent, /Add show to My List/);
+
+  streamUrlRequests = 0;
+  const { ctx: standalone } = await mount('r2-standalone');
+  const soloActions = standalone.root.querySelector('.watch-actions');
+  assert.equal(soloActions.querySelector('#castBtn'), null, 'standalone R2 also has no Cast action');
+  assert.equal(soloActions.querySelector('[data-list^="video:"]'), null, 'without a parent show, the replacement list action is omitted');
+  assert.equal(soloActions.querySelector('[data-list^="show:"]'), null, 'there is no invalid show ID to add');
+  assert.ok(soloActions.querySelector('#shareBtn'), 'standalone R2 keeps Share');
+  streamUrlRequests = 0;
+});
+
+test('the first successful playback records one database view start for this watch page', async () => {
+  const previousRemote = app.user.remote, events = [];
+  app.user.remote = { playEvent: (...args) => events.push(args) };
+  try {
+    const { opts } = await mount('v1');
+    opts.onState('playing'); opts.onState('playing');
+    assert.deepEqual(events, [['v1', 'start']], 'resumes/buffering within the page do not add duplicate views');
+    opts.onState('paused');
+  } finally { app.user.remote = previousRemote; }
+});
+
+test('Autoplay next counts down to the next episode when one exists', async () => {
+  const { opts } = await mount('v1');
+  opts.onEnded();
+  const card = document.querySelector('#nextUp');
+  assert.ok(card && !card.hidden, 'the next-up countdown appears when the video ends');
+  assert.match(card.textContent, /Next in \d+s/);
+  assert.match(card.textContent, /Premium episode/, 'the next episode is selected ahead of recommendations');
+  assert.doesNotMatch(card.textContent, /Episode\s·/, 'the video type is not shown in the popup');
+  assert.doesNotMatch(card.textContent, /recommended/i, 'the popup does not label the next video as recommended');
+  assert.equal(card.querySelector('#nuCancel'), null, 'the large Cancel button is gone');
+  card.querySelector('#nuClose').dispatchEvent(new window.Event('click', { bubbles: true }));
+  assert.equal(card.hidden, true, 'the small close button dismisses the countdown');
+});
+
+test('when the series has no next episode, Autoplay next recommends a related show episode', async () => {
+  const { opts } = await mount('vpy');
+  opts.onEnded();
+  const card = document.querySelector('#nextUp');
+  assert.ok(card && !card.hidden, 'a related recommendation appears at the end of the playlist');
+  assert.match(card.textContent, /Next in \d+s/);
+  assert.doesNotMatch(card.textContent, /recommended/i, 'no Recommended label appears in the popup');
+  assert.match(card.textContent, /Related show premiere/, 'recommendations start with a related show episode');
+  assert.doesNotMatch(card.textContent, /Episode\s·/, 'the video type is omitted');
+  card.querySelector('#nuClose').dispatchEvent(new window.Event('click', { bubbles: true }));
+  assert.equal(card.hidden, true);
+});
+
+test('recommended-next countdown ticks preserve the thumbnail and card controls', async () => {
+  const { opts } = await mount('vpy');
+  const realSetInterval = globalThis.setInterval;
+  const realClearInterval = globalThis.clearInterval;
+  let tick, cleared = false;
+  globalThis.setInterval = (fn, delay) => {
+    if (delay === 1000) { tick = fn; return 'next-countdown'; }
+    return realSetInterval(fn, delay);
+  };
+  globalThis.clearInterval = (id) => {
+    if (id === 'next-countdown') { cleared = true; return; }
+    return realClearInterval(id);
+  };
+  try {
+    opts.onEnded();
+    const card = document.querySelector('#nextUp');
+    const thumbnail = card.querySelector('.next-card img');
+    const playButton = card.querySelector('#nuPlay');
+    const countdown = card.querySelector('[data-next-countdown]');
+    assert.ok(thumbnail, 'the recommendation thumbnail is rendered');
+    assert.ok(countdown);
+    assert.match(countdown.textContent, /Next in \d+s/);
+    const seconds = Number(countdown.textContent.match(/(\d+)s$/)[1]);
+
+    tick();
+    assert.equal(countdown.textContent, `Next in ${seconds - 1}s`);
+    assert.equal(card.querySelector('.next-card img'), thumbnail, 'the same image node stays mounted across countdown ticks');
+    assert.equal(card.querySelector('#nuPlay'), playButton, 'the rest of the recommendation card stays mounted too');
+
+    card.querySelector('#nuClose').dispatchEvent(new window.Event('click', { bubbles: true }));
+    assert.equal(cleared, true, 'the close button still stops the timer');
+  } finally {
+    globalThis.setInterval = realSetInterval;
+    globalThis.clearInterval = realClearInterval;
+  }
+});
+
+test('the next-up popup is translucent, compact and dismissible with a top-right cross', () => {
+  const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
+  const view = fs.readFileSync(new URL('../../app/js/views/watch.js', import.meta.url), 'utf8');
+  assert.match(css, /\.next-up \{[^}]*right: 12px; bottom: 12px;[^}]*width: fit-content;/,
+    'the popup shrink-wraps to content at the video bottom-right');
+  assert.match(css, /\.next-card \{[^}]*grid-template-columns: 80px minmax\(0,1fr\); align-items: end;[^}]*background: rgba\(15,15,20,\.42\)[^}]*backdrop-filter: blur\(14px\)/,
+    'the compact glass card aligns its contents to the bottom');
+  assert.match(css, /\.next-card img \{ width: 68px; max-width: 68px; align-self: center; justify-self: end; \}/,
+    'on phones the thumbnail sits in the upper-left content area beside the title and play action');
+  assert.match(css, /\.next-close \{[^}]*inset: 6px 6px auto auto;[^}]*width: 28px; height: 28px;/,
+    'the dismiss control is pinned to the upper-right corner');
+  assert.match(view, /Next in \$\{n\}s/, 'the countdown does not use a Recommended label');
+  assert.match(view, /id="nuClose" aria-label="Dismiss next video"/, 'the cross has an accessible name');
+  assert.doesNotMatch(view, /cat\.label\(target\)|id="nuCancel"|Recommended next/, 'the video type, large Cancel button, and Recommended copy are removed');
+});
+
+test('Autoplay next disabled does not start an episode or recommendation countdown', async () => {
+  const pref = app.user.pref;
+  app.user.pref = () => false;
+  try {
+    const { opts } = await mount('vpy');
+    opts.onEnded();
+    assert.equal(document.querySelector('#nextUp').hidden, true);
+  } finally { app.user.pref = pref; }
 });
 
 test('opening a watch page does not scroll the viewport down to the current episode row', async () => {
@@ -78,13 +220,10 @@ test('when even muted autoplay is blocked, a "Tap to play" pill starts playback 
   assert.ok(ctx);
 });
 
-test('muted autostart offers a one-tap "Tap to unmute" pill', async () => {
-  const { ctl, opts } = await mount();
-  opts.onAutoplayMuted();     // autoplay with sound refused: video is running muted
-  const pill = document.querySelector('#unmutePill');
-  assert.ok(pill, 'unmute pill shown for muted autostart');
-  pill.dispatchEvent(new window.Event('click', { bubbles: true }));
-  assert.equal(ctl.__unmuted, true);
+test('muted autostart uses the player volume control without a duplicate unmute pill', async () => {
+  const { opts } = await mount();
+  assert.equal(opts.onAutoplayMuted, undefined, 'watch does not add an app-level unmute prompt');
+  assert.equal(document.querySelector('#unmutePill'), null, 'the player remains free of a duplicate Tap to unmute button');
 });
 
 // The player mock is not given a stream URL for R2 videos, so give the premium page one.

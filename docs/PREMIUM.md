@@ -10,7 +10,7 @@ Viewer opens a Premium title hosted in R2
         ├─ 401 login_required (not signed in) / 402 subscription_required (signed in, no active paid plan)
         └─ 200 { type: 'mp4' | 'hls', url, expiresAt }
               mp4 → presigned R2 URL (Range requests / seeking work)
-              hls → /api/v1/media/<token>/master.m3u8  (playlists via API, segments 302 → presigned R2)
+              hls → /api/v1/media/<token>/master.m3u8  (playlists via API; browsers redirect segments to R2, Capacitor WebViews stream them through the API)
   └─ <video> / hls.js plays it; progress & resume work like any other title
 ```
 
@@ -20,7 +20,7 @@ Viewer opens a Premium title hosted in R2
 2. *R2 → Manage API tokens → Create API token*: permission **Object Read only**, scoped to that bucket. Copy the Access Key ID and Secret. (The server only ever reads. Upload with a separate, write-capable credential.)
 3. Note your **Account ID** (R2 overview page).
 4. Server environment: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (see `.env.example`).
-5. Bucket **CORS** (only needed for HLS, where the player fetches segments cross-origin). *Bucket → Settings → CORS policy*:
+5. Bucket **CORS** (needed for browser HLS, where hls.js fetches segments cross-origin; native Capacitor WebViews proxy segments through the API). *Bucket → Settings → CORS policy*:
    ```json
    [{ "AllowedOrigins": ["https://addabaaz.in", "https://app.addabaaz.in", "http://localhost:3000"],
       "AllowedMethods": ["GET", "HEAD"], "AllowedHeaders": ["Range"], "ExposeHeaders": ["Content-Length", "Content-Range"], "MaxAgeSeconds": 3600 }]

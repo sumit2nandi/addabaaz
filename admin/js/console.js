@@ -1,27 +1,27 @@
-/* Shared console shell used by BOTH consoles:
+/* Shared console shell used by both entry points:
  *
- *   /admin/    — the Admin console (customers, payments, broadcast, moderation, system …)
- *   /content/  — the Content studio (shows, videos & reels, coming soon, Top 10, studio & team)
+ *   /admin/    — the full Admin console, including the content CMS
+ *   /content/  — a focused Content studio with a shorter, editor-only sidebar
  *
- * The two are deliberately separate pages: content work is a different job, often done by different people,
- * and one sidebar with thirty entries is unusable — especially on a phone. They share this file, the API
- * client, the UI toolkit and the page modules, and each links to the other from its sidebar.
+ * Both entry points share this file, the API client, the UI toolkit and page modules. The Content studio
+ * remains available as a focused workspace, while every CMS task is also reachable from Admin.
  *
  * This module owns: sign-in (the same session token as the public site, so being signed in there is enough),
  * the page frame (sidebar + content), the hash router, the sidebar badges and session-loss handling.
  */
 import { api, getToken, setToken } from './api.js';
-import { html, $, $$, icon, errMsg, guard, loadingPage } from './ui.js';
+import { html, $, $$, icon, errMsg, guard, loadingPage, applyResponsiveTableLabels } from './ui.js';
 import { mountSocialButtons } from '/app/js/social.js';
 
 /** Boots a console. `nav` and `routes` come from the entry point; the rest is presentation. */
 export function startConsole({ nav, routes, name = 'Admin', title = 'ADDABAAZ Admin', switchTo = null, badges = true }) {
   // `admin` = the signed-in administrator; `navToken` lets a slow page load detect that the user already navigated away.
   const app = $('#app');
-  let admin = null, navToken = 0;
+  let admin = null, navToken = 0, tableLabelsObserver = null;
 
   /* ---------- sign-in ---------- */
   function showLogin(message = '', { emailValue = '' } = {}) {
+    tableLabelsObserver?.disconnect(); tableLabelsObserver = null;
     admin = null;
     app.innerHTML = html`<main class="login"><form class="card login-card" novalidate>
       <img src="/media/icons/logo-96.webp" width="56" height="56" alt="" class="login-logo">
@@ -81,6 +81,14 @@ export function startConsole({ nav, routes, name = 'Admin', title = 'ADDABAAZ Ad
         <main id="main" tabindex="-1"></main>
       </div>
     </div>`.s;
+    tableLabelsObserver?.disconnect();
+    const pageRoot = $('#main');
+    const labelTables = () => applyResponsiveTableLabels(pageRoot);
+    labelTables();
+    if (typeof MutationObserver !== 'undefined') {
+      tableLabelsObserver = new MutationObserver(labelTables);
+      tableLabelsObserver.observe(pageRoot, { childList: true, subtree: true });
+    }
     $('#logout').onclick = () => { setToken(null); showLogin('You’re signed out.'); };
     const layout = $('.layout'), side = $('#side'), menu = $('#menu');
     const toggle = (open) => {

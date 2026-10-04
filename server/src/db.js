@@ -11,6 +11,31 @@ import { extraDb } from './db-extra.js';
 
 // Converts a Date (or date string) to an ISO-8601 string for JSON responses; null stays null.
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
+
+/** Run one mysql2 query and attach its parameterized SQL template to any driver error. Bound values are never copied. */
+export async function queryRows(target, sql, params) {
+  try { return (await target.query(sql, params))[0]; }
+  catch (error) {
+    if (error && (typeof error === 'object' || typeof error === 'function')) {
+      try {
+        error.sqlTemplate = String(sql).slice(0, 8000);
+        error.sqlParamCount = Array.isArray(params) ? params.length
+          : params && typeof params === 'object' ? Object.keys(params).length
+            : params == null ? 0 : 1;
+        // mysql2's `sql` property can contain interpolated values, so copy only safe exception metadata.
+        const message = (value) => typeof value === 'string' ? value.slice(0, 2000) : null;
+        const errno = error.errno == null ? null : Number(error.errno);
+        error.sqlException = {
+          name: message(error.name) || 'Error', message: message(error.message), sqlMessage: message(error.sqlMessage),
+          code: message(error.code), errno: Number.isSafeInteger(errno) ? errno : null,
+          sqlState: message(error.sqlState)?.slice(0, 5) || null,
+          fatal: typeof error.fatal === 'boolean' ? error.fatal : null,
+        };
+      } catch { /* retain the original database exception if it is immutable */ }
+    }
+    throw error;
+  }
+}
 // True when MySQL rejected an insert because of a UNIQUE key (e.g. the email already exists).
 // How many "continue watching" rows are kept per profile.
 const MAX_PROGRESS = 500;
@@ -40,15 +65,15 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
     connectTimeout: 10_000, supportBigNumbers: true, dateStrings: false,
   });
   pool.pool.on('connection', (c) => c.query("SET time_zone = '+00:00'"));   // DEFAULT CURRENT_TIMESTAMP is then UTC too
-  // Shorthand: run a query and return only the rows (no column metadata).
-  const q = async (sql, params) => (await pool.query(sql, params))[0];
+  // Shorthand: run a query and return only the rows (no column metadata), with safe SQL context on failures.
+  const q = async (sql, params) => queryRows(pool, sql, params);
 
   /** Runs fn(conn) in a transaction; commits on success, rolls back on error. */
   async function tx(fn) {
     const c = await pool.getConnection();
     try {
       await c.beginTransaction();
-      const out = await fn({ query: async (sql, params) => (await c.query(sql, params))[0] });
+      const out = await fn({ query: async (sql, params) => queryRows(c, sql, params) });
       await c.commit();
       return out;
     } catch (e) { await c.rollback().catch(() => {}); throw e; } finally { c.release(); }

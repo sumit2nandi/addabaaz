@@ -161,5 +161,8 @@ Admin (`/api/v1/admin`, admin session or `ADMIN_TOKEN`):
 * **The welcome bonus did not appear** for an account created before the offer existed: that is by design
   (one grant per account, ever). Use **Give credit** to make it up to them.
 * **Migration**: `018_credits_referrals.sql` adds `users.referral_code`, the `user_credit` and `referrals`
-  tables and `payments.credit_applied_paise`. It runs automatically at boot unless `DB_MIGRATE=false`.
+  tables and `payments.credit_applied_paise`. `021_repair_credit_ledger_amount.sql` repairs older `user_credit`
+  tables that are missing `amount_paise`; the startup schema check also repairs it if drift appears after a repair
+  was recorded. A missing amount is added idempotently and any remaining grant balance is preserved. Migrations
+  and the schema check run automatically at boot unless `DB_MIGRATE=false`.
 * **Tests**: `node --test server/test/promos.test.js` (no database needed).

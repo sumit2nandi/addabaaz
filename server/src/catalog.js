@@ -44,9 +44,9 @@ export function createCatalogStore({ db, catalogPath, studioPath = null, ttl = 3
   // Public API of the store.
   const store = {
     /** Current snapshot: { catalog, studio, showIds, upcomingIds, videoById }. */
-    async get({ all = false } = {}) {
+    async get({ all = false, fresh = false } = {}) {
       const now = Date.now();
-      if (!(snap && now - checked < ttl)) {
+      if (fresh || !(snap && now - checked < ttl)) {
         await ensureSeeded();
         const v = await db.catalog.version();
         if (!snap || v !== version) { const { catalog, studio } = await db.catalog.snapshot(); snap = index(catalog, studio, v); version = v; pub = null; }

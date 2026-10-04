@@ -1,7 +1,30 @@
 /* Small UI toolkit for the admin console: templating, icons, formatting, toasts, modals and a schema-driven form builder. */
-import { html, raw, esc, $, $$, debounce } from '../../app/js/util.js';
+import { html, raw, esc, $, $$, debounce, fmtViews } from '../../app/js/util.js';
 import { api, prepareImage, putFile, ApiError } from './api.js';
-export { html, raw, esc, $, $$, debounce, ApiError };
+export { html, raw, esc, $, $$, debounce, fmtViews, ApiError };
+
+/** Adds the column heading to each table cell so narrow-console table cards remain self-explanatory. */
+export function applyResponsiveTableLabels(root) {
+  if (!root?.querySelectorAll) return;
+  for (const table of root.querySelectorAll('table.tbl')) {
+    const header = table.querySelector('thead tr');
+    if (!header) continue;
+    const labels = [...header.querySelectorAll('th')].map((cell) => {
+      const labelled = cell.getAttribute('aria-label') || cell.querySelector('[aria-label]')?.getAttribute('aria-label');
+      return String(labelled || cell.textContent || '').replace(/\s+/g, ' ').trim();
+    });
+    for (const row of table.querySelectorAll('tbody tr')) {
+      let column = 0;
+      for (const cell of row.querySelectorAll('td')) {
+        const span = Math.max(1, Number(cell.getAttribute('colspan')) || cell.colSpan || 1);
+        const label = labels.slice(column, column + span).filter(Boolean).join(' / ');
+        if (label) cell.setAttribute('data-label', label);
+        else cell.removeAttribute('data-label');
+        column += span;
+      }
+    }
+  }
+}
 
 /* ---------- formatting ---------- */
 export const inr = (paise) => { const n = (Number(paise) || 0) / 100; return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 }); };
@@ -80,7 +103,7 @@ const I = {
   trash: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   up: '<path d="m18 15-6-6-6 6"/>', down: '<path d="m6 9 6 6 6-6"/>', left: '<path d="m15 18-6-6 6-6"/>', right: '<path d="m9 18 6-6-6-6"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>', download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
-  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>', external: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>', copy: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>', external: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>',
   check: '<path d="M20 6 9 17l-5-5"/>', alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/>',
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>', logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>', eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>', lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',

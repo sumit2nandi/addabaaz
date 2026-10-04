@@ -4,9 +4,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { PassThrough } from 'node:stream';
 import { parseHTML } from 'linkedom';
+import { signJwt } from '../../server/src/auth.js';
+import { registerMediaRoutes } from '../../server/src/routes/media.js';
 import { videoKey } from '../../server/src/uploads.js';
 import { createR2 } from '../../server/src/r2.js';
+import { app } from '../../app/js/app.js';
 import { createHtml5Player } from '../../app/js/players/html5.js';
 
 const read = (p) => fs.readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
@@ -158,7 +162,7 @@ test('admin panel surfaces technical R2 diagnostics while public app/website kee
   assert.doesNotMatch(mediaRoutes, /Please upload the video file in Admin|Check the R2 API credentials/, 'public stream API returns friendly non-technical viewer messages');
 });
 
-test('createHtml5Player renders a uniform YouTube-style player (.ytp) with Settings menu (Playback speed, Quality, Subtitles/CC, Loop)', async () => {
+test('createHtml5Player renders a uniform YouTube-style player (.ytp) with a viewport-level Settings sheet', async () => {
   const { document, window } = parseHTML('<!doctype html><html><body><div id="slot"></div></body></html>');
   const prevDoc = globalThis.document, prevWin = globalThis.window;
   globalThis.document = document;
@@ -180,15 +184,18 @@ test('createHtml5Player renders a uniform YouTube-style player (.ytp) with Setti
     assert.ok(ytp.querySelector('.ytp-gear-btn'), 'Settings gear button is rendered');
     assert.ok(ytp.querySelector('.ytp-fs-btn'), 'Fullscreen button is rendered');
 
-    // Open Settings menu and verify Playback speed, Quality, Subtitles/CC, and Loop options.
+    // The sheet is portalled to the document, not constrained by the player; it keeps the supported options.
     const gear = ytp.querySelector('.ytp-gear-btn');
-    const menu = ytp.querySelector('.ytp-menu');
-    assert.equal(menu.hidden, true, 'Settings menu starts closed');
+    const menu = document.body.querySelector('.ytp-settings-overlay');
+    assert.ok(menu, 'Settings sheet is mounted at the viewport level');
+    assert.equal(ytp.contains(menu), false, 'Settings sheet is outside the player wrapper');
+    assert.equal(menu.hidden, true, 'Settings sheet starts closed');
     gear.click();
-    assert.equal(menu.hidden, false, 'Clicking gear opens Settings menu');
+    assert.equal(menu.hidden, false, 'Clicking gear opens Settings sheet');
+    assert.equal(document.body.classList.contains('player-settings-open'), true, 'the page is scroll-locked while settings are open');
     assert.match(menu.textContent, /Playback speed/);
     assert.match(menu.textContent, /Quality/);
-    assert.match(menu.textContent, /Subtitles\/CC/);
+    assert.doesNotMatch(menu.textContent, /Subtitles\/CC/, 'Subtitles/CC is omitted when there are no tracks');
     assert.match(menu.textContent, /Loop/);
 
     // Navigate to Playback speed and select 1.5x.
@@ -196,7 +203,19 @@ test('createHtml5Player renders a uniform YouTube-style player (.ytp) with Setti
     assert.ok(menu.querySelector('[data-speed="1.5"]'), '1.5x playback speed option is available');
     menu.querySelector('[data-speed="1.5"]').click();
     assert.equal(ytp.querySelector('video').playbackRate, 1.5, 'Selecting 1.5x updates video.playbackRate');
-    assert.equal(menu.hidden, true, 'Menu closes after selecting speed');
+    assert.equal(menu.hidden, true, 'Sheet closes after selecting speed');
+    assert.equal(document.body.classList.contains('player-settings-open'), false, 'closing the sheet unlocks page scrolling');
+
+    // Quality and Loop remain available in the larger sheet.
+    gear.click();
+    menu.querySelector('[data-nav="quality"]').click();
+    assert.ok(menu.querySelector('[data-quality="-1"]'), 'Auto quality remains selectable');
+    menu.querySelector('[data-settings-back]').click();
+    const loop = menu.querySelector('[data-act="loop"]');
+    loop.click();
+    assert.match(menu.querySelector('.ytp-menu-pill').textContent, /On/, 'Loop toggles on from the sheet');
+    menu.querySelector('[data-settings-close]').click();
+    assert.equal(menu.hidden, true, 'Close button dismisses the settings sheet');
 
     // Control buttons must not replace their inner SVG node on repeated timeupdate events, and pointerleave must not hide controls.
     const playBtn = ytp.querySelector('.ytp-play');
@@ -211,6 +230,193 @@ test('createHtml5Player renders a uniform YouTube-style player (.ytp) with Setti
   } finally {
     globalThis.document = prevDoc;
     globalThis.window = prevWin;
+  }
+});
+
+test('Android WebView HLS fragments stream through the API while browser fragments keep direct R2 redirects', async () => {
+  const routes = new Map(), upstreamRequests = [];
+  const api = { post() {}, get(path, handler) { routes.set(path, handler); } };
+  const secret = 'media-proxy-test-secret';
+  const token = signJwt({ aud: 'media', vid: 'hls-test', sub: null }, secret, 600);
+  const r2 = {
+    configured: true,
+    presignGet: (key, { ttl }) => `https://r2.test/${key}?ttl=${ttl}`,
+    async getObject(key, options) {
+      upstreamRequests.push({ key, ...options });
+      return new Response(Buffer.from('segment bytes'), { status: 206, headers: {
+        'Accept-Ranges': 'bytes', 'Content-Length': '13', 'Content-Range': 'bytes 0-12/13', 'Content-Type': 'video/mp2t',
+      } });
+    },
+    async getText() { return '#EXTM3U\\n'; },
+  };
+  const video = { id: 'hls-test', kind: 'episode', source: { type: 'r2', format: 'hls', key: 'premium/hls-test/master.m3u8' } };
+  registerMediaRoutes(api, {
+    db: {}, secret, publicApiUrl: 'https://api.example', streamTtl: 600, r2,
+    catalog: { video: (id) => id === video.id ? video : null, get: async () => ({ catalog: { shows: [] } }) },
+    features: {}, userFromRequest: async () => null,
+  });
+  const handler = routes.get('/media/:token/*');
+  const makeResponse = () => {
+    const res = new PassThrough();
+    res.headersOut = {};
+    res.set = (name, value) => { Object.assign(res.headersOut, typeof name === 'object' ? name : { [name]: value }); return res; };
+    res.status = (status) => { res.statusCode = status; return res; };
+    res.redirect = (status, location) => { res.statusCode = status; res.headersOut.Location = location; res.end(); return res; };
+    return res;
+  };
+  const request = (headers) => ({
+    params: { token, 0: '720p/seg0.ts' }, headers,
+    get(name) { return headers[name.toLowerCase()] || ''; },
+  });
+
+  const appResponse = makeResponse(), chunks = [];
+  appResponse.on('data', (chunk) => chunks.push(chunk));
+  const appFinished = new Promise((resolve, reject) => { appResponse.once('finish', resolve); appResponse.once('error', reject); });
+  await handler(request({ origin: 'https://app.addabaaz.in', 'user-agent': 'Mozilla/5.0 Android; wv)', range: 'bytes=0-12' }), appResponse, (e) => { if (e) throw e; });
+  await appFinished;
+  assert.equal(appResponse.statusCode, 206);
+  assert.equal(appResponse.headersOut['Content-Range'], 'bytes 0-12/13');
+  assert.equal(appResponse.headersOut['Access-Control-Expose-Headers'], 'Accept-Ranges, Content-Length, Content-Range');
+  assert.equal(Buffer.concat(chunks).toString(), 'segment bytes');
+  assert.deepEqual(upstreamRequests, [{ key: 'premium/hls-test/720p/seg0.ts', ttl: 900, range: 'bytes=0-12' }]);
+
+  const browserResponse = makeResponse();
+  await handler(request({ origin: 'https://addabaazott.onrender.com', 'user-agent': 'Chrome/154' }), browserResponse, (e) => { if (e) throw e; });
+  assert.equal(browserResponse.statusCode, 302, 'web playback retains direct R2 delivery');
+  assert.equal(browserResponse.headersOut.Location, 'https://r2.test/premium/hls-test/720p/seg0.ts?ttl=900');
+  assert.equal(upstreamRequests.length, 1, 'only native-app fragments pass through the API');
+});
+
+test('Chromium HLS uses hls.js despite a native maybe-hint, and fatal errors reach Admin → Errors safely', async () => {
+  const { document, window } = parseHTML('<!doctype html><html><head></head><body><div id="slot"></div></body></html>');
+  const previous = {
+    document: globalThis.document, window: globalThis.window, location: globalThis.location, user: app.user,
+    navigator: Object.getOwnPropertyDescriptor(globalThis, 'navigator'),
+  };
+  const reports = [], states = [];
+  app.user = { remote: { reportError: (error) => reports.push(error) } };
+  globalThis.document = document;
+  globalThis.window = window;
+  globalThis.location = { pathname: '/watch/hls-test', search: '', hash: '' };
+  Object.defineProperty(globalThis, 'navigator', {
+    value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36' },
+    configurable: true,
+  });
+  const createElement = document.createElement.bind(document);
+  document.createElement = (tag) => {
+    const el = createElement(tag);
+    if (String(tag).toLowerCase() === 'video') el.canPlayType = () => 'maybe';
+    return el;
+  };
+  class MockHls {
+    static Events = { ERROR: 'hlsError', MANIFEST_PARSED: 'manifestParsed', LEVEL_SWITCHED: 'levelSwitched' };
+    static isSupported() { return true; }
+    constructor() { this.handlers = new Map(); MockHls.instance = this; }
+    on(name, fn) { this.handlers.set(name, fn); }
+    loadSource(url) { this.sourceUrl = url; }
+    attachMedia() {}
+    destroy() {}
+  }
+  const append = document.head.appendChild.bind(document.head);
+  document.head.appendChild = (el) => {
+    if (el.tagName === 'SCRIPT' && String(el.src).includes('hls.min.js')) {
+      window.Hls = MockHls;
+      el.onload?.();
+      return el;
+    }
+    return append(el);
+  };
+  try {
+    const player = await createHtml5Player(document.getElementById('slot'), {
+      id: 'hls-test', title: 'HLS test', duration: 6,
+      source: { type: 'hls', url: 'https://site.example/api/v1/media/test-token/master.m3u8' },
+    }, { autoplay: false, controls: false, onState: (...state) => states.push(state) });
+    assert.equal(MockHls.instance.sourceUrl, 'https://site.example/api/v1/media/test-token/master.m3u8', 'Chromium uses hls.js even when canPlayType returns maybe');
+    const signedUrl = 'https://acct.r2.cloudflarestorage.com/bucket/premium/hls-test/segment.ts?X-Amz-Signature=secret-signature';
+    const mediaToken = 'eyJhbGciOiJIUzI1NiJ9.eyJ2aWQiOiJoc2wtdGVzdCJ9.signature';
+    const onHlsError = MockHls.instance.handlers.get(MockHls.Events.ERROR);
+    onHlsError(null, { fatal: false, type: 'networkError', details: 'fragLoadError' });
+    assert.equal(reports.length, 0, 'recoverable HLS errors are not reported as playback failures');
+    onHlsError(null, {
+      fatal: true, type: 'networkError', details: 'fragLoadError', level: 3,
+      response: { code: 403, url: signedUrl },
+      reason: `Request failed for ${signedUrl}; media token /api/v1/media/${mediaToken}/master.m3u8`,
+    });
+    assert.equal(reports.length, 1, 'one fatal HLS error is reported');
+    assert.match(reports[0].message, /video=hls-test; type=networkError; detail=fragLoadError; http=403; fatal=true/);
+    assert.match(reports[0].stack, /Playback diagnostic \(signed media URLs omitted\)/);
+    assert.match(reports[0].stack, /reason=Request failed for \[redacted URL\]\s+media token \/api\/v1\/media\/\[redacted token\]\/master\.m3u8/);
+    assert.match(reports[0].stack, /level=3/);
+    assert.equal(reports[0].url, '/watch/hls-test');
+    assert.equal(Object.hasOwn(reports[0], 'force'), false, 'the reporter-only force flag is not sent to the API');
+    assert.doesNotMatch(JSON.stringify(reports[0]), /acct\.r2\.cloudflarestorage\.com|secret-signature|eyJhbGciOiJIUzI1NiJ9/);
+    assert.deepEqual(states, [['error', 2]], 'the viewer still receives the existing generic playback error state');
+    player.destroy();
+  } finally {
+    document.head.appendChild = append;
+    document.createElement = createElement;
+    app.user = previous.user;
+    for (const key of ['document', 'window', 'location']) {
+      if (previous[key] === undefined) delete globalThis[key]; else globalThis[key] = previous[key];
+    }
+    if (previous.navigator) Object.defineProperty(globalThis, 'navigator', previous.navigator);
+    else delete globalThis.navigator;
+  }
+});
+
+test('native Safari quality sheet refreshes after the master loads and switches to the selected variant', async () => {
+  const { document, window } = parseHTML('<!doctype html><html><head></head><body><div id="slot"></div></body></html>');
+  const previous = {
+    document: globalThis.document, window: globalThis.window, location: globalThis.location,
+    fetch: globalThis.fetch, navigator: Object.getOwnPropertyDescriptor(globalThis, 'navigator'),
+  };
+  let finishManifest, playCalls = 0;
+  const manifestRequest = new Promise((resolve) => { finishManifest = resolve; });
+  globalThis.document = document;
+  globalThis.window = window;
+  globalThis.location = { protocol: 'https:', origin: 'https://site.example', pathname: '/', hash: '', search: '' };
+  globalThis.fetch = () => manifestRequest;
+  Object.defineProperty(globalThis, 'navigator', { value: { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' }, configurable: true });
+  const createElement = document.createElement.bind(document);
+  let video;
+  document.createElement = (tag) => {
+    const el = createElement(tag);
+    if (String(tag).toLowerCase() === 'video') {
+      video = el;
+      el.canPlayType = () => 'probably';
+      el.paused = false; el.ended = false; el.currentTime = 2; el.duration = 6;
+      el.videoWidth = 854; el.videoHeight = 480; el.playbackRate = 1; el.muted = false; el.volume = 0.8;
+      el.play = () => { playCalls++; return Promise.resolve(); };
+      el.pause = () => { el.paused = true; };
+      el.load = () => setTimeout(() => el.dispatchEvent(new window.Event('loadedmetadata')), 0);
+    }
+    return el;
+  };
+  try {
+    const url = 'https://site.example/api/v1/media/token/master.m3u8';
+    const player = await createHtml5Player(document.getElementById('slot'), {
+      id: 'native-hls', title: 'Native HLS', duration: 6, source: { type: 'hls', url },
+    }, { autoplay: false, controls: true });
+    const slot = document.getElementById('slot');
+    const settings = document.body.querySelector('.ytp-settings-overlay');
+    slot.querySelector('.ytp-gear-btn').click();
+    settings.querySelector('[data-nav="quality"]').click();
+    assert.deepEqual([...settings.querySelectorAll('[data-quality]')].map((item) => item.textContent.trim()), ['Auto (480p)', '480p'], 'before the fetch resolves, the sheet shows only the active native level');
+
+    finishManifest(new Response(`#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080,NAME="1080p"\n1080p/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2800000,RESOLUTION=1280x720,NAME="720p"\n720p/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1400000,RESOLUTION=854x480,NAME="480p"\n480p/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,NAME="360p"\n360p/index.m3u8\n`, { status: 200, headers: { 'Content-Type': 'application/vnd.apple.mpegurl' } }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual([...settings.querySelectorAll('[data-quality]')].map((item) => item.textContent.trim()), ['Auto (480p)', '1080p HD', '720p HD', '480p', '360p'], 'the open sheet refreshes with every master-playlist resolution');
+
+    settings.querySelector('[data-quality="1"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(video.src, 'https://site.example/api/v1/media/token/720p/index.m3u8', 'native Safari switches to the selected child playlist');
+    assert.equal(video.currentTime, 2, 'switching quality preserves the playback position');
+    assert.equal(playCalls, 1, 'active playback resumes after the new playlist metadata loads');
+    player.destroy();
+  } finally {
+    document.createElement = createElement;
+    globalThis.document = previous.document; globalThis.window = previous.window; globalThis.location = previous.location; globalThis.fetch = previous.fetch;
+    if (previous.navigator) Object.defineProperty(globalThis, 'navigator', previous.navigator); else delete globalThis.navigator;
   }
 });
 
@@ -259,6 +465,23 @@ test('R2 videos (including short clips like 6s Cricket and newly started videos)
     globalThis.localStorage = prevLS;
     globalThis.sessionStorage = prevSS;
   }
+});
+
+test('createR2.getObject fetches signed objects server-side and forwards HLS byte ranges', async () => {
+  const originalFetch = globalThis.fetch;
+  let requested = null;
+  globalThis.fetch = async (url, options) => {
+    requested = { url: String(url), options };
+    return new Response(Buffer.from('segment'), { status: 206, headers: { 'Content-Range': 'bytes 0-6/7' } });
+  };
+  try {
+    const r2 = createR2({ R2_ACCOUNT_ID: 'acct123', R2_ACCESS_KEY_ID: 'AK', R2_SECRET_ACCESS_KEY: 'SK', R2_BUCKET: 'bucket' });
+    const response = await r2.getObject('premium/hls/seg0.ts', { ttl: 900, range: 'bytes=0-6' });
+    assert.equal(response.status, 206);
+    assert.equal(new URL(requested.url).pathname, '/bucket/premium/hls/seg0.ts');
+    assert.equal(new URL(requested.url).searchParams.get('X-Amz-Expires'), '900');
+    assert.equal(requested.options.headers.Range, 'bytes=0-6');
+  } finally { globalThis.fetch = originalFetch; }
 });
 
 test('createR2.head signs HEAD requests with method=HEAD (not GET) and falls back to 1-byte Range GET if HEAD is rejected', async () => {

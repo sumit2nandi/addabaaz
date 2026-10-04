@@ -1,8 +1,13 @@
 // Private video access policy and the R2/HLS gateway. No storage keys or provider SDK leak into handlers.
 import path from 'node:path';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { HttpError, wrap } from '../http.js';
 import { signJwt, verifyToken } from '../auth.js';
 import { FREE_KINDS } from '../catalog-schema.js';
+
+const CAPACITOR_ORIGIN = 'https://app.addabaaz.in';
+const isNativeWebView = (req) => req.get('origin') === CAPACITOR_ORIGIN || /\bwv\b/i.test(req.get('user-agent') || '');
 
 export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, r2, catalog, features, userFromRequest }) {
   // Small helpers: catalog lookup, the public base URL for links we hand out, and mp4-vs-HLS detection.
@@ -51,7 +56,7 @@ export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, 
     // Plain MP4: a time-limited signed R2 link the browser can play directly.
     res.json({ type: 'mp4', url: r2.presignGet(v.source.key, { ttl: streamTtl }), expiresAt });
   }));
-  /** HLS gateway: playlists are proxied (so relative URLs stay on this gateway); media segments are redirected to short-lived R2 URLs. */
+  /** HLS gateway: playlists stay on this gateway; web browsers get signed R2 redirects, native WebViews stream fragments through the API. */
   api.get('/media/:token/*', wrap(async (req, res) => {
     const claims = verifyToken(req.params.token, secret);
     if (!claims || claims.aud !== 'media') throw new HttpError(401, 'invalid_token', 'This playback link has expired.');
@@ -68,6 +73,20 @@ export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, 
       const text = await r2.getText(target);
       if (text == null) throw new HttpError(404, 'not_found', 'Not found.');
       return res.set({ 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'no-store' }).send(text);
+    }
+    // Capacitor WebViews can fail XHR on the cross-origin 302 to R2 even when the bucket CORS rule is correct.
+    // Stream only native-app fragments through the API; desktop browsers keep the bandwidth-saving direct redirect.
+    if (isNativeWebView(req) && typeof r2.getObject === 'function') {
+      const upstream = await r2.getObject(target, { ttl: 900, range: req.get('range') || '' });
+      res.status(upstream.status).set({ 'Cache-Control': 'no-store', 'Access-Control-Expose-Headers': 'Accept-Ranges, Content-Length, Content-Range' });
+      for (const name of ['Accept-Ranges', 'Content-Length', 'Content-Range', 'Content-Type', 'ETag', 'Last-Modified']) {
+        const value = upstream.headers.get(name);
+        if (value) res.set(name, value);
+      }
+      if (!upstream.body) return res.end();
+      try { await pipeline(Readable.fromWeb(upstream.body), res); }
+      catch (e) { if (!res.headersSent) throw e; res.destroy(e); }
+      return;
     }
     res.set('Cache-Control', 'no-store').redirect(302, r2.presignGet(target, { ttl: 900 }));
   }));

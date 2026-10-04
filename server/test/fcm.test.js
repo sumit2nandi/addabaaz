@@ -103,5 +103,9 @@ test('send() dedupes tokens, counts failures, and reports the dead ones for clea
   } });
   const r = await fcm.send(['good1', 'good2', 'dead', 'flaky', 'good1', null], { title: 'T', body: 'B' });
   assert.equal(r.sent, 2); assert.equal(r.failed, 1); assert.deepEqual(r.dead, ['dead']);
-  assert.deepEqual(await fcm.send([], { title: 'T' }), { sent: 0, failed: 0, dead: [] });
+  assert.deepEqual(r.results.map(({ token, ok, dead: isDead }) => ({ token, ok, dead: isDead })), [
+    { token: 'good1', ok: true, dead: false }, { token: 'good2', ok: true, dead: false },
+    { token: 'dead', ok: false, dead: true }, { token: 'flaky', ok: false, dead: false },
+  ]);
+  assert.deepEqual(await fcm.send([], { title: 'T' }), { sent: 0, failed: 0, dead: [], results: [] });
 });

@@ -11,6 +11,11 @@ import { safeErrorUrl } from './http.js';
 
 // Listen port (PORT, default 3000).
 const port = Number(process.env.PORT) || 3000;
+// Render supplies this SHA for the deployed source revision. It is safe to log and expose in health checks,
+// and makes it possible to distinguish a stale deployment from a live database/schema problem.
+const release = process.env.RENDER_GIT_COMMIT || '';
+const releaseSha = /^[0-9a-f]{7,40}$/i.test(release) ? release.toLowerCase() : '';
+console.log(`[release] commit=${releaseSha || 'unknown'}`);
 // Work out where the database settings come from and log it (host, database and user only - never the password),
 // so a wrong or leftover DATABASE_URL is easy to spot in the host's runtime log.
 const dbConfig = dbConfigFromEnv();
@@ -27,8 +32,11 @@ catch (e) {
   process.exit(1);
 }
 if (process.env.DB_MIGRATE !== 'false') {                       // set DB_MIGRATE=false to run `npm run db:migrate` as a separate deploy step
+  console.log(`[migrate] automatic startup migrations enabled (DB_MIGRATE=${process.env.DB_MIGRATE === undefined ? 'unset' : 'not false'})`);
   const applied = await migrate(db, { log: (m) => console.log('[migrate]', m) });
-  if (applied.length) console.log(`[migrate] applied ${applied.length} migration(s)`);
+  console.log(`[migrate] startup check complete; applied ${applied.length} migration(s)`);
+} else {
+  console.warn('[migrate] DB_MIGRATE=false — migrations and schema-drift checks are skipped at startup; run `npm run db:migrate` as a deploy step.');
 }
 // One address = one account: rewrite stored addresses in the normalized form (migration 012 could only
 // lower-case and trim them in SQL). Rows that collide are flagged for Admin → Users → merge.
@@ -46,7 +54,7 @@ if (process.env.MINIFY !== 'false') {
   try { const m = await prepareWebAssets(); console.log(`[web] front-end minified (${m.files} files, −${(m.saved / 1024).toFixed(0)} KB)`); }
   catch (e) { console.warn('[web] front-end minification skipped — serving sources as-is:', e.message); }
 }
-const app = createApp({ db, rate: !noRate });
+const app = createApp({ db, rate: !noRate, release: releaseSha });
 // Optional Sentry: `npm i @sentry/node` and set SENTRY_DSN. Not installed by default; the built-in Errors page in /admin works without it.
 if (process.env.SENTRY_DSN) {
   try {

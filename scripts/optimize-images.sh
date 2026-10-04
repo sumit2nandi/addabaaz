@@ -45,9 +45,11 @@ done
 convert -size 512x512 xc:'#050505' \( images/addabaaz-logo.png -resize 360x360 \) -gravity center -composite -strip media/icons/maskable-512.png
 convert -size 192x192 xc:'#050505' \( images/addabaaz-logo.png -resize 134x134 \) -gravity center -composite -strip media/icons/maskable-192.png
 convert images/addabaaz-logo.png -resize 96x96 -strip -quality 80 media/icons/logo-96.webp
-# Master art for native icon/splash generation (@capacitor/assets, run via `npm --prefix mobile run assets`)
+# Master art for native icon/splash generation (@capacitor/assets, run via `npm --prefix mobile run assets`).
+# Keep the round mark's transparent corners; a black square baked into icon-only.png shows in Android's system sheets.
 mkdir -p resources
-convert images/addabaaz-logo1.png -resize 1024x1024 -strip -define png:compression-level=9 resources/icon-only.png
+convert -size 512x512 xc:none -fill white -draw 'circle 256,256 256,0' /tmp/round-mask.png
+convert images/addabaaz-logo.png -resize 512x512 -alpha set /tmp/round-mask.png -compose DstIn -composite -strip -depth 8 -define png:compression-level=9 PNG32:resources/icon-only.png
 convert -size 1024x1024 xc:'#050505' resources/icon-background.png
 convert -size 2732x2732 xc:'#050505' \( images/addabaaz-logo.png -resize 900x900 \) -gravity center -composite -strip -define png:compression-level=9 resources/splash.png
 echo "done"; du -sh media resources

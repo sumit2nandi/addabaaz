@@ -1,0 +1,30 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const read = (path) => fs.readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
+
+test('Account keeps its single-column mobile layout and widens to two columns on desktop', () => {
+  const css = read('app/css/styles.css');
+  const account = read('app/js/views/account.js');
+  const extras = read('app/js/views/account-extra.js');
+
+  assert.match(css, /\.account-grid \{ display: grid; grid-template-columns: minmax\(0, 1fr\); align-items: start; \}/,
+    'the Account sections stay in one column by default for mobile and app webviews');
+  assert.match(css, /@media \(min-width: 900px\) \{\s*\.page\.account-page \{ max-width: 1320px; \}\s*\.who \{ grid-template-columns: auto minmax\(0, 1fr\) auto; \}\s*\.who-actions \{ grid-column: auto; \}\s*\.account-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/,
+    'desktop Account uses a wider profile row and a two-column settings grid');
+  assert.match(css, /\.who-actions \{[^}]*justify-content: flex-end/,
+    'profile actions, including Sign out, align to the right');
+  assert.match(css, /\.account-section:empty \{ display: none; \}/,
+    'empty asynchronous sections do not leave gaps in the desktop grid');
+  assert.match(account, /<section class="card-panel who">[\s\S]*?<div class="who-actions">[\s\S]*?id="signout"/,
+    'Sign out remains inside the profile card');
+  assert.match(account, /<div class="account-grid">[\s\S]*?<section class="account-section">\s*<h2 class="sub-h">Profiles<\/h2>/,
+    'static Account settings are grouped as responsive grid sections');
+  assert.match(extras, /<section class="account-section">\s*<h2 class="sub-h">Security<\/h2>/,
+    'security settings participate in the desktop grid');
+  assert.match(extras, /<div id="referSlot" class="account-section"><\/div>/,
+    'the asynchronous referral slot participates in the grid');
+  assert.match(extras, /<div id="notifySlot" class="account-section"><\/div>/,
+    'the asynchronous notification slot participates in the grid');
+});
