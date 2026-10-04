@@ -59,9 +59,13 @@ export function createR2(env = process.env) {
       const { queryString } = presign({ method: 'PUT', host: base.host, path, accessKeyId, secretAccessKey, expires: Math.min(Math.max(ttl, 1), 86400), now });
       return `${base.origin}${path}?${queryString}`;
     },
+    /** Fetches an object response server-side; used to stream HLS fragments through the API for native WebViews. */
+    getObject(key, { ttl = 900, range } = {}) {
+      return fetch(r2.presignGet(key, { ttl }), { headers: range ? { Range: range } : {} });
+    },
     /** Reads a small text object (HLS playlists). Returns null when the object doesn't exist. */
     async getText(key) {
-      const res = await fetch(r2.presignGet(key, { ttl: 60 }));
+      const res = await r2.getObject(key, { ttl: 60 });
       if (res.status === 404 || res.status === 403) return null;
       if (!res.ok) throw new Error(`R2 responded ${res.status}`);
       return res.text();

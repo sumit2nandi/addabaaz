@@ -4,7 +4,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { PassThrough } from 'node:stream';
 import { parseHTML } from 'linkedom';
+import { signJwt } from '../../server/src/auth.js';
+import { registerMediaRoutes } from '../../server/src/routes/media.js';
 import { videoKey } from '../../server/src/uploads.js';
 import { createR2 } from '../../server/src/r2.js';
 import { app } from '../../app/js/app.js';
@@ -213,6 +216,60 @@ test('createHtml5Player renders a uniform YouTube-style player (.ytp) with Setti
     globalThis.document = prevDoc;
     globalThis.window = prevWin;
   }
+});
+
+test('Android WebView HLS fragments stream through the API while browser fragments keep direct R2 redirects', async () => {
+  const routes = new Map(), upstreamRequests = [];
+  const api = { post() {}, get(path, handler) { routes.set(path, handler); } };
+  const secret = 'media-proxy-test-secret';
+  const token = signJwt({ aud: 'media', vid: 'hls-test', sub: null }, secret, 600);
+  const r2 = {
+    configured: true,
+    presignGet: (key, { ttl }) => `https://r2.test/${key}?ttl=${ttl}`,
+    async getObject(key, options) {
+      upstreamRequests.push({ key, ...options });
+      return new Response(Buffer.from('segment bytes'), { status: 206, headers: {
+        'Accept-Ranges': 'bytes', 'Content-Length': '13', 'Content-Range': 'bytes 0-12/13', 'Content-Type': 'video/mp2t',
+      } });
+    },
+    async getText() { return '#EXTM3U\\n'; },
+  };
+  const video = { id: 'hls-test', kind: 'episode', source: { type: 'r2', format: 'hls', key: 'premium/hls-test/master.m3u8' } };
+  registerMediaRoutes(api, {
+    db: {}, secret, publicApiUrl: 'https://api.example', streamTtl: 600, r2,
+    catalog: { video: (id) => id === video.id ? video : null, get: async () => ({ catalog: { shows: [] } }) },
+    features: {}, userFromRequest: async () => null,
+  });
+  const handler = routes.get('/media/:token/*');
+  const makeResponse = () => {
+    const res = new PassThrough();
+    res.headersOut = {};
+    res.set = (name, value) => { Object.assign(res.headersOut, typeof name === 'object' ? name : { [name]: value }); return res; };
+    res.status = (status) => { res.statusCode = status; return res; };
+    res.redirect = (status, location) => { res.statusCode = status; res.headersOut.Location = location; res.end(); return res; };
+    return res;
+  };
+  const request = (headers) => ({
+    params: { token, 0: '720p/seg0.ts' }, headers,
+    get(name) { return headers[name.toLowerCase()] || ''; },
+  });
+
+  const appResponse = makeResponse(), chunks = [];
+  appResponse.on('data', (chunk) => chunks.push(chunk));
+  const appFinished = new Promise((resolve, reject) => { appResponse.once('finish', resolve); appResponse.once('error', reject); });
+  await handler(request({ origin: 'https://app.addabaaz.in', 'user-agent': 'Mozilla/5.0 Android; wv)', range: 'bytes=0-12' }), appResponse, (e) => { if (e) throw e; });
+  await appFinished;
+  assert.equal(appResponse.statusCode, 206);
+  assert.equal(appResponse.headersOut['Content-Range'], 'bytes 0-12/13');
+  assert.equal(appResponse.headersOut['Access-Control-Expose-Headers'], 'Accept-Ranges, Content-Length, Content-Range');
+  assert.equal(Buffer.concat(chunks).toString(), 'segment bytes');
+  assert.deepEqual(upstreamRequests, [{ key: 'premium/hls-test/720p/seg0.ts', ttl: 900, range: 'bytes=0-12' }]);
+
+  const browserResponse = makeResponse();
+  await handler(request({ origin: 'https://addabaazott.onrender.com', 'user-agent': 'Chrome/154' }), browserResponse, (e) => { if (e) throw e; });
+  assert.equal(browserResponse.statusCode, 302, 'web playback retains direct R2 delivery');
+  assert.equal(browserResponse.headersOut.Location, 'https://r2.test/premium/hls-test/720p/seg0.ts?ttl=900');
+  assert.equal(upstreamRequests.length, 1, 'only native-app fragments pass through the API');
 });
 
 test('Chromium HLS uses hls.js despite a native maybe-hint, and fatal errors reach Admin → Errors safely', async () => {
