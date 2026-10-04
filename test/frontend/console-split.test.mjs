@@ -61,6 +61,23 @@ test('the Content Studio page can resolve its shared view-count formatter', asyn
   assert.equal(ui.fmtViews(1_200_000), '1.2M');
 });
 
+test('the Content Studio overview renders its warning icon as SVG, not escaped text', async () => {
+  const { default: renderOverview } = await import('../../admin/js/views/content-overview.js');
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    shows: [], upcoming: [],
+    videos: [{ id: 'incomplete', title: 'Incomplete episode', kind: 'episode' }],
+  }), { headers: { 'content-type': 'application/json' } });
+  const root = { innerHTML: '' };
+  try {
+    await renderOverview(root, [], { stale: () => false });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.match(root.innerHTML, /<h2><svg class="i"[^>]*>[\s\S]*?<\/svg> Needs attention<\/h2>/);
+  assert.doesNotMatch(root.innerHTML, /&lt;svg/);
+});
+
 test('both consoles are usable on a phone', () => {
   // Sidebar becomes a drawer, top bar appears — the behaviour both consoles inherit.
   assert.match(adminCss, /@media \(max-width: 860px\) \{\n  \.layout \{ display: block; \}/, 'the sidebar turns into a drawer');

@@ -42,7 +42,9 @@ export default async function contentOverview(root, _p, ctx) {
     </div>
     <div class="grid two">
       <section class="card">
-        <h2>${(noArt.length + noSource.length + noDuration.length) ? `${icon('alert', 18)} Needs attention` : `${icon('check', 18)} Catalog looks healthy`}</h2>
+        <h2>${(noArt.length + noSource.length + noDuration.length)
+          ? html`${icon('alert', 18)} Needs attention`
+          : html`${icon('check', 18)} Catalog looks healthy`}</h2>
         ${(noArt.length + noSource.length + noDuration.length) ? html`
           ${issue(noSource, 'titles have no video source', 'Upload the file or paste a YouTube link, then save the title.', '#/videos')}
           ${issue(noArt, 'episodes have no thumbnail', 'The thumbnail is what viewers see in every row.', '#/videos')}
