@@ -167,7 +167,11 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       // Browser error reports (rate limited, stored for the admin Errors page).
       api.post('/client-errors', limit('clienterr', 20, 60_000), wrap(async (req, res) => {
         const b = req.body || {};
-        if (typeof b.message === 'string' && b.message) await db.errors.add({ source: 'client', message: b.message, stack: b.stack, url: safeErrorUrl(b.url), userAgent: req.get('user-agent') });
+        // The route is public so a crashed page can still report, but resolve a first-party bearer token
+        // when present. Never accept an account id supplied by the browser itself.
+        let user = null;
+        try { user = await userFromRequest?.(req) || null; } catch { /* retain the report without account attribution */ }
+        if (typeof b.message === 'string' && b.message) await db.errors.add({ source: 'client', message: b.message, stack: b.stack, url: safeErrorUrl(b.url), userAgent: req.get('user-agent'), userId: user?.id || null });
         res.sendStatus(204);
       }));
 

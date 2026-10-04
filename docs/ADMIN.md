@@ -64,7 +64,7 @@ Security notes
 | **Dashboard → System status** | what is configured and what is not: database, session secret, Razorpay, GST, e-mail (with a test send), **SMS sign-in (MSG91)** (with a test send once connected), R2, web/app push, social sign-in, uploads, public URL and indexing. Missing items are listed under **Finish setting up**. |
 | **Client cache** | invalidate what browsers and installed apps have cached: *Clear app files* (the site's HTML/JS/CSS/catalog) or *Clear everything* (also offline artwork). Everybody re-downloads on their next launch; nobody is signed out and no preference changes |
 | **Maintenance** | take the viewer side of the site offline while you work: a message, an optional “Back by” (the site reopens on its own), a live preview, and a switch. The console, sign-in, health checks, payment webhooks and unsubscribe links keep working. See [docs/MAINTENANCE.md](MAINTENANCE.md) |
-| **Errors** | grouped browser and server errors of the last 7 days with stack traces |
+| **Errors** | grouped browser and server errors of the last 7 days; recent reports show account IDs, device/page context and stack traces, with a per-report Copy action |
 | **Audit log** | who did what, when, to what (`catalog.show.update`, `payment.refund`, `user.grant`, `coupon.create`, …). Append-only from the UI |
 
 Changes go live straight away: the public API serves the new catalog within a few seconds (several servers stay in sync through a version counter).

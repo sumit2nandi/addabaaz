@@ -180,7 +180,24 @@ export function createApp({
     if (err.type === 'entity.parse.failed') err = bad('Invalid JSON body.', 'invalid_json');
     if (err.type === 'entity.too.large') err = new HttpError(413, 'too_large', 'Request too large.');
     const status = err.status || 500;
-    if (status >= 500 && !(err instanceof HttpError)) { console.error(err); try { app.locals.captureError?.(err, req); } catch { /* monitoring must never break error handling */ } db.errors.add({ source: 'server', message: `${req.method} ${safeErrorUrl(req.path)}: ${err.message}`, stack: err.stack, url: safeErrorUrl(req.originalUrl), userAgent: req.get('user-agent') }).catch(() => {}); }   // expected 5xx (provider down, storage off) are not logged as crashes
+    if (status >= 500 && !(err instanceof HttpError)) {
+      console.error(err);
+      try { app.locals.captureError?.(err, req); } catch { /* monitoring must never break error handling */ }
+      const userId = req.user?.id || req.admin?.id || null;
+      const diagnostic = [
+        `HTTP ${status} ${req.method} ${safeErrorUrl(req.path)}`,
+        `userId=${userId || 'anonymous'}`,
+        ...(req.admin ? [`adminId=${req.admin.id || 'ADMIN_TOKEN'}`] : []),
+        `errorCode=${err.code || 'unknown'}`,
+        ...(err.errno ? [`errno=${err.errno}`] : []),
+        ...(err.sqlState ? [`sqlState=${err.sqlState}`] : []),
+      ].join('\n');
+      db.errors.add({
+        source: 'server', message: `${req.method} ${safeErrorUrl(req.path)} [${status}${err.code ? ` ${err.code}` : ''}]: ${err.message}`,
+        stack: `Request diagnostics:\n${diagnostic}\n\n${err.stack || 'No stack trace.'}`,
+        url: safeErrorUrl(req.originalUrl), userAgent: req.get('user-agent'), userId,
+      }).catch(() => {});
+    }   // expected 5xx (provider down, storage off) are not logged as crashes
     const authored = err instanceof HttpError || (Number.isInteger(err?.status) && typeof err?.code === 'string');
     const message = authored && err.message ? err.message : (status >= 500 ? 'Something went wrong.' : 'That request couldn’t be completed.');
     const code = authored && typeof err.code === 'string' ? err.code : (status >= 500 ? 'server_error' : 'bad_request');

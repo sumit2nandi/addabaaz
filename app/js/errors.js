@@ -1,4 +1,4 @@
-/* Sends uncaught browser errors to the ADDABAAZ API (admin console → Errors). Throttled and de-duplicated; nothing personal is attached.
+/* Sends uncaught browser errors to the ADDABAAZ API (admin console → Errors). Reports are throttled and de-duplicated; the browser sends no account identifier (the server may associate a verified session).
  * Also owns `friendly()` — the one place that decides what a user may see when something throws:
  * server-authored and deliberately-written messages pass through, browser/JS internals never do. */
 import { app } from './app.js';

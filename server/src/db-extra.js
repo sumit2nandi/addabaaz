@@ -646,9 +646,9 @@ export function extraDb({ q, tx, iso }) {
     async list({ limit = 100 } = {}) {
       const [groups, recent] = await Promise.all([
         q('SELECT source, message, COUNT(*) AS n, MAX(created_at) AS last_at, MIN(created_at) AS first_at, MAX(url) AS url FROM error_log WHERE created_at > UTC_TIMESTAMP(3) - INTERVAL 7 DAY GROUP BY source, message ORDER BY last_at DESC LIMIT ?', [limit]),
-        q('SELECT id, source, message, stack, url, user_agent, created_at FROM error_log ORDER BY id DESC LIMIT 20'),
+        q('SELECT id, source, message, stack, url, user_agent, user_id, created_at FROM error_log ORDER BY id DESC LIMIT 20'),
       ]);
-      return { groups: groups.map((r) => ({ source: r.source, message: r.message, count: Number(r.n), lastAt: iso(r.last_at), firstAt: iso(r.first_at), url: r.url })), recent: recent.map((r) => ({ id: r.id, source: r.source, message: r.message, stack: r.stack, url: r.url, userAgent: r.user_agent, at: iso(r.created_at) })) };
+      return { groups: groups.map((r) => ({ source: r.source, message: r.message, count: Number(r.n), lastAt: iso(r.last_at), firstAt: iso(r.first_at), url: r.url })), recent: recent.map((r) => ({ id: r.id, source: r.source, message: r.message, stack: r.stack, url: r.url, userAgent: r.user_agent, userId: r.user_id || null, at: iso(r.created_at) })) };
     },
     async clear() { await q('DELETE FROM error_log'); },
     async prune() { await q('DELETE FROM error_log WHERE created_at < UTC_TIMESTAMP(3) - INTERVAL 30 DAY'); },
