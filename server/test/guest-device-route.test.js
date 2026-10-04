@@ -90,3 +90,34 @@ test('the device data layer stores guest ownership as NULL and can remove a toke
   await db.devices.removeHash(hash);
   assert.match(queries[1].sql, /DELETE FROM push_devices WHERE token_hash = \?/);
 });
+
+test('the device data layer applies a device’s own switches, exactly like a browser subscription', async () => {
+  const queries = [];
+  const db = extraDb({
+    q: async (sql, params) => { queries.push({ sql, params }); return []; },
+    tx: async (fn) => fn({ query: async (sql, params) => { queries.push({ sql, params }); return { affectedRows: 1 }; } }),
+    iso: (value) => value,
+  });
+  const last = () => queries[queries.length - 1];
+  // The three targeted audiences filter on the device’s own flag and keep the browser’s user lookup.
+  await db.devices.audienceFor({ kind: 'episodes', showId: 'show-1', videoIds: ['v1'] });
+  assert.match(last().sql, /WHERE pd\.episodes = 1 AND pd\.user_id IN \(/);
+  assert.match(last().sql, /l\.item_type = 'show' AND l\.item_id = \?/);
+  assert.deepEqual(last().params, ['show-1', ['v1']]);
+  await db.devices.audienceFor({ kind: 'launches', upcomingId: 'up-1' });
+  assert.match(last().sql, /WHERE pd\.launches = 1 AND/); assert.deepEqual(last().params, ['up-1']);
+  await db.devices.audienceFor({ kind: 'news' });
+  assert.match(last().sql, /WHERE pd\.news = 1$/);
+  await db.devices.audienceFor({ kind: 'all' });
+  assert.doesNotMatch(last().sql, /WHERE pd\.(episodes|launches|news|user_id)/, 'a general broadcast ignores the switches');
+  await db.devices.audienceFor({ kind: 'user', userId: 'u1' });
+  assert.match(last().sql, /WHERE pd\.user_id = \?/);
+  // Writing sends only the switches it was given; an empty change is not a query.
+  const before = queries.length;
+  await db.devices.setPrefs('hash-1', { episodes: false, news: true });
+  assert.match(last().sql, /UPDATE push_devices SET episodes = \?, news = \?, last_seen/);
+  assert.deepEqual(last().params, [0, 1, 'hash-1']);
+  assert.equal(await db.devices.setPrefs('hash-1', {}), 0);
+  assert.equal(queries.length, before + 1, 'no empty update is sent');
+  assert.equal(await db.devices.getPrefs('hash-1'), null, 'an unknown token reads as unknown, never as defaults');
+});

@@ -437,9 +437,11 @@ test('admin: app push reaches registered devices through FCM and drops dead toke
     assert.equal((await db.devices.audienceFor({ kind: 'news' })).some((d) => d.token === token2), false, 'and off for the default device');
 
     // The targeted audiences really do filter on the switch: follow a show, then turn episodes off.
+    // (Episodes are off from the round-trip above — put them back before testing the following case.)
+    await call('PATCH', '/devices/prefs', { token: prefsToken, episodes: true });
     const followed = (await call('GET', '/catalog')).body.shows[0];
-    const profileId = (await call('GET', '/me', null, u.token)).body.profiles[0].id;
-    await db.list.addListItem(profileId, 'show', followed.id);
+    const profileId = u.profiles[0].id;
+    await db.library.addListItem(profileId, 'show', followed.id);
     const epAudience = { kind: 'episodes', showId: followed.id, videoIds: [] };
     assert.ok((await db.devices.audienceFor(epAudience)).some((d) => d.token === prefsToken), 'a follower with episodes on is included');
     await call('PATCH', '/devices/prefs', { token: prefsToken, episodes: false });
@@ -449,7 +451,7 @@ test('admin: app push reaches registered devices through FCM and drops dead toke
 
     // The launch switch behaves the same way, and is independent of the episode one.
     const soon = (await call('GET', '/catalog')).body.upcoming[0];
-    await db.list.addReminder(profileId, soon.id);
+    await db.library.addReminder(profileId, soon.id);
     const launchAudience = { kind: 'launches', upcomingId: soon.id };
     assert.ok((await db.devices.audienceFor(launchAudience)).some((d) => d.token === prefsToken), 'reminder-holders with launches on are included');
     await call('PATCH', '/devices/prefs', { token: prefsToken, launches: false });
