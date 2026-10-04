@@ -58,7 +58,8 @@ test('the notification permission is asked once, gently, and never again', () =>
   assert.match(main, /initNotifyPrompt\(\{ path: currentPath\(\) \}\)/, 'the app asks through it on boot and on navigation');
   assert.match(main, /window\.addEventListener\('ab:ready', ask\)/, 'and after each route change (the module decides)');
   assert.match(css, /\.dlg-centered .dlg-body \.row\.end \.btn, \.dialog-sm \.row\.end \.btn \{ min-width: 132px/, 'confirm buttons share one size');
-  assert.match(css, /\.btn-danger \{ background: var\(--accent\); border-color: var\(--accent\); color: #fff;/, 'the destructive button matches every other button');
+  assert.match(css, /\.btn-danger \{ background-color: var\(--accent\); background-image: var\(--accent-gradient\); border-color: var\(--accent\); color: #fff;/,
+    'the destructive button uses the same branded red gradient as the primary button');
 });
 
 test('the sign-in page styles exist for the phone-first form', () => {
