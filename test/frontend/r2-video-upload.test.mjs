@@ -215,20 +215,33 @@ test('createHtml5Player renders a uniform YouTube-style player (.ytp) with Setti
   }
 });
 
-test('fatal HLS playback errors reach Admin → Errors with useful details and no signed URLs', async () => {
+test('Chromium HLS uses hls.js despite a native maybe-hint, and fatal errors reach Admin → Errors safely', async () => {
   const { document, window } = parseHTML('<!doctype html><html><head></head><body><div id="slot"></div></body></html>');
-  const previous = { document: globalThis.document, window: globalThis.window, location: globalThis.location, user: app.user };
+  const previous = {
+    document: globalThis.document, window: globalThis.window, location: globalThis.location, user: app.user,
+    navigator: Object.getOwnPropertyDescriptor(globalThis, 'navigator'),
+  };
   const reports = [], states = [];
   app.user = { remote: { reportError: (error) => reports.push(error) } };
   globalThis.document = document;
   globalThis.window = window;
   globalThis.location = { pathname: '/watch/hls-test', search: '', hash: '' };
+  Object.defineProperty(globalThis, 'navigator', {
+    value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36' },
+    configurable: true,
+  });
+  const createElement = document.createElement.bind(document);
+  document.createElement = (tag) => {
+    const el = createElement(tag);
+    if (String(tag).toLowerCase() === 'video') el.canPlayType = () => 'maybe';
+    return el;
+  };
   class MockHls {
     static Events = { ERROR: 'hlsError', MANIFEST_PARSED: 'manifestParsed', LEVEL_SWITCHED: 'levelSwitched' };
     static isSupported() { return true; }
     constructor() { this.handlers = new Map(); MockHls.instance = this; }
     on(name, fn) { this.handlers.set(name, fn); }
-    loadSource() {}
+    loadSource(url) { this.sourceUrl = url; }
     attachMedia() {}
     destroy() {}
   }
@@ -246,6 +259,7 @@ test('fatal HLS playback errors reach Admin → Errors with useful details and n
       id: 'hls-test', title: 'HLS test', duration: 6,
       source: { type: 'hls', url: 'https://site.example/api/v1/media/test-token/master.m3u8' },
     }, { autoplay: false, controls: false, onState: (...state) => states.push(state) });
+    assert.equal(MockHls.instance.sourceUrl, 'https://site.example/api/v1/media/test-token/master.m3u8', 'Chromium uses hls.js even when canPlayType returns maybe');
     const signedUrl = 'https://acct.r2.cloudflarestorage.com/bucket/premium/hls-test/segment.ts?X-Amz-Signature=secret-signature';
     const mediaToken = 'eyJhbGciOiJIUzI1NiJ9.eyJ2aWQiOiJoc2wtdGVzdCJ9.signature';
     const onHlsError = MockHls.instance.handlers.get(MockHls.Events.ERROR);
@@ -268,10 +282,13 @@ test('fatal HLS playback errors reach Admin → Errors with useful details and n
     player.destroy();
   } finally {
     document.head.appendChild = append;
+    document.createElement = createElement;
     app.user = previous.user;
     for (const key of ['document', 'window', 'location']) {
       if (previous[key] === undefined) delete globalThis[key]; else globalThis[key] = previous[key];
     }
+    if (previous.navigator) Object.defineProperty(globalThis, 'navigator', previous.navigator);
+    else delete globalThis.navigator;
   }
 });
 

@@ -145,7 +145,8 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
     if (SPEEDS.includes(sp)) v.playbackRate = sp;
   } catch { /* ignore */ }
 
-  let hls = null, lastEmit = 0, selectedQuality = -1, playbackErrorReported = false; // -1 = Auto
+  let hls = null, lastEmit = 0, selectedQuality = -1; // -1 = Auto
+  let playbackErrorReported = false, hlsEngine = 'html5';
   let uiUpdate = () => {}, uiCleanup = () => {};
 
   if (!controls || typeof container.querySelector !== 'function') {
@@ -171,7 +172,14 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
   subs.catch(() => {});
 
   const { type, url } = video.source;
-  if (type === 'hls' && !v.canPlayType?.('application/vnd.apple.mpegurl')) {
+  const nativeHlsHint = Boolean(v.canPlayType?.('application/vnd.apple.mpegurl'));
+  const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+  // Chromium may return "maybe" for the HLS MIME type despite not handling HLS manifests natively.
+  // Prefer hls.js there; reserve native playback for browsers whose native HLS support is dependable.
+  const chromium = /\b(?:Chrome|Chromium|Edg(?:A|iOS)?|OPR|SamsungBrowser)\//i.test(userAgent);
+  const useNativeHls = nativeHlsHint && !chromium;
+  if (type === 'hls' && !useNativeHls) {
+    hlsEngine = 'hls.js';
     let Hls;
     try { Hls = await loadHls(); }
     catch (e) {
@@ -211,6 +219,7 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
       throw Object.assign(new Error('This video format isn’t supported on your device.'), { friendly: true });
     }
   } else {
+    if (type === 'hls') hlsEngine = 'native-hls';
     v.src = url;
   }
 
@@ -238,9 +247,7 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
       const code = v.error?.code;
       const names = ['', 'aborted', 'network', 'decode', 'unsupported-source'];
       reportPlaybackDiagnostic(video, {
-        engine: type === 'hls'
-          ? (v.canPlayType?.('application/vnd.apple.mpegurl') ? 'native-hls' : 'hls.js')
-          : 'html5',
+        engine: type === 'hls' ? hlsEngine : 'html5',
         type: 'media-element', detail: names[code] || 'media-error', status: null,
         reason: v.error?.message, mediaError: code == null ? null : `${code}${v.error?.message ? `: ${v.error.message}` : ''}`, media: v,
       });
