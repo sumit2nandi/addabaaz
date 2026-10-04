@@ -53,7 +53,7 @@ test('the notification permission is asked once, gently, and never again', () =>
   assert.match(prompt, /if \(!nativePushSupported\(\) && Notification\.permission !== 'default'\) \{ remember\(\); return false; \}/, 'an OS-level decision is respected');
   assert.match(prompt, /Turn on notifications/, 'one clear action');
   assert.match(prompt, /Not now/, 'and a real way to decline');
-  assert.match(prompt, /await enablePush\(\{ episodes: true, launches: true, news: false \}\)/, 'turning it on subscribes with sensible defaults');
+  assert.match(prompt, /await enablePush\(\{ episodes: true, launches: true, news: true \}\)/, 'turning it on subscribes with all three kinds on');
   assert.match(prompt, /pending = true;/, 'repeated calls cannot schedule two prompts');
   assert.match(main, /initNotifyPrompt\(\{ path: currentPath\(\) \}\)/, 'the app asks through it on boot and on navigation');
   assert.match(main, /window\.addEventListener\('ab:ready', ask\)/, 'and after each route change (the module decides)');

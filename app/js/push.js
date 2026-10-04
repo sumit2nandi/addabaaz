@@ -31,7 +31,7 @@ export async function pushState() {
   const cfg = await u.remote.pushConfig(); if (!cfg.enabled) return { supported: true, enabled: false };
   const sub = await currentSubscription();
   const prefs = sub ? (await u.remote.pushStatus(sub.endpoint).catch(() => ({}))).prefs : null;
-  return { supported: true, enabled: true, permission: Notification.permission, subscribed: !!(sub && prefs), prefs: prefs || { episodes: true, launches: true, news: false } };
+  return { supported: true, enabled: true, permission: Notification.permission, subscribed: !!(sub && prefs), prefs: prefs || { episodes: true, launches: true, news: true } };
 }
 
 // Ask permission, subscribe this browser to push, and send the subscription to the server.

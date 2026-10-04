@@ -104,7 +104,7 @@ export function extraDb({ q, tx, iso }) {
     async upsert(userId, { endpoint, hash, p256dh, auth }, prefs = {}) {
       await q(`INSERT INTO push_subscriptions (id, user_id, endpoint_hash, endpoint, p256dh, auth, episodes, launches, news) VALUES (UUID(),?,?,?,?,?,?,?,?)
         ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), endpoint = VALUES(endpoint), p256dh = VALUES(p256dh), auth = VALUES(auth), fail_count = 0`,
-      [userId, hash, endpoint, p256dh, auth, prefs.episodes === false ? 0 : 1, prefs.launches === false ? 0 : 1, prefs.news ? 1 : 0]);
+      [userId, hash, endpoint, p256dh, auth, prefs.episodes === false ? 0 : 1, prefs.launches === false ? 0 : 1, prefs.news === false ? 0 : 1]);
     },
     async setPrefs(userId, hash, prefs) {
       const sets = [], vals = [];
@@ -150,11 +150,12 @@ export function extraDb({ q, tx, iso }) {
       const plat = ['android', 'ios', 'web'].includes(platform) ? platform : null;
       const lab = label ? String(label).slice(0, 120) : null;
       // On a re-registration the stored choices are kept: the apps send the token on every start, and those
-      // columns are the viewer's settings, not part of the registration.
+      // columns are the viewer's settings, not part of the registration. A registration that carries no
+      // choices at all starts from the defaults — all three kinds on (migration 020).
       await q(`INSERT INTO push_devices (id, user_id, platform, token_hash, token, label, episodes, launches, news) VALUES (UUID(),?,COALESCE(?,'android'),?,?,?,?,?,?)
         ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), token = VALUES(token), platform = COALESCE(?, platform), label = COALESCE(?, label), fail_count = 0, last_seen = UTC_TIMESTAMP(3)`,
       [userId, plat, hash, String(token).slice(0, 512), lab,
-        prefs?.episodes === false ? 0 : 1, prefs?.launches === false ? 0 : 1, prefs?.news ? 1 : 0,
+        prefs?.episodes === false ? 0 : 1, prefs?.launches === false ? 0 : 1, prefs?.news === false ? 0 : 1,
         plat, lab]);
     },
     /** Stores a guest app token with no account association; the same device moves to a user on sign-in. */
@@ -164,7 +165,7 @@ export function extraDb({ q, tx, iso }) {
       await q(`INSERT INTO push_devices (id, user_id, platform, token_hash, token, label, episodes, launches, news) VALUES (UUID(),NULL,COALESCE(?,'android'),?,?,?,?,?,?)
         ON DUPLICATE KEY UPDATE user_id = NULL, token = VALUES(token), platform = COALESCE(?, platform), label = COALESCE(?, label), fail_count = 0, last_seen = UTC_TIMESTAMP(3)`,
       [plat, hash, String(token).slice(0, 512), lab,
-        prefs?.episodes === false ? 0 : 1, prefs?.launches === false ? 0 : 1, prefs?.news ? 1 : 0,
+        prefs?.episodes === false ? 0 : 1, prefs?.launches === false ? 0 : 1, prefs?.news === false ? 0 : 1,
         plat, lab]);
     },
     /** Removes one token (sign-out, permission revoked, or account opt-out). */

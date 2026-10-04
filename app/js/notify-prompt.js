@@ -100,7 +100,7 @@ export async function initNotifyPrompt({ path = location.pathname || '/' } = {})
     $('#npOn', el).addEventListener('click', async () => {
       const btn = $('#npOn', el);
       btn.disabled = true;
-      try { await enablePush({ episodes: true, launches: true, news: false }); finish(true); }   // the prompt closes itself as soon as this lands
+      try { await enablePush({ episodes: true, launches: true, news: true }); finish(true); }   // the prompt closes itself as soon as this lands
       catch (err) {
         const status = $('#npStatus', el);
         if (status) status.textContent = friendly(err);

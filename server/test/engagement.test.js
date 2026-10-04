@@ -254,7 +254,7 @@ test('push: subscribe, preferences, notify audiences, send-once automatic notifi
   assert.equal((await call('POST', '/push/subscribe', { subscription: sub('https://push.example/dev1') }, u.token)).status, 201);
   assert.equal((await call('POST', '/push/subscribe', { subscription: sub('https://push.example/dev1') }, u.token)).status, 201, 'idempotent');
   assert.equal((await call('POST', '/push/subscribe', { subscription: sub('https://push.example/gone') }, u.token)).status, 201);
-  assert.deepEqual((await call('POST', '/push/status', { endpoint: 'https://push.example/dev1' }, u.token)).body.prefs, { episodes: true, launches: true, news: false });
+  assert.deepEqual((await call('POST', '/push/status', { endpoint: 'https://push.example/dev1' }, u.token)).body.prefs, { episodes: true, launches: true, news: true }, 'all three kinds are on unless a viewer turns one off');
   const push = (await import('../src/push.js')).createPush({ db, vapid: { publicKey: 'x' }, sender: fakeSender });
   // nobody follows the show yet → nobody is told
   pushed.length = 0; let r = await push.notify({ kind: 'episodes', showId: show.id, videoIds: [] }, { title: 'T', body: 'B' }); assert.equal(r.sent, 0);
@@ -346,7 +346,14 @@ test('admin: push broadcasts go to the chosen audience, with progress and audit;
   assert.equal((await fetch(`${base}/admin/notifications/send`, { method: 'POST' })).status, 401);
   pushed.length = 0;
   let c = await broadcast({ title: 'Big news', body: 'Season 2 is here', url: '/plans', audience: 'news' });
-  assert.equal(c.status, 'sent'); assert.equal(c.sent, 0, 'news is opt-in'); assert.equal(c.channel, 'push');
+  assert.equal(c.status, 'sent'); assert.equal(c.channel, 'push');
+  // Assert on this subscription, not on the total: other tests in this file keep their own rows.
+  assert.ok(pushed.some((p) => p.endpoint === 'https://push.example/admin1'), 'announcements reach a subscriber by default');
+  await call('PATCH', '/push/prefs', { endpoint: sub.endpoint, news: false }, u.token);
+  pushed.length = 0;
+  c = await broadcast({ title: 'One more thing', body: 'Body', audience: 'news' });
+  assert.equal(pushed.some((p) => p.endpoint === 'https://push.example/admin1'), false, 'and turning them off is honoured');
+  await call('PATCH', '/push/prefs', { endpoint: sub.endpoint, news: true }, u.token);
   c = await broadcast({ title: 'Hello all', body: 'Body', audience: 'all' });
   assert.ok(c.sent >= 1); assert.ok(c.total >= c.sent); assert.equal(c.status, 'sent'); assert.equal(c.by, 'ADMIN_TOKEN');
   assert.equal(pushed.at(-1).title, 'Hello all');
@@ -420,7 +427,7 @@ test('admin: app push reaches registered devices through FCM and drops dead toke
     const prefsToken = 'fcm-device-prefs-' + 'p'.repeat(30);
     assert.equal((await call('POST', '/devices', { token: prefsToken }, u.token)).status, 201);
     assert.deepEqual((await call('POST', '/devices/status', { token: prefsToken })).body.prefs,
-      { episodes: true, launches: true, news: false }, 'a fresh device gets the web defaults');
+      { episodes: true, launches: true, news: true }, 'a fresh device gets the web defaults — all three on');
     assert.equal((await call('PATCH', '/devices/prefs', { token: prefsToken, episodes: false, news: true })).status, 204);
     assert.deepEqual((await call('POST', '/devices/status', { token: prefsToken })).body.prefs,
       { episodes: false, launches: true, news: true }, 'only the switches that were sent change');
@@ -434,7 +441,10 @@ test('admin: app push reaches registered devices through FCM and drops dead toke
     // Audience selection honours them, exactly like the browser subscriptions.
     assert.ok((await db.devices.audienceFor({ kind: 'all' })).some((d) => d.token === prefsToken), 'everyone-broadcasts ignore the switches');
     assert.ok((await db.devices.audienceFor({ kind: 'news' })).some((d) => d.token === prefsToken), 'news is on for this device');
-    assert.equal((await db.devices.audienceFor({ kind: 'news' })).some((d) => d.token === token2), false, 'and off for the default device');
+    assert.ok((await db.devices.audienceFor({ kind: 'news' })).some((d) => d.token === token2), 'and on for a device nobody configured — announcements are the default now');
+    await call('PATCH', '/devices/prefs', { token: token2, news: false });
+    assert.equal((await db.devices.audienceFor({ kind: 'news' })).some((d) => d.token === token2), false, 'until the viewer turns them off');
+    await call('PATCH', '/devices/prefs', { token: token2, news: true });
 
     // The targeted audiences really do filter on the switch: follow a show, then turn episodes off.
     // (Episodes are off from the round-trip above — put them back before testing the following case.)

@@ -29,7 +29,7 @@ test('the app sends the choices to the device row, keyed by its FCM token', () =
   assert.match(native, /export async function setNativePushPrefs\(prefs\)/, 'a native setter exists');
   assert.match(native, /await u\.remote\.devicePrefs\(token, prefs\);/, 'it writes to the device token');
   assert.match(native, /const prefs = token \? \(await u\.remote\.deviceStatus\?\.\(token\)\.catch\(\(\) => \(\{\}\)\)\)\?\.prefs : null;/, 'and reads the stored choices back for the screen');
-  assert.match(native, /prefs \|\| \{ episodes: true, launches: true, news: false \}/, 'falling back to the server defaults');
+  assert.match(native, /prefs \|\| \{ episodes: true, launches: true, news: true \}/, 'falling back to the server defaults (all three on)');
   const push = read('app/js/push.js');
   assert.match(push, /export async function setPushPrefs\(prefs\) \{ if \(nativePushSupported\(\)\) return setNativePushPrefs\(prefs\);/, 'setPushPrefs routes to it instead of returning early');
   assert.doesNotMatch(push, /setPushPrefs\(prefs\) \{ if \(nativePushSupported\(\)\) return;/, 'the old no-op is gone');
@@ -43,8 +43,14 @@ test('the server keeps them per device and filters the targeted audiences', () =
   const migration = read('server/migrations/019_push_device_prefs.sql');
   assert.match(migration, /ALTER TABLE push_devices\n  ADD COLUMN episodes TINYINT\(1\) NOT NULL DEFAULT 1,/, 'episodes default on');
   assert.match(migration, /ADD COLUMN launches TINYINT\(1\) NOT NULL DEFAULT 1,/, 'launches default on');
-  assert.match(migration, /ADD COLUMN news     TINYINT\(1\) NOT NULL DEFAULT 0;/, 'announcements default off, like the browser');
-  assert.equal(/ALTER TABLE push_devices/.test(read('server/migrations/019_push_device_prefs.sql')), true);
+  assert.match(migration, /ADD COLUMN news     TINYINT\(1\) NOT NULL DEFAULT 0;/, 'migration 019 added the column (its default was the old opt-in one)');
+  assert.equal(/ALTER TABLE push_devices/.test(migration), true);
+  // …and migration 020 flips the default to on and back-fills everyone, on both channels.
+  const flipped = read('server/migrations/020_news_on_by_default.sql');
+  assert.match(flipped, /ALTER TABLE push_subscriptions ALTER COLUMN news SET DEFAULT 1;/, 'browser subscriptions default to announcements on');
+  assert.match(flipped, /ALTER TABLE push_devices       ALTER COLUMN news SET DEFAULT 1;/, 'so do app devices');
+  assert.match(flipped, /UPDATE push_subscriptions SET news = 1 WHERE news = 0;/, 'and existing rows are brought along');
+  assert.match(flipped, /UPDATE push_devices       SET news = 1 WHERE news = 0;/);
 
   const db = read('server/src/db-extra.js');
   assert.match(db, /async getPrefs\(hash\)/, 'choices are read by token hash');
@@ -61,6 +67,9 @@ test('the server keeps them per device and filters the targeted audiences', () =
   assert.match(features, /api\.post\('\/devices\/status'/, 'the status route exists');
   assert.match(features, /api\.patch\('\/devices\/prefs'/, 'the write route exists');
   assert.match(features, /if \(v !== undefined && typeof v !== 'boolean'\) throw bad\('Notification choices must be true or false\.'\)/, 'and is validated');
+  // The defaults themselves: a registration/prefs body that carries nothing means announcements on.
+  assert.match(db, /prefs\.news === false \? 0 : 1\]\)/, 'the browser subscription default is on');
+  assert.equal((db.match(/prefs\?\.news === false \? 0 : 1/g) || []).length, 2, 'both device registrations default to on too');
   assert.match(features, /guestDeviceLimit/, 'both sit behind the guest rate limit, since they work by token possession');
 });
 

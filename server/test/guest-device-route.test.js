@@ -14,7 +14,7 @@ before(async () => {
     async upsertGuest(device) { saved.push(device); },
     async removeHash(hash) { removed.push(hash); delete prefs[hash]; },
     async getPrefs(hash) { return prefs[hash] || null; },
-    async setPrefs(hash, p) { prefs[hash] = { ...(prefs[hash] || { episodes: true, launches: true, news: false }), ...Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined)) }; return 1; },
+    async setPrefs(hash, p) { prefs[hash] = { ...(prefs[hash] || { episodes: true, launches: true, news: true }), ...Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined)) }; return 1; },
   } };
   const router = express.Router(); router.use(express.json());
   const features = createFeatures({
@@ -55,16 +55,16 @@ test('guest registration refuses malformed tokens and does not write them', asyn
 
 test('the device choices are read and written by token possession, and validated', async () => {
   const token = 'guest-route-prefs-' + 'd'.repeat(30), hash = endpointHash(token);
-  prefs[hash] = { episodes: true, launches: true, news: false };
+  prefs[hash] = { episodes: true, launches: true, news: true };
 
   const status = await call('POST', '/devices/status', { token });
   assert.equal(status.status, 200);
   assert.match(status.headers.get('cache-control'), /no-store/);
-  assert.deepEqual((await status.json()).prefs, { episodes: true, launches: true, news: false });
+  assert.deepEqual((await status.json()).prefs, { episodes: true, launches: true, news: true });
 
-  const patched = await call('PATCH', '/devices/prefs', { token, episodes: false, news: true });
+  const patched = await call('PATCH', '/devices/prefs', { token, episodes: false, news: false });
   assert.equal(patched.status, 204);
-  assert.deepEqual(patched_prefs(hash), { episodes: false, launches: true, news: true }, 'only what was sent changes');
+  assert.deepEqual(patched_prefs(hash), { episodes: false, launches: true, news: false }, 'only what was sent changes — and turning announcements off works');
 
   assert.equal((await call('PATCH', '/devices/prefs', { token, episodes: 'yes' })).status, 400, 'booleans only');
   assert.equal((await call('PATCH', '/devices/prefs', { token: 'too-short', news: true })).status, 400);
@@ -85,8 +85,8 @@ test('the device data layer stores guest ownership as NULL and can remove a toke
   assert.match(queries[0].sql, /VALUES \(UUID\(\),NULL,COALESCE\(/);
   assert.match(queries[0].sql, /ON DUPLICATE KEY UPDATE user_id = NULL/);
   assert.match(queries[0].sql, /episodes, launches, news/);
-  assert.deepEqual(queries[0].params, ['android', hash, token, 'Android app', 1, 1, 0, 'android', 'Android app'],
-    'a guest device starts on the same defaults as the browser: episodes/launches on, announcements off');
+  assert.deepEqual(queries[0].params, ['android', hash, token, 'Android app', 1, 1, 1, 'android', 'Android app'],
+    'a guest device starts on the same defaults as the browser: all three kinds on');
   await db.devices.removeHash(hash);
   assert.match(queries[1].sql, /DELETE FROM push_devices WHERE token_hash = \?/);
 });

@@ -110,7 +110,7 @@ test('the app keeps the same three notification choices as the browser', async (
   let state = await nativePushState();
   assert.equal(state.native, true);
   assert.equal(state.guest, false);
-  assert.deepEqual(state.prefs, { episodes: true, launches: true, news: false }, 'episodes and launches on, announcements off — the same defaults as the web');
+  assert.deepEqual(state.prefs, { episodes: true, launches: true, news: true }, 'all three on by default — the same defaults as the web');
   assert.deepEqual(reads, ['fcm-account-token-1234567890'], 'the stored choices are read by token');
 
   // What the server stores comes back to the screen.

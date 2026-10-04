@@ -169,13 +169,13 @@ export async function nativePushState() {
   // The choices stored for THIS device (episodes / launches / news) — the app's Account page shows the same
   // three switches the browser has. A guest installation has no account to target episode or launch sends
   // with, so it keeps only the master switch and never asks for these. A token the server does not know yet
-  // falls back to the server defaults: episodes and launches on, announcements off.
+  // falls back to the server defaults: all three on.
   const token = u.account ? knownToken() : '';
   const prefs = token ? (await u.remote.deviceStatus?.(token).catch(() => ({})))?.prefs : null;
   return {
     supported: true, enabled: true, native: true, guest: !u.account,
     subscribed: !isOptedOut() && localToken && registeredForViewer && (!permission || permissionState === 'granted'),
-    permission: permissionState, prefs: prefs || { episodes: true, launches: true, news: false },
+    permission: permissionState, prefs: prefs || { episodes: true, launches: true, news: true },
   };
 }
 

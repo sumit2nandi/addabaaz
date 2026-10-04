@@ -148,7 +148,7 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
       email: { configured: mailConfigured(), from: mailer?.from || '', optedOut, audiences: emailAudiences },
       // Legacy keys (older admin builds / scripts read these).
       configured: pushConfigured(), publicKey: push?.publicKey || '', subscribers: webSubscribers,
-      audiences: [{ id: 'news', label: 'Announcements — people who opted in to news' }, { id: 'all', label: 'Everyone who turned notifications on' },
+      audiences: [{ id: 'news', label: 'Announcements — everyone whose announcements are on (the default)' }, { id: 'all', label: 'Everyone who turned notifications on' },
         ...snap.catalog.shows.map((s) => ({ id: `show:${s.id}`, label: `Followers of ${s.titleEn || s.title}` })), ...snap.catalog.upcoming.map((u) => ({ id: `launch:${u.id}`, label: `Reminders for ${u.titleEn || u.title}` }))],
       history: recent, campaigns: recent,
     });
