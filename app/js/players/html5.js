@@ -68,6 +68,7 @@ const YT_ICONS = {
   check: '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>',
   chevRight: '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>',
   chevLeft: '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>',
+  close: '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>',
 };
 
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -383,7 +384,7 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
   };
 }
 
-// Builds the YouTube-look player shell, scrubber, control bar, double-tap seek, and Settings menu around <video>.
+// Builds the YouTube-look player shell, scrubber, control bar, double-tap seek, and viewport-level Settings sheet.
 function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelectedQuality, setSelectedQuality, onUserMute }) {
   const wrap = document.createElement('div');
   wrap.className = 'ytp is-paused show-controls';
@@ -396,7 +397,6 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
     <div class="ytp-bezel" aria-hidden="true"><div class="ytp-bezel-icon">${YT_ICONS.play}</div></div>
     <div class="ytp-seek-ind left" aria-hidden="true"><span>« 10s</span></div>
     <div class="ytp-seek-ind right" aria-hidden="true"><span>10s »</span></div>
-    <div class="ytp-menu" hidden role="menu" aria-label="Player settings"></div>
     <div class="ytp-chrome">
       <div class="ytp-progress" role="slider" aria-label="Seek" aria-valuemin="0" aria-valuemax="${Math.round(video.duration || 0)}" aria-valuenow="0">
         <div class="ytp-hover-time" hidden>0:00</div>
@@ -427,6 +427,30 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
   wrap.querySelector('.ytp-video-slot').appendChild(v);
   container.appendChild(wrap);
 
+  // Keep settings outside the player so the sheet can use the full viewport instead of being
+  // clipped by the video's aspect ratio or overflow. Re-parent it into the fullscreen element
+  // only while that element is in the browser's fullscreen top layer.
+  const menu = document.createElement('div');
+  menu.className = 'ytp-settings-overlay';
+  menu.hidden = true;
+  menu.innerHTML = `
+    <button type="button" class="ytp-settings-scrim" aria-label="Close player settings" tabindex="-1"></button>
+    <section class="ytp-settings-sheet" role="dialog" aria-modal="true" aria-label="Player settings" tabindex="-1">
+      <div class="ytp-settings-handle" aria-hidden="true"><span></span></div>
+      <header class="ytp-settings-header">
+        <button type="button" data-settings-back aria-label="Back to settings" hidden>${YT_ICONS.chevLeft}</button>
+        <h2 class="ytp-settings-title">Settings</h2>
+        <button type="button" data-settings-close aria-label="Close settings">${YT_ICONS.close}</button>
+      </header>
+      <div class="ytp-settings-body"></div>
+    </section>`;
+  const menuHost = () => document.fullscreenElement || document.webkitFullscreenElement || document.body || document.documentElement;
+  const ensureMenuHost = () => {
+    const host = menuHost();
+    if (host && menu.parentNode !== host) host.appendChild(menu);
+  };
+  ensureMenuHost();
+
   const $ = (sel) => wrap.querySelector(sel);
   const videoSlot = $('.ytp-video-slot');
   const chrome = $('.ytp-chrome');
@@ -446,7 +470,10 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
   const gearBadge = $('.ytp-gear-badge');
   const pipBtn = $('.ytp-pip-btn');
   const fsBtn = $('.ytp-fs-btn');
-  const menu = $('.ytp-menu');
+  const settingsSheet = menu.querySelector('.ytp-settings-sheet');
+  const settingsBody = menu.querySelector('.ytp-settings-body');
+  const settingsTitle = menu.querySelector('.ytp-settings-title');
+  const settingsBack = menu.querySelector('[data-settings-back]');
   const bezel = $('.ytp-bezel');
   const bezelIcon = $('.ytp-bezel-icon');
   const seekLeft = $('.ytp-seek-ind.left');
@@ -475,10 +502,10 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
     scheduleHide();
   };
 
-  // Never let clicks or pointerdowns inside the control bar or settings menu bubble to the video surface or hide controls.
+  // Never let clicks or pointerdowns inside the control bar or settings sheet bubble to the video surface or hide controls.
   chrome?.addEventListener('pointerdown', (e) => { e.stopPropagation(); showControls(); });
   chrome?.addEventListener('click', (e) => { e.stopPropagation(); showControls(); });
-  menu?.addEventListener('pointerdown', (e) => { e.stopPropagation(); showControls(); });
+  menu.addEventListener('pointerdown', (e) => { e.stopPropagation(); showControls(); });
 
   // Pulse the YouTube center bezel icon briefly on play/pause.
   let bezelTimer = null;
@@ -520,7 +547,7 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
   };
 
   // Video surface interaction:
-  // - If settings menu is open, clicking the video closes the menu.
+  // - Keep a close guard if the video surface receives a synthetic click while settings are open.
   // - Double-tap left/right 35% seeks -10s / +10s.
   // - Single tap/click toggles play/pause and keeps controls visible.
   let lastTapAt = 0;
@@ -672,7 +699,7 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
     update();
   };
   fsBtn?.addEventListener('click', (e) => { e.stopPropagation(); toggleFullscreen(); });
-  const onFsChange = () => update();
+  const onFsChange = () => { ensureMenuHost(); update(); };
   if (typeof document !== 'undefined') {
     document.addEventListener('fullscreenchange', onFsChange);
     document.addEventListener('webkitfullscreenchange', onFsChange);
@@ -680,12 +707,18 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
   v.addEventListener('webkitbeginfullscreen', onFsChange);
   v.addEventListener('webkitendfullscreen', onFsChange);
 
-  // Settings Menu (Playback speed, Quality, Subtitles/CC, Loop).
-  const closeMenu = () => {
+  // Settings sheet (Playback speed, Quality, Subtitles/CC when tracks exist, and Loop).
+  const updateSettingsScrollLock = () => {
+    const hasOpenSheet = !!document.querySelector('.ytp-settings-overlay:not([hidden])');
+    document.body?.classList.toggle('player-settings-open', hasOpenSheet);
+  };
+  const closeMenu = (restoreFocus = true) => {
     menuView = null;
     menu.hidden = true;
     gearBtn.classList.remove('is-open');
     gearBtn.setAttribute('aria-expanded', 'false');
+    updateSettingsScrollLock();
+    if (restoreFocus) gearBtn.focus?.({ preventScroll: true });
     scheduleHide();
   };
 
@@ -715,20 +748,27 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
     return `${found.label}${found.sub ? ' ' + found.sub : ''}`;
   };
 
-  const renderMenu = (view = 'main') => {
+  const renderMenu = (view = 'main', { focus = true } = {}) => {
     if (!view) { closeMenu(); return; }
     const tracks = getTracks();
     if (view === 'subs' && !tracks.length) view = 'main';
     menuView = view;
+    ensureMenuHost();
     menu.hidden = false;
     gearBtn.classList.add('is-open');
     gearBtn.setAttribute('aria-expanded', 'true');
+    updateSettingsScrollLock();
     clearTimeout(hideTimer);
     wrap.classList.add('show-controls');
     const curSub = activeTrack();
+    const titles = { main: 'Settings', speed: 'Playback speed', quality: 'Quality', subs: 'Subtitles/CC' };
+    settingsTitle.textContent = titles[view] || 'Settings';
+    settingsBack.hidden = view === 'main';
+    settingsSheet.setAttribute('aria-label', view === 'main' ? 'Player settings' : `${titles[view]} settings`);
+    settingsBody.scrollTop = 0;
 
     if (view === 'main') {
-      menu.innerHTML = `
+      settingsBody.innerHTML = `
         <button type="button" class="ytp-menu-item" data-nav="speed">
           <span class="ytp-menu-lead">${YT_ICONS.speed}<span>Playback speed</span></span>
           <span class="ytp-menu-val"><span>${speedLabel(v.playbackRate || 1)}</span>${YT_ICONS.chevRight}</span>
@@ -746,8 +786,7 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
           <span class="ytp-menu-val"><span class="ytp-menu-pill ${v.loop ? 'on' : ''}">${v.loop ? 'On' : 'Off'}</span></span>
         </button>`;
     } else if (view === 'speed') {
-      menu.innerHTML = `
-        <button type="button" class="ytp-menu-head" data-nav="main">${YT_ICONS.chevLeft}<span>Playback speed</span></button>
+      settingsBody.innerHTML = `
         <div class="ytp-menu-list">
           ${SPEEDS.map((s) => `<button type="button" class="ytp-menu-opt ${(v.playbackRate || 1) === s ? 'active' : ''}" data-speed="${s}">
             <span class="ytp-opt-check">${(v.playbackRate || 1) === s ? YT_ICONS.check : ''}</span>
@@ -756,8 +795,7 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
         </div>`;
     } else if (view === 'quality') {
       const sel = getSelectedQuality();
-      menu.innerHTML = `
-        <button type="button" class="ytp-menu-head" data-nav="main">${YT_ICONS.chevLeft}<span>Quality</span></button>
+      settingsBody.innerHTML = `
         <div class="ytp-menu-list">
           ${qualityOptions().map((o) => `<button type="button" class="ytp-menu-opt ${sel === o.id ? 'active' : ''}" data-quality="${o.id}">
             <span class="ytp-opt-check">${sel === o.id ? YT_ICONS.check : ''}</span>
@@ -765,8 +803,7 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
           </button>`).join('')}
         </div>`;
     } else if (view === 'subs') {
-      menu.innerHTML = `
-        <button type="button" class="ytp-menu-head" data-nav="main">${YT_ICONS.chevLeft}<span>Subtitles/CC</span></button>
+      settingsBody.innerHTML = `
         <div class="ytp-menu-list">
           <button type="button" class="ytp-menu-opt ${!curSub ? 'active' : ''}" data-sub="">
             <span class="ytp-opt-check">${!curSub ? YT_ICONS.check : ''}</span>
@@ -778,10 +815,16 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
           </button>`).join('')}
         </div>`;
     }
+    if (focus) {
+      const target = view === 'main'
+        ? settingsBody.querySelector('[data-nav]')
+        : settingsBody.querySelector('.ytp-menu-opt');
+      (target || settingsSheet).focus?.({ preventScroll: true });
+    }
   };
   const refreshQuality = () => {
-    if (menuView === 'quality') renderMenu('quality');
-    else if (menuView === 'main') renderMenu('main');
+    if (menuView === 'quality') renderMenu('quality', { focus: false });
+    else if (menuView === 'main') renderMenu('main', { focus: false });
   };
 
   gearBtn?.addEventListener('click', (e) => {
@@ -790,8 +833,10 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
     else renderMenu('main');
   });
 
-  menu?.addEventListener('click', (e) => {
+  menu.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (e.target.closest?.('[data-settings-close], .ytp-settings-scrim')) { closeMenu(); return; }
+    if (e.target.closest?.('[data-settings-back]')) { renderMenu('main'); return; }
     const nav = e.target.closest?.('[data-nav]');
     if (nav) { renderMenu(nav.getAttribute('data-nav')); return; }
     const act = e.target.closest?.('[data-act="loop"]');
@@ -819,10 +864,23 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
       return;
     }
   });
+  menu.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); closeMenu(); return; }
+    if (e.key !== 'Tab') return;
+    const buttons = [...settingsSheet.querySelectorAll('button')].filter((button) => !button.hidden && !button.disabled);
+    if (!buttons.length) { e.preventDefault(); settingsSheet.focus?.(); return; }
+    const first = buttons[0], last = buttons[buttons.length - 1];
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === settingsSheet)) {
+      e.preventDefault(); last.focus?.();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault(); first.focus?.();
+    }
+  });
 
   // Keyboard shortcuts when player is focused (Space/K play, Left/Right 5s, J/L 10s, M mute, F fullscreen, C captions).
   wrap.addEventListener('keydown', (e) => {
-    if (e.target?.tagName === 'INPUT') return;
+    // The sheet is re-parented into the fullscreen player when necessary; don't let its keys trigger player shortcuts.
+    if (menu.contains(e.target) || e.target?.tagName === 'INPUT') return;
     if (e.key === ' ' || e.key === 'k' || e.key === 'K') { e.preventDefault(); togglePlay(); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); skipBy(-5); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); skipBy(5); }
@@ -891,6 +949,9 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
 
   update();
   const cleanup = () => {
+    if (menuView) closeMenu(false);
+    menu.remove();
+    updateSettingsScrollLock();
     clearTimeout(hideTimer);
     clearTimeout(bezelTimer);
     clearTimeout(seekIndTimer);

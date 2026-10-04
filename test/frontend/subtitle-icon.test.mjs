@@ -43,7 +43,7 @@ const mount = async (subtitles) => {
   const box = document.createElement('div');
   document.body.appendChild(box);
   const player = await createHtml5Player(box, video(subtitles), { autoplay: false });
-  return { box, player, cc: box.querySelector('.ytp-cc-btn'), menu: box.querySelector('.ytp-menu'), gear: box.querySelector('.ytp-gear-btn') };
+  return { box, player, cc: box.querySelector('.ytp-cc-btn'), menu: document.body.querySelector('.ytp-settings-overlay'), gear: box.querySelector('.ytp-gear-btn') };
 };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -53,6 +53,7 @@ test('no subtitle tracks: hide the CC icon and omit subtitles from Settings', as
     assert.ok(cc);
     assert.equal(cc.hidden, true);
     assert.equal(player.hasSubtitles(), false);
+    assert.equal(box.querySelector('.ytp-settings-overlay'), null, 'the settings sheet is portalled outside the player');
     gear.dispatchEvent(new window.Event('click', { bubbles: true }));
     assert.doesNotMatch(menu.textContent, /Subtitles\/CC/);
   } finally { player.destroy(); box.remove(); }

@@ -162,7 +162,7 @@ test('admin panel surfaces technical R2 diagnostics while public app/website kee
   assert.doesNotMatch(mediaRoutes, /Please upload the video file in Admin|Check the R2 API credentials/, 'public stream API returns friendly non-technical viewer messages');
 });
 
-test('createHtml5Player renders a uniform YouTube-style player (.ytp) with Settings menu (Playback speed, Quality, Subtitles/CC, Loop)', async () => {
+test('createHtml5Player renders a uniform YouTube-style player (.ytp) with a viewport-level Settings sheet', async () => {
   const { document, window } = parseHTML('<!doctype html><html><body><div id="slot"></div></body></html>');
   const prevDoc = globalThis.document, prevWin = globalThis.window;
   globalThis.document = document;
@@ -184,15 +184,18 @@ test('createHtml5Player renders a uniform YouTube-style player (.ytp) with Setti
     assert.ok(ytp.querySelector('.ytp-gear-btn'), 'Settings gear button is rendered');
     assert.ok(ytp.querySelector('.ytp-fs-btn'), 'Fullscreen button is rendered');
 
-    // Open Settings menu and verify Playback speed, Quality, Subtitles/CC, and Loop options.
+    // The sheet is portalled to the document, not constrained by the player; it keeps the supported options.
     const gear = ytp.querySelector('.ytp-gear-btn');
-    const menu = ytp.querySelector('.ytp-menu');
-    assert.equal(menu.hidden, true, 'Settings menu starts closed');
+    const menu = document.body.querySelector('.ytp-settings-overlay');
+    assert.ok(menu, 'Settings sheet is mounted at the viewport level');
+    assert.equal(ytp.contains(menu), false, 'Settings sheet is outside the player wrapper');
+    assert.equal(menu.hidden, true, 'Settings sheet starts closed');
     gear.click();
-    assert.equal(menu.hidden, false, 'Clicking gear opens Settings menu');
+    assert.equal(menu.hidden, false, 'Clicking gear opens Settings sheet');
+    assert.equal(document.body.classList.contains('player-settings-open'), true, 'the page is scroll-locked while settings are open');
     assert.match(menu.textContent, /Playback speed/);
     assert.match(menu.textContent, /Quality/);
-    assert.match(menu.textContent, /Subtitles\/CC/);
+    assert.doesNotMatch(menu.textContent, /Subtitles\/CC/, 'Subtitles/CC is omitted when there are no tracks');
     assert.match(menu.textContent, /Loop/);
 
     // Navigate to Playback speed and select 1.5x.
@@ -200,7 +203,19 @@ test('createHtml5Player renders a uniform YouTube-style player (.ytp) with Setti
     assert.ok(menu.querySelector('[data-speed="1.5"]'), '1.5x playback speed option is available');
     menu.querySelector('[data-speed="1.5"]').click();
     assert.equal(ytp.querySelector('video').playbackRate, 1.5, 'Selecting 1.5x updates video.playbackRate');
-    assert.equal(menu.hidden, true, 'Menu closes after selecting speed');
+    assert.equal(menu.hidden, true, 'Sheet closes after selecting speed');
+    assert.equal(document.body.classList.contains('player-settings-open'), false, 'closing the sheet unlocks page scrolling');
+
+    // Quality and Loop remain available in the larger sheet.
+    gear.click();
+    menu.querySelector('[data-nav="quality"]').click();
+    assert.ok(menu.querySelector('[data-quality="-1"]'), 'Auto quality remains selectable');
+    menu.querySelector('[data-settings-back]').click();
+    const loop = menu.querySelector('[data-act="loop"]');
+    loop.click();
+    assert.match(menu.querySelector('.ytp-menu-pill').textContent, /On/, 'Loop toggles on from the sheet');
+    menu.querySelector('[data-settings-close]').click();
+    assert.equal(menu.hidden, true, 'Close button dismisses the settings sheet');
 
     // Control buttons must not replace their inner SVG node on repeated timeupdate events, and pointerleave must not hide controls.
     const playBtn = ytp.querySelector('.ytp-play');
@@ -349,7 +364,7 @@ test('Chromium HLS uses hls.js despite a native maybe-hint, and fatal errors rea
   }
 });
 
-test('native Safari quality menu refreshes after the master loads and switches to the selected variant', async () => {
+test('native Safari quality sheet refreshes after the master loads and switches to the selected variant', async () => {
   const { document, window } = parseHTML('<!doctype html><html><head></head><body><div id="slot"></div></body></html>');
   const previous = {
     document: globalThis.document, window: globalThis.window, location: globalThis.location,
@@ -383,15 +398,16 @@ test('native Safari quality menu refreshes after the master loads and switches t
       id: 'native-hls', title: 'Native HLS', duration: 6, source: { type: 'hls', url },
     }, { autoplay: false, controls: true });
     const slot = document.getElementById('slot');
+    const settings = document.body.querySelector('.ytp-settings-overlay');
     slot.querySelector('.ytp-gear-btn').click();
-    slot.querySelector('[data-nav="quality"]').click();
-    assert.deepEqual([...slot.querySelectorAll('[data-quality]')].map((item) => item.textContent.trim()), ['Auto (480p)', '480p'], 'before the fetch resolves, the menu shows only the active native level');
+    settings.querySelector('[data-nav="quality"]').click();
+    assert.deepEqual([...settings.querySelectorAll('[data-quality]')].map((item) => item.textContent.trim()), ['Auto (480p)', '480p'], 'before the fetch resolves, the sheet shows only the active native level');
 
     finishManifest(new Response(`#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080,NAME="1080p"\n1080p/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2800000,RESOLUTION=1280x720,NAME="720p"\n720p/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1400000,RESOLUTION=854x480,NAME="480p"\n480p/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,NAME="360p"\n360p/index.m3u8\n`, { status: 200, headers: { 'Content-Type': 'application/vnd.apple.mpegurl' } }));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.deepEqual([...slot.querySelectorAll('[data-quality]')].map((item) => item.textContent.trim()), ['Auto (480p)', '1080p HD', '720p HD', '480p', '360p'], 'the open menu refreshes with every master-playlist resolution');
+    assert.deepEqual([...settings.querySelectorAll('[data-quality]')].map((item) => item.textContent.trim()), ['Auto (480p)', '1080p HD', '720p HD', '480p', '360p'], 'the open sheet refreshes with every master-playlist resolution');
 
-    slot.querySelector('[data-quality="1"]').click();
+    settings.querySelector('[data-quality="1"]').click();
     await new Promise((resolve) => setTimeout(resolve, 5));
     assert.equal(video.src, 'https://site.example/api/v1/media/token/720p/index.m3u8', 'native Safari switches to the selected child playlist');
     assert.equal(video.currentTime, 2, 'switching quality preserves the playback position');
