@@ -84,7 +84,23 @@ test('show details keep the artwork-view button beside My List on phones', () =>
   assert.match(css, /\.detail-hero \.hero-actions > \.btn-lg \{ padding: 10px 12px; font-size: 14px; \}/,
     'compact mobile button padding helps the primary action and the paired controls fit');
   assert.match(css, /\.detail-hero \.hero-shade \{[^}]*rgba\(5,5,5,\.72\) 60%/,
-    'a stronger lower scrim keeps poster lettering from colliding visually with the title and facts');
+    'a stronger lower scrim keeps poster lettering from colliding with the remaining hero text');
+});
+
+test('show facts sit below the banner and the tagline uses the page font', () => {
+  const show = read('app/js/views/show.js');
+  const heroStart = show.indexOf('<section class="detail-hero"');
+  const heroEnd = show.indexOf('</section>', heroStart);
+  const facts = show.indexOf('<dl class="facts show-facts-below">');
+  const tagline = show.indexOf('class="show-tagline-below"');
+  const description = show.indexOf('<section class="show-description"');
+  assert.ok(heroStart >= 0 && facts > heroEnd, 'cast and episode facts no longer cover the banner artwork');
+  assert.ok(facts < tagline && tagline < description, 'facts and tagline stay together before the description');
+  assert.doesNotMatch(show, /show-tagline-below bn/, 'the tagline no longer uses the Bengali serif display override');
+
+  const css = read('app/css/styles.css');
+  assert.match(css, /\.page-tight\.show-details-page \{ padding-top: 20px; \}/, 'the below-banner information has breathing room');
+  assert.match(css, /\.show-tagline-below \{[^}]*font-family: var\(--font\)/, 'the tagline uses the same font stack as the rest of the page');
 });
 
 test('the artwork popup shows the banner and the poster, each once', async () => {

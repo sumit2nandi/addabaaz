@@ -53,17 +53,17 @@ export default async function showView(ctx) {
             </div>
             <button type="button" class="btn btn-glass btn-lg icon-only" id="shareBtn" aria-label="Share">${icon('share', { size: 20 })}</button>
           </div>
-          <dl class="facts">
-            ${s.cast?.length ? html`<div><dt>Featuring</dt><dd>${s.cast.join(', ')}</dd></div>` : ''}
-            <div><dt>Genres</dt><dd>${(s.genres || []).join(', ')}</dd></div>
-            ${eps.length ? html`<div><dt>Runtime</dt><dd>${eps.length} episodes · ${fmtRuntime(totalRun)}</dd></div>` : ''}
-            ${latest ? html`<div><dt>Latest</dt><dd>${fmtDate(latest.publishedAt)} (${timeAgo(latest.publishedAt)})</dd></div>` : ''}
-          </dl>
         </div>
       </div>
     </section>
-    <div class="page page-tight">
-      ${s.tagline ? html`<p class="show-tagline-below bn">${s.tagline}</p>` : ''}
+    <div class="page page-tight show-details-page">
+      <dl class="facts show-facts-below">
+        ${s.cast?.length ? html`<div><dt>Featuring</dt><dd>${s.cast.join(', ')}</dd></div>` : ''}
+        <div><dt>Genres</dt><dd>${(s.genres || []).join(', ')}</dd></div>
+        ${eps.length ? html`<div><dt>Runtime</dt><dd>${eps.length} episodes · ${fmtRuntime(totalRun)}</dd></div>` : ''}
+        ${latest ? html`<div><dt>Latest</dt><dd>${fmtDate(latest.publishedAt)} (${timeAgo(latest.publishedAt)})</dd></div>` : ''}
+      </dl>
+      ${s.tagline ? html`<p class="show-tagline-below">${s.tagline}</p>` : ''}
       ${s.description ? html`<section class="show-description" aria-labelledby="showDescriptionTitle"><h2 id="showDescriptionTitle">Description</h2><p>${s.description}</p></section>` : ''}
       ${eps.length ? html`<section class="ep-section" aria-label="Episodes">
         <div class="section-bar"><h2>Episodes <span class="count">${eps.length}</span></h2>

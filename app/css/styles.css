@@ -193,7 +193,9 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 /* ---------- pages ---------- */
 .page { padding: 28px var(--pad) 40px; max-width: 1600px; margin: 0 auto; }
 .page-tight { padding-top: 8px; } .page-narrow { max-width: 820px; }
-.show-tagline-below { max-width: 1000px; margin: 0 0 18px; color: var(--gold); font-size: clamp(16px, 2vw, 19px); line-height: 1.55; }
+.page-tight.show-details-page { padding-top: 20px; }
+.show-facts-below { max-width: 1000px; margin: 0 0 14px; }
+.show-tagline-below { max-width: 1000px; margin: 0 0 18px; color: var(--gold); font-family: var(--font); font-size: clamp(16px, 2vw, 19px); line-height: 1.55; }
 .show-description { max-width: 1000px; margin: 18px 0 28px; padding: 20px 22px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(135deg, rgba(255,255,255,.045), rgba(255,255,255,.015)); }
 .show-description h2 { margin-bottom: 8px; font-size: 19px; }
 .show-description p { max-width: 82ch; color: var(--text-2); line-height: 1.75; }
