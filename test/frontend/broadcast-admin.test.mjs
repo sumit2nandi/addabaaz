@@ -45,6 +45,86 @@ test('the console has a Broadcast section that offers both channels', () => {
   assert.doesNotMatch(view, /web-push message to viewers/, 'the old push-only subtitle is gone');
 });
 
+test('a recent broadcast opens a detail modal and Refresh preview reads the current form without sending', async () => {
+  const { parseHTML } = await import('linkedom');
+  const { document, window } = parseHTML('<!doctype html><html><body><main id="root"></main></body></html>');
+  const previous = Object.fromEntries(['window', 'document', 'localStorage', 'fetch', 'setInterval', 'clearInterval'].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  const campaign = {
+    id: 'campaign-1', channel: 'push', audience: 'news', title: 'Saved campaign title', body: 'Full saved campaign message',
+    url: '/show/example', button: null, imageUrl: null, imageAlt: null, status: 'partial', total: 34, sent: 31,
+    failed: 1, skipped: 2, cursor: 0, test: false, error: null, by: 'admin@example.com',
+    createdAt: '2026-10-05T12:00:00.000Z', updatedAt: '2026-10-05T12:01:00.000Z', finishedAt: '2026-10-05T12:01:00.000Z',
+    at: '2026-10-05T12:00:00.000Z',
+  };
+  const meta = {
+    push: { web: true, native: true, webSubscribers: 23, nativeDevices: 11 },
+    email: { configured: true, audiences: [] },
+    audiences: [{ id: 'news', label: 'Announcements — viewers who opted in' }],
+    campaigns: [campaign],
+  };
+  const calls = [];
+  Object.defineProperty(window.HTMLElement.prototype, 'showModal', { configurable: true, value() { this.setAttribute('open', ''); } });
+  Object.defineProperty(window.HTMLElement.prototype, 'close', { configurable: true, value() { this.removeAttribute('open'); this.dispatchEvent(new window.Event('close')); } });
+  globalThis.window = window;
+  globalThis.document = document;
+  globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
+  globalThis.setInterval = () => 1;
+  globalThis.clearInterval = () => {};
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, ...options });
+    let data;
+    if (url === '/api/v1/admin/notifications') data = meta;
+    else if (url === '/api/v1/admin/notifications/preview') data = { channel: 'push', push: { title: 'Draft title', body: 'Draft body', url: '/show/example' } };
+    else if (url === '/api/v1/admin/notifications/campaign-1') data = { ...campaign, body: 'Latest full campaign details', done: true };
+    else throw new Error(`Unexpected request ${options.method} ${url}`);
+    return new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json' } });
+  };
+
+  try {
+    const { default: notifications } = await import('../../admin/js/views/notifications.js');
+    const root = document.querySelector('#root');
+    await notifications(root, [], { stale: () => false });
+
+    // Linkedom does not implement the browser's named form controls, so expose these controls as a real
+    // browser form would. Clicking the actual button then exercises runPreview() and its payload builder.
+    const form = root.querySelector('#bcf');
+    for (const name of ['title', 'body', 'url', 'imageUrl', 'imageAlt']) {
+      const control = form.querySelector(`[name="${name}"]`);
+      Object.defineProperty(form, name, { configurable: true, value: control });
+    }
+    form.title.value = 'Draft title';
+    form.body.value = 'Draft body';
+    form.url.value = '/show/example';
+    root.querySelector('#bc_preview').dispatchEvent(new window.Event('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const preview = calls.find((call) => call.url === '/api/v1/admin/notifications/preview');
+    assert.ok(preview, 'Refresh preview calls the non-sending preview endpoint');
+    assert.deepEqual(JSON.parse(preview.body), {
+      channel: 'push', title: 'Draft title', body: 'Draft body', url: '/show/example', button: '', imageUrl: '', imageAlt: '',
+    });
+    assert.equal(root.querySelector('#bcPvState').textContent, 'Nothing has been sent.');
+    assert.equal(calls.some((call) => call.url.endsWith('/notifications/send')), false, 'preview never starts a broadcast');
+
+    assert.ok(root.querySelector('[data-campaign-open]'), 'the item title is also keyboard-accessible');
+    root.querySelector('tr[data-campaign] td:nth-child(2)').dispatchEvent(new window.Event('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const modal = document.querySelector('dialog.modal[open]');
+    assert.ok(modal, 'the recent item opens a popup');
+    assert.match(modal.textContent, /Latest full campaign details/, 'the popup refreshes from GET /notifications/:id');
+    assert.match(modal.textContent, /Announcements — viewers who opted in/);
+    assert.match(modal.textContent, /34/);
+    assert.match(modal.textContent, /31/);
+    assert.match(modal.textContent, /1/);
+    assert.match(modal.textContent, /2/);
+  } finally {
+    for (const [key, descriptor] of Object.entries(previous)) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  }
+});
+
 test('the server exposes the broadcast API: send, status, test, devices, unsubscribe', () => {
   assert.match(extra, /router\.post\('\/notifications\/send'/, 'POST /admin/notifications/send');
   assert.match(extra, /router\.get\('\/notifications\/:id'/, 'GET /admin/notifications/:id (progress)');

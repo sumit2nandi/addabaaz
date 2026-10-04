@@ -3,13 +3,14 @@
 // that turned notifications on; "E-mail" reaches accounts by their Users-page filter. Sending happens
 // in the background, so the page polls the campaign row and shows live progress.
 import { api } from '../api.js';
-import { empty, html, $, icon, pageHead, toast, errMsg, guard, fmtDT, badge, wireImages, imgSrc } from '../ui.js';
+import { empty, html, $, icon, pageHead, toast, errMsg, guard, fmtDT, badge, wireImages, openModal } from '../ui.js';
 
 // Status badge for a campaign row.
 const STATUS = { queued: ['Queued', 'warn'], sending: ['Sending…', 'warn'], sent: ['Sent', 'ok'], partial: ['Partly sent', 'warn'], failed: ['Failed', 'bad'], cancelled: ['Cancelled', ''] };
 const statusBadge = (s) => badge(...(STATUS[s] || [s, '']));
 const CHANNEL = { push: 'App push', email: 'E-mail' };
 const k = (n) => (Number(n) || 0).toLocaleString('en-IN');
+const campaignImageSrc = (path) => (!path ? '' : /^https?:\/\//i.test(path) ? path : `/${String(path).replace(/^\/+/, '')}`);
 const done = (s) => ['sent', 'partial', 'failed', 'cancelled'].includes(s);
 // The optional image attached to a broadcast: shown inside the notification (rich push) and at the top of
 // the e-mail. The markup matches the console's other image controls, so `wireImages()` gives it upload + preview.
@@ -38,14 +39,19 @@ export default async function notifications(root, _p, ctx) {
     <section class="card flush" style="margin-top:16px"><div class="card-head pad"><h2>Recent broadcasts</h2><span class="muted small" id="bclive"></span></div><div id="bchistory"></div></section>`.s;
 
   const body = $('#bcbody', root), history = $('#bchistory', root), live = $('#bclive', root);
+  history.addEventListener('click', (e) => {
+    const button = e.target.closest('[data-campaign-open]');
+    const row = button || e.target.closest('tr[data-campaign]');
+    if (row && history.contains(row)) openBroadcast(button?.dataset.campaignOpen || row.dataset.campaign);
+  });
   for (const t of [...root.querySelectorAll('[data-ch]')]) {
     t.classList.toggle('on', t.dataset.ch === channel);
     t.addEventListener('click', () => { channel = t.dataset.ch; for (const x of [...root.querySelectorAll('[data-ch]')]) x.classList.toggle('on', x === t); paint(); });
   }
 
   /* ---------- recent broadcasts (with live progress while one is sending) ---------- */
-  const row = (c) => html`<tr>
-    <td>${badge(CHANNEL[c.channel] || c.channel)} <strong>${c.title}</strong><br><small class="muted">${(c.body || '').slice(0, 110)}${(c.body || '').length > 110 ? '…' : ''}</small></td>
+  const row = (c) => html`<tr class="link broadcast-row" data-campaign="${c.id}">
+    <td>${badge(CHANNEL[c.channel] || c.channel)} <button class="broadcast-open" type="button" data-campaign-open="${c.id}" aria-label="View details for ${c.title || 'broadcast'}" aria-haspopup="dialog">${icon('eye', 14)} <strong>${c.title || 'Untitled broadcast'}</strong></button><br><small class="muted">${(c.body || '').slice(0, 110)}${(c.body || '').length > 110 ? '…' : ''}</small></td>
     <td class="small">${c.audience}${c.test ? html` ${badge('test')}` : ''}</td>
     <td class="small">${k(c.sent)}${c.total ? html` / ${k(c.total)}` : ''} sent${c.failed ? html` ${badge(`${k(c.failed)} failed`, 'warn')}` : ''}${c.skipped ? html`<br><small class="muted">${k(c.skipped)} skipped</small>` : ''}</td>
     <td>${statusBadge(c.status)}${c.error ? html`<br><small class="muted">${c.error}</small>` : ''}</td>
@@ -58,6 +64,37 @@ export default async function notifications(root, _p, ctx) {
     const active = list.filter((c) => !done(c.status)).length;
     live.textContent = active ? `${active} sending…` : '';
   };
+
+  function campaignDetails(c) {
+    const audiences = c.channel === 'email' ? (meta.email?.audiences || []) : (meta.audiences || []);
+    const audience = audiences.find((a) => a.id === c.audience)?.label || c.audience || '—';
+    const details = [
+      ['Audience', audience], ['Created', fmtDT(c.createdAt || c.at)], ['Updated', fmtDT(c.updatedAt)],
+      ['Finished', fmtDT(c.finishedAt)], ['Sent by', c.by || '—'],
+      ...(c.channel !== 'email' || c.button ? [[c.channel === 'email' ? 'Button opens' : 'Opens', c.url || '/']] : []),
+      ...(c.button ? [['Button label', c.button]] : []), ['Campaign ID', c.id || '—'],
+    ];
+    return html`<div class="broadcast-detail">
+      <div class="broadcast-detail-head">${badge(CHANNEL[c.channel] || c.channel)} ${c.test ? badge('test') : ''} ${statusBadge(c.status)}</div>
+      <div><h3>${c.title || 'Untitled broadcast'}</h3><p class="muted small">${c.channel === 'email' ? 'E-mail subject' : 'Push notification title'}</p></div>
+      <div class="broadcast-detail-stats">${[['Recipients', c.total], ['Sent', c.sent], ['Failed', c.failed], ['Skipped', c.skipped]].map(([label, value]) => html`<div class="broadcast-detail-stat"><span class="muted small">${label}</span><strong>${k(value)}</strong></div>`)}</div>
+      <section><b>Message</b><p class="broadcast-detail-message">${c.body || '—'}</p></section>
+      <dl class="broadcast-detail-meta">${details.map(([label, value]) => html`<div><dt>${label}</dt><dd>${label === 'Opens' || label === 'Button opens' || label === 'Campaign ID' ? html`<code class="broadcast-detail-code">${value}</code>` : value}</dd></div>`)}</dl>
+      ${c.imageUrl ? html`<section><b>Attached image</b><div class="broadcast-detail-image"><img src="${campaignImageSrc(c.imageUrl)}" alt="${c.imageAlt || ''}" loading="lazy"></div>${c.imageAlt ? html`<p class="muted small">${c.imageAlt}</p>` : ''}</section>` : ''}
+      ${c.error ? html`<p class="form-err broadcast-detail-error"><b>Campaign error:</b> ${c.error}</p>` : Number(c.failed) > 0 ? html`<p class="muted small">Individual recipient error messages are not retained in this campaign history.</p>` : ''}
+    </div>`;
+  }
+
+  async function openBroadcast(id) {
+    const initial = (meta.campaigns || []).find((c) => String(c.id) === String(id));
+    if (!initial) return;
+    const modal = openModal(campaignDetails(initial), { title: 'Broadcast details', wide: true });
+    try {
+      const latest = await api.get(`/notifications/${encodeURIComponent(id)}`);
+      if (modal.el.isConnected) modal.body.innerHTML = campaignDetails(latest).s;
+    } catch { /* the recent-history snapshot is still useful if the detail request fails */ }
+  }
+
   // While something is sending, refresh the list every few seconds (and stop when the page changes).
   function schedule() {
     clearTimeout(timer);
@@ -88,9 +125,8 @@ export default async function notifications(root, _p, ctx) {
     <div id="bcPvBody"><p class="muted small">Nothing is sent by previewing.</p></div>
   </section>`;
 
-  function previewText() {
-    const p = { channel, title: (form.title?.value || '').trim(), body: (form.body?.value || '').trim(), url: (form.url?.value || '').trim(), button: (form.button?.value || '').trim(), imageUrl: (form.imageUrl?.value || '').trim(), imageAlt: (form.imageAlt?.value || '').trim() };
-    return p;
+  function previewText(form) {
+    return { channel, title: (form.title?.value || '').trim(), body: (form.body?.value || '').trim(), url: (form.url?.value || '').trim(), button: (form.button?.value || '').trim(), imageUrl: (form.imageUrl?.value || '').trim(), imageAlt: (form.imageAlt?.value || '').trim() };
   }
 
   let previewTimer = null;
@@ -102,7 +138,7 @@ export default async function notifications(root, _p, ctx) {
   async function runPreview() {
     const form = $('#bcf', body), pvBody = $('#bcPvBody', body), state = $('#bcPvState', body);
     if (!form || !pvBody) return;
-    const p = previewText();
+    const p = previewText(form);
     if (!p.title && !p.body) { pvBody.innerHTML = '<p class="muted small">Write a title and a message to see the preview.</p>'; state.textContent = ''; return; }
     state.textContent = 'Rendering…';
     let r;
