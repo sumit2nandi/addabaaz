@@ -53,6 +53,22 @@ test('error-log migrations retain parameterized SQL and structured SQL exception
     'the driver SQL string is intentionally excluded because it may interpolate bound values');
 });
 
+test('credit-ledger admin statistics aggregate from user_credit', async () => {
+  const statements = [];
+  const q = async (sql) => {
+    statements.push(sql);
+    if (sql.includes('GROUP BY kind')) return [];
+    return [{ outstanding: 0, granted: 0, spent: 0, expired: 0, accounts: 0 }];
+  };
+  const db = extraDb({ q, tx: async (fn) => fn({ query: q }), iso: () => null });
+
+  const stats = await db.credits.stats();
+  assert.match(statements[0], /COUNT\(DISTINCT CASE WHEN amount_paise > 0 THEN user_id END\) AS accounts\s+FROM user_credit/,
+    'the aggregate query reads ledger columns from the ledger table');
+  assert.match(statements[1], /FROM user_credit GROUP BY kind/);
+  assert.deepEqual(stats, { outstandingPaise: 0, grantedPaise: 0, spentPaise: 0, expiredPaise: 0, accounts: 0, byKind: {} });
+});
+
 test('failed SQL diagnostics retain the query template but never the bound values', async () => {
   const sql = 'SELECT amount_paise FROM user_credit WHERE user_id = ? AND status = ?';
   const values = ['person@example.com', 'secret-token'];

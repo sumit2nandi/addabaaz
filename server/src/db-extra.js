@@ -582,7 +582,8 @@ export function extraDb({ q, tx, iso }) {
         COALESCE(SUM(CASE WHEN amount_paise > 0 THEN amount_paise ELSE 0 END),0) AS granted,
         COALESCE(SUM(CASE WHEN kind = 'spend' AND status <> 'void' THEN -amount_paise ELSE 0 END),0) AS spent,
         COALESCE(SUM(CASE WHEN status = 'expired' THEN amount_paise ELSE 0 END),0) AS expired,
-        COUNT(DISTINCT CASE WHEN amount_paise > 0 THEN user_id END) AS accounts`))[0] || {};
+        COUNT(DISTINCT CASE WHEN amount_paise > 0 THEN user_id END) AS accounts
+        FROM user_credit`))[0] || {};
       const byKind = Object.fromEntries((await q(`SELECT kind, COUNT(*) AS n, COALESCE(SUM(amount_paise),0) AS paise FROM user_credit GROUP BY kind`)).map((x) => [x.kind, { count: Number(x.n), paise: Number(x.paise) }]));
       return { outstandingPaise: Number(r.outstanding || 0), grantedPaise: Number(r.granted || 0), spentPaise: Number(r.spent || 0), expiredPaise: Number(r.expired || 0), accounts: Number(r.accounts || 0), byKind };
     },
