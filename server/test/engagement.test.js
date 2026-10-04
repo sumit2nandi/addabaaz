@@ -445,7 +445,7 @@ test('admin: app push reaches registered devices through FCM and drops dead toke
     const accountDelivery = recipientPage.body.deliveries.find((d) => d.email === u.email && d.status === 'sent');
     assert.equal(accountDelivery.userId, u.user.id); assert.equal(accountDelivery.name, 'Eng Test'); assert.equal(accountDelivery.destination, 'Android');
     const skippedDelivery = recipientPage.body.deliveries.find((d) => d.status === 'skipped');
-    assert.equal(skippedDelivery.email, u.email); assert.match(skippedDelivery.error, /unregistered/);
+    assert.equal(skippedDelivery.email, u.email); assert.match(skippedDelivery.error, /expired or no longer registered/);
     const guestDelivery = recipientPage.body.deliveries.find((d) => d.userId === null);
     assert.equal(guestDelivery.name, 'Guest device'); assert.equal(guestDelivery.status, 'sent');
     const filtered = await adm2('GET', `/notifications/${c.id}/deliveries?status=skipped&limit=1`);
