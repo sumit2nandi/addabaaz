@@ -13,8 +13,8 @@ const NAV = [
   ['/upcoming', 'Coming Soon', 'upcoming'], ['/list', 'My List', 'list'],   // the photo gallery is hidden (app/js/views/gallery.js redirects home)
 ];
 const STUDIO = [['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact'], ['/support', 'Support']];
-const TABS = [['/', 'Home', 'home'], ['/shows', 'Shows', 'tv'], ['/reels', 'Reels', 'reels'], ['/search', 'Search', 'search'], ['/account', 'Me', 'user']];
-// A visitor who is not signed in has no personal "Me" area (and no profile to show): only offered once signed in, or when this build has no sign-in at all.
+const TABS = [['/', 'Home', 'home'], ['/shows', 'Shows', 'tv'], ['/reels', 'Reels', 'reels'], ['/search', 'Search', 'search']];
+// Keep a personal destination in the floating bar for every visitor: guests get Sign in; everyone else gets Profile.
 const isGuest = () => !!app.user?.supportsAuth && !app.user?.account;
 let lastPath = '/';
 
@@ -48,10 +48,11 @@ export function renderShell() {
   });
 }
 
-// Bottom tab bar (phones). Re-drawn when the user signs in or out; local-only builds keep this route for device profiles/settings but label it "Profile" rather than "Me".
+// Bottom tab bar (phones). Keep the personal icon visible for signed-in, signed-out and local-only users.
 export function renderTabbar() {
   const bar = $('#tabbar'); if (!bar) return;
-  const tabs = TABS.filter(([p]) => p !== '/account' || !isGuest()).map(([p, label, ic]) => [p, p === '/account' && !app.user?.supportsAuth ? 'Profile' : label, ic]);
+  const personalTab = isGuest() ? ['/signin', 'Sign in', 'user'] : ['/account', 'Profile', 'user'];
+  const tabs = [...TABS, personalTab];
   bar.style.setProperty('--tabs', tabs.length);
   bar.innerHTML = tabs.map(([p, l, ic]) => html`<a href="#${p}" data-tab="${p}">${icon(ic, { size: 24 })}<span>${l}</span></a>`).map(String).join('');
   markTabs(lastPath);
