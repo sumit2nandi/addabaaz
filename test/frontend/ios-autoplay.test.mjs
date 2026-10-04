@@ -140,18 +140,21 @@ test('YouTube autoplay explicitly mutes the iOS iframe before asking it to play 
 test('YouTube iframe fallback honors the requested sound-first mode when the API script fails', async () => {
   const restore = saveGlobals(['document', 'location', 'window']);
   globalThis.document = {
-    createElement() { return {}; },
+    createElement() { return { appendChild() {} }; },
     head: { appendChild(script) { setTimeout(() => script.onerror?.(), 0); } },
   };
   globalThis.location = { protocol: 'https:', origin: 'https://addabaaz.example' };
   globalThis.window = {};
   try {
     const container = { innerHTML: '', appendChild() {}, querySelector() { return null; } };
-    const ctl = await createYouTubePlayer(container, 'test-video', { autoplay: true, muted: false, controls: false });
+    const ctl = await createYouTubePlayer(container, 'test-video', { autoplay: true, muted: false, controls: true });
     assert.equal(ctl.engine, 'iframe', 'slow/blocked API does not hold the video behind its 8-second timeout');
     assert.match(container.innerHTML, /autoplay=1/);
     assert.match(container.innerHTML, /mute=0/, 'fallback does not force the viewer into muted autoplay');
     assert.match(container.innerHTML, /playsinline=1/);
+    assert.match(container.innerHTML, /controls=1/, 'the fallback keeps YouTube controls available');
+    assert.match(container.innerHTML, /fs=1/, 'the fallback keeps YouTube fullscreen enabled');
+    assert.match(container.innerHTML, /allowfullscreen/, 'the fallback iframe is permitted to enter fullscreen');
     ctl.destroy();
   } finally { restore(); }
 });
@@ -250,7 +253,7 @@ test('YouTube watchdog retries muted when iOS omits the blocked-autoplay event',
   } finally { restore(); }
 });
 
-test('YouTube embeds keep native quality controls and offer app-owned viewport settings for speed and loop', async () => {
+test('YouTube embeds keep native controls and offer app-owned fullscreen and settings for speed and loop', async () => {
   const restore = saveGlobals(['document', 'location', 'window']);
   const { document, window } = parseHTML('<!doctype html><html><head></head><body><div id="slot"></div></body></html>');
   const calls = [];
@@ -277,6 +280,12 @@ test('YouTube embeds keep native quality controls and offer app-owned viewport s
     isMuted() { return false; }
     destroy() {}
   }
+  let fullscreenElement = null;
+  Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fullscreenElement });
+  document.exitFullscreen = async () => {
+    fullscreenElement = null;
+    document.dispatchEvent(new window.Event('fullscreenchange'));
+  };
   globalThis.document = document;
   globalThis.location = { protocol: 'https:', origin: 'https://addabaaz.example' };
   globalThis.window = { YT: { Player: FakePlayer, PlayerState } };
@@ -288,6 +297,22 @@ test('YouTube embeds keep native quality controls and offer app-owned viewport s
       onEnded: () => ended++,
     });
     assert.equal(config.playerVars.controls, 1, 'YouTube built-in controls stay enabled for native quality and captions');
+    assert.equal(config.playerVars.fs, 1, 'YouTube native fullscreen remains enabled too');
+    const shell = container.querySelector('.ytp-youtube-shell');
+    const fullscreen = container.querySelector('.ytp-youtube-fullscreen-btn');
+    assert.ok(fullscreen, 'a visible app-owned fullscreen button sits beside Settings');
+    shell.requestFullscreen = async () => {
+      fullscreenElement = shell;
+      document.dispatchEvent(new window.Event('fullscreenchange'));
+    };
+    fullscreen.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(fullscreenElement, shell, 'the visible fullscreen button expands the YouTube player shell');
+    assert.equal(fullscreen.getAttribute('aria-label'), 'Exit full screen');
+    fullscreen.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(fullscreenElement, null, 'the app-owned control can exit its fullscreen mode');
+    assert.equal(fullscreen.getAttribute('aria-label'), 'Full screen');
     const launcher = container.querySelector('.ytp-youtube-settings-btn');
     assert.ok(launcher, 'the app-owned settings launcher is visible outside the YouTube iframe');
     launcher.click();
@@ -297,7 +322,7 @@ test('YouTube embeds keep native quality controls and offer app-owned viewport s
     assert.match(sheet.querySelector('.ytp-settings-title').textContent, /^Settings$/, 'the full Settings title is displayed');
     assert.match(sheet.textContent, /Playback speed/);
     assert.match(sheet.textContent, /Loop/);
-    assert.match(sheet.textContent, /Quality and subtitles remain in YouTube/);
+    assert.match(sheet.textContent, /Tap the video to reveal YouTube’s controls for quality and subtitles/);
     sheet.querySelector('[data-nav="speed"]').click();
     assert.ok(sheet.querySelector('[data-speed="1.5"]'));
     sheet.querySelector('[data-speed="1.5"]').click();
