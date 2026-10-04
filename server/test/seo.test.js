@@ -46,7 +46,7 @@ test('routes: shared matcher', () => {
 });
 
 test('pageMeta: titles, descriptions, canonical, robots', () => {
-  for (const p of ['/', '/shows', '/show/shahid', '/upcoming', '/soon/trap', '/gallery', '/plans', '/about', '/services', '/contact']) {
+  for (const p of ['/', '/shows', '/show/shahid', '/upcoming', '/soon/trap', '/plans', '/about', '/services', '/contact']) {
     const m = meta(p);
     assert.equal(m.status, 200, p); assert.match(m.robots, /^index,follow/, p);
     assert.ok(m.title.length >= 10 && m.title.length <= 75, `${p} title length ${m.title.length}: ${m.title}`);
@@ -55,6 +55,9 @@ test('pageMeta: titles, descriptions, canonical, robots', () => {
   }
   const ep = cat.episodes('shahid')[0], m = meta(`/watch/${ep.id}`);
   assert.match(m.title, /EP 1 \| ADDABAAZ$/); assert.equal(m.canonical, `/watch/${ep.id}`); assert.equal(m.ogType, 'video.episode');
+  // /gallery is hidden (docs/CONTENT.md): a permanent redirect home, and crawlers are told not to keep it.
+  const g = meta('/gallery');
+  assert.equal(g.status, 301); assert.equal(g.redirect, '/'); assert.equal(g.robots, 'noindex,nofollow');
   // private pages are never indexed and have no canonical
   for (const p of ['/search', '/signin', '/signup', '/account', '/profiles', '/billing', '/list']) assert.match(meta(p).robots, /^noindex/, p);
   assert.equal(meta('/account').canonical, null);
@@ -113,10 +116,14 @@ test('server: page HTML carries per-page metadata for crawlers that do not run J
 
 test('server: every public page renders for a direct visit, including the Reels feed (/reels) and a single reel', async () => {
   // Regression: /reels (no :id) used to crash the renderer -> 503 -> a reload or shared link of Reels showed the home page instead.
-  for (const path of ['/', '/shows', '/reels', '/upcoming', '/gallery', '/plans', '/about', '/search', '/account']) {
+  for (const path of ['/', '/shows', '/reels', '/upcoming', '/plans', '/about', '/search', '/account']) {
     const r = await get(path); assert.equal(r.status, 200, path);
     assert.match(await r.text(), /<meta name="ab:routing" content="history">/, path + ' must be served with real-URL routing');
   }
+  // /gallery is hidden: old links, bookmarks and Google results land on the home page (the app does the same).
+  const gallery = await get('/gallery');
+  assert.equal(gallery.status, 301); assert.equal(gallery.headers.get('location'), '/');
+  assert.doesNotMatch(await (await get('/')).text(), /Behind the scenes/i);
   const reel = cat.reels()[0]; assert.equal((await get('/reels/' + reel.id)).status, 200);
   assert.equal((await get('/reels/zzzzzzzzzzz')).status, 404);
 });
@@ -159,8 +166,9 @@ test('robots.txt and sitemap.xml', async () => {
   const sm = await get('/sitemap.xml'); assert.match(sm.headers.get('content-type'), /xml/);
   const xml = await sm.text(); const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
   assert.equal(new Set(locs).size, locs.length, 'no duplicate URLs'); assert.ok(locs.every((l) => l.startsWith(SITE + '/') && !l.includes('#')));
-  for (const p of ['/', '/shows', '/show/shahid', '/soon/trap', '/about', '/contact', '/plans', '/gallery', '/upcoming']) assert.ok(locs.includes(SITE + p), p);
-  for (const p of ['/search', '/signin', '/account', '/billing', '/admin', '/youtube']) assert.ok(!locs.includes(SITE + p), `${p} must not be in the sitemap`);
+  for (const p of ['/', '/shows', '/show/shahid', '/soon/trap', '/about', '/contact', '/plans', '/upcoming']) assert.ok(locs.includes(SITE + p), p);
+  assert.ok(!locs.includes(SITE + '/gallery'), 'the hidden gallery is not in the sitemap');
+  for (const p of ['/search', '/signin', '/account', '/billing', '/admin', '/youtube', '/gallery']) assert.ok(!locs.includes(SITE + p), `${p} must not be in the sitemap`);
   const reel = cat.videos.find((v) => v.kind === 'reel'), ep = cat.episodes('shahid')[0];
   assert.ok(!locs.includes(`${SITE}/watch/${reel.id}`), 'undescribed reels stay out of the sitemap'); assert.ok(locs.includes(`${SITE}/watch/${ep.id}`));
   assert.match(xml, /<video:video><video:thumbnail_loc>https:\/\/i\.ytimg\.com/); assert.match(xml, /<video:duration>\d+<\/video:duration>/);

@@ -59,10 +59,20 @@ export class User extends Emitter {
     return r;
   }
   async signIn(p) { const r = await this.remote.signIn(p); await this.#afterAuth(r); return r; }
-  /** Google / Facebook sign-in. A brand-new account inherits the device's guest list & progress, like sign-up. */
-  async signInSocial(provider, credential) {
+  /** Phone sign-in step 1: ask for a code. Throws a friendly error when SMS is not set up. */
+  requestOtp(phone, ref = '') { return this.remote.requestOtp(phone, ref); }
+  /** Phone sign-in step 2: the code signs the viewer in, or creates the account on first use (like sign-up). */
+  async signInOtp(phone, code, name, ref = '') {
     const local = this.#localSnapshot();
-    const r = await this.remote.signInSocial(provider, credential);
+    const r = await this.remote.verifyOtp(phone, code, name, ref);
+    await this.#afterAuth(r);
+    if (r.isNew && local && this.profile) await this.#migrate(local);   // a new account inherits the device's guest list/progress
+    return r;
+  }
+  /** Google / Facebook sign-in. A brand-new account inherits the device's guest list & progress, like sign-up. */
+  async signInSocial(provider, credential, ref = '') {
+    const local = this.#localSnapshot();
+    const r = await this.remote.signInSocial(provider, credential, ref);
     await this.#afterAuth(r);
     if (r.isNew && local && this.profile) await this.#migrate(local);
     return r;
@@ -272,5 +282,24 @@ export class User extends Emitter {
   emailInvoice(id) { return this.adapter.emailInvoice(id); }
   async cancelSubscription() { this.subscription = await this.adapter.cancelSubscription(); this.emit('subscription'); }
   plans() { return this.adapter.plans(); }
+
+  /* ---------- credit & referrals ----------
+   * `remote` (never `adapter`): a code can be added and a balance read only with an account, and the local
+   * adapter says so instead of pretending. */
+  promos() { return (this.remote || this.local).promo(); }
+  credits() { return (this.remote || this.local).credits(); }
+  redeemInvite(code) { return (this.remote || this.local).redeemInvite(code); }
+  inviteLink() { return (this.remote || this.local).inviteLink(); }
   submitContact(p) { return (this.remote || this.local).submitContact(p); }
+
+  /* ---------- support ----------
+   * These always go through `remote` (never `adapter`): a viewer who is signed out — or looking at a ticket
+   * from the receipt e-mail — must still reach the API. The local (no-server) adapter explains that it needs
+   * a connection instead of pretending to file a ticket. */
+  submitTicket(p) { return (this.remote || this.local).submitTicket(p); }
+  myTickets(opts) { return (this.remote || this.local).myTickets(opts); }
+  ticket(id, email) { return (this.remote || this.local).ticket(id, email); }
+  /** Guest lookup: the reference from our e-mail plus the address that raised the ticket. */
+  lookupTicket(reference, email) { return (this.remote || this.local).lookupTicket(reference, email); }
+  replyTicket(id, body, email) { return (this.remote || this.local).replyTicket(id, body, email); }
 }

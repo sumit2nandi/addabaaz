@@ -80,6 +80,8 @@ export function renderInvoicePdf(inv, { compress = true } = {}) {
       pdf.text(label, L + W * 0.5, y, { width: W * 0.28 }); pdf.text(`${sign}Rs. ${money(value)}`, L + W * 0.78, y, { width: W * 0.22, align: 'right' }); y += bold ? 18 : 14;
     };
     if (d.discount && inv.kind !== 'credit_note') { totalRow('List price (incl. GST)', d.listPricePaise); totalRow(`Coupon ${d.discount.code}`, -d.discount.paise * 1); y += 2; }
+    // Promotional credit that paid part of this order (welcome bonus, referral reward, goodwill) — see promos.js.
+    if (d.credit && inv.kind !== 'credit_note') totalRow('ADDABAAZ credit', -d.credit.paise * 1);
     if (taxed) {
       totalRow('Taxable value', inv.taxable);
       if (inv.cgst) totalRow(`CGST @ ${inv.gstRate / 2}%`, inv.cgst);

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0b10">
+<meta name="robots" content="noindex, nofollow">
+<title>We’ll be right back — ADDABAAZ</title>
+<meta name="description" content="ADDABAAZ is being upgraded for a short while. We’ll be back shortly.">
+<link rel="icon" href="media/icons/icon-96.png">
+<!-- Served both by the maintenance switch (503 while it is on) and at /maintenance as a preview.
+     Self-contained on purpose: no external fonts, scripts or stylesheets, so the page renders even when
+     everything else is down. The two placeholders (the message and the end of the window) are filled in by
+     the server (see web.js); with JavaScript available the page also polls /api/v1/status and reloads
+     itself the moment we are back. -->
+<style>
+  :root {
+    --bg: #0b0b10; --panel: #14141c; --line: #262633; --ink: #f4f4f8; --muted: #9b9bad;
+    --brand: #e50914; --brand-2: #ff5f6d; --brand-soft: rgba(229, 9, 20, .16);
+    --ok: #38d39f;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink); overflow-x: hidden;
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Bengali", "Helvetica Neue", Arial, sans-serif;
+    display: flex; align-items: center; justify-content: center; min-height: 100%;
+    padding: 28px 20px calc(28px + env(safe-area-inset-bottom));
+  }
+  /* Soft brand glow behind the card. */
+  .glow {
+    position: fixed; inset: -30vmax; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(circle at 30% 25%, var(--brand-soft), transparent 42%),
+      radial-gradient(circle at 72% 70%, rgba(229, 9, 20, .10), transparent 45%);
+    animation: drift 18s ease-in-out infinite alternate;
+  }
+  @keyframes drift { from { transform: translate3d(-2%, -1%, 0) } to { transform: translate3d(2%, 1%, 0) } }
+  .card {
+    position: relative; z-index: 1; width: 100%; max-width: 560px; text-align: center;
+    background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01)), var(--panel);
+    border: 1px solid var(--line); border-radius: 22px; padding: 40px 30px 30px;
+    box-shadow: 0 30px 80px rgba(0,0,0,.55);
+    animation: rise .5s cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
+  .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; margin-bottom: 26px; }
+  .brand img { width: 42px; height: 42px; border-radius: 11px; }
+  .brand b { font-size: 20px; letter-spacing: .5px; font-weight: 800; }
+  .brand i { font-style: normal; font-size: 20px; letter-spacing: .5px; font-weight: 800; color: var(--brand); }
+  /* Animated "working on it" glyph: a pulsing ring with the wrench… without an icon font, a CSS cog. */
+  .pulse { width: 74px; height: 74px; margin: 0 auto 22px; position: relative; }
+  .pulse span { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--brand); opacity: .35; animation: ring 2.4s ease-out infinite; }
+  .pulse span:nth-child(2) { animation-delay: .8s; }
+  .pulse span:nth-child(3) { animation-delay: 1.6s; }
+  .pulse b {
+    position: absolute; inset: 14px; border-radius: 50%; background: var(--brand-soft);
+    display: flex; align-items: center; justify-content: center; font-size: 24px;
+  }
+  @keyframes ring { 0% { transform: scale(.55); opacity: .5 } 100% { transform: scale(1.05); opacity: 0 } }
+  h1 { margin: 0 0 10px; font-size: clamp(24px, 5vw, 31px); letter-spacing: -.02em; line-height: 1.2; }
+  .message { margin: 0 auto; max-width: 44ch; color: var(--muted); font-size: 15.5px; }
+  .eta { margin: 22px auto 0; display: none; align-items: center; justify-content: center; gap: 10px; font-size: 14px; color: var(--ink); }
+  .eta.on { display: inline-flex; }
+  .eta .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 4px rgba(56,211,159,.16); }
+  .eta b { font-variant-numeric: tabular-nums; letter-spacing: .03em; }
+  .bar { height: 4px; margin: 26px auto 0; max-width: 320px; border-radius: 99px; background: var(--line); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 35%; border-radius: 99px; background: linear-gradient(90deg, var(--brand), var(--brand-2)); animation: slide 1.9s ease-in-out infinite; }
+  @keyframes slide { 0% { transform: translateX(-110%) } 100% { transform: translateX(320%) } }
+  .actions { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .btn {
+    appearance: none; border: 1px solid var(--line); background: #1c1c26; color: var(--ink);
+    padding: 11px 18px; border-radius: 11px; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 8px; transition: transform .12s ease, border-color .12s ease;
+  }
+  .btn:hover { border-color: #3a3a4a; transform: translateY(-1px); }
+  .btn.primary { background: linear-gradient(180deg, var(--brand-2), var(--brand)); border-color: transparent; }
+  .btn[disabled] { opacity: .6; cursor: default; transform: none; }
+  .note { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+  .note b { color: var(--ink); font-weight: 600; }
+  .spin { display: inline-block; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  @media (prefers-reduced-motion: reduce) { .glow, .pulse span, .bar i, .spin { animation: none } .card { animation: none } }
+</style>
+</head>
+<body>
+<div class="glow" aria-hidden="true"></div>
+
+<main class="card" role="main">
+  <a class="brand" href="/" aria-label="ADDABAAZ home"><img src="media/icons/icon-96.png" alt=""><span><b>ADDA</b><i>BAAZ</i></span></a>
+
+  <div class="pulse" aria-hidden="true"><span></span><span></span><span></span><b>🛠️</b></div>
+
+  <h1>We’ll be right back</h1>
+  <p class="message" id="mMessage">{{message}}</p>
+
+  <div class="eta" id="mEta"><span class="dot"></span>Back in <b id="mLeft">a few minutes</b></div>
+  <div class="bar" aria-hidden="true"><i></i></div>
+
+  <div class="actions">
+    <button class="btn primary" id="mCheck" type="button">Check again</button>
+    <a class="btn" href="/">Go to the home page</a>
+  </div>
+
+  <p class="note">
+    Your plan, watchlist and progress are safe.<br>
+    <b>Paid for something just before this?</b> It is not lost — payments already made are still settling.
+    Questions? Reply to any ADDABAAZ e-mail, or use the Support page once we are back.
+  </p>
+</main>
+
+<script>
+  /* No build step, no dependencies: read the switch from /api/v1/status and reload the moment it is off.
+     Everything here is progressive — with JavaScript off, the page above (filled in by the server) is final. */
+  (function () {
+    var until = {{until}} || null;                 // ISO string or null
+    var left = document.getElementById('mLeft'), eta = document.getElementById('mEta');
+    var check = document.getElementById('mCheck'), message = document.getElementById('mMessage');
+
+    function label(ms) {
+      var s = Math.max(0, Math.round(ms / 1000));
+      if (s < 90) return s + ' second' + (s === 1 ? '' : 's');
+      var m = Math.round(s / 60);
+      if (m < 90) return m + ' minute' + (m === 1 ? '' : 's');
+      var h = Math.floor(m / 60);
+      return h + ' hour' + (h === 1 ? '' : 's') + (m % 60 ? ' ' + (m % 60) + ' min' : '');
+    }
+    function paint() {
+      if (!until) return;
+      var ms = Date.parse(until) - Date.now();
+      eta.classList.add('on');
+      left.textContent = ms > 0 ? label(ms) : 'any moment now';
+    }
+
+    function status() {
+      return fetch('/api/v1/status', { cache: 'no-store' }).then(function (r) { return r.json(); });
+    }
+    function watch() {
+      status().then(function (s) {
+        var m = s && s.maintenance;
+        if (!m || !m.active) { location.reload(); return; }              // we are back
+        if (m.message && message) message.textContent = m.message;
+        until = m.until || null;
+        paint();
+      }).catch(function () { /* the API is down too: the static page stands on its own */ });
+    }
+
+    check.addEventListener('click', function () {
+      check.disabled = true; check.innerHTML = '<span class="spin">↻</span> Checking…';
+      status().then(function (s) {
+        if (!s || !s.maintenance || !s.maintenance.active) location.reload();
+        else { check.disabled = false; check.textContent = 'Still working — check again'; watch(); }
+      }).catch(function () { check.disabled = false; check.textContent = 'No connection — try again'; });
+    });
+
+    paint();
+    if (until) setInterval(paint, 1000);          // live countdown
+    setInterval(watch, 20000);                    // come back by ourselves
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) watch(); });
+  })();
+</script>
+</body>
+</html>

@@ -10,7 +10,7 @@ flowchart LR
 
   subgraph clients[Client applications]
     web[Website / PWA<br/>index.html + app/ ES modules]
-    admin[Admin console<br/>admin/ SPA]
+    admin[Admin + Content studio<br/>admin/ · content/ SPA]
     native[Android and iOS<br/>Capacitor shell + shared www bundle]
     offline[Local mode<br/>localStorage adapters]
   end
@@ -168,6 +168,7 @@ flowchart TB
     auth[auth.js + sessions.js]
     catalog[catalog.js + catalog-schema.js]
     billing[billing.js + gst.js + invoice-pdf.js]
+    promos[promos.js credit + referrals]
     campaigns[campaigns.js + jobs.js]
     media[entitlement + HLS playback policy]
     identity[social.js + apple.js]
@@ -217,10 +218,10 @@ flowchart TB
 |---|---|---|
 | Web and PWA | `app/js/main.js`, `app/js/router.js`, `app/js/views/` | UI and navigation; reads through `User` and the data adapters, not raw `fetch`/storage calls scattered through views. |
 | Client data | `app/js/data/user.js`, `app/js/data/adapters.js`, `app/js/data/api.js` | `User` is the UI-facing facade; `LocalAdapter` handles offline/guest state and `RemoteAdapter` speaks the versioned REST API. |
-| Admin UI | `admin/js/main.js`, `admin/js/views/` | Admin navigation and feature screens; calls `/api/v1/admin`, never queries storage directly. |
+| Console UI | `admin/js/console.js` (shared shell), `admin/js/main.js` (Admin), `content/js/main.js` (Content studio), `admin/js/views/` | Two consoles — business (`/admin`) and content (`/content`) — sharing the shell, sign-in, UI toolkit and API client; they call `/api/v1/admin`, never query storage directly. |
 | Native shell | `mobile/`, `mobile/scripts/`, `app/js/platform.js`, `app/js/push-native.js` | Capacitor packaging, OS permissions, deep links, native push and build-time Firebase setup. It reuses the web application bundle. |
 | HTTP composition | `server/src/app.js`, `middleware/security.js`, `routes/*.js`, `web.js` | Middleware order, API version prefix, route registration, static/SEO delivery and final error mapping. Route modules receive dependencies; they do not read environment variables or create a database connection. |
-| Use cases | `auth.js`, `sessions.js`, `features.js`, `billing.js`, `campaigns.js`, `catalog.js`, `jobs.js` | Identity/session policy, engagement rules, payment/invoice workflows, leased campaigns, catalog snapshots and scheduled work. |
+| Use cases | `auth.js`, `sessions.js`, `features.js`, `billing.js`, `promos.js`, `maintenance.js`, `campaigns.js`, `catalog.js`, `jobs.js` | Identity/session policy, engagement rules, payment/invoice workflows, promotional credit & referrals, the maintenance switch, leased campaigns, catalog snapshots and scheduled work. |
 | Persistence | `db.js`, `db-admin.js`, `db-billing.js`, `db-extra.js`, `migrations/` | Parameterized MySQL operations and row mapping. `db.js` composes the repository facade; HTTP modules do not issue SQL. |
 | Provider adapters | `payments.js`, `mailer.js`, `push.js`, `fcm.js`, `r2.js`, `social.js`, `apple.js`, `youtube-feed.js` | External protocols and provider configuration. Domain workflows consume their narrow methods instead of SDK details. |
 | Operations | `index.js`, `migrate.js`, `backup.js`, `scripts/`, `Dockerfile`, workflows | Process lifecycle, schema evolution, backups, HLS encoding, build/test/release automation. |
@@ -245,6 +246,7 @@ flowchart TB
 1. Authenticated checkout validates eligibility and calls `billing.js`; payment-provider secrets stay server-side.
 2. The browser signature endpoint and the signed Razorpay webhook both converge on idempotent settlement. MySQL transactions apply the payment, subscription and invoice consistently.
 3. Refunds and notices use the billing domain and durable claims; failed mail claims are released for retry.
+4. Promotional credit (`promos.js`) is spent inside the same checkout: the ledger is append-only, a spend holds grants until the payment settles, and abandoned orders release them from the housekeeping job. See [docs/PROMOS.md](PROMOS.md).
 
 ### Catalog and notifications
 

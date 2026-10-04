@@ -6,10 +6,10 @@ import { HttpError, bad, wrap } from '../http.js';
 import { normalizeEmail } from '../email-address.js';
 import { SocialError } from '../social-errors.js';
 
-export function registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled }) {
+export function registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled, sms = null, promos = null }) {
   // Create an account with e-mail + password. A verification-mail failure must be visible to the user (the account is still created so they can sign in and retry).
   api.post('/auth/signup', authLimit, wrap(async (req, res) => {
-    const { name = '', email = '', password = '' } = req.body || {};
+    const { name = '', email = '', password = '', ref = '' } = req.body || {};      // `ref` = an inviter's code
     // One address = one account: the address is normalized (case, full-width characters and invisible
     // paste artefacts removed) before it is compared or stored — see server/src/email-address.js.
     const norm = normalizeEmail(email);
@@ -36,7 +36,15 @@ export function registerAuthRoutes(api, { db, secret, social, features, mailer, 
       // Keep the newly created account usable, but don't silently pretend its confirmation mail went out.
       console.warn(`[auth] verification email failed${e.code ? ` (${e.code})` : ''}:`, e.message);
     }
-    res.status(201).json({ token: signToken(user.id, secret), user: publicUser(user), profiles: [profile], verificationEmailSent });
+    // Promotions: the welcome bonus, and the referral bonus for both sides when a code came with the sign-up.
+    // A promotion must never break an account creation, so `onSignup` swallows its own errors.
+    const bonus = promos ? await promos.onSignup({ user: await db.users.byId(user.id) || user, code: ref }) : { welcomePaise: 0 };
+    res.status(201).json({
+      token: signToken(user.id, secret), user: publicUser(user), profiles: [profile], verificationEmailSent,
+      ...(bonus.welcomePaise || bonus.inviteePaise ? { creditPaise: bonus.welcomePaise + bonus.inviteePaise } : {}),
+      ...(bonus.inviterPaise ? { referral: { inviterPaise: bonus.inviterPaise, hold: bonus.hold || null } } : {}),
+      ...(bonus.skipped ? { referralSkipped: bonus.skipped } : {}),
+    });
   }));
   // Log in with e-mail + password. Returns a session token.
   api.post('/auth/login', authLimit, wrap(async (req, res) => {
@@ -51,7 +59,15 @@ export function registerAuthRoutes(api, { db, secret, social, features, mailer, 
 
   /* ---------- social sign-in ---------- */
   // Tells the front end which social buttons to show.
-  api.get('/auth/providers', (_req, res) => res.json({ password: true, ...social.config }));
+  // `otp` tells the sign-in page whether to offer phone sign-in first (SMS OTP) and which country code
+  // the number field should assume. It is false whenever MSG91 is not configured, so the page falls back
+  // to email + password without any errors.
+  api.get('/auth/providers', (_req, res) => res.json({
+    password: true,
+    otp: !!sms?.configured && sms.provider !== 'none',
+    otpCountryCode: sms?.countryCode || '91',
+    ...social.config,
+  }));
   const LABEL = { google: 'Google', facebook: 'Facebook', apple: 'Apple' };
   // Shared by Google, Facebook and Apple: verify the provider's token, then find or create our own account.
   // An existing account with the same *verified* e-mail is linked rather than duplicated.
@@ -88,15 +104,28 @@ export function registerAuthRoutes(api, { db, secret, social, features, mailer, 
     notDisabled(user);
     await db.identities.touch(provider, claims.subject);
     if (!user.emailVerifiedAt) await db.accounts.markVerified(user.id);           // the provider already verified this address
+    // Promotions (docs/PROMOS.md): a brand-new social account gets the welcome bonus and honours an invite
+    // code from the sign-up link. The provider already confirmed the address, so a held referral reward is
+    // released immediately — the friend is a real, identifiable person.
+    let bonus = null;
+    if (isNew && promos) {
+      const fresh = (await db.users.byId(user.id)) || user;
+      bonus = await promos.onSignup({ user: fresh, code: opts.ref });
+      await promos.qualify(fresh, { reason: 'verified' });
+    }
     // Native apps: instead of handing the session to the (external) browser that did the OAuth
     // dance, hand back a 2-minute single-use ticket the app exchanges for its own session.
     if (opts.ticket) return { ticket: signJwt({ aud: 'oauth-ticket', sub: user.id, sv: user.sessionVersion, jti: crypto.randomUUID() }, secret, 120) };
-    return { token: signToken(user.id, secret, undefined, user.sessionVersion), user: publicUser({ ...user, emailVerifiedAt: user.emailVerifiedAt || true }), profiles: await db.profiles.list(user.id), isNew };
+    return {
+      token: signToken(user.id, secret, undefined, user.sessionVersion), user: publicUser({ ...user, emailVerifiedAt: user.emailVerifiedAt || true }),
+      profiles: await db.profiles.list(user.id), isNew,
+      ...(bonus?.welcomePaise || bonus?.inviteePaise ? { creditPaise: bonus.welcomePaise + bonus.inviteePaise } : {}),
+    };
   }
   // One endpoint per provider; the body carries the provider's ID token / access token.
-  api.post('/auth/google', authLimit, wrap(async (req, res) => res.json(await socialSignIn('google', req.body?.idToken, { ticket: req.body?.ticket === true }))));
-  api.post('/auth/facebook', authLimit, wrap(async (req, res) => res.json(await socialSignIn('facebook', req.body?.accessToken))));
-  api.post('/auth/apple', authLimit, wrap(async (req, res) => res.json(await socialSignIn('apple', { identityToken: req.body?.identityToken, name: req.body?.name }))));
+  api.post('/auth/google', authLimit, wrap(async (req, res) => res.json(await socialSignIn('google', req.body?.idToken, { ticket: req.body?.ticket === true, ref: req.body?.ref }))));
+  api.post('/auth/facebook', authLimit, wrap(async (req, res) => res.json(await socialSignIn('facebook', req.body?.accessToken, { ref: req.body?.ref }))));
+  api.post('/auth/apple', authLimit, wrap(async (req, res) => res.json(await socialSignIn('apple', { identityToken: req.body?.identityToken, name: req.body?.name }, { ref: req.body?.ref }))));
 
   /* ---------- native Google sign-in (Custom Tab + one-time ticket deep link) ----------
    * Google refuses sign-in inside WebViews, and the native SDK needs every build keystore's

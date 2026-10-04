@@ -6,7 +6,22 @@ import { createSeo } from './seo.js';
 import { wrap } from './http.js';
 import { UPLOAD_NAME, uploadType, cacheUpload } from './uploads.js';
 
-export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg }) {
+export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg, maintenance = null }) {
+  // Maintenance mode (docs/MAINTENANCE.md): while the switch is on, viewers get the branded page with a real
+  // 503 and the API refuses viewer calls — but the consoles, the API allow-list and /maintenance itself keep
+  // working so the operator can finish the job and turn it back off.
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const maintenancePage = (req, res, state) => {
+    let body = '';
+    try { body = fs.readFileSync(path.join(ROOT, 'maintenance.html'), 'utf8'); }
+    catch { body = '<!doctype html><html lang="en"><meta charset="utf-8"><title>We’ll be right back</title><h1>We’ll be right back</h1>'; }
+    // Fill the two placeholders so the page is complete even with JavaScript disabled (the script refreshes
+    // them from /api/v1/status when it can).
+    body = body.replace('{{message}}', esc(state.message)).replace('{{until}}', state.until ? JSON.stringify(state.until) : 'null');
+    // A client that cannot take HTML (an API client, a scraper) gets a sentence instead of a page.
+    if (!req.accepts('html')) return res.status(503).type('text/plain').set({ 'Cache-Control': 'no-store', 'Retry-After': String(maintenance.retryAfter(state)) }).send(state.message);
+    res.status(503).set({ 'Cache-Control': 'no-store', 'Retry-After': String(maintenance.retryAfter(state)) }).type('html').send(body);
+  };
   /* ---------- static site (same origin => the web app auto-detects this API) ---------- */
   // ---- Website ----
   // Static files, plus server-rendered HTML for every page so search engines see real titles and content.
@@ -14,6 +29,7 @@ export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS
     // Defence in depth: even though only the folders below are mounted, explicitly refuse anything that
     // looks like repository internals (git, docs, tests, sources, keys, backups) so a future mount or
     // route can never accidentally expose it.
+    // (`content/` is the Content studio's page folder, not repository content — it is mounted below.)
     const DENY = /(^\/\.(?:git|env|npm|ssh)|\/(?:server|scripts|docs|test|tests|mobile|resources|node_modules|\.github)(?:\/|$)|\/package(?:-lock)?\.json$|\.(?:map|md|mdx|ts|tsx|mjs|cjs|yml|yaml|toml|ini|cfg|log|sql|sqlite|pem|key|p12|keystore|bak|old)$)/i;
     app.use((req, res, next) => {
       let p; try { p = decodeURIComponent(req.path); } catch { return res.status(404).type('text/plain').send('Not found'); }
@@ -76,16 +92,35 @@ export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS
     app.use('/data', express.static(path.join(ROOT, 'data'), opts(60_000)));
     app.use('/media', guardImages, express.static(path.join(ROOT, 'media'), opts(7 * 86_400_000)));
     app.use('/uploads', guardImages, express.static(uploadDir, { maxAge: '365d', immutable: true, index: false, dotfiles: 'ignore' }), uploadFromDb);   // admin-uploaded images and subtitles (content-hash names): disk cache first, then MySQL
-    // The admin console: its own page + scripts, never cached, locked down with a strict CSP (no inline script, no framing).
-    const adminHeaders = (_q, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'self'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' https://accounts.google.com https://connect.facebook.net https://appleid.cdn-apple.com; connect-src 'self' https:; frame-src 'self' https://accounts.google.com https://www.facebook.com https://appleid.apple.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" }); next(); };
-    // Admin console page + its scripts.
-    app.get(['/admin', '/admin/'], adminHeaders, (_q, res) => res.sendFile(path.join(ROOT, 'admin/index.html')));
-    app.use('/admin', adminHeaders, express.static(path.join(ROOT, 'admin'), { index: false, dotfiles: 'ignore', etag: true }));
+    // The management consoles — the Admin console (/admin/) and the Content studio (/content/). Each has its
+    // own page + scripts, is never cached, and is locked down with a strict CSP (no inline script, no framing).
+    const consoleHeaders = (_q, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'self'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' https://accounts.google.com https://connect.facebook.net https://appleid.cdn-apple.com; connect-src 'self' https:; frame-src 'self' https://accounts.google.com https://www.facebook.com https://appleid.apple.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" }); next(); };
+    // Admin console page + its scripts. The Content studio shares the console's CSS/JS modules.
+    app.get(['/admin', '/admin/'], consoleHeaders, (_q, res) => res.sendFile(path.join(ROOT, 'admin/index.html')));
+    app.use('/admin', consoleHeaders, express.static(path.join(ROOT, 'admin'), { index: false, dotfiles: 'ignore', etag: true }));
+    // The maintenance page itself: a preview while the switch is off, the real thing (503) while it is on.
+    app.get(['/maintenance', '/maintenance.html'], wrap(async (_q, res) => {
+      const state = maintenance ? await maintenance.state() : { active: false, message: '', until: null };
+      if (!maintenance || !state.active) {
+        let body = '';
+        try { body = fs.readFileSync(path.join(ROOT, 'maintenance.html'), 'utf8'); } catch { return res.status(404).type('text/plain').send('Not found'); }
+        return res.set('Cache-Control', 'no-store').type('html')
+          .send(body.replace('{{message}}', esc(state.message)).replace('{{until}}', state.until ? JSON.stringify(state.until) : 'null'));
+      }
+      maintenancePage(_q, res, state);
+    }));
+    app.get(['/content', '/content/'], consoleHeaders, (_q, res) => res.sendFile(path.join(ROOT, 'content/index.html')));
+    app.use('/content', consoleHeaders, express.static(path.join(ROOT, 'content'), { index: false, dotfiles: 'ignore', etag: true }));
 
     // Every other GET is a page of the web app (/, /show/shahid …). Unknown pages get a REAL 404 status (with the app shell, so
     // people still see the site) — otherwise search engines index every mistyped URL as a "soft 404".
     app.get('*', async (req, res, next) => {
-      if (req.path !== '/index.html' && (/^\/(api|app|data|media|uploads|admin)(\/|$)/.test(req.path) || /\.[a-z0-9]{1,8}$/i.test(req.path))) return res.status(404).type('text/plain').send('Not found');
+      if (req.path !== '/index.html' && (/^\/(api|app|data|media|uploads|admin|content)(\/|$)/.test(req.path) || /\.[a-z0-9]{1,8}$/i.test(req.path))) return res.status(404).type('text/plain').send('Not found');
+      // Maintenance mode answers every browser page here (the app shell is not served while it is on).
+      if (maintenance) {
+        const state = await maintenance.state();
+        if (state.active) return maintenancePage(req, res, state);
+      }
       // Render the requested page (or redirect, or a real 404 status for unknown URLs).
       try {
         const r = await seoSvc.render(req);

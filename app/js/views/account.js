@@ -44,8 +44,8 @@ export default async function account(ctx) {
 
     <h2 class="sub-h">Explore</h2>
     <div class="card-panel list">
-      ${link('#/list', 'list', 'My List')}${link('#/upcoming', 'clock', 'Coming Soon')}${link('#/gallery', 'image', 'Behind the Scenes')}
-      ${link('#/about', 'info', 'About ADDABAAZ')}${link('#/services', 'film', 'Services')}${link('#/contact', 'mail', 'Contact us')}
+      ${link('#/list', 'list', 'My List')}${link('#/upcoming', 'clock', 'Coming Soon')}
+      ${link('#/about', 'info', 'About ADDABAAZ')}${link('#/services', 'film', 'Services')}${link('#/contact', 'mail', 'Contact us')}${link('#/support', 'chat', 'Help & support', 'Raise a ticket and follow our replies')}
     </div>
 
     <h2 class="sub-h">App</h2>

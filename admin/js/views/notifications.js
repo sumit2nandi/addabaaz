@@ -3,7 +3,7 @@
 // that turned notifications on; "E-mail" reaches accounts by their Users-page filter. Sending happens
 // in the background, so the page polls the campaign row and shows live progress.
 import { api } from '../api.js';
-import { empty, html, $, icon, pageHead, toast, errMsg, guard, fmtDT, badge } from '../ui.js';
+import { empty, html, $, icon, pageHead, toast, errMsg, guard, fmtDT, badge, wireImages, imgSrc } from '../ui.js';
 
 // Status badge for a campaign row.
 const STATUS = { queued: ['Queued', 'warn'], sending: ['Sending…', 'warn'], sent: ['Sent', 'ok'], partial: ['Partly sent', 'warn'], failed: ['Failed', 'bad'], cancelled: ['Cancelled', ''] };
@@ -11,6 +11,19 @@ const statusBadge = (s) => badge(...(STATUS[s] || [s, '']));
 const CHANNEL = { push: 'App push', email: 'E-mail' };
 const k = (n) => (Number(n) || 0).toLocaleString('en-IN');
 const done = (s) => ['sent', 'partial', 'failed', 'cancelled'].includes(s);
+// The optional image attached to a broadcast: shown inside the notification (rich push) and at the top of
+// the e-mail. The markup matches the console's other image controls, so `wireImages()` gives it upload + preview.
+const imageField = (max, help) => html`<div class="field wide"><label for="bc_img">Image <small class="muted">(optional — shown in the notification and in the e-mail)</small></label>
+  <div class="imgf" data-image="imageUrl" data-maxw="1200">
+    <div class="imgf-prev"><span class="muted small">No image</span></div>
+    <div class="imgf-in">
+      <input id="bc_img" name="imageUrl" maxlength="500" placeholder="Upload, or paste media/… or https://…">
+      <label class="btn sm">${icon('upload', 16)} Upload<input type="file" accept="image/*" hidden></label>
+      <input name="imageAlt" maxlength="200" placeholder="Describe the image (alt text)" aria-label="Image description">
+      <span class="imgf-st small muted">${help || ''}</span>
+    </div>
+  </div></div>`;
+
 // One step line in a "not set up yet" card; `parts` alternate text / code.
 const step = (...parts) => html`<span>${parts.map((p, i) => (i % 2 ? html`<code>${p}</code>` : p))}</span>`;
 
@@ -67,6 +80,61 @@ export default async function notifications(root, _p, ctx) {
     paintHistory(); schedule();
   }
 
+  /* ---------- preview: exactly what will be sent, before anything is sent ---------- */
+  // Rendered by the server with the same builders the sender uses (POST /notifications/preview), so the
+  // preview cannot drift from the real notification/e-mail. Debounced as the composer is typed into.
+  const previewHtml = () => html`<section class="card" id="bcPreview">
+    <div class="card-head"><h2>${icon('eye', 18)} Preview</h2><span class="muted small" id="bcPvState">Write a title and a message to see the preview.</span></div>
+    <div id="bcPvBody"><p class="muted small">Nothing is sent by previewing.</p></div>
+  </section>`;
+
+  function previewText() {
+    const p = { channel, title: (form.title?.value || '').trim(), body: (form.body?.value || '').trim(), url: (form.url?.value || '').trim(), button: (form.button?.value || '').trim(), imageUrl: (form.imageUrl?.value || '').trim(), imageAlt: (form.imageAlt?.value || '').trim() };
+    return p;
+  }
+
+  let previewTimer = null;
+  function schedulePreview() {
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(runPreview, 500);
+  }
+
+  async function runPreview() {
+    const form = $('#bcf', body), pvBody = $('#bcPvBody', body), state = $('#bcPvState', body);
+    if (!form || !pvBody) return;
+    const p = previewText();
+    if (!p.title && !p.body) { pvBody.innerHTML = '<p class="muted small">Write a title and a message to see the preview.</p>'; state.textContent = ''; return; }
+    state.textContent = 'Rendering…';
+    let r;
+    try { r = await api.post('/notifications/preview', p); }
+    catch (e) { state.textContent = errMsg(e); pvBody.innerHTML = ''; return; }
+    if (!pvBody.isConnected) return;                       // navigated away while rendering
+    state.textContent = 'Nothing has been sent.';
+    if (r.channel === 'push') {
+      const n = r.push || {};
+      pvBody.innerHTML = html`<div class="push-row">
+        <div class="push-mock" role="img" aria-label="Notification preview">
+          <div class="push-app"><img src="/media/icons/logo-96.webp" width="18" height="18" alt=""><span>ADDABAAZ</span><small>now</small></div>
+          <b class="push-title">${n.title || '(no title)'}</b>
+          ${n.body ? html`<span class="push-body">${n.body}</span>` : ''}
+          ${r.image ? html`<img class="push-img" src="${r.image}" alt="${p.imageAlt || ''}" loading="lazy">` : ''}
+        </div>
+        <div class="pv-meta">
+          <p class="muted small">${r.image ? 'With an image, phones show a large picture notification.' : 'Add an image for a large picture notification.'}</p>
+          <p class="muted small">Tapping it opens <code>${n.url || '/'}</code>.</p>
+          <details><summary class="small">Payload sent to devices</summary><pre class="pv-json">${JSON.stringify(n, null, 2)}</pre></details>
+        </div>
+      </div>`;
+    } else {
+      const m = r.email || {};
+      pvBody.innerHTML = html`<div class="mail-mock">
+        <div class="mail-subj"><small class="muted">Subject</small> <b>${m.subject || '(no subject)'}</b></div>
+        <iframe class="mail-frame" title="E-mail preview" sandbox referrerpolicy="no-referrer" srcdoc="${m.html || ''}"></iframe>
+      </div>
+      <details><summary class="small">Plain-text version</summary><pre class="pv-json">${m.text || ''}</pre></details>`;
+    }
+  }
+
   /* ---------- app push ---------- */
   function pushHtml() {
     const p = meta.push || {};
@@ -83,9 +151,11 @@ export default async function notifications(root, _p, ctx) {
           <div class="field"><label for="bc_t">Title <small class="muted">(max 80)</small></label><input id="bc_t" name="title" maxlength="80" required placeholder="New episode is live"></div>
           <div class="field"><label for="bc_b">Message <small class="muted">(max 180)</small></label><textarea id="bc_b" name="body" rows="3" maxlength="180" required placeholder="Season 2, Episode 1 is now streaming."></textarea></div>
           <div class="field"><label for="bc_u">Opens <small class="muted">(a page on the site, e.g. /show/…)</small></label><input id="bc_u" name="url" value="/" maxlength="300"></div>
+          ${imageField('', 'A wide (16:9) image looks best in the notification.')}
           <div class="form-err" id="bc_err" hidden></div>
           <div class="row"><button class="btn primary" type="submit" ${ready ? '' : 'disabled'}>${icon('bell', 16)} Send now</button>
-            <button class="btn" type="button" id="bc_test" ${ready ? '' : 'disabled'}>${icon('check', 16)} Send a test to me</button></div>
+            <button class="btn" type="button" id="bc_test" ${ready ? '' : 'disabled'}>${icon('check', 16)} Send a test to me</button>
+            <button class="btn" type="button" id="bc_preview">${icon('eye', 16)} Refresh preview</button></div>
           <p class="muted small">Notifications appear on the phones and tablets where the app is installed, and in browsers where the viewer allowed them. Every app installation receives the broadcast; browser subscriptions follow the viewer's own preferences. A test goes only to your own devices.</p>
         </form>
         <section class="card"><div class="card-head"><h2>Reach</h2></div>
@@ -95,7 +165,8 @@ export default async function notifications(root, _p, ctx) {
             ? 'App push goes through Firebase Cloud Messaging to every device token the apps registered at sign-in.'
             : 'App push needs a Firebase service account (FCM_SERVICE_ACCOUNT or FCM_SERVICE_ACCOUNT_FILE) — see docs/MOBILE.md.'}</p>
         </section>
-      </div>`;
+      </div>
+      ${previewHtml()}`;
   }
 
   /* ---------- e-mail ---------- */
@@ -113,9 +184,11 @@ export default async function notifications(root, _p, ctx) {
           <div class="field"><label for="bc_b">Message <small class="muted">(plain text; a blank line starts a new paragraph)</small></label><textarea id="bc_b" name="body" rows="7" maxlength="4000" required placeholder="Hello!&#10;&#10;Season 2 of your favourite show is streaming now."></textarea></div>
           <div class="field"><label for="bc_u">Button opens <small class="muted">(a page on the site, e.g. /plans)</small></label><input id="bc_u" name="url" value="/" maxlength="300"></div>
           <div class="field"><label for="bc_btn">Button label <small class="muted">(optional)</small></label><input id="bc_btn" name="button" maxlength="40" placeholder="Watch now"></div>
+          ${imageField('', 'Appears as a banner at the top of the e-mail.')}
           <div class="form-err" id="bc_err" hidden></div>
           <div class="row"><button class="btn primary" type="submit" ${e.configured ? '' : 'disabled'}>${icon('mail', 16)} <span id="bc_sendlabel">Send now</span></button>
-            <button class="btn" type="button" id="bc_test" ${e.configured ? '' : 'disabled'}>${icon('check', 16)} Send a test to me</button></div>
+            <button class="btn" type="button" id="bc_test" ${e.configured ? '' : 'disabled'}>${icon('check', 16)} Send a test to me</button>
+            <button class="btn" type="button" id="bc_preview">${icon('eye', 16)} Refresh preview</button></div>
           <p class="muted small">Every message carries a one-click unsubscribe link; people who use it are skipped from then on. Receipts and account e-mails are never affected.</p>
         </form>
         <section class="card"><div class="card-head"><h2>Reach</h2></div>
@@ -123,13 +196,16 @@ export default async function notifications(root, _p, ctx) {
           ${line('Unsubscribed', k(e.optedOut), 'excluded')}
           <p class="muted small" style="margin-top:10px">Sent from <strong>${e.from || '—'}</strong>. Disabled accounts are always skipped.</p>
         </section>
-      </div>`;
+      </div>
+      ${previewHtml()}`;
   }
 
   /* ---------- wiring ---------- */
   function wire() {
     const form = $('#bcf', body), err = $('#bc_err', body);
-    const payload = () => ({ channel, audience: form.audience.value, title: form.title.value, body: form.body.value, url: form.url.value, button: form.button ? form.button.value : '' });
+    wireImages(form);                                     // upload + live thumbnail for the image field
+    const payload = () => ({ channel, audience: form.audience.value, title: form.title.value, body: form.body.value, url: form.url.value, button: form.button ? form.button.value : '',
+      imageUrl: form.imageUrl ? form.imageUrl.value.trim() : '', imageAlt: form.imageAlt ? form.imageAlt.value.trim() : '' });
     const label = $('#bc_sendlabel', body);
     const count = () => {
       if (channel !== 'email' || !label) return;
@@ -137,18 +213,24 @@ export default async function notifications(root, _p, ctx) {
       label.textContent = `Send to ${k(a?.count)} ${a?.count === 1 ? 'account' : 'accounts'}`;
     };
     if (channel === 'email') { count(); form.audience.addEventListener('change', count); }
+    // Live preview while typing (debounced), and instantly when the image changes.
+    form.addEventListener('input', schedulePreview);
+    form.addEventListener('change', schedulePreview);
     form.addEventListener('submit', async (e) => {
       e.preventDefault(); err.hidden = true;
       await guard($('button[type=submit]', form), async () => {
         try {
           const c = await api.post('/notifications/send', payload());
           form.title.value = ''; form.body.value = '';
+          if (form.imageUrl) { form.imageUrl.value = ''; form.imageAlt.value = ''; }
+          schedulePreview();
           meta = await api.get('/notifications');
           paintHistory(); schedule();
           toast(c && c.status === 'failed' ? (c.error || 'The broadcast could not be started.') : 'Queued — sending in the background.', c && c.status === 'failed' ? 'err' : 'ok');
         } catch (x) { err.textContent = errMsg(x); err.hidden = false; }
       });
     });
+    $('#bc_preview', body)?.addEventListener('click', (e) => guard(e.currentTarget, runPreview));
     $('#bc_test', body)?.addEventListener('click', (e) => guard(e.currentTarget, async () => {
       try { await api.post('/notifications/test', payload()); toast('Test sent to you.'); }
       catch (x) { err.textContent = errMsg(x); err.hidden = false; }

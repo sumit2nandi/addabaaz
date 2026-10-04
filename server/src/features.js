@@ -25,7 +25,7 @@ const noop = (_q, _s, n) => n();
  */
 // Returns helper functions plus two route registrars, `public(api)` and `authed(api)`, which app.js calls
 // (before and after the authentication middleware respectively). Behaviour limits come from `options` or environment variables.
-export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rate = true, publicUser, notDisabled, userFromRequest, plans = [], options = {} }) {
+export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rate = true, publicUser, notDisabled, userFromRequest, plans = [], promos = null, options = {} }) {
   // Tunable limits: screens at once, refund window, reports needed to hide a comment, comment rate, whether an e-mail must be verified before commenting/buying.
   const cfg = {
     supportEmail: options.supportEmail ?? process.env.SUPPORT_EMAIL ?? '',
@@ -138,6 +138,8 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         const user = await db.users.byId(uid); if (!user) throw new HttpError(400, 'invalid_token', 'This reset link is invalid or has expired.');
         notDisabled(user);
         const sv = await db.accounts.setPassword(uid, await hashPassword(password), { verify: true });      // signs out every other device
+        // Opening the reset link proves the address is theirs, so a held referral reward can be released too.
+        if (promos) promos.qualify({ ...user, id: uid }, { reason: 'verified' }).catch(() => {});
         sendMail(user.email, mail.passwordChangedEmail({ name: user.name, siteUrl, supportEmail: cfg.supportEmail }), `password changed for ${user.email}`);
         res.json({ ...sessionFor({ ...user, emailVerifiedAt: user.emailVerifiedAt || new Date().toISOString() }, sv), profiles: await db.profiles.list(uid) });
       }));
@@ -147,6 +149,8 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         const uid = typeof token === 'string' && token.length >= 20 && token.length <= 200 ? await db.authTokens.consume(sha256(token), 'verify') : null;
         if (!uid) throw new HttpError(400, 'invalid_token', 'This confirmation link is invalid or has expired. Sign in and request a new one from Account.');
         await db.accounts.markVerified(uid);
+        // A confirmed e-mail is what a referral reward was waiting for — pay the inviter now (see promos.js).
+        if (promos) { const u = await db.users.byId(uid); if (u) promos.qualify(u, { reason: 'verified' }).catch(() => {}); }
         res.json({ verified: true });
       }));
 
@@ -188,15 +192,33 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       // app-push audiences; account-specific episode/launch audiences are resolved from server data.
       const guestDeviceLimit = limit('guest-devices', 20, 60_000);
       api.post('/devices/guest', guestDeviceLimit, wrap(async (req, res) => {
-        const { token, platform = null, label = null } = req.body || {};
+        const { token, platform = null, label = null, prefs = null } = req.body || {};
         if (typeof token !== 'string' || token.length < 20 || token.length > 512) throw bad('Invalid device token.');
-        await db.devices.upsertGuest({ hash: endpointHash(token), token, platform, label: typeof label === 'string' && label.trim() ? label.trim() : null });
+        await db.devices.upsertGuest({ hash: endpointHash(token), token, platform, label: typeof label === 'string' && label.trim() ? label.trim() : null, prefs });
         res.status(201).json({ ok: true });
       }));
       // Token possession is required; deleting by token hash also cleans up a stale account link left by an older app session.
       api.delete('/devices/guest', guestDeviceLimit, wrap(async (req, res) => {
         const token = req.body?.token;
         if (typeof token === 'string' && token.length >= 20 && token.length <= 512) await db.devices.removeHash(endpointHash(token));
+        res.sendStatus(204);
+      }));
+
+      // The three notification choices stored for a device token (the app's Account page reads these).
+      // Possessing the token is the proof, exactly like the guest registration above — no account needed,
+      // and it answers `null` for a token the server does not know.
+      api.post('/devices/status', guestDeviceLimit, wrap(async (req, res) => {
+        const token = req.body?.token;
+        res.set('Cache-Control', 'no-store');
+        res.json({ prefs: typeof token === 'string' && token.length <= 512 ? await db.devices.getPrefs(endpointHash(token)) : null });
+      }));
+      // Change them. Works whether the token belongs to an account or was registered anonymously.
+      api.patch('/devices/prefs', guestDeviceLimit, wrap(async (req, res) => {
+        const token = req.body?.token;
+        if (typeof token !== 'string' || token.length < 20 || token.length > 512) throw bad('Invalid device token.');
+        const { episodes, launches, news } = req.body || {};
+        for (const v of [episodes, launches, news]) if (v !== undefined && typeof v !== 'boolean') throw bad('Notification choices must be true or false.');
+        await db.devices.setPrefs(endpointHash(token), { episodes, launches, news });
         res.sendStatus(204);
       }));
 
@@ -316,9 +338,9 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       /* --- native app push devices for signed-in accounts (FCM tokens) — Admin → Notifications sends to these --- */
       // Sign-in links an existing guest token to the account; one FCM token has exactly one audience.
       api.post('/devices', wrap(async (req, res) => {
-        const { token, platform = null, label = null } = req.body || {};
+        const { token, platform = null, label = null, prefs = null } = req.body || {};
         if (typeof token !== 'string' || token.length < 20 || token.length > 512) throw bad('Invalid device token.');
-        await db.devices.upsert(req.user.id, { hash: endpointHash(token), token, platform, label: typeof label === 'string' && label.trim() ? label.trim() : null });
+        await db.devices.upsert(req.user.id, { hash: endpointHash(token), token, platform, label: typeof label === 'string' && label.trim() ? label.trim() : null, prefs });
         res.status(201).json({ ok: true });
       }));
       api.delete('/devices', wrap(async (req, res) => { if (typeof req.body?.token === 'string') await db.devices.remove(req.user.id, endpointHash(req.body.token)); res.sendStatus(204); }));

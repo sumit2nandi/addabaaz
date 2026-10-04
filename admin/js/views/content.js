@@ -1,6 +1,6 @@
-// Catalog management: shows, videos (free or premium), upcoming titles and the gallery. One page module handles all four sections; `section` comes from the URL.
+// Catalog management: shows, videos (free or premium) and upcoming titles. One page module handles every section; `section` comes from the URL.
 import { api, putFile } from '../api.js';
-import { html, raw, $, $$, icon, badge, empty, pager, pageHead, openModal, formModal, confirmBox, guard, toast, errMsg, imgSrc, fmtDur, parseDur, probeVideoDuration, fmtDT, fmtD, slug, ytId, plural, esc } from '../ui.js';
+import { html, raw, $, $$, icon, badge, empty, pager, pageHead, openModal, formModal, confirmBox, guard, toast, errMsg, imgSrc, fmtDur, parseDur, probeVideoDuration, fmtDT, fmtD, fmtViews, slug, ytId, plural, esc } from '../ui.js';
 
 // Option lists for the forms.
 const SHOW_TYPES = [['series', 'Series'], ['standup', 'Stand-up'], ['podcast', 'Podcast'], ['film', 'Film']].map(([v, l]) => ({ v, l }));
@@ -154,6 +154,7 @@ export default async function content(root, [section], ctx) {
     { k: 'hidden', label: 'Hide from the public website', type: 'bool', wide: true, help: 'Hidden videos stay in the admin catalog and can be restored later.' },
     ratingField, subtitlesField(),
     { k: 'views', label: 'Views', type: 'number', min: 0 },
+    { k: 'topRank', label: 'Top 10 position (optional)', type: 'number', min: 1, max: 10, help: 'Pins this episode into the homepage “Top 10 Episodes” rail: 1 is first. Leave empty to rank it by views. Content studio → Top 10 arranges them all at once.' },
     { k: 'id', label: 'ID', req: true, readonly: !create, max: 64, help: create ? 'Filled in automatically; letters, digits, - and _.' : '', wide: true },
   ];
   const editVideo = (v) => {
@@ -483,27 +484,65 @@ export default async function content(root, [section], ctx) {
     wireUpcomingMoves({ 'releasing-this-month': releases, 'coming-soon': comingSoon });
   }
 
-  /* ---------- gallery ---------- */
-  const galFields = (create) => [
-    { k: 'id', label: 'ID', req: true, readonly: !create, max: 64, help: create ? 'Filled in for you; letters, digits, - and _.' : '' }, { k: 'group', label: 'Group (album)', req: true, max: 60, help: 'Photos with the same group are shown together.' },
-    { k: 'image', label: 'Photo (thumbnail)', type: 'image', req: true, maxWidth: 700, wide: true }, { k: 'imageLg', label: 'Photo (large)', type: 'image', maxWidth: 1800, wide: true }, { k: 'caption', label: 'Caption', wide: true, max: 200 },
-  ];
-  const editPhoto = (g) => {
-    const create = !g;
-    formModal({ title: create ? 'Add photo' : 'Edit photo', wide: true, fields: galFields(create), values: g || { group: data.gallery.at(-1)?.group || '' }, note,
-      extra: (form) => { if (create) { form.id.value = 'photo-' + Date.now().toString(36); } },
-      onSubmit: async (v) => { create ? await api.post('/catalog/gallery', v) : await api.put(`/catalog/gallery/${encodeURIComponent(g.id)}`, v); toast('Saved'); await reload(); } });
+  /* ---------- gallery (hidden in the viewer; app/js/views/gallery.js; not in this studio) ----------
+   * The Behind-the-scenes section is hidden from the whole product: no viewer entry point, no CMS page.
+   * The catalog data stays untouched, so re-enabling it is a matter of restoring this block and the nav
+   * entry in content/js/main.js (git history has both). */
+
+  /* ---------- Top 10 episodes (the homepage rail) ---------- */
+  const TOP = { q: '' };        // the search box on this page, kept across re-draws
+  // Episodes an editor picked, in rank order.
+  const ranked = () => data.videos.filter((v) => v.kind === 'episode' && Number(v.topRank) >= 1).sort((a, b) => Number(a.topRank) - Number(b.topRank)).slice(0, 10);
+  // Write the ranks that changed (1 = first). Everything else on the video document is sent back untouched,
+  // so the API validates the same document the editor sees.
+  const saveTop = (ids) => {
+    const before = new Map(ranked().map((v) => [v.id, Number(v.topRank)]));
+    const byId = new Map(data.videos.map((v) => [v.id, v]));
+    const writes = ids.map((id, i) => ({ id, rank: i + 1 })).filter((w) => before.get(w.id) !== w.rank);
+    return writes.reduce((p, w) => p.then(() => api.put(`/catalog/videos/${encodeURIComponent(w.id)}`, { ...byId.get(w.id), topRank: w.rank })), Promise.resolve());
   };
-  function drawGallery() {
-    root.innerHTML = html`${pageHead('Gallery', note, html`<button class="btn primary" id="new">${icon('plus', 16)} Add photo</button>`)}
-      ${data.gallery.length ? html`<div class="photos">${data.gallery.map((g, i) => html`<figure class="photo"><img src="${imgSrc(g.image)}" alt="" loading="lazy"><figcaption><strong>${g.group}</strong><small class="muted">${g.caption || ''}</small></figcaption>
-        <div class="photo-actions"><button class="icon-btn" data-move="${g.id}:-1" ${i === 0 ? 'disabled' : ''} title="Move earlier">${icon('left', 16)}</button><button class="icon-btn" data-move="${g.id}:1" ${i === data.gallery.length - 1 ? 'disabled' : ''} title="Move later">${icon('right', 16)}</button><button class="icon-btn" data-edit="${g.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${g.id}" title="Delete">${icon('trash', 16)}</button></div></figure>`)}</div>` : html`<div class="card">${empty('No photos yet.')}</div>`}`.s;
-    $('#new').onclick = () => editPhoto(null);
-    $$('[data-edit]', root).forEach((b) => b.onclick = () => editPhoto(data.gallery.find((g) => g.id === b.dataset.edit)));
-    $$('[data-del]', root).forEach((b) => b.onclick = async () => { if (await confirmBox({ title: 'Delete this photo?', confirm: 'Delete', danger: true })) mutate(() => api.del(`/catalog/gallery/${encodeURIComponent(b.dataset.del)}`), 'Photo deleted'); });
-    wireMoves(data.gallery);
+  const clearTop = () => ranked().reduce((p, v) => p.then(() => api.put(`/catalog/videos/${encodeURIComponent(v.id)}`, { ...v, topRank: '' })), Promise.resolve());
+  function drawTop() {
+    const picks = ranked();
+    const picked = new Set(picks.map((v) => v.id));
+    const byViews = data.videos.filter((v) => v.kind === 'episode' && !picked.has(v.id)).sort((a, b) => (b.views || 0) - (a.views || 0));
+    const q = TOP.q.trim().toLowerCase();
+    const matches = (v) => !q || `${v.title} ${v.shortTitle || ''} ${showTitle(v.showId)}`.toLowerCase().includes(q);
+    const candidates = byViews.filter(matches).slice(0, 40);
+    const row = (v, i) => html`<li class="top-row">${i != null ? html`<span class="top-rank">${i + 1}</span>` : ''}
+      <img src="${thumb(v)}" alt="" loading="lazy" class="top-thumb">
+      <div class="top-info"><b>${v.title}</b><small class="muted">${showTitle(v.showId) || 'No show'}${v.episode ? ` · EP ${v.episode}` : ''} · ${fmtViews(v.views || 0)} views${v.hidden ? ' · hidden' : ''}</small></div>
+      <div class="row end">${i != null ? html`<button class="icon-btn" data-top-up="${v.id}" title="Move up" ${i === 0 ? 'disabled' : ''}>${icon('up', 16)}</button><button class="icon-btn" data-top-down="${v.id}" title="Move down" ${i === picks.length - 1 ? 'disabled' : ''}>${icon('down', 16)}</button><button class="icon-btn danger" data-top-out="${v.id}" title="Take it out of the rail">${icon('x', 16)}</button>`
+        : html`<button class="btn sm" data-top-in="${v.id}">${icon('plus', 14)} Add</button>`}</div></li>`;
+    root.innerHTML = html`${pageHead('Top 10 episodes', 'What the homepage rail shows, in this order. Episodes you do not pick are filled in by most-watched, so the rail is never empty.', html`<button class="btn" id="topReset" ${picks.length ? '' : 'disabled'}>${icon('refresh', 16)} Rank by views</button>`)}
+      <div class="grid two">
+        <section class="card">
+          <h2>${icon('crown', 18)} In the rail <span class="muted small">${picks.length} / 10</span></h2>
+          ${picks.length ? html`<ol class="top-list">${picks.map((v, i) => row(v, i)).join('')}</ol>` : empty('Nothing picked yet — the rail currently shows the ten most-watched episodes.')}
+          <p class="muted small">A picked episode always appears, mature or not: it is an editorial choice, not a recommendation.</p>
+        </section>
+        <section class="card">
+          <h2>${icon('play', 18)} Most watched</h2>
+          <input type="search" id="topSearch" placeholder="Search episodes…" value="${TOP.q.replace(/"/g, '&quot;')}" autocomplete="off">
+          ${candidates.length ? html`<ul class="top-list">${candidates.map((v) => row(v)).join('')}</ul>` : html`<p class="empty">${q ? 'No episode matches that search.' : 'Every episode is already in the rail.'}</p>`}
+        </section>
+      </div>
+      <p class="muted small">${note}</p>`.s;
+    $('#topSearch', root).addEventListener('input', (e) => {
+      TOP.q = e.target.value;
+      drawTop();                                   // only this card is redrawn; the caret goes back where it was
+      const box = $('#topSearch', root);
+      box.focus(); box.setSelectionRange(box.value.length, box.value.length);
+    });
+    const ids = picks.map((v) => v.id);
+    const swap = (id, dir) => { const i = ids.indexOf(id), j = i + dir; if (i < 0 || j < 0 || j >= ids.length) return; [ids[i], ids[j]] = [ids[j], ids[i]]; mutate(() => saveTop(ids), 'Order saved'); };
+    $('[data-top-up]', root).forEach((b) => b.onclick = () => swap(b.dataset.topUp, -1));
+    $('[data-top-down]', root).forEach((b) => b.onclick = () => swap(b.dataset.topDown, 1));
+    $('[data-top-out]', root).forEach((b) => b.onclick = () => mutate(() => saveTop(ids.filter((x) => x !== b.dataset.topOut)), 'Removed from the rail'));
+    $('[data-top-in]', root).forEach((b) => b.onclick = () => mutate(() => saveTop([...ids, b.dataset.topIn]), 'Added to the rail'));
+    $('#topReset', root)?.addEventListener('click', () => mutate(clearTop, 'The rail is ranked by views again'));
   }
 
-  const VIEWS = { shows: drawShows, videos: drawVideos, upcoming: drawUpcoming, gallery: drawGallery };
+  const VIEWS = { shows: drawShows, videos: drawVideos, upcoming: drawUpcoming, top: drawTop };
   draw();
 }

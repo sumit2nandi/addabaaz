@@ -50,7 +50,7 @@ const normCode = (c) => String(c || '').trim().toUpperCase();
 const MIN_CHARGE = 100;      // Razorpay's minimum order is ₹1
 
 // Factory: dependencies (database, payment provider, mailer) are injected so tests can fake them.
-export function createBilling({ db, payments, mailer, config = billingConfigFromEnv(), log = console }) {
+export function createBilling({ db, payments, mailer, config = billingConfigFromEnv(), promos = null, log = console }) {
   // Tracks in-flight e-mail promises (see `track`).
   const pending = new Set();
   /** Emails are best-effort: they never delay or fail a payment. `idle()` lets tests (and graceful shutdown) wait for them. */
@@ -95,7 +95,17 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
     return { ...out, discountPaise: discount, finalPaise: final, coupon: c };
   }
   // The subset of a quote that is shown to the buyer.
-  const quoteView = (q) => ({ planId: q.plan.id, listPaise: q.listPaise, discountPaise: q.discountPaise, finalPaise: q.finalPaise, coupon: q.coupon && { code: q.coupon.code, description: q.coupon.description } });
+  // The subset of a quote that is shown to the buyer. `creditPaise` / `payablePaise` are filled in by
+  // checkout (and by creditQuote) — promotional credit is money the viewer already has, not a discount.
+  const quoteView = (q, extra = {}) => ({
+    planId: q.plan.id, listPaise: q.listPaise, discountPaise: q.discountPaise, finalPaise: q.finalPaise,
+    coupon: q.coupon && { code: q.coupon.code, description: q.coupon.description },
+    // Credit fields appear only when credit is actually in play, so the payload for a plain purchase is
+    // exactly what it always was (older clients and the test suite depend on that).
+    ...(extra.creditPaise ? { creditPaise: extra.creditPaise, payablePaise: extra.payablePaise ?? q.finalPaise - extra.creditPaise } : {}),
+  });
+  /** How much promotional credit would pay for an order priced `finalPaise` (0 when there is no promo). */
+  const creditFor = (userId, finalPaise) => (promos && userId && finalPaise > 0 ? promos.quoteTax(userId, finalPaise) : Promise.resolve(0));
 
   /* ---------------- billing details ---------------- */
   /** Validates the buyer's billing details. With GST on, the place of supply (state) is mandatory; a valid GSTIN fixes it and gets the invoice in the business's name. */
@@ -127,7 +137,13 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
         placeOfSupply: b.state ? `${b.stateName} (${b.state})` : null,
         lines: [{ description: `${plan?.name || p.planId} — ${plan?.days ?? ''} days of premium video access`, sac: config.sac }],
         listPricePaise: p.listPricePaise, discount: p.discountPaise ? { code: p.couponCode, paise: p.discountPaise } : null,
-        reverseCharge: config.gstEnabled ? 'No' : null, paymentRef: { provider: 'Razorpay', paymentId: p.paymentId || '' }, footer: config.footer,
+        credit: p.creditAppliedPaise ? { paise: p.creditAppliedPaise } : null,
+        reverseCharge: config.gstEnabled ? 'No' : null,
+        // A credit-only order was not paid through the gateway, so the document must not say Razorpay.
+        paymentRef: p.provider === 'credit'
+          ? { provider: 'Paid with ADDABAAZ credit', paymentId: '' }
+          : { provider: 'Razorpay', paymentId: p.paymentId || '' },
+        footer: config.footer,
       },
     };
   }
@@ -141,37 +157,67 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
   }
 
   /* ---------------- purchase ---------------- */
-  /** Razorpay checkout: prices the order (coupon + GST details), then creates or reopens the Razorpay order. */
-  async function checkout({ user, planId, couponCode, billing: input }) {
+  /**
+   * Starts a purchase: prices it (coupon + GST details), spends as much promotional credit as the viewer
+   * has, and either creates/reopens the gateway order for the remainder or grants the plan outright when the
+   * credit covered everything. Credit is only spent when the buyer asks for it (`useCredit: true`, which the
+   * plans page sends while its "use my credit" box is ticked) — a bonus is never spent behind someone's back.
+   */
+  async function checkout({ user, planId, couponCode, billing: input, useCredit = false }) {
     const q = await quote(user.id, planId, couponCode);
     const billing = billingDetails(input, user);
     const plan = q.plan, couponRow = q.coupon;
-    const base = { userId: user.id, planId: plan.id, listPricePaise: q.listPaise, discountPaise: q.discountPaise, couponCode: couponRow?.code || null, billing };
+    // Promotional credit — see server/src/promos.js. It can never take an order below the gateway minimum.
+    const creditPaise = useCredit && q.finalPaise > 0 ? await creditFor(user.id, q.finalPaise) : 0;
+    const payablePaise = q.finalPaise - creditPaise;
+    const base = { userId: user.id, planId: plan.id, listPricePaise: q.listPaise, discountPaise: q.discountPaise, creditAppliedPaise: creditPaise, couponCode: couponRow?.code || null, billing };
     // Translates a coupon-limit error raised inside the transaction into a friendly 400.
     const wrapCoupon = async (fn) => { try { return await fn(); } catch (e) { if (e.code === 'coupon_exhausted' || e.code === 'coupon_used') throw bad('invalid_coupon', e.message); throw e; } };
 
-    // A 100%-off coupon: nothing to pay, so access is granted immediately and no gateway order is created.
-    if (q.finalPaise === 0) {                              // 100%-off coupon: grant without a payment
+    // Nothing left to pay: a 100%-off coupon, credit that covered the order, or both. Access is granted
+    // immediately and no gateway order is created.
+    if (payablePaise === 0) {
       const id = crypto.randomUUID();
-      await wrapCoupon(() => db.payments.create({ ...base, id, provider: 'coupon', orderId: `coupon_${id}`, amountPaise: 0 }, { coupon: couponRow }));
+      const provider = creditPaise > 0 ? 'credit' : 'coupon';
+      await wrapCoupon(() => db.payments.create({ ...base, id, provider, orderId: `${provider}_${id}`, amountPaise: 0 }, { coupon: couponRow }));
+      // The credit leaves the wallet for good (it is not a hold): status `available` here means "spent".
+      if (creditPaise > 0) await promos.spendForOrder({ userId: user.id, amountPaise: creditPaise, paymentId: id, status: 'available' });
       const pay = await db.payments.byId(id);
-      const r = await db.payments.settle(pay, `coupon_${id}`, plan.days);
+      if (creditPaise > 0) {
+        // An invoice is issued because credit was used; the receipt e-mail explains what covered the price.
+        const r = await db.payments.settle(pay, `credit_${id}`, plan.days, { invoice: invoiceFields });
+        if (r.applied) await promos.finaliseOrder(id).catch((e) => log.error('[billing] could not settle credit:', e?.message || e));
+        if (r.applied && r.invoice) track(sendReceipt({ ...pay, creditAppliedPaise: creditPaise }, r.invoice));
+      } else {
+        const r = await db.payments.settle(pay, `coupon_${id}`, plan.days);
+        const sub = await db.subscriptions.get(user.id);
+        if (r.applied) track(mailer.send({ to: user.email, ...mail.accessGrantedEmail({ ...mailOpts, name: user.name, couponCode: couponRow?.code || '', planName: plan.name, validUntil: sub.expiresAt }) }));
+      }
       const subscription = await db.subscriptions.get(user.id);
-      if (r.applied) track(mailer.send({ to: user.email, ...mail.accessGrantedEmail({ ...mailOpts, name: user.name, couponCode: couponRow.code, planName: plan.name, validUntil: subscription.expiresAt }) }));
-      return { provider: 'coupon', subscription, quote: quoteView(q) };
+      // Credit orders spell out the split (the plans page shows it); a plain coupon order is unchanged.
+      return { provider, subscription, quote: quoteView(q, { creditPaise, payablePaise: 0 }), ...(creditPaise ? { creditPaise, payablePaise: 0 } : {}) };
     }
 
     // If the buyer already has an unpaid order for the same purchase, reopen it instead of creating a duplicate.
-    const reuse = await db.payments.openOrder({ userId: user.id, planId: plan.id, amountPaise: q.finalPaise, couponCode: base.couponCode, provider: 'razorpay' });
-    let orderId, amount = q.finalPaise, currency = 'INR';
-    if (reuse) { await db.payments.setBilling(reuse.id, billing); orderId = reuse.orderId; }
+    const reuse = await db.payments.openOrder({ userId: user.id, planId: plan.id, amountPaise: payablePaise, couponCode: base.couponCode, provider: 'razorpay' });
+    let orderId, amount = payablePaise, currency = 'INR', paymentId;
+    if (reuse) {
+      await db.payments.setBilling(reuse.id, billing);
+      orderId = reuse.orderId; paymentId = reuse.id;
+      // Give this order the credit it is owed, once (an order created before credit was offered has none).
+      if (creditPaise > 0 && !(await db.credits.pendingSpend('payment', reuse.id)).amountPaise) {
+        await promos.spendForOrder({ userId: user.id, amountPaise: creditPaise, paymentId: reuse.id });
+      }
+    }
     else {
       const id = crypto.randomUUID();
-      const order = await payments.createOrder({ amountPaise: q.finalPaise, receipt: `ab_${id.slice(0, 30)}`, notes: { userId: user.id, planId: plan.id, ...(couponRow ? { coupon: couponRow.code } : {}) } });
+      const order = await payments.createOrder({ amountPaise: payablePaise, receipt: `ab_${id.slice(0, 30)}`, notes: { userId: user.id, planId: plan.id, ...(couponRow ? { coupon: couponRow.code } : {}), ...(creditPaise ? { creditPaise: String(creditPaise) } : {}) } });
       await wrapCoupon(() => db.payments.create({ ...base, id, provider: 'razorpay', orderId: order.orderId, amountPaise: order.amountPaise }, { coupon: couponRow }));
-      orderId = order.orderId; amount = order.amountPaise; currency = order.currency;
+      orderId = order.orderId; amount = order.amountPaise; currency = order.currency; paymentId = id;
+      // Hold the credit until the payment is confirmed; an abandoned order releases it (see jobs.js).
+      if (creditPaise > 0) await promos.spendForOrder({ userId: user.id, amountPaise: creditPaise, paymentId: id });
     }
-    return { provider: 'razorpay', keyId: payments.keyId, orderId, amount, currency, plan: { id: plan.id, name: plan.name }, quote: quoteView(q), prefill: { name: user.name, email: user.email } };
+    return { provider: 'razorpay', keyId: payments.keyId, orderId, amount, currency, plan: { id: plan.id, name: plan.name }, quote: quoteView(q, { creditPaise, payablePaise }), creditPaise, payablePaise, prefill: { name: user.name, email: user.email } };
   }
 
   /** Marks an order paid (idempotent), issues its invoice and emails the receipt — used by /payments/verify and the webhook. */
@@ -179,6 +225,8 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
   async function settle(payment, providerPaymentId) {
     const plan = paidPlan(payment.planId);
     const r = await db.payments.settle(payment, providerPaymentId, plan.days, { invoice: invoiceFields });
+    // The order is paid: the credit that was held for it is now spent for good.
+    if (r.applied && promos && payment.creditAppliedPaise > 0) { try { await promos.finaliseOrder(payment.id); } catch (e) { log.error('[billing] could not settle credit:', e?.message || e); } }
     if (r.applied && r.invoice && payment.userId) track(sendReceipt(payment, r.invoice));
     return r;
   }
@@ -188,7 +236,7 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
     const sub = await db.subscriptions.get(user.id);
     await mailer.send({
       to: user.email, attachments: [await pdf(invoice)],
-      ...mail.receiptEmail({ ...mailOpts, name: user.name, planName: planName(payment.planId), invoice, amountPaise: payment.amountPaise, validUntil: sub.expiresAt || new Date(), couponCode: payment.couponCode, discountPaise: payment.discountPaise }),
+      ...mail.receiptEmail({ ...mailOpts, name: user.name, planName: planName(payment.planId), invoice, amountPaise: payment.amountPaise, creditPaise: payment.creditAppliedPaise || 0, validUntil: sub.expiresAt || new Date(), couponCode: payment.couponCode, discountPaise: payment.discountPaise }),
     });
   }
 
@@ -208,6 +256,11 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
   // After a refund completes: e-mail the buyer the credit note (only the first time it becomes processed).
   async function afterRefund(payment, rec) {
     if (!rec.becameProcessed || !payment.userId) return;
+    // A refund returns the buyer's money — the promotional credit they spent on the order comes back too.
+    if (promos && payment.creditAppliedPaise > 0) {
+      try { await promos.refundOrderCredit({ userId: payment.userId, paymentId: payment.id, amountPaise: payment.creditAppliedPaise, reason: 'Credit returned — order refunded' }); }
+      catch (e) { log.error('[billing] could not return credit after a refund:', e?.message || e); }
+    }
     const user = await db.users.byId(payment.userId); if (!user) return;
     const attachments = rec.creditNote ? [await pdf(rec.creditNote)] : [];
     await mailer.send({
@@ -256,7 +309,7 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
       const inv = p.invoices.find((i) => i.kind === 'invoice');
       return {
         id: p.id, planId: p.planId, planName: planName(p.planId), provider: p.provider, amountPaise: p.amountPaise, listPricePaise: p.listPricePaise, discountPaise: p.discountPaise,
-        couponCode: p.couponCode, paidAt: p.paidAt, refundedPaise: p.refundedPaise,
+        couponCode: p.couponCode, creditAppliedPaise: p.creditAppliedPaise, paidAt: p.paidAt, refundedPaise: p.refundedPaise,
         invoice: inv ? { id: inv.id, number: inv.number, title: inv.doc.title } : null,
         creditNotes: p.invoices.filter((i) => i.kind === 'credit_note').map((i) => ({ id: i.id, number: i.number, totalPaise: i.total, issuedAt: i.issuedAt })),
         refunds: p.refunds.map((r) => ({ amountPaise: r.amountPaise, status: r.status, createdAt: r.createdAt })),
@@ -311,5 +364,5 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
   }
 
   // Public surface of the billing module.
-  return { config, quote, quoteView, billingDetails, checkout, settle, onPaymentFailed, refund, onRefundEvent, history, invoicePdf, adminInvoicePdf, emailInvoice, sendExpiryReminders, registerCsv, idle: async () => { while (pending.size) await Promise.all([...pending]); } };
+  return { config, quote, quoteView, creditFor, billingDetails, checkout, settle, onPaymentFailed, refund, onRefundEvent, history, invoicePdf, adminInvoicePdf, emailInvoice, sendExpiryReminders, registerCsv, idle: async () => { while (pending.size) await Promise.all([...pending]); } };
 }

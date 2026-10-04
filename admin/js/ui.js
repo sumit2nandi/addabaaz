@@ -87,7 +87,11 @@ const I = {
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/>', chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
   chart: '<path d="M3 3v18h18M7 15v3M12 9v9M17 5v13"/>', bug: '<path d="M8 2l1.9 1.9M16 2l-1.9 1.9M9 7.1V6a3 3 0 0 1 6 0v1.1M6 13H2M22 13h-4M6 17l-3 2M18 17l3 2M6 9l-3-2M18 9l3-2"/><rect x="6" y="7" width="12" height="14" rx="6"/>',
   refund: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/>',
-  crown: '<path d="M4.1 17.6 3 8.9l4.7 3.7L12 5.7l4.3 6.9 4.7-3.7-1.1 8.7Z"/><path d="M5.3 20.7h13.4"/>', mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>', star: '<path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>',
+  power: '<path d="M12 3v9"/><path d="M7 6.3a8 8 0 1 0 10 0"/>', warning: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
+  gift: '<path d="M20 12v9H4v-9M2 7h20v5H2zM12 21V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7ZM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7Z"/>',
+  crown: '<path d="M4.1 17.6 3 8.9l4.7 3.7L12 5.7l4.3 6.9 4.7-3.7-1.1 8.7Z"/><path d="M5.3 20.7h13.4"/>',
+  play: '<path d="M5 3.5v17l15-8.5z"/>', send: '<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/>', mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>', star: '<path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>',
 };
 export const icon = (n, size = 18) => raw(`<svg class="i" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n] || ''}</svg>`);
 
@@ -139,6 +143,19 @@ export const badge = (text, kind = '') => html`<span class="badge ${kind}">${tex
 export const empty = (msg) => html`<div class="empty">${msg}</div>`;
 export const pager = ({ total, offset, limit }) => total <= limit ? '' : html`<div class="pager"><button class="btn sm" data-page="${Math.max(0, offset - limit)}" ${offset <= 0 ? 'disabled' : ''}>${icon('left', 16)} Prev</button><span class="muted">${offset + 1}–${Math.min(total, offset + limit)} of ${total.toLocaleString('en-IN')}</span><button class="btn sm" data-page="${offset + limit}" ${offset + limit >= total ? 'disabled' : ''}>Next ${icon('right', 16)}</button></div>`;
 export const pageHead = (title, sub = '', actions = '') => html`<div class="page-head"><div><h1>${title}</h1>${sub ? html`<p class="muted">${sub}</p>` : ''}</div><div class="row">${actions}</div></div>`;
+
+/* ---------- loading placeholders ----------
+ * Every admin page fetches its data in the background. These are the pieces the shell and the pages use
+ * while that is happening, so a page never looks empty or broken: a spinner for a whole page, shimmering
+ * lines for content inside a card, and placeholder rows for a table that is still loading. */
+export const loadingPage = (what = '') => html`<div class="loading" role="status" aria-live="polite"><span class="spin"></span> Loading${what ? ` ${what}` : ''}…</div>`;
+/** Shimmering lines that stand in for text/cards while their data arrives. */
+export const loadingLines = (n = 4, { card = true } = {}) => {
+  const sk = html`<div class="sk" role="status" aria-label="Loading">${Array.from({ length: n }, (_, i) => html`<i class="sk-line" style="width:${[92, 74, 86, 62, 78][i % 5]}%"></i>`)}</div>`;
+  return card ? html`<div class="card">${sk}</div>` : sk;
+};
+/** Placeholder rows for a list/table that is still loading (the real rows replace them). */
+export const loadingTable = (rows = 6, cols = 4) => html`<div class="card flush" role="status" aria-label="Loading"><table class="tbl"><tbody>${Array.from({ length: rows }, () => html`<tr class="sk-row">${Array.from({ length: cols }, () => html`<td><i class="sk-line"></i></td>`)}</tr>`)}</tbody></table></div>`;
 
 /* ---------- schema-driven forms ----------
  * field: { k, label, type: text|number|textarea|lines|tags|select|bool|datetime|image|custom, req, help, options:[{v,l}], max, placeholder, readonly,

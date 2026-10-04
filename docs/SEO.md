@@ -47,7 +47,7 @@ The admin console has hints on these fields:
 - **Show tagline + description** – Google shows ~155 characters. Lead with the hook; name the show, genre and language ("Bengali"). Unique per show.
 - **Video description** (new optional field on each video) – 1–2 sentences. Episodes without one get an automatic description built from the show, so they are never empty; **reels are kept out of Google until you write one**, because "Part 18" reels of the same series look like duplicates.
 - **Titles** – the app cleans messy YouTube titles for display (`Part - 18` → "Part 18 — Shahid"). If a video's `title` is good on its own, it ranks well as-is; you can set `shortTitle`.
-- **Gallery images** – set a `caption`; it becomes the image's alt text.
+- **Posters** – the details-page poster opens the original artwork in the lightbox, so keep the poster's own shape (4:5, 2:3 or wide are all fine; the box follows it with a tiny crop).
 - **Posters** – use a real 1200×630-ish poster as the *large* poster: it is the link-preview image and the Google thumbnail.
 
 ## What only you can do

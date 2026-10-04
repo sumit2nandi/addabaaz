@@ -10,9 +10,9 @@ import { mayLeaveKids } from './parental.js';
 // Menu definitions: [path, label] for the top bar, and [path, label, icon] for the mobile tab bar.
 const NAV = [
   ['/', 'Home', 'home'], ['/shows', 'Shows', 'shows'], ['/reels', 'Reels', 'reels'],
-  ['/upcoming', 'Coming Soon', 'upcoming'], ['/gallery', 'Behind the Scenes', 'gallery'], ['/list', 'My List', 'list'],
+  ['/upcoming', 'Coming Soon', 'upcoming'], ['/list', 'My List', 'list'],   // the photo gallery is hidden (app/js/views/gallery.js redirects home)
 ];
-const STUDIO = [['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact']];
+const STUDIO = [['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact'], ['/support', 'Support']];
 const TABS = [['/', 'Home', 'home'], ['/shows', 'Shows', 'tv'], ['/reels', 'Reels', 'reels'], ['/search', 'Search', 'search'], ['/account', 'Me', 'user']];
 // A visitor who is not signed in has no personal "Me" area (and no profile to show): only offered once signed in, or when this build has no sign-in at all.
 const isGuest = () => !!app.user?.supportsAuth && !app.user?.account;
@@ -22,8 +22,8 @@ let lastPath = '/';
 const section = (path) => {
   if (path === '/' ) return 'home';
   const seg = path.split('/')[1];
-  return { shows: 'shows', show: 'shows', watch: 'shows', reels: 'reels', upcoming: 'upcoming', soon: 'upcoming', gallery: 'gallery', list: 'list',
-    about: 'studio', services: 'studio', contact: 'studio', search: 'search', account: 'account', profiles: 'account', plans: 'account', billing: 'account', signin: 'account', signup: 'account' }[seg] || '';
+  return { shows: 'shows', show: 'shows', watch: 'shows', reels: 'reels', upcoming: 'upcoming', soon: 'upcoming', list: 'list',
+    about: 'studio', services: 'studio', contact: 'studio', support: 'studio', search: 'search', account: 'account', profiles: 'account', plans: 'account', billing: 'account', signin: 'account', signup: 'account' }[seg] || '';
 };
 
 // Draw the frame and hook up menus and the search box.
@@ -72,6 +72,7 @@ export function renderProfileMenu() {
         <a class="menu-item" href="#/list">${icon('list', { size: 18 })}<span>My List</span></a>
         <a class="menu-item" href="#/plans">${icon('crown', { size: 18 })}<span>Plans</span></a>
         <a class="menu-item" href="#/account">${icon('edit', { size: 18 })}<span>Settings &amp; privacy</span></a>
+        <a class="menu-item" href="#/support">${icon('chat', { size: 18 })}<span>Help &amp; support</span></a>
       </div>`.s;
     return;
   }
@@ -83,6 +84,7 @@ export function renderProfileMenu() {
       <hr>
       <a class="menu-item" href="#/list">${icon('list', { size: 18 })}<span>My List</span></a>
       <a class="menu-item" href="#/account">${icon('user', { size: 18 })}<span>Account &amp; settings</span></a>
+      <a class="menu-item" href="#/support">${icon('chat', { size: 18 })}<span>Help &amp; support</span></a>
       ${u.supportsAuth ? html`<a class="menu-item" href="#/plans">${icon('crown', { size: 18 })}<span>Plans</span></a>` : ''}
       ${u.supportsAuth ? (u.account
         ? html`<button type="button" class="menu-item" data-signout>${icon('logout', { size: 18 })}<span>Sign out</span></button>`

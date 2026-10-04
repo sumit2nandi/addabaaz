@@ -4,6 +4,8 @@
  * Same conventions as db.js: parameterised queries, UTC timestamps returned as ISO strings.
  */
 // Each `const x = {...}` below is one group of related queries, exposed as `db.x` (see the return statement at the end).
+import crypto from 'node:crypto';
+
 export function extraDb({ q, tx, iso }) {
   // ---- One-time tokens (password reset, e-mail verification). Only a hash is stored, never the token itself ----
   const authTokens = {
@@ -102,7 +104,7 @@ export function extraDb({ q, tx, iso }) {
     async upsert(userId, { endpoint, hash, p256dh, auth }, prefs = {}) {
       await q(`INSERT INTO push_subscriptions (id, user_id, endpoint_hash, endpoint, p256dh, auth, episodes, launches, news) VALUES (UUID(),?,?,?,?,?,?,?,?)
         ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), endpoint = VALUES(endpoint), p256dh = VALUES(p256dh), auth = VALUES(auth), fail_count = 0`,
-      [userId, hash, endpoint, p256dh, auth, prefs.episodes === false ? 0 : 1, prefs.launches === false ? 0 : 1, prefs.news ? 1 : 0]);
+      [userId, hash, endpoint, p256dh, auth, prefs.episodes === false ? 0 : 1, prefs.launches === false ? 0 : 1, prefs.news === false ? 0 : 1]);
     },
     async setPrefs(userId, hash, prefs) {
       const sets = [], vals = [];
@@ -144,26 +146,42 @@ export function extraDb({ q, tx, iso }) {
      * A re-registration that only carries the token (the apps usually just send that) keeps the stored
      * platform and label instead of wiping them.
      */
-    async upsert(userId, { hash, token, platform = null, label = null }) {
+    async upsert(userId, { hash, token, platform = null, label = null, prefs = null }) {
       const plat = ['android', 'ios', 'web'].includes(platform) ? platform : null;
       const lab = label ? String(label).slice(0, 120) : null;
-      await q(`INSERT INTO push_devices (id, user_id, platform, token_hash, token, label) VALUES (UUID(),?,COALESCE(?,'android'),?,?,?)
+      // On a re-registration the stored choices are kept: the apps send the token on every start, and those
+      // columns are the viewer's settings, not part of the registration. A registration that carries no
+      // choices at all starts from the defaults — all three kinds on (migration 020).
+      await q(`INSERT INTO push_devices (id, user_id, platform, token_hash, token, label, episodes, launches, news) VALUES (UUID(),?,COALESCE(?,'android'),?,?,?,?,?,?)
         ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), token = VALUES(token), platform = COALESCE(?, platform), label = COALESCE(?, label), fail_count = 0, last_seen = UTC_TIMESTAMP(3)`,
-      [userId, plat, hash, String(token).slice(0, 512), lab, plat, lab]);
+      [userId, plat, hash, String(token).slice(0, 512), lab,
+        prefs?.episodes === false ? 0 : 1, prefs?.launches === false ? 0 : 1, prefs?.news === false ? 0 : 1,
+        plat, lab]);
     },
     /** Stores a guest app token with no account association; the same device moves to a user on sign-in. */
-    async upsertGuest({ hash, token, platform = null, label = null }) {
+    async upsertGuest({ hash, token, platform = null, label = null, prefs = null }) {
       const plat = ['android', 'ios', 'web'].includes(platform) ? platform : null;
       const lab = label ? String(label).slice(0, 120) : null;
-      await q(`INSERT INTO push_devices (id, user_id, platform, token_hash, token, label) VALUES (UUID(),NULL,COALESCE(?,'android'),?,?,?)
+      await q(`INSERT INTO push_devices (id, user_id, platform, token_hash, token, label, episodes, launches, news) VALUES (UUID(),NULL,COALESCE(?,'android'),?,?,?,?,?,?)
         ON DUPLICATE KEY UPDATE user_id = NULL, token = VALUES(token), platform = COALESCE(?, platform), label = COALESCE(?, label), fail_count = 0, last_seen = UTC_TIMESTAMP(3)`,
-      [plat, hash, String(token).slice(0, 512), lab, plat, lab]);
+      [plat, hash, String(token).slice(0, 512), lab,
+        prefs?.episodes === false ? 0 : 1, prefs?.launches === false ? 0 : 1, prefs?.news === false ? 0 : 1,
+        plat, lab]);
     },
     /** Removes one token (sign-out, permission revoked, or account opt-out). */
     async remove(userId, hash) { return (await q('DELETE FROM push_devices WHERE user_id = ? AND token_hash = ?', [userId, hash])).affectedRows; },
     /** Removes a token by hash (FCM dead-token cleanup and public guest opt-out / stale-link cleanup). */
     async removeHash(hash) { await q('DELETE FROM push_devices WHERE token_hash = ?', [hash]); },
     async listFor(userId) { return (await q('SELECT platform, label, last_seen FROM push_devices WHERE user_id = ? ORDER BY last_seen DESC', [userId])).map((r) => ({ platform: r.platform, label: r.label, lastSeen: iso(r.last_seen) })); },
+    /** The three notification choices stored for one device token (by hash), or null when the token is unknown. */
+    async getPrefs(hash) { const r = (await q('SELECT episodes, launches, news FROM push_devices WHERE token_hash = ?', [hash]))[0]; return r ? { episodes: !!r.episodes, launches: !!r.launches, news: !!r.news } : null; },
+    /** Updates only the choices the client sent. Works for an account device or a guest device (token possession). */
+    async setPrefs(hash, prefs) {
+      const sets = [], vals = [];
+      for (const k of ['episodes', 'launches', 'news']) if (prefs[k] !== undefined) { sets.push(`${k} = ?`); vals.push(prefs[k] ? 1 : 0); }
+      if (!sets.length) return 0;
+      return (await q(`UPDATE push_devices SET ${sets.join(', ')}, last_seen = UTC_TIMESTAMP(3) WHERE token_hash = ?`, [...vals, hash])).affectedRows;
+    },
     async count() { return Number((await q('SELECT COUNT(*) AS n FROM push_devices'))[0].n); },
     /** Every registered token, for a broadcast. */
     async audience() { return (await q('SELECT token FROM push_devices')).map((r) => r.token); },
@@ -171,12 +189,15 @@ export function extraDb({ q, tx, iso }) {
     async audienceFor(a) {
       const sel = 'SELECT pd.token, pd.user_id FROM push_devices pd';
       let rows;
+      // The same three switches as the browser, applied to the same audiences: a device that turned, say,
+      // episode notifications off is skipped for a show's new-episode send but still gets a launch.
       if (a.kind === 'episodes') {
         const vids = a.videoIds?.length ? a.videoIds : ['\u0000'];
-        rows = await q(`${sel} WHERE pd.user_id IN (
+        rows = await q(`${sel} WHERE pd.episodes = 1 AND pd.user_id IN (
           SELECT p.user_id FROM profiles p JOIN list_items l ON l.profile_id = p.id AND l.item_type = 'show' AND l.item_id = ?
           UNION SELECT p.user_id FROM profiles p JOIN watch_progress w ON w.profile_id = p.id AND w.video_id IN (?))`, [a.showId, vids]);
-      } else if (a.kind === 'launches') rows = await q(`${sel} WHERE pd.user_id IN (SELECT p.user_id FROM profiles p JOIN reminders r ON r.profile_id = p.id AND r.upcoming_id = ?)`, [a.upcomingId]);
+      } else if (a.kind === 'launches') rows = await q(`${sel} WHERE pd.launches = 1 AND pd.user_id IN (SELECT p.user_id FROM profiles p JOIN reminders r ON r.profile_id = p.id AND r.upcoming_id = ?)`, [a.upcomingId]);
+      else if (a.kind === 'news') rows = await q(`${sel} WHERE pd.news = 1`);
       else if (a.kind === 'user') rows = await q(`${sel} WHERE pd.user_id = ?`, [a.userId]);
       else rows = await q(sel);
       return rows.map((r) => ({ token: r.token, userId: r.user_id }));
@@ -252,6 +273,366 @@ export function extraDb({ q, tx, iso }) {
     async pendingCount() { return Number((await q("SELECT COUNT(*) AS n FROM refund_requests WHERE status = 'pending'"))[0].n); },
   };
 
+  // ---- Phone sign-in: one row per OTP sent (only a hash of the code is stored) ----
+  const phoneOtps = {
+    /** Issues a code: earlier live codes for the same number stop working immediately. */
+    async issue(phone, codeHash, ttlMs) {
+      await tx(async (t) => {
+        await t.query('UPDATE phone_otps SET consumed_at = UTC_TIMESTAMP(3) WHERE phone = ? AND consumed_at IS NULL', [phone]);
+        await t.query('INSERT INTO phone_otps (id, phone, code_hash, expires_at) VALUES (UUID(),?,?,?)', [phone, codeHash, new Date(Date.now() + ttlMs)]);
+      });
+    },
+    /** When a code was last sent to this number (per-number cooldown). */
+    async lastIssuedAt(phone) { const r = (await q('SELECT MAX(created_at) AS at FROM phone_otps WHERE phone = ?', [phone]))[0]; return r?.at ? new Date(r.at) : null; },
+    /** How many codes were sent to this number in the last `seconds` (flood guard). */
+    async recentCount(phone, seconds) { return Number((await q('SELECT COUNT(*) AS n FROM phone_otps WHERE phone = ? AND created_at > UTC_TIMESTAMP(3) - INTERVAL ? SECOND', [phone, seconds]))[0].n); },
+    /** The newest live code row for a number, or null. */
+    async active(phone) {
+      const r = (await q('SELECT id, code_hash, attempts, expires_at FROM phone_otps WHERE phone = ? AND consumed_at IS NULL AND expires_at > UTC_TIMESTAMP(3) ORDER BY created_at DESC LIMIT 1', [phone]))[0];
+      return r ? { id: r.id, codeHash: r.code_hash, attempts: Number(r.attempts), expiresAt: iso(r.expires_at) } : null;
+    },
+    /** Counts a wrong attempt; after `max` wrong tries the code is burnt. */
+    async fail(id, max = 5) {
+      await q('UPDATE phone_otps SET attempts = attempts + 1 WHERE id = ?', [id]);
+      await q('UPDATE phone_otps SET consumed_at = UTC_TIMESTAMP(3) WHERE id = ? AND attempts >= ?', [id, max]);
+    },
+    /** Spends a code (single use). Returns false when another request already used it. */
+    async consume(id) { return (await q('UPDATE phone_otps SET consumed_at = UTC_TIMESTAMP(3) WHERE id = ? AND consumed_at IS NULL', [id])).affectedRows === 1; },
+    async purge() { await q('DELETE FROM phone_otps WHERE expires_at < UTC_TIMESTAMP(3) - INTERVAL 1 DAY'); },
+  };
+
+  // ---- Accounts that carry a verified phone number (phone sign-in / sign-up) ----
+  const phones = {
+    async byPhone(phone) {
+      const r = (await q('SELECT * FROM users WHERE phone = ?', [phone]))[0];
+      if (!r) return null;
+      return { id: r.id, email: r.email, name: r.name, passwordHash: r.password_hash, createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabledAt: iso(r.disabled_at), emailVerifiedAt: iso(r.email_verified_at), sessionVersion: r.session_version || 0, hasPin: !!r.parental_pin_hash, phone: r.phone, phoneVerifiedAt: iso(r.phone_verified_at) };
+    },
+    /** Links a verified number to an account (sign-in from a new browser, or "add my number" later). */
+    async attach(userId, phone) {
+      const r = await q('UPDATE users SET phone = ?, phone_verified_at = UTC_TIMESTAMP(3) WHERE id = ? AND (phone IS NULL OR phone = ?)', [phone, userId, phone]);
+      return r.affectedRows === 1;
+    },
+    /** Creates an account whose only credential is a verified phone number (email stays NULL). */
+    async createWithPhone(user, profile) {
+      await tx(async (t) => {
+        await t.query('INSERT INTO users (id, email, email_norm, name, phone, phone_verified_at) VALUES (?,NULL,NULL,?,?,UTC_TIMESTAMP(3))', [user.id, user.name, user.phone]);
+        await t.query('INSERT INTO profiles (id, user_id, name, color, kids) VALUES (?,?,?,?,0)', [profile.id, user.id, profile.name, profile.color ?? 0]);
+      });
+    },
+    /** Replaces the email of a phone-only account once the viewer shares one. */
+    async setEmail(userId, email, emailNorm) { await q('UPDATE users SET email = ?, email_norm = ? WHERE id = ? AND email IS NULL', [email, emailNorm, userId]); },
+  };
+
+  // ---- Support tickets (the Support page → Admin → Support) ----
+  const mapReply = (r) => ({ id: r.id, ticketId: r.ticket_id, author: r.author, authorName: r.author_name, body: r.body, createdAt: iso(r.created_at) });
+  const mapTicket = (r) => ({
+    id: r.id, userId: r.user_id, name: r.name, email: r.email, phone: r.phone, category: r.category,
+    subject: r.subject, body: r.body, status: r.status, priority: r.priority,
+    appVersion: r.app_version, platform: r.platform, device: r.device,
+    adminNote: r.admin_note, handledBy: r.handled_by, replies: Number(r.replies || 0),
+    lastReplyBy: r.last_reply_by, lastReplyAt: iso(r.last_reply_at),
+    createdAt: iso(r.created_at), updatedAt: iso(r.updated_at), resolvedAt: iso(r.resolved_at),
+  });
+  // A ticket list row carries the latest activity so the console can sort/paint without a second query.
+  const ticketSelect = `SELECT t.*, (SELECT r2.created_at FROM support_ticket_replies r2 WHERE r2.ticket_id = t.id ORDER BY r2.created_at DESC LIMIT 1) AS last_reply_at,
+    (SELECT r3.author FROM support_ticket_replies r3 WHERE r3.ticket_id = t.id ORDER BY r3.created_at DESC LIMIT 1) AS last_reply_by,
+    (SELECT COUNT(*) FROM support_ticket_replies r4 WHERE r4.ticket_id = t.id) AS replies FROM support_tickets t`;
+  const tickets = {
+    async create(t) {
+      await q(`INSERT INTO support_tickets (id, user_id, name, email, phone, category, subject, body, priority, app_version, platform, device)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [t.id, t.userId || null, String(t.name).slice(0, 80), String(t.email).slice(0, 254), t.phone ? String(t.phone).slice(0, 24) : null,
+        t.category, String(t.subject).slice(0, 160), String(t.body).slice(0, 20_000), t.priority || 'normal',
+        t.appVersion ? String(t.appVersion).slice(0, 40) : null, t.platform ? String(t.platform).slice(0, 40) : null, t.device ? String(t.device).slice(0, 120) : null]);
+    },
+    async get(id) { const r = (await q(`${ticketSelect} WHERE t.id = ?`, [id]))[0]; return r ? mapTicket(r) : null; },
+    /** A guest's ticket, found from the short reference ("ADD-1A2B3C4D") plus the e-mail that raised it. */
+    async byReference(ref, email) {
+      const prefix = String(ref || '').replace(/^ADD-?/i, '').toLowerCase();
+      if (!/^[0-9a-f]{8}$/.test(prefix)) return null;
+      const r = (await q(`${ticketSelect} WHERE t.id LIKE ? AND LOWER(t.email) = ? LIMIT 1`, [`${prefix}%`, String(email || '').toLowerCase()]))[0];
+      return r ? mapTicket(r) : null;
+    },
+    async replies(ticketId) { return (await q('SELECT * FROM support_ticket_replies WHERE ticket_id = ? ORDER BY created_at, id', [ticketId])).map(mapReply); },
+    /** Adds a message to the thread and moves the ticket's status/last-activity accordingly. */
+    async addReply({ id, ticketId, author, authorName = null, authorId = null, body, status = null }) {
+      await tx(async (t) => {
+        await t.query('INSERT INTO support_ticket_replies (id, ticket_id, author, author_name, author_id, body) VALUES (?,?,?,?,?,?)', [id, ticketId, author, authorName, authorId, String(body).slice(0, 10_000)]);
+        await t.query(`UPDATE support_tickets SET replies = replies + 1, last_reply_by = ?, last_reply_at = UTC_TIMESTAMP(3), updated_at = UTC_TIMESTAMP(3),
+          status = COALESCE(?, status), resolved_at = IF(? = 'resolved', COALESCE(resolved_at, UTC_TIMESTAMP(3)), IF(? IN ('open','pending'), NULL, resolved_at))
+          WHERE id = ?`, [author, status, status, status, ticketId]);
+      });
+    },
+    /** A viewer's own tickets. Guests have none (they get the reference by e-mail). */
+    async forUser(userId, { limit = 25, offset = 0 } = {}) {
+      const [rows, [{ n }]] = await Promise.all([
+        q(`${ticketSelect} WHERE t.user_id = ? ORDER BY t.updated_at DESC LIMIT ? OFFSET ?`, [userId, limit, offset]),
+        q('SELECT COUNT(*) AS n FROM support_tickets WHERE user_id = ?', [userId]),
+      ]);
+      return { total: Number(n), items: rows.map(mapTicket) };
+    },
+    /** Console list with the usual filters. `q` searches subject, body, email and name. */
+    async list({ status = 'all', category = 'all', search = '', userId = null, limit = 25, offset = 0 } = {}) {
+      const where = [], params = [];
+      if (status !== 'all') { where.push('t.status = ?'); params.push(status); }
+      if (category !== 'all') { where.push('t.category = ?'); params.push(category); }
+      if (userId) { where.push('t.user_id = ?'); params.push(userId); }
+      if (search) { where.push('(t.subject LIKE ? OR t.body LIKE ? OR t.email LIKE ? OR t.name LIKE ?)'); const like = `%${search}%`; params.push(like, like, like, like); }
+      const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
+      const [rows, [{ n }], counts] = await Promise.all([
+        q(`${ticketSelect} ${w} ORDER BY FIELD(t.status,'open','pending','resolved','closed'), t.updated_at DESC LIMIT ? OFFSET ?`, [...params, limit, offset]),
+        q(`SELECT COUNT(*) AS n FROM support_tickets t ${w}`, params),
+        q("SELECT status, COUNT(*) AS n FROM support_tickets GROUP BY status"),
+      ]);
+      const byStatus = Object.fromEntries(counts.map((r) => [r.status, Number(r.n)]));
+      return { total: Number(n), items: rows.map(mapTicket), counts: { open: byStatus.open || 0, pending: byStatus.pending || 0, resolved: byStatus.resolved || 0, closed: byStatus.closed || 0 } };
+    },
+    /** Updates the triage fields an admin owns (status, priority, internal note, who handled it). */
+    async update(id, { status, priority, adminNote, handledBy = null }) {
+      const sets = [], params = [];
+      if (status) { sets.push('status = ?'); params.push(status); sets.push("resolved_at = IF(? = 'resolved', COALESCE(resolved_at, UTC_TIMESTAMP(3)), IF(? IN ('open','pending'), NULL, resolved_at))"); params.push(status, status); }
+      if (priority) { sets.push('priority = ?'); params.push(priority); }
+      if (adminNote !== undefined) { sets.push('admin_note = ?'); params.push(adminNote ? String(adminNote).slice(0, 300) : null); }
+      if (handledBy) { sets.push('handled_by = ?'); params.push(String(handledBy).slice(0, 254)); }
+      if (!sets.length) return false;
+      sets.push('updated_at = UTC_TIMESTAMP(3)');
+      return (await q(`UPDATE support_tickets SET ${sets.join(', ')} WHERE id = ?`, [...params, id])).affectedRows === 1;
+    },
+    async remove(id) { return (await q('DELETE FROM support_tickets WHERE id = ?', [id])).affectedRows === 1; },
+    /** Badge on the console: tickets nobody has picked up yet (new viewer messages count as activity). */
+    async openCount() { return Number((await q("SELECT COUNT(*) AS n FROM support_tickets WHERE status IN ('open','pending')"))[0].n); },
+    /** Tickets whose last message was from the viewer (the admin's "needs an answer" queue). */
+    async awaitingCount() { return Number((await q("SELECT COUNT(*) AS n FROM support_tickets WHERE status = 'open'"))[0].n); },
+    async prune() { await q("DELETE FROM support_tickets WHERE status = 'closed' AND updated_at < UTC_TIMESTAMP(3) - INTERVAL 365 DAY"); },
+  };
+
+  // ---- Server-side settings (app_settings): currently the client cache version behind the console button ----
+  const settings = {
+    async get(k, dflt = null) { const r = (await q('SELECT v FROM app_settings WHERE k = ?', [k]))[0]; return r ? r.v : dflt; },
+    async set(k, v) { await q('INSERT INTO app_settings (k, v) VALUES (?,?) ON DUPLICATE KEY UPDATE v = VALUES(v)', [k, String(v).slice(0, 255)]); },
+    /** Read + write in one step (used by the cache-purge button so two admins cannot write the same value). */
+    async bump(k) { const next = String(Date.now()); await q('INSERT INTO app_settings (k, v) VALUES (?,?) ON DUPLICATE KEY UPDATE v = VALUES(v)', [k, next]); return next; },
+    async all() { return Object.fromEntries((await q('SELECT k, v FROM app_settings')).map((r) => [r.k, r.v])); },
+  };
+
+
+  /* ---- Promotional credit (welcome bonus, referral rewards, goodwill) — see server/src/promos.js ----
+   * The ledger is append-only: a grant stores how much is left (`remaining_paise`), and spending walks the
+   * grants oldest-expiry-first and decrements them inside one transaction with row locks. That is what makes
+   * a balance correct under two tabs checking out at once, and what stops an expired grant from being spent.
+   */
+  const CREDIT_SELECT = `SELECT id, user_id, kind, amount_paise, remaining_paise, status, reason, ref_type, ref_id, expires_at, settled_at, created_at FROM user_credit`;
+  const mapCredit = (r) => r && ({
+    id: r.id, userId: r.user_id, kind: r.kind, amountPaise: Number(r.amount_paise), remainingPaise: Number(r.remaining_paise),
+    status: r.status, reason: r.reason, refType: r.ref_type, refId: r.ref_id,
+    expiresAt: iso(r.expires_at), settledAt: iso(r.settled_at), createdAt: iso(r.created_at),
+  });
+  const credits = {
+    /** The spendable balance in paise (grants that are available and not expired). */
+    async balance(userId) {
+      const r = (await q(`SELECT COALESCE(SUM(remaining_paise),0) AS n FROM user_credit
+        WHERE user_id = ? AND status = 'available' AND amount_paise > 0 AND remaining_paise > 0
+          AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP(3))`, [userId]))[0];
+      return Number(r?.n || 0);
+    },
+    /** Spendable balance, what is on hold (a referral whose friend has not qualified yet) and what expires soon. */
+    async summary(userId) {
+      const r = (await q(`SELECT
+        COALESCE(SUM(CASE WHEN amount_paise > 0 AND status = 'available' AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP(3)) THEN remaining_paise ELSE 0 END),0) AS available,
+        COALESCE(SUM(CASE WHEN amount_paise > 0 AND status = 'pending' THEN remaining_paise ELSE 0 END),0) AS pending,
+        COALESCE(SUM(CASE WHEN amount_paise < 0 AND status = 'pending' THEN -amount_paise ELSE 0 END),0) AS held,
+        COALESCE(SUM(CASE WHEN status = 'available' AND expires_at IS NOT NULL AND expires_at > UTC_TIMESTAMP(3) AND expires_at <= UTC_TIMESTAMP(3) + INTERVAL 7 DAY THEN remaining_paise ELSE 0 END),0) AS expiring,
+        MIN(CASE WHEN amount_paise > 0 AND status = 'available' AND expires_at IS NOT NULL AND expires_at > UTC_TIMESTAMP(3) THEN expires_at END) AS nextExpiry
+        FROM user_credit WHERE user_id = ?`, [userId]))[0] || {};
+      // `heldPaise` is credit reserved by an order that has not been paid yet — it comes back if it never is.
+      return { availablePaise: Number(r.available || 0), pendingPaise: Number(r.pending || 0), heldPaise: Number(r.held || 0), expiringPaise: Number(r.expiring || 0), nextExpiryAt: iso(r.nextExpiry) };
+    },
+    /** Has the account ever been granted this kind? (One welcome bonus per account, ever.) */
+    async hasKind(userId, kind) { return Number((await q('SELECT COUNT(*) AS n FROM user_credit WHERE user_id = ? AND kind = ?', [userId, kind]))[0].n) > 0; },
+    /** Adds one ledger row. `status: 'pending'` holds the value until it is released. */
+    async add(entry) {
+      const id = entry.id || crypto.randomUUID();
+      await q(`INSERT INTO user_credit (id, user_id, kind, amount_paise, remaining_paise, status, reason, ref_type, ref_id, expires_at, settled_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      [id, entry.userId, entry.kind, entry.amountPaise, entry.amountPaise > 0 ? entry.amountPaise : 0, entry.status || 'available',
+        entry.reason ? String(entry.reason).slice(0, 200) : null, entry.refType || null, entry.refId || null, entry.expiresAt || null,
+        entry.status && entry.status !== 'pending' && entry.status !== 'available' ? new Date() : null]);
+      return mapCredit((await q(`${CREDIT_SELECT} WHERE id = ?`, [id]))[0]);
+    },
+    /** Grants that are waiting for the referred friend to qualify. */
+    async pendingFor(userId) { return (await q(`${CREDIT_SELECT} WHERE user_id = ? AND status = 'pending' AND amount_paise > 0 ORDER BY created_at`, [userId])).map(mapCredit); },
+    /** Releases the pending grants tied to one reference (a single referral, an order …). */
+    async releasePendingRef(userId, refType, refId) {
+      const r = (await q(`SELECT COALESCE(SUM(remaining_paise),0) AS n FROM user_credit WHERE user_id = ? AND ref_type = ? AND ref_id = ? AND status = 'pending' AND amount_paise > 0`, [userId, refType, refId]))[0];
+      const amount = Number(r?.n || 0);
+      if (amount > 0) await q(`UPDATE user_credit SET status = 'available', settled_at = UTC_TIMESTAMP(3) WHERE user_id = ? AND ref_type = ? AND ref_id = ? AND status = 'pending' AND amount_paise > 0`, [userId, refType, refId]);
+      return amount;
+    },
+    /** Releases every pending grant of an account. Returns how much became spendable. */
+    async releasePending(userId) {
+      const rows = await q(`SELECT COALESCE(SUM(remaining_paise),0) AS n FROM user_credit WHERE user_id = ? AND status = 'pending' AND amount_paise > 0`, [userId]);
+      const amount = Number(rows[0]?.n || 0);
+      if (amount > 0) await q(`UPDATE user_credit SET status = 'available', settled_at = UTC_TIMESTAMP(3) WHERE user_id = ? AND status = 'pending' AND amount_paise > 0`, [userId]);
+      return amount;
+    },
+    /**
+     * Spends `amountPaise` oldest-expiry-first under row locks. Returns { appliedPaise, spendId } — applied may be
+     * less than asked when the balance ran out. Records the spend as one negative ledger row (status `pending`
+     * until the payment it belongs to is settled, so an abandoned order can be given back).
+     */
+    async spend(userId, amountPaise, { refType = null, refId = null, reason = null, status = 'available' } = {}) {
+      const want = Math.max(0, Math.floor(Number(amountPaise) || 0));
+      if (!want) return { appliedPaise: 0, spendId: null };
+      return tx(async (t) => {
+        const grants = await t.query(`SELECT id, remaining_paise FROM user_credit
+          WHERE user_id = ? AND status = 'available' AND amount_paise > 0 AND remaining_paise > 0
+            AND (expires_at IS NULL OR expires_at > UTC_TIMESTAMP(3))
+          ORDER BY (expires_at IS NULL) DESC, expires_at ASC, created_at ASC, id ASC
+          FOR UPDATE`, [userId]);
+        let left = want;
+        for (const g of grants) {
+          if (left <= 0) break;
+          const take = Math.min(left, Number(g.remaining_paise));
+          const rest = Number(g.remaining_paise) - take;
+          await t.query('UPDATE user_credit SET remaining_paise = ?, status = ? WHERE id = ?', [rest, rest > 0 ? 'available' : 'spent', g.id]);
+          left -= take;
+        }
+        const applied = want - left;
+        if (!applied) return { appliedPaise: 0, spendId: null };
+        const id = crypto.randomUUID();
+        await t.query(`INSERT INTO user_credit (id, user_id, kind, amount_paise, remaining_paise, status, reason, ref_type, ref_id)
+          VALUES (?,?,?,?,?,?,?,?,?)`, [id, userId, 'spend', -applied, 0, status, reason ? String(reason).slice(0, 200) : null, refType, refId]);
+        return { appliedPaise: applied, spendId: id };
+      });
+    },
+    /** Marks the spends tied to a reference as final (the payment went through) or void (it never will be paid). */
+    async settleRef(refType, refId, status) {
+      const res = await q(`UPDATE user_credit SET status = ?, settled_at = UTC_TIMESTAMP(3) WHERE ref_type = ? AND ref_id = ? AND kind = 'spend' AND status = 'pending'`, [status, refType, refId]);
+      return res.affectedRows || 0;
+    },
+    /** What a pending spend holds (used to give the value back when an order is abandoned). */
+    async pendingSpend(refType, refId) {
+      const r = (await q(`SELECT id, COALESCE(SUM(-amount_paise),0) AS n FROM user_credit WHERE ref_type = ? AND ref_id = ? AND kind = 'spend' AND status = 'pending'`, [refType, refId]))[0];
+      return { amountPaise: Number(r?.n || 0), id: r?.id || null };
+    },
+    /** Undoes a pending spend: books a `refund` grant so the viewer keeps the value. */
+    async returnPending(refType, refId, { reason = 'Order not completed' } = {}) {
+      const held = await credits.pendingSpend(refType, refId);
+      if (!held.amountPaise) return 0;
+      const n = await credits.settleRef(refType, refId, 'void');
+      if (!n) return 0;
+      await credits.add({ userId: (await q(`SELECT user_id FROM user_credit WHERE ref_type = ? AND ref_id = ? AND kind = 'spend' LIMIT 1`, [refType, refId]))[0]?.user_id, kind: 'refund', amountPaise: held.amountPaise, reason, refType, refId });
+      return held.amountPaise;
+    },
+    /** Pending spends older than `hours` whose payment is still unpaid (a deploy or a closed tab left them). */
+    async stalePending(hours = 24) {
+      return (await q(`SELECT c.id, c.user_id AS userId, c.ref_id AS paymentId, -c.amount_paise AS amountPaise FROM user_credit c
+        WHERE c.kind = 'spend' AND c.status = 'pending' AND c.ref_type = 'payment' AND c.created_at < UTC_TIMESTAMP(3) - INTERVAL ? HOUR
+          AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.id = c.ref_id AND p.status = 'paid')`, [hours])).map((r) => ({ id: r.id, userId: r.userId, paymentId: r.paymentId, amountPaise: Number(r.amountPaise) }));
+    },
+    /** Removes one grant that has not been touched yet (a mistake or a fraud report). Returns what was removed. */
+    async revoke(id, { reason = null } = {}) {
+      const r = (await q(`SELECT remaining_paise FROM user_credit WHERE id = ? AND amount_paise > 0 AND status IN ('pending','available') AND remaining_paise > 0`, [id]))[0];
+      if (!r) return 0;
+      await q(`UPDATE user_credit SET remaining_paise = 0, status = 'void', reason = COALESCE(?, reason), settled_at = UTC_TIMESTAMP(3) WHERE id = ?`, [reason ? String(reason).slice(0, 200) : null, id]);
+      return Number(r.remaining_paise);
+    },
+    /** Removes every untouched grant created by a reference (cancelling a referral). Returns the total removed. */
+    async revokeByRef(refType, refId, { reason = null } = {}) {
+      const rows = await q(`SELECT COALESCE(SUM(remaining_paise),0) AS n FROM user_credit
+        WHERE ref_type = ? AND ref_id = ? AND amount_paise > 0 AND status IN ('pending','available') AND remaining_paise > 0`, [refType, refId]);
+      const amount = Number(rows[0]?.n || 0);
+      if (amount > 0) await q(`UPDATE user_credit SET remaining_paise = 0, status = 'void', reason = COALESCE(?, reason), settled_at = UTC_TIMESTAMP(3)
+        WHERE ref_type = ? AND ref_id = ? AND amount_paise > 0 AND status IN ('pending','available') AND remaining_paise > 0`, [reason ? String(reason).slice(0, 200) : null, refType, refId]);
+      return amount;
+    },
+    /** Flips grants whose expiry has passed. Returns how much value expired. */
+    async expireDue() {
+      const r = (await q(`SELECT COALESCE(SUM(remaining_paise),0) AS n FROM user_credit WHERE status = 'available' AND amount_paise > 0 AND remaining_paise > 0 AND expires_at IS NOT NULL AND expires_at <= UTC_TIMESTAMP(3)`))[0];
+      const amount = Number(r?.n || 0);
+      if (amount > 0) await q(`UPDATE user_credit SET status = 'expired', settled_at = UTC_TIMESTAMP(3) WHERE status = 'available' AND amount_paise > 0 AND remaining_paise > 0 AND expires_at IS NOT NULL AND expires_at <= UTC_TIMESTAMP(3)`);
+      return amount;
+    },
+    /** The viewer's own movements, newest first. */
+    async ledger(userId, { limit = 50, offset = 0 } = {}) {
+      const rows = await q(`${CREDIT_SELECT} WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`, [userId, limit, offset]);
+      const total = Number((await q('SELECT COUNT(*) AS n FROM user_credit WHERE user_id = ?', [userId]))[0].n);
+      return { total, items: rows.map(mapCredit) };
+    },
+    /** Console: the newest movements across all accounts (optionally for one account or one kind). */
+    async list({ userId = null, kind = null, limit = 50, offset = 0 } = {}) {
+      const where = [], args = [];
+      if (userId) { where.push('c.user_id = ?'); args.push(userId); }
+      if (kind) { where.push('c.kind = ?'); args.push(kind); }
+      const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
+      const rows = await q(`SELECT c.*, u.email AS user_email, u.name AS user_name FROM user_credit c LEFT JOIN users u ON u.id = c.user_id ${w} ORDER BY c.created_at DESC, c.id DESC LIMIT ? OFFSET ?`, [...args, limit, offset]);
+      const total = Number((await q(`SELECT COUNT(*) AS n FROM user_credit c ${w}`, args))[0].n);
+      return { total, items: rows.map((r) => ({ ...mapCredit(r), userEmail: r.user_email, userName: r.user_name })) };
+    },
+    /** Headline numbers for the console: what is out there, what was used, what expired. */
+    async stats() {
+      const r = (await q(`SELECT
+        COALESCE(SUM(CASE WHEN amount_paise > 0 AND status IN ('available','pending') THEN remaining_paise ELSE 0 END),0) AS outstanding,
+        COALESCE(SUM(CASE WHEN amount_paise > 0 THEN amount_paise ELSE 0 END),0) AS granted,
+        COALESCE(SUM(CASE WHEN kind = 'spend' AND status <> 'void' THEN -amount_paise ELSE 0 END),0) AS spent,
+        COALESCE(SUM(CASE WHEN status = 'expired' THEN amount_paise ELSE 0 END),0) AS expired,
+        COUNT(DISTINCT CASE WHEN amount_paise > 0 THEN user_id END) AS accounts`))[0] || {};
+      const byKind = Object.fromEntries((await q(`SELECT kind, COUNT(*) AS n, COALESCE(SUM(amount_paise),0) AS paise FROM user_credit GROUP BY kind`)).map((x) => [x.kind, { count: Number(x.n), paise: Number(x.paise) }]));
+      return { outstandingPaise: Number(r.outstanding || 0), grantedPaise: Number(r.granted || 0), spentPaise: Number(r.spent || 0), expiredPaise: Number(r.expired || 0), accounts: Number(r.accounts || 0), byKind };
+    },
+  };
+
+  // ---- Referrals: who invited whom (one row per invited account, at most one referral per person) ----
+  const mapReferral = (r) => r && ({
+    id: r.id, inviterId: r.inviter_id, inviteeId: r.invitee_id, code: r.code, status: r.status,
+    bonusPaise: Number(r.bonus_paise), createdAt: iso(r.created_at), completedAt: iso(r.completed_at),
+    inviterEmail: r.inviter_email, inviteeEmail: r.invitee_email, inviteeName: r.invitee_name,
+  });
+  const referrals = {
+    async create({ id = crypto.randomUUID(), inviterId, inviteeId, code, bonusPaise = 0, status = 'pending' }) {
+      await q('INSERT INTO referrals (id, inviter_id, invitee_id, code, status, bonus_paise, completed_at) VALUES (?,?,?,?,?,?,?)',
+        [id, inviterId, inviteeId, code, status, bonusPaise, status === 'completed' ? new Date() : null]);
+      return referrals.byId(id);
+    },
+    async byId(id) { return mapReferral((await q('SELECT * FROM referrals WHERE id = ?', [id]))[0]); },
+    /** The referral of an invited account (each account can have at most one). */
+    async byInvitee(inviteeId) { return mapReferral((await q('SELECT * FROM referrals WHERE invitee_id = ?', [inviteeId]))[0]); },
+    /** Everyone this account invited, newest first, with the friend's name/email. */
+    async forInviter(inviterId, { limit = 50, offset = 0 } = {}) {
+      const rows = await q(`SELECT r.*, u.email AS invitee_email, u.name AS invitee_name FROM referrals r LEFT JOIN users u ON u.id = r.invitee_id
+        WHERE r.inviter_id = ? ORDER BY r.created_at DESC LIMIT ? OFFSET ?`, [inviterId, limit, offset]);
+      const total = Number((await q('SELECT COUNT(*) AS n FROM referrals WHERE inviter_id = ?', [inviterId]))[0].n);
+      return { total, items: rows.map(mapReferral) };
+    },
+    /** How many rewards this account has already earned or is waiting on (the anti-farming cap). */
+    async countForInviter(inviterId) { return Number((await q("SELECT COUNT(*) AS n FROM referrals WHERE inviter_id = ? AND status <> 'void'", [inviterId]))[0].n); },
+    async complete(id) { await q("UPDATE referrals SET status = 'completed', completed_at = UTC_TIMESTAMP(3) WHERE id = ? AND status = 'pending'", [id]); return referrals.byId(id); },
+    async void(id) { await q("UPDATE referrals SET status = 'void' WHERE id = ?", [id]); return referrals.byId(id); },
+    /** Console list: newest first, with both parties for display. */
+    async list({ status = null, limit = 50, offset = 0 } = {}) {
+      const where = status ? 'WHERE r.status = ?' : '', args = status ? [status] : [];
+      const rows = await q(`SELECT r.*, i.email AS inviter_email, u.email AS invitee_email, u.name AS invitee_name FROM referrals r
+        LEFT JOIN users i ON i.id = r.inviter_id LEFT JOIN users u ON u.id = r.invitee_id ${where} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`, [...args, limit, offset]);
+      const total = Number((await q(`SELECT COUNT(*) AS n FROM referrals r ${where}`, args))[0].n);
+      return { total, items: rows.map(mapReferral) };
+    },
+    /** Who brings the most people in (completed referrals first). */
+    async leaderboard(limit = 10) {
+      return (await q(`SELECT r.inviter_id AS userId, u.name, u.email, COUNT(*) AS invited,
+          SUM(CASE WHEN r.status = 'completed' THEN 1 ELSE 0 END) AS completed, SUM(CASE WHEN r.status <> 'void' THEN r.bonus_paise ELSE 0 END) AS bonusPaise
+        FROM referrals r LEFT JOIN users u ON u.id = r.inviter_id GROUP BY r.inviter_id, u.name, u.email
+        ORDER BY completed DESC, invited DESC LIMIT ?`, [limit])).map((r) => ({ userId: r.userId, name: r.name, email: r.email, invited: Number(r.invited), completed: Number(r.completed || 0), bonusPaise: Number(r.bonusPaise || 0) }));
+    },
+    async stats() {
+      const r = (await q(`SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending, SUM(CASE WHEN status = 'void' THEN 1 ELSE 0 END) AS void,
+        COALESCE(SUM(CASE WHEN status <> 'void' THEN bonus_paise ELSE 0 END),0) AS bonusPaise FROM referrals`))[0] || {};
+      return { total: Number(r.total || 0), completed: Number(r.completed || 0), pending: Number(r.pending || 0), void: Number(r.void || 0), bonusPaise: Number(r.bonusPaise || 0) };
+    },
+    /** Deleting an account removes its referral rows through the foreign keys. */
+  };
+
   // ---- Client/server error reports shown in the admin "Errors" page ----
   const errors = {
     async add(e) {
@@ -274,15 +655,17 @@ export function extraDb({ q, tx, iso }) {
   // ---- Broadcast campaigns: one row per admin broadcast, updated as it sends ----
   const mapCampaign = (r) => ({
     id: r.id, channel: r.channel, audience: r.audience, title: r.title, body: r.body, url: r.url, button: r.button,
+    imageUrl: r.image_url || null, imageAlt: r.image_alt || null,
     status: r.status, total: Number(r.total), sent: Number(r.sent), failed: Number(r.failed), skipped: Number(r.skipped),
     cursor: Number(r.page_cursor), test: !!r.is_test, error: r.error, by: r.created_by,
     createdAt: iso(r.created_at), updatedAt: iso(r.updated_at), finishedAt: iso(r.finished_at),
   });
   const campaigns = {
     async create(c) {
-      await q(`INSERT INTO campaigns (id, channel, audience, title, body, url, button, status, is_test, created_by)
-        VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      [c.id, c.channel, String(c.audience).slice(0, 120), String(c.title).slice(0, 200), String(c.body).slice(0, 20_000), c.url || null, c.button || null, c.status || 'queued', c.test ? 1 : 0, c.by || null]);
+      await q(`INSERT INTO campaigns (id, channel, audience, title, body, url, button, image_url, image_alt, status, is_test, created_by)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [c.id, c.channel, String(c.audience).slice(0, 120), String(c.title).slice(0, 200), String(c.body).slice(0, 20_000), c.url || null, c.button || null,
+        c.imageUrl ? String(c.imageUrl).slice(0, 500) : null, c.imageAlt ? String(c.imageAlt).slice(0, 200) : null, c.status || 'queued', c.test ? 1 : 0, c.by || null]);
     },
     async get(id) { const r = (await q('SELECT * FROM campaigns WHERE id = ?', [id]))[0]; return r ? mapCampaign(r) : null; },
     /** Claims a queued campaign, or takes over only after another instance's lease expires. */
@@ -324,5 +707,5 @@ export function extraDb({ q, tx, iso }) {
     async prune() { await q("DELETE FROM campaigns WHERE finished_at IS NOT NULL AND finished_at < UTC_TIMESTAMP(3) - INTERVAL 365 DAY"); },
   };
 
-  return { authTokens, accounts, ratings, comments, push, devices, campaigns, playback, playStats, refundRequests, errors };
+  return { authTokens, accounts, ratings, comments, push, devices, campaigns, playback, playStats, refundRequests, tickets, phoneOtps, phones, settings, errors, credits, referrals };
 }

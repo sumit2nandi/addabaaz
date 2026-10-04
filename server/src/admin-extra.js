@@ -1,5 +1,8 @@
 import { HttpError, bad, wrap } from './http.js';
 import * as mail from './emails.js';
+import { TICKET_CATEGORIES, emailTemplates } from './routes/support.js';
+import { notificationPayload } from './push.js';
+import { normalizePhone, generateOtp, maskPhone } from './sms.js';
 
 // Reads `limit` / `offset` from the query string.
 const asPage = (req, dflt = 50, max = 200) => ({ limit: Math.min(Math.max(Number(req.query.limit) || dflt, 1), max), offset: Math.max(Number(req.query.offset) || 0, 0) });
@@ -8,12 +11,15 @@ const asPage = (req, dflt = 50, max = 200) => ({ limit: Math.min(Math.max(Number
  * Admin routes for the engagement features: analytics, comment moderation, refund requests, push notifications, error log.
  * Mounted by createAdminRouter (so they sit behind the same admin sign-in, rate limit and audit log).
  */
-export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns = null, unsubscribeUrlFor = null, log, siteUrl }) {
+export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns = null, unsubscribeUrlFor = null, log, siteUrl, sms = null, email = mail.campaignEmail }) {
+  // Notifications and e-mail images are rendered by the viewer's device: a site-relative path has to be
+  // absolute before it leaves the server, or the image will not load.
+  const absoluteUrl = (v) => (/^https?:/i.test(v) ? v : `${String(siteUrl || '').replace(/\/+$/, '')}${String(v).startsWith('/') ? '' : '/'}${v}`);
   /* ---------- badges for the sidebar ---------- */
   // Counts shown as badges in the admin sidebar: comments to review, refund requests pending, recent errors.
   router.get('/inbox', wrap(async (_req, res) => {
-    const [comments, refunds, errors] = await Promise.all([db.comments.reviewCount(), db.refundRequests.pendingCount(), db.errors.count24h()]);
-    res.json({ comments, refunds, errors });
+    const [comments, refunds, errors, tickets] = await Promise.all([db.comments.reviewCount(), db.refundRequests.pendingCount(), db.errors.count24h(), db.tickets.awaitingCount().catch(() => 0)]);
+    res.json({ comments, refunds, errors, tickets });
   }));
 
   /* ---------- email delivery diagnostic ---------- */
@@ -36,6 +42,26 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
     }
     await log(req, 'email.test', req.admin.email);
     res.json({ sent: true, to: req.admin.email });
+  }));
+
+  /* ---------- SMS delivery diagnostic ---------- */
+  // Sends the same kind of 6-digit code a viewer gets to a number the administrator types, so MSG91, the
+  // DLT-approved template and the number format can be checked before viewers depend on it. The code is
+  // never stored, shown or logged — only the masked number reaches the audit log.
+  router.post('/sms/test', wrap(async (req, res) => {
+    if (req.admin.via !== 'session') throw new HttpError(400, 'sms_test_requires_session', 'Sign in with an administrator account to test SMS delivery.');
+    if (sms?.provider !== 'msg91') throw new HttpError(503, 'sms_not_configured', 'Real SMS is not configured. Set MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID, restart the service and try again (docs/MSG91.md).');
+    const phone = normalizePhone(req.body?.to, sms.countryCode);
+    if (!phone) throw bad('Enter the phone number with its country code, for example +91 98123 45678.');
+    try {
+      await sms.send({ phone, code: generateOtp(6), minutes: 10 });
+    } catch (e) {
+      const code = typeof e.code === 'string' ? e.code.replace(/[^\w.-]/g, '').slice(0, 40) : '';
+      console.error(`[sms] admin test failed${code ? ` (${code})` : ''}:`, e.message);
+      throw new HttpError(e.status === 502 || e.status === 503 ? e.status : 502, code || 'sms_send_failed', `${e.message || 'The test SMS could not be sent.'} Check MSG91 (auth key, template, DLT header) and the server log.`);
+    }
+    await log(req, 'sms.test', maskPhone(phone));
+    res.json({ sent: true, to: maskPhone(phone) });
   }));
 
   /* ---------- analytics ---------- */
@@ -122,7 +148,7 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
       email: { configured: mailConfigured(), from: mailer?.from || '', optedOut, audiences: emailAudiences },
       // Legacy keys (older admin builds / scripts read these).
       configured: pushConfigured(), publicKey: push?.publicKey || '', subscribers: webSubscribers,
-      audiences: [{ id: 'news', label: 'Announcements — people who opted in to news' }, { id: 'all', label: 'Everyone who turned notifications on' },
+      audiences: [{ id: 'news', label: 'Announcements — everyone whose announcements are on (the default)' }, { id: 'all', label: 'Everyone who turned notifications on' },
         ...snap.catalog.shows.map((s) => ({ id: `show:${s.id}`, label: `Followers of ${s.titleEn || s.title}` })), ...snap.catalog.upcoming.map((u) => ({ id: `launch:${u.id}`, label: `Reminders for ${u.titleEn || u.title}` }))],
       history: recent, campaigns: recent,
     });
@@ -138,7 +164,9 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
     if (channel === 'email' && !mailConfigured()) throw new HttpError(503, 'email_not_configured', 'E-mail is not configured on this server. Set SMTP_URL and MAIL_FROM.');
     const limit = channel === 'email' ? { title: 120, body: 4000 } : { title: 80, body: 180 };
     const title = str(b.title, limit.title), body = str(b.body, limit.body), url = str(b.url, 300) || '/', button = str(b.button, 40);
+    const imageUrl = normalizeImage(b.imageUrl), imageAlt = str(b.imageAlt, 200);
     if (!title || !body) throw bad('A title and a message are required.');
+    if (b.imageUrl && !imageUrl) throw bad('The image must be an https:// address or an upload path starting with /uploads/ or /media/.', 'invalid_image');
     if (!/^\/(?!\/)/.test(url) && !/^https:\/\//.test(url)) throw bad('The link must start with / (a page on this site) or https://.');
     const a = String(b.audience || (channel === 'email' ? 'all' : 'news'));
     const snap = await catalog.get({ all: true });
@@ -153,7 +181,7 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
     if (channel === 'push') pushAudience(a);
     else if (!EMAIL_AUDIENCES.some((x) => x.id === a)) throw bad('Unknown audience.');
     const campaign = await campaigns.start(
-      { channel, audience: a, title, body, url, button: button || null, by: req.admin.email },
+      { channel, audience: a, title, body, url, button: button || null, imageUrl: imageUrl || null, imageAlt: imageAlt || null, by: req.admin.email },
       { resolveAudience: pushAudience, unsubscribeUrlFor, siteUrl },
     );
     await log(req, 'notification.send', a, { channel, title, campaign: campaign.id, status: campaign.status });
@@ -172,17 +200,124 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
     const b = req.body || {}, str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
     const channel = b.channel === 'email' ? 'email' : 'push';
     const title = str(b.title, 120), body = str(b.body, channel === 'push' ? 180 : 4000), url = str(b.url, 300) || '/', button = str(b.button, 40);
+    const imageUrl = normalizeImage(b.imageUrl), imageAlt = str(b.imageAlt, 200);
     if (!title || !body) throw bad('A title and a message are required.');
     const me = await db.users.byId(req.admin.id || req.admin.userId);
     if (!me) throw new HttpError(404, 'not_found', 'Admin account not found.');
-    const r = await campaigns.sendTest({ channel, to: me.email, userId: me.id, name: me.name, title, body, url, button: button || null, siteUrl, unsubscribeUrlFor });
+    const r = await campaigns.sendTest({ channel, to: me.email, userId: me.id, name: me.name, title, body, url, button: button || null, imageUrl: imageUrl || null, imageAlt: imageAlt || null, siteUrl, unsubscribeUrlFor });
     if (!r.ok) throw new HttpError(409, 'test_failed', r.error || 'The test could not be sent.');
     await log(req, 'notification.test', channel, { title, to: me.email });
     res.json({ ok: true });
   }));
 
+  /* ---------- support tickets (Admin → Support) ---------- */
+  // The queue behind the public Support page: filters, the full conversation, triage (status/priority),
+  // replies that are e-mailed to the viewer, and delete.
+  router.get('/tickets', wrap(async (req, res) => {
+    const { limit, offset } = asPage(req, 25, 100);
+    const status = ['open', 'pending', 'resolved', 'closed', 'all'].includes(req.query.status) ? req.query.status : 'all';
+    const category = TICKET_CATEGORIES.includes(req.query.category) ? req.query.category : 'all';
+    const search = String(req.query.q || '').trim().slice(0, 80);
+    const userId = String(req.query.user || '').trim() || null;
+    res.json(await db.tickets.list({ status, category, search, userId, limit, offset }));
+  }));
+  router.get('/tickets/:id', wrap(async (req, res) => {
+    const ticket = await db.tickets.get(String(req.params.id));
+    if (!ticket) throw new HttpError(404, 'not_found', 'Unknown support ticket.');
+    const replies = await db.tickets.replies(ticket.id);
+    // The account behind the ticket (if any) helps the admin see the plan/verification state at a glance.
+    const account = ticket.userId ? await db.users.byId(ticket.userId).catch(() => null) : null;
+    res.json({ ticket, replies, account: account ? { id: account.id, email: account.email, name: account.name, disabled: !!account.disabledAt, phone: account.phone || null } : null });
+  }));
+  router.patch('/tickets/:id', wrap(async (req, res) => {
+    const b = req.body || {};
+    const status = ['open', 'pending', 'resolved', 'closed'].includes(b.status) ? b.status : null;
+    const priority = ['low', 'normal', 'high'].includes(b.priority) ? b.priority : null;
+    const adminNote = typeof b.adminNote === 'string' ? b.adminNote.trim().slice(0, 300) : undefined;
+    if (!status && !priority && adminNote === undefined) throw bad('Nothing to update.');
+    const ok = await db.tickets.update(String(req.params.id), { status, priority, adminNote, handledBy: req.admin.email });
+    if (!ok) throw new HttpError(404, 'not_found', 'Unknown support ticket.');
+    await log(req, 'ticket.update', req.params.id, { status, priority });
+    res.json({ ticket: await db.tickets.get(String(req.params.id)) });
+  }));
+  // An admin reply: stored in the thread, status moves to pending (waiting on the viewer) and the answer
+  // is e-mailed to the address on the ticket. Without SMTP the reply is still stored — the console says so.
+  router.post('/tickets/:id/replies', wrap(async (req, res) => {
+    const ticket = await db.tickets.get(String(req.params.id));
+    if (!ticket) throw new HttpError(404, 'not_found', 'Unknown support ticket.');
+    const body = String(req.body?.body || '').replace(/\u0000/g, '').trim().slice(0, 5000);
+    if (body.length < 2) throw bad('Write a reply first.');
+    const status = ['open', 'pending', 'resolved', 'closed'].includes(req.body?.status) ? req.body.status : 'pending';
+    await db.tickets.addReply({ id: crypto.randomUUID(), ticketId: ticket.id, author: 'admin', authorName: req.admin.name || req.admin.email, authorId: req.admin.id, body, status });
+    let emailed = false;
+    if (mailer?.provider === 'smtp') {
+      try {
+        const built = emailTemplates.adminAnswered({ body, ref: `ADD-${ticket.id.slice(0, 8).toUpperCase()}`, subject: ticket.subject, supportEmail: billing?.config?.supportEmail || '', siteUrl });
+        const r = await mailer.send({ to: ticket.email, ...built });
+        emailed = !!r?.sent;
+      } catch (e) { console.warn('[support] reply e-mail failed:', e.message); }
+    }
+    await log(req, 'ticket.reply', ticket.id, { status, emailed });
+    res.status(201).json({ ok: true, emailed, ticket: await db.tickets.get(ticket.id), replies: await db.tickets.replies(ticket.id) });
+  }));
+  router.delete('/tickets/:id', wrap(async (req, res) => {
+    const done = await db.tickets.remove(String(req.params.id));
+    if (!done) throw new HttpError(404, 'not_found', 'Unknown support ticket.');
+    await log(req, 'ticket.delete', req.params.id);
+    res.sendStatus(204);
+  }));
+
+  /* ---------- broadcast preview (Admin → Broadcast) ---------- */
+  // Renders exactly what a broadcast would look like WITHOUT sending it: the browser/app notification
+  // (same payload builder the sender uses) and the e-mail (the same template the campaign uses, including
+  // the unsubscribe footer). Nothing is written to the database and no message leaves the server.
+  router.post('/notifications/preview', wrap(async (req, res) => {
+    const b = req.body || {}, str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+    const channel = b.channel === 'email' ? 'email' : 'push';
+    const title = str(b.title, channel === 'email' ? 120 : 80), body = str(b.body, channel === 'email' ? 4000 : 180);
+    const url = str(b.url, 300) || '/', button = str(b.button, 40);
+    const imageUrl = normalizeImage(b.imageUrl);
+    if (!title && !body) throw bad('Write a title or a message to preview.');
+    if (channel === 'push') {
+      // The same helper the real send uses, so the preview cannot drift from what viewers receive.
+      const payload = notificationPayload({ title, body, url, image: imageUrl ? absoluteUrl(imageUrl) : null });
+      res.json({ channel, push: { ...payload, appBadge: 1 }, image: imageUrl ? absoluteUrl(imageUrl) : null, note: 'This is how the notification appears on a phone. Nothing has been sent.' });
+    } else {
+      const built = email({ name: 'Priya', email: 'priya@example.com', subject: title || '(no subject)', body, button: button ? { label: button, url } : null, siteUrl, unsubscribeUrl: `${siteUrl || ''}/api/v1/notifications/unsubscribe?u=preview&t=preview`, image: imageUrl ? absoluteUrl(imageUrl) : null, imageAlt: str(b.imageAlt, 200) });
+      res.json({ channel, email: built, note: 'This is the e-mail viewers receive. Nothing has been sent.' });
+    }
+  }));
+
+  /* ---------- clear client caches (Admin → Client cache) ---------- */
+  // Every browser and installed app asks for the current cache version when it starts; bumping the
+  // version makes each of them drop its cached files and fetch fresh ones. `scope: 'all'` also clears the
+  // local data those clients keep (never the sign-in token on the web — that would sign everyone out).
+  router.get('/cache', wrap(async (_req, res) => res.json(await cacheState())));
+  router.post('/cache/purge', wrap(async (req, res) => {
+    const scope = req.body?.scope === 'all' ? 'all' : 'assets';
+    const version = await db.settings.bump('client_cache_version');
+    await db.settings.set('client_cache_scope', scope);
+    await log(req, 'cache.purge', scope, { version });
+    res.json({ ...(await cacheState()), purged: true });
+  }));
+
+  /** Current client-cache state (version + scope + when it last changed). */
+  async function cacheState() {
+    const [version, scope] = await Promise.all([db.settings.get('client_cache_version', '1'), db.settings.get('client_cache_scope', 'assets')]);
+    return { version: String(version), scope: scope === 'all' ? 'all' : 'assets', checkedAt: new Date().toISOString() };
+  }
+
   /* ---------- error log ---------- */
   // Error log: browser and server errors grouped by message (see the Errors page).
   router.get('/errors', wrap(async (_req, res) => res.json(await db.errors.list())));
   router.delete('/errors', wrap(async (req, res) => { await db.errors.clear(); await log(req, 'errors.clear'); res.sendStatus(204); }));
+}
+
+// Broadcast images may be an admin upload (/uploads/…, /media/…) or a full https URL. Anything else is
+// dropped (an image URL in a notification is loaded by every viewer's device).
+export function normalizeImage(value) {
+  const v = typeof value === 'string' ? value.trim().slice(0, 500) : '';
+  if (!v) return '';
+  if (/^https:\/\/[^\s]+$/.test(v) || /^\/(uploads|media)\/[A-Za-z0-9._/-]+$/.test(v)) return v;
+  return '';
 }

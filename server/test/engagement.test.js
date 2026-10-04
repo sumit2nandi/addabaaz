@@ -254,7 +254,7 @@ test('push: subscribe, preferences, notify audiences, send-once automatic notifi
   assert.equal((await call('POST', '/push/subscribe', { subscription: sub('https://push.example/dev1') }, u.token)).status, 201);
   assert.equal((await call('POST', '/push/subscribe', { subscription: sub('https://push.example/dev1') }, u.token)).status, 201, 'idempotent');
   assert.equal((await call('POST', '/push/subscribe', { subscription: sub('https://push.example/gone') }, u.token)).status, 201);
-  assert.deepEqual((await call('POST', '/push/status', { endpoint: 'https://push.example/dev1' }, u.token)).body.prefs, { episodes: true, launches: true, news: false });
+  assert.deepEqual((await call('POST', '/push/status', { endpoint: 'https://push.example/dev1' }, u.token)).body.prefs, { episodes: true, launches: true, news: true }, 'all three kinds are on unless a viewer turns one off');
   const push = (await import('../src/push.js')).createPush({ db, vapid: { publicKey: 'x' }, sender: fakeSender });
   // nobody follows the show yet → nobody is told
   pushed.length = 0; let r = await push.notify({ kind: 'episodes', showId: show.id, videoIds: [] }, { title: 'T', body: 'B' }); assert.equal(r.sent, 0);
@@ -346,7 +346,14 @@ test('admin: push broadcasts go to the chosen audience, with progress and audit;
   assert.equal((await fetch(`${base}/admin/notifications/send`, { method: 'POST' })).status, 401);
   pushed.length = 0;
   let c = await broadcast({ title: 'Big news', body: 'Season 2 is here', url: '/plans', audience: 'news' });
-  assert.equal(c.status, 'sent'); assert.equal(c.sent, 0, 'news is opt-in'); assert.equal(c.channel, 'push');
+  assert.equal(c.status, 'sent'); assert.equal(c.channel, 'push');
+  // Assert on this subscription, not on the total: other tests in this file keep their own rows.
+  assert.ok(pushed.some((p) => p.endpoint === 'https://push.example/admin1'), 'announcements reach a subscriber by default');
+  await call('PATCH', '/push/prefs', { endpoint: sub.endpoint, news: false }, u.token);
+  pushed.length = 0;
+  c = await broadcast({ title: 'One more thing', body: 'Body', audience: 'news' });
+  assert.equal(pushed.some((p) => p.endpoint === 'https://push.example/admin1'), false, 'and turning them off is honoured');
+  await call('PATCH', '/push/prefs', { endpoint: sub.endpoint, news: true }, u.token);
   c = await broadcast({ title: 'Hello all', body: 'Body', audience: 'all' });
   assert.ok(c.sent >= 1); assert.ok(c.total >= c.sent); assert.equal(c.status, 'sent'); assert.equal(c.by, 'ADMIN_TOKEN');
   assert.equal(pushed.at(-1).title, 'Hello all');
@@ -414,6 +421,53 @@ test('admin: app push reaches registered devices through FCM and drops dead toke
     assert.equal(await db.devices.count(), 2, 'the dead token was removed; account and guest tokens remain');
     assert.equal((await call('DELETE', '/devices/guest', { token: guestToken })).status, 204);
     assert.equal(await db.devices.count(), 1, 'guest opt-out removes the anonymous token');
+
+    // Per-device notification choices: the app now has the same three switches as the browser
+    // (episodes / launches / news), read and written by token possession.
+    const prefsToken = 'fcm-device-prefs-' + 'p'.repeat(30);
+    assert.equal((await call('POST', '/devices', { token: prefsToken }, u.token)).status, 201);
+    assert.deepEqual((await call('POST', '/devices/status', { token: prefsToken })).body.prefs,
+      { episodes: true, launches: true, news: true }, 'a fresh device gets the web defaults — all three on');
+    assert.equal((await call('PATCH', '/devices/prefs', { token: prefsToken, episodes: false, news: true })).status, 204);
+    assert.deepEqual((await call('POST', '/devices/status', { token: prefsToken })).body.prefs,
+      { episodes: false, launches: true, news: true }, 'only the switches that were sent change');
+    assert.equal((await call('PATCH', '/devices/prefs', { token: prefsToken, episodes: 'yes' })).status, 400, 'booleans only');
+    assert.equal((await call('PATCH', '/devices/prefs', { token: 'short', news: true })).status, 400);
+    assert.equal((await call('POST', '/devices/status', { token: 'unknown-token-' + 'u'.repeat(20) })).body.prefs, null);
+    // The apps re-register on every start; that must not wipe the viewer's choices.
+    assert.equal((await call('POST', '/devices', { token: prefsToken, platform: 'android', label: 'Pixel 7' }, u.token)).status, 201);
+    assert.deepEqual((await call('POST', '/devices/status', { token: prefsToken })).body.prefs,
+      { episodes: false, launches: true, news: true }, 're-registration keeps them');
+    // Audience selection honours them, exactly like the browser subscriptions.
+    assert.ok((await db.devices.audienceFor({ kind: 'all' })).some((d) => d.token === prefsToken), 'everyone-broadcasts ignore the switches');
+    assert.ok((await db.devices.audienceFor({ kind: 'news' })).some((d) => d.token === prefsToken), 'news is on for this device');
+    assert.ok((await db.devices.audienceFor({ kind: 'news' })).some((d) => d.token === token2), 'and on for a device nobody configured — announcements are the default now');
+    await call('PATCH', '/devices/prefs', { token: token2, news: false });
+    assert.equal((await db.devices.audienceFor({ kind: 'news' })).some((d) => d.token === token2), false, 'until the viewer turns them off');
+    await call('PATCH', '/devices/prefs', { token: token2, news: true });
+
+    // The targeted audiences really do filter on the switch: follow a show, then turn episodes off.
+    // (Episodes are off from the round-trip above — put them back before testing the following case.)
+    await call('PATCH', '/devices/prefs', { token: prefsToken, episodes: true });
+    const followed = (await call('GET', '/catalog')).body.shows[0];
+    const profileId = u.profiles[0].id;
+    await db.library.addListItem(profileId, 'show', followed.id);
+    const epAudience = { kind: 'episodes', showId: followed.id, videoIds: [] };
+    assert.ok((await db.devices.audienceFor(epAudience)).some((d) => d.token === prefsToken), 'a follower with episodes on is included');
+    await call('PATCH', '/devices/prefs', { token: prefsToken, episodes: false });
+    assert.equal((await db.devices.audienceFor(epAudience)).some((d) => d.token === prefsToken), false, 'episodes off means skipped, even while following the show');
+    await call('PATCH', '/devices/prefs', { token: prefsToken, episodes: true });
+    assert.ok((await db.devices.audienceFor(epAudience)).some((d) => d.token === prefsToken), 'turning it back on restores the notification');
+
+    // The launch switch behaves the same way, and is independent of the episode one.
+    const soon = (await call('GET', '/catalog')).body.upcoming[0];
+    await db.library.addReminder(profileId, soon.id);
+    const launchAudience = { kind: 'launches', upcomingId: soon.id };
+    assert.ok((await db.devices.audienceFor(launchAudience)).some((d) => d.token === prefsToken), 'reminder-holders with launches on are included');
+    await call('PATCH', '/devices/prefs', { token: prefsToken, launches: false });
+    assert.equal((await db.devices.audienceFor(launchAudience)).some((d) => d.token === prefsToken), false, 'launches off means skipped');
+    assert.ok((await db.devices.audienceFor(epAudience)).some((d) => d.token === prefsToken), 'while episodes — still on — keeps working');
+    assert.equal((await call('DELETE', '/devices', { token: prefsToken }, u.token)).status, 204);
 
     // E-mail campaigns: plain-text body becomes paragraphs, every mail carries a working unsubscribe link.
     mails.length = 0;

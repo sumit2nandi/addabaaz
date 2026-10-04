@@ -10,7 +10,10 @@ import { PLANS, paidPlan } from './plans.js';
 import { validate, TYPES } from './catalog-schema.js';
 import { describeImage, describeSubtitle, cacheUpload, UPLOAD_NAME, videoKey } from './uploads.js';
 import { adminExtraRoutes } from './admin-extra.js';
+import { adminPromoRoutes } from './admin-promos.js';
+import { adminMaintenanceRoutes } from './admin-maintenance.js';
 import { suggestYouTubeKind } from './youtube-feed.js';
+import { smsHealthCheck } from './sms.js';
 
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 // UTC half-open bounds for the current calendar day in Asia/Kolkata (MySQL timestamps are stored in UTC).
@@ -34,7 +37,7 @@ const page = (req, dflt = 25, max = 100) => ({ limit: Math.min(Math.max(Number(r
  */
 // Every route below runs after the authentication middleware, so `req.admin` is always set.
 // Write actions call `log(...)` so the audit log records who did what.
-export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2, payments, mailer, push = null, campaigns = null, unsubscribeUrlFor = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', env = process.env }) {
+export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2, payments, mailer, push = null, campaigns = null, unsubscribeUrlFor = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', sms = null, promos = null, maintenance = null, siteUrl = '', env = process.env }) {
   // The shared ADMIN_TOKEN (for scripts) only counts when it is long enough to be unguessable.
   const tokenOn = adminToken.length >= 24;
   if (adminToken && !tokenOn) console.warn('[admin] ADMIN_TOKEN is shorter than 24 characters — the token is ignored (admin accounts still work).');
@@ -100,6 +103,9 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
       item('payments', 'Payments', payments.provider === 'razorpay', payments.provider === 'razorpay' ? 'Razorpay is connected.' : payments.provider === 'mock' ? 'Demo checkout — nobody is really charged.' : 'No payment provider: paid plans cannot be bought.'),
       item('gst', 'GST invoicing', billing.config.gstEnabled, billing.config.gstEnabled ? `Invoices are issued under GSTIN ${billing.config.gstin}.` : 'GSTIN is not set — purchases get plain receipts without GST.'),
       item('mail', 'Email', mailer.provider === 'smtp', mailer.provider === 'smtp' ? 'SMTP is configured. Use Send test email below to check actual delivery.' : 'SMTP_URL is not set — verification, password-reset and billing emails are not sent.'),
+      // Phone sign-in (MSG91). Reports which variables are present — never their values — so "SMS is not set
+      // up yet" is visible in the console instead of only in the server log (docs/MSG91.md).
+      (() => { const c = smsHealthCheck(env, sms?.provider || 'none'); return item('sms', 'SMS sign-in (MSG91)', c.ok, c.detail, c.level); })(),
       item('r2', 'Private video storage (R2)', !!r2.configured, r2.configured ? `Bucket “${r2.bucket}” is configured.` : 'R2 is not configured — R2-hosted videos cannot play (optional for other sources).'),
       item('push', 'Web push', !!push?.configured, push?.configured ? 'VAPID keys are set; broadcasts reach browsers and installed web apps.' : 'VAPID keys are not set — browser notifications are off (optional).', 'info'),
       item('apppush', 'App push', !!push?.nativeConfigured, push?.nativeConfigured ? 'Server Firebase credentials are set; native app builds also need Firebase client config (and iOS APNs setup).' : 'FCM_SERVICE_ACCOUNT is not set — the phone apps cannot receive broadcasts (optional; see docs/MOBILE.md).', 'info'),
@@ -534,6 +540,12 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   }));
 
   // More admin endpoints (analytics, comments moderation, refund requests, notifications, errors ...) live in admin-extra.js.
-  adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns, unsubscribeUrlFor, log, siteUrl: billing.config.siteUrl });
+  adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns, unsubscribeUrlFor, log, siteUrl: siteUrl || billing.config.siteUrl, sms });
+  // Credit & referrals (Admin → Promotions). Without a promos collaborator the section is simply absent,
+  // exactly like the other optional features — the console hides it when /admin/promos answers 404.
+  if (promos) adminPromoRoutes({ router, db, promos, log });
+  // Maintenance mode (Admin → Maintenance). The console stays reachable while the switch is on, so this is
+  // how an operator ends the window — see server/src/maintenance.js for the allow-list.
+  if (maintenance) adminMaintenanceRoutes({ router, maintenance, log, siteUrl: siteUrl || billing.config.siteUrl || '' });
   return router;
 }

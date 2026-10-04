@@ -12,7 +12,7 @@ Prices and limits change: check the two pricing pages before you commit.
 ---
 
 ## 1. Put the code on GitHub
-Render deploys from a GitHub repository (yours: `sumit2nandi/addabaaz`, branch `production` or whichever branch you want live). Nothing to build or upload by hand.
+Render deploys from a GitHub repository (yours: `sumit2nandi/addabaaz`, branch `arena/01a10339-addabaaz` — the live branch, also set in `render.yaml`). Nothing to build or upload by hand.
 
 ## 2. Create the database on Aiven
 1. Sign up at **aiven.io** → **Create service** → **MySQL**.
@@ -35,7 +35,7 @@ The app needs no manual SQL: it creates all 26 tables itself when it starts (eve
 | Field | Value |
 |---|---|
 | Language / Runtime | **Node** |
-| Branch | the branch you deploy from |
+| Branch | `arena/01a10339-addabaaz` — the live branch (`render.yaml` sets the same one) |
 | Region | **Singapore** (or next to your Aiven database) |
 | Build Command | `npm ci` |
 | Start Command | `npm start` |
@@ -88,6 +88,8 @@ First create the account on your site (Sign up with that e-mail), then run the c
 Render → your service → **Settings → Custom Domains** → add `www.yourdomain.com` and create the DNS record Render shows. Then change `PUBLIC_SITE_URL` to the new address (and update the Google/Facebook/Razorpay settings that use it, see `SETUP.md` section 8).
 
 ## 8. Updating
+**Switching the live branch.** `render.yaml` names the branch, so a Blueprint service follows the file. For a service created by hand (Option B), or to move an existing one, open your service → **Settings → Build & Deploy → Branch** → pick the branch → **Save** (Render redeploys the latest commit on it, and `autoDeploy` then follows that branch). Keep the branch and the file in step: the APK workflow (`.github/workflows/apk.yml`) and the mobile apps are built from the same branch.
+
 With `autoDeploy: true` (the Blueprint default) every push to the branch deploys automatically. Otherwise use **Manual Deploy** in Render. Database changes are applied automatically at start. Aiven keeps daily backups on the free plan; for your own copy use **mysqldump** from your computer or `npm run backup` (see `SETUP.md` section 13).
 
 ## Troubleshooting

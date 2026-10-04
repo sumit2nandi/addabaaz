@@ -120,7 +120,7 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .btn-primary { background: var(--accent); color: #fff; } .btn-primary:hover { background: var(--accent-2); }
 .btn-ghost { background: rgba(255,255,255,.07); border-color: var(--border-2); color: #fff; } .btn-ghost:hover { background: rgba(255,255,255,.14); }
 .btn-glass { background: rgba(120,120,130,.35); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; } .btn-glass:hover { background: rgba(140,140,150,.5); }
-.btn-danger { background: #5a1216; border-color: #8f1f25; color: #ffd4d4; } .btn-danger:hover { background: #7a1a20; }
+.btn-danger { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 800; } .btn-danger:hover { background: var(--accent-2); border-color: var(--accent-2); }
 .btn-sm { padding: 7px 13px; font-size: 13px; border-radius: 8px; }
 .btn-lg { padding: 13px 26px; font-size: 16px; border-radius: 12px; }
 .btn.block { width: 100%; }
@@ -170,9 +170,14 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .hero-dots button { width: 26px; height: 5px; border-radius: 3px; border: 0; background: rgba(255,255,255,.3); padding: 0; transition: .3s; }
 .hero-dots button.active { background: #fff; width: 44px; }
 .detail-hero .hero-inner { align-items: flex-end; justify-content: flex-start; padding-bottom: 48px; }
-.detail-hero { min-height: min(78vh, 700px); display: flex; }
-.detail-poster { display: none; flex: none; width: clamp(180px, 18vw, 260px); aspect-ratio: 2/3; border-radius: var(--radius-lg); overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.7), 0 0 0 1px var(--border-2); }
-.detail-poster img { width: 100%; height: 100%; object-fit: cover; }
+.detail-hero { min-height: min(78vh, 700px); display: flex; cursor: zoom-in; }   /* the banner opens the artwork popup */
+/* The details-page poster: a button, so it opens the full artwork (lightbox). Its box follows the image's
+ * own aspect ratio — set by fitPoster() and clamped to a poster-like range — so a 4:5 or 16:9 upload is
+ * cropped only a little instead of losing half the picture. Without JS it falls back to 4:5. */
+.detail-poster { display: none; flex: none; width: clamp(180px, 18vw, 260px); aspect-ratio: var(--poster-ar, 4/5); border-radius: var(--radius-lg); overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.7), 0 0 0 1px var(--border-2); background: var(--panel-2); padding: 0; border: 0; cursor: zoom-in; transition: transform .35s var(--ease), box-shadow .35s var(--ease); }
+.detail-poster:hover { transform: translateY(-2px) scale(1.01); box-shadow: 0 34px 90px rgba(0,0,0,.75), 0 0 0 1px var(--border-2); }
+.detail-poster:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.detail-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .facts { display: grid; gap: 4px; margin: 6px 0 0; font-size: 13.5px; }
 .facts div { display: flex; gap: 10px; } .facts dt { color: var(--muted); min-width: 76px; } .facts dd { margin: 0; color: var(--text-2); }
 @media (min-width: 760px) { .hero-poster, .detail-poster { display: block; } }
@@ -402,6 +407,7 @@ body.reels-mode { overflow: hidden; padding-bottom: 0; } body.reels-mode .footer
 .dlg-icon { width: 58px; height: 58px; margin: -4px auto -2px; border-radius: 50%; display: grid; place-items: center; background: rgba(229, 9, 20, .14); color: var(--accent-2); }
 .dlg-icon.is-danger { background: rgba(229, 9, 20, .2); color: var(--accent-2); }
 .dlg-centered .dlg-body { text-align: center; } .dlg-centered .dlg-body .row.end { justify-content: center; margin-top: 4px; }
+.dlg-centered .dlg-body .row.end .btn, .dialog-sm .row.end .btn { min-width: 132px; justify-content: center; }
 .toasts { position: fixed; z-index: 500; left: 50%; bottom: calc(var(--tabbar-h) + var(--sab) + 16px); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 24px); pointer-events: none; }
 .toast { display: flex; align-items: center; gap: 14px; background: #f2f2f2; color: #111; padding: 12px 18px; border-radius: 12px; font-weight: 600; font-size: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.6); opacity: 0; transform: translateY(12px); transition: .25s var(--ease); pointer-events: auto; } .toast.show { opacity: 1; transform: none; } .toast button { background: none; border: 0; color: var(--accent); font-weight: 800; padding: 0; }
 
@@ -443,7 +449,20 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .plans { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 20px; } .plan { position: relative; background: var(--panel); border: 1px solid var(--border-2); border-radius: 20px; padding: 28px 24px; display: grid; gap: 16px; align-content: start; } .plan.best { border-color: var(--gold); } .plan.current { box-shadow: 0 0 0 2px var(--accent); }
 .plan .price { font-size: 38px; font-weight: 800; } .plan .price small { font-size: 14px; color: var(--muted); font-weight: 500; } .plan li { display: flex; gap: 8px; align-items: flex-start; color: var(--text-2); font-size: 14px; margin-bottom: 8px; } .plan li svg { color: var(--ok); margin-top: 3px; }
 .badge { position: absolute; top: -12px; right: 20px; background: var(--gold); color: #000; font-size: 12px; font-weight: 800; padding: 4px 12px; border-radius: 999px; }
-.notice { display: flex; gap: 10px; align-items: center; background: #2a2200; border: 1px solid #5c4a00; color: var(--gold); padding: 12px 16px; border-radius: 12px; font-size: 14px; }
+/* Inline notice ("Your plan is active until…"): the icon stays with the first line and never shrinks,
+ * and the sentence is ONE text column. That column is the whole point: as bare flex children the words
+ * before a <b>, the <b> itself and the words after it become three separate flex items, and flex items
+ * never reflow into each other — on a phone the nowrap date was painted on top of "Renew any time…".
+ * Inside a real text column the same <b> simply moves to the next line when the row is too narrow.
+ * The icon's own wrapper must not grow either: with flex: 1 it took half the row and squeezed the
+ * support e-mail into "gmail.c / om". */
+.notice { display: flex; gap: 10px; align-items: flex-start; background: #2a2200; border: 1px solid #5c4a00; color: var(--gold); padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+.notice > svg, .notice > .i { flex: 0 0 auto; margin-top: 2px; }
+.notice > span, .notice > div { min-width: 0; flex: 1; }
+.notice > div:first-child { flex: 0 0 auto; }
+.notice b { font-weight: 700; white-space: nowrap; }
+.card-panel.notice b { white-space: normal; }
+@media (max-width: 520px) { .notice { font-size: 13.5px; padding: 11px 13px; gap: 8px; } }
 .notice.ok { background: #0f2415; border-color: #1f5c31; color: #7be495; } .page > .notice { margin-top: 14px; }
 
 /* ---------- studio pages ---------- */
@@ -521,9 +540,25 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .fine { font-size: 12.5px; color: var(--muted); text-align: center; line-height: 1.5; } .fine a { color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; }
 .stack-sm { display: grid; gap: 10px; } .btn.block { width: 100%; justify-content: center; }
 .pin-input { text-align: center; letter-spacing: .5em; font-size: 22px; }
+/* Sign-in page: the mobile-number (SMS OTP) flow sits next to the email form. */
+.seg-full { display: flex; gap: 6px; padding: 4px; background: var(--bg-2); border: 1px solid var(--border-2); border-radius: 12px; }
+.seg-full button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; border: 0; border-radius: 9px; background: none; color: var(--text-2); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.seg-full button.on { background: var(--accent); color: #fff; }
+.otp-phone { display: flex; align-items: center; gap: 0; background: var(--bg-2); border: 1px solid var(--border-2); border-radius: 10px; overflow: hidden; }
+.otp-phone .otp-cc { padding: 0 12px; font-size: 16px; color: var(--text-2); border-right: 1px solid var(--border-2); align-self: stretch; display: flex; align-items: center; }
+.otp-phone input { border: 0 !important; background: none !important; border-radius: 0 !important; letter-spacing: 1px; }
+.otp-links { margin-top: 2px; } .otp-links .linklike { font-size: 14px; }
+.otp-links .linklike:disabled { color: var(--muted); cursor: default; text-decoration: none; }
+.auth-busy { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 12px; color: var(--text-2); }
+.auth-busy[hidden] { display: none; }
 .legal section { margin-top: 26px; } .legal h2 { font-size: 19px; margin-bottom: 8px; } .legal p { color: var(--text-2); margin-top: 8px; line-height: 1.7; max-width: 72ch; } .legal .lead { font-size: 16px; margin-top: 4px; } .legal-links { margin-top: 36px !important; }
 .consent-bar { position: fixed; z-index: 90; left: 12px; right: 12px; bottom: calc(var(--tabbar-h) + var(--sab) + 24px); max-width: 760px; margin: 0 auto; display: flex; gap: 14px 20px; align-items: center; flex-wrap: wrap; justify-content: space-between; padding: 14px 18px; border-radius: 16px; background: rgba(24,24,28,.97); border: 1px solid var(--border-2); box-shadow: 0 12px 40px rgba(0,0,0,.6); font-size: 13.5px; color: var(--text-2); } .consent-bar p { flex: 1 1 320px; } .consent-bar a { text-decoration: underline; } .consent-bar .row { display: flex; gap: 8px; }
 @media (min-width: 900px) { .consent-bar { bottom: 20px; } }
+/* Refer & earn (Account → credit, invite code and the people who joined) */
+.refer-card .refer-head { display: flex; gap: 14px; align-items: flex-start; } .refer-card .refer-head b { display: block; } .refer-card .refer-head small { color: var(--muted); }
+.refer-bal { font-size: 30px; font-weight: 700; } .refer-bal small { font-size: 14px; font-weight: 400; color: var(--muted); } .refer-bal em { display: block; font-size: 13px; font-style: normal; font-weight: 400; color: var(--muted); }
+.refer-ledger summary { cursor: pointer; color: var(--muted); font-size: 13.5px; } .refer-ledger ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; } .refer-ledger li { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; }
+@media (max-width: 600px) { .refer-bal { font-size: 26px; } }
 .dev-list { display: grid; gap: 4px; margin-top: 10px; } .dev-list li { display: flex; gap: 12px; align-items: center; padding: 10px 4px; border-top: 1px solid var(--border); } .dev-list li > div { flex: 1; display: grid; } .dev-list small { color: var(--muted); }
 .row-switch { cursor: pointer; }
 .rate-box { display: inline-flex; } .rate { display: inline-flex; gap: 6px; } .rate-btn { gap: 6px; } .rate-btn.on { border-color: var(--gold); color: var(--gold); } .rate-btn .i { flex: none; }
@@ -629,3 +664,50 @@ body:has(#consentBar) .auth-page { padding-bottom: 190px; } body:has(#consentBar
   .ytp-time { font-size: 12px; padding: 0 4px; }
   .ytp-menu { right: 8px; bottom: 48px; width: min(240px, calc(100% - 16px)); }
 }
+
+/* Support & help (#/support): raise a ticket, read the reply thread, look a guest ticket up by reference. */
+.sup-ref { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; letter-spacing: .04em; color: var(--muted); }
+.sup-empty { padding: 14px 16px; }
+.pill.warn { background: rgba(88,166,255,.16); color: #7cb0ff; }
+.tk-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tk-thread { display: grid; gap: 10px; max-height: 42dvh; overflow: auto; padding-right: 2px; }
+.tk-msg { background: var(--bg-2); border: 1px solid var(--border-2); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; }
+.tk-msg.admin { background: rgba(229,9,20,.08); border-color: rgba(229,9,20,.28); }
+.tk-msg header { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); }
+.tk-msg p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Maintenance mode (docs/MAINTENANCE.md): the full-screen notice an open tab or a resumed app shows when
+   the API answers 503 maintenance. Rendered by app/js/maintenance.js. */
+.maintenance-screen {
+  position: fixed; inset: 0; z-index: 9000; display: grid; place-items: center; overflow: auto;
+  padding: calc(24px + var(--sat)) 20px calc(24px + var(--sab)); background: var(--bg);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.maintenance-screen::before {
+  content: ''; position: absolute; inset: -20vmax; pointer-events: none;
+  background: radial-gradient(circle at 30% 20%, rgba(229,9,20,.18), transparent 45%), radial-gradient(circle at 74% 76%, rgba(229,9,20,.10), transparent 46%);
+  animation: abm-drift 18s ease-in-out infinite alternate;
+}
+@keyframes abm-drift { from { transform: translate3d(-2%,-1%,0) } to { transform: translate3d(2%,1%,0) } }
+.abm-card {
+  position: relative; width: min(520px, 100%); text-align: center; padding: 34px 26px 26px;
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01)), var(--panel);
+  border: 1px solid var(--border-2); border-radius: var(--radius-lg); box-shadow: 0 30px 80px rgba(0,0,0,.6);
+  display: grid; justify-items: center; gap: 12px;
+}
+.abm-brand b { font-size: 19px; letter-spacing: .5px; font-weight: 800; }
+.abm-brand i { font-style: normal; font-size: 19px; letter-spacing: .5px; font-weight: 800; color: var(--accent); }
+.abm-glyph {
+  width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; color: #fff;
+  background: rgba(229,9,20,.16); border: 1px solid rgba(229,9,20,.35);
+  animation: abm-pulse 2.6s ease-in-out infinite;
+}
+@keyframes abm-pulse { 0%,100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(229,9,20,.35) } 50% { transform: scale(1.04); box-shadow: 0 0 0 14px rgba(229,9,20,0) } }
+.abm-card h1 { margin: 0; font-size: clamp(23px, 5vw, 29px); letter-spacing: -.02em; }
+.abm-msg { margin: 0; color: var(--text-2); max-width: 42ch; }
+.abm-left { margin: 0; color: var(--ok); font-size: 14px; font-weight: 600; min-height: 20px; }
+.abm-bar { width: min(300px, 100%); height: 4px; border-radius: 99px; background: var(--panel-3); overflow: hidden; }
+.abm-bar i { display: block; height: 100%; width: 35%; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); animation: abm-slide 1.9s ease-in-out infinite; }
+@keyframes abm-slide { 0% { transform: translateX(-110%) } 100% { transform: translateX(320%) } }
+.abm-note { margin: 0; color: var(--muted); font-size: 12.5px; max-width: 40ch; }
+@media (prefers-reduced-motion: reduce) { .maintenance-screen::before, .abm-glyph, .abm-bar i { animation: none } }

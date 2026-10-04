@@ -12,6 +12,21 @@ import crypto from 'node:crypto';
  * Tests inject `sender` (async (subscription, payloadString) => void, throws {statusCode} like web-push does)
  * and `fcm` (anything with { configured, send(tokens, message) }).
  */
+/**
+ * The payload a browser notification carries — the ONE place it is defined, so what the Broadcast page
+ * previews is byte-for-byte what viewers receive. Lengths match the platform limits (title 80, body 180).
+ * The service worker (sw.js) renders `image` as the rich notification picture.
+ */
+export function notificationPayload({ title, body, url, image, tag } = {}) {
+  return {
+    title: String(title || 'ADDABAAZ').slice(0, 80),
+    body: String(body || '').slice(0, 180),
+    url: String(url || '/'),
+    ...(image ? { image: String(image) } : {}),
+    ...(tag ? { tag: String(tag) } : {}),
+  };
+}
+
 // A stable id for a browser push subscription (its endpoint URL is long and secret, so store a hash to look it up).
 export const endpointHash = (endpoint) => crypto.createHash('sha256').update(String(endpoint)).digest('hex');
 
@@ -51,7 +66,7 @@ export function createPush({ db, vapid = {}, sender = null, fcm = null, log = co
       }
       const native = await notifyNative(allowedNative, message).catch((e) => { log.warn?.(`[push] native send failed: ${e.message}`); return { sent: 0, failed: 0, removed: 0 }; });
       if (!configured) return { sent: native.sent, failed: native.failed, removed: native.removed, native, skipped: 'not_configured' };
-      const payload = JSON.stringify({ title: String(message.title || 'ADDABAAZ').slice(0, 80), body: String(message.body || '').slice(0, 180), url: message.url || '/', image: message.image || undefined, tag: message.tag || undefined });
+      const payload = JSON.stringify(notificationPayload(message));
       let sent = 0, failed = 0, removed = 0;
       for (const s of keptSubs) {
         try { await send({ endpoint: s.endpoint, keys: s.keys }, payload); sent++; await db.push.ok(s.id); }

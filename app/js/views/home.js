@@ -3,8 +3,7 @@ import { app } from '../app.js';
 import { html, $, $$, fmtDate } from '../util.js';
 import { icon } from '../icons.js';
 import { CONFIG } from '../config.js';
-import { rail, enhanceRails, showCard, videoCard, reelCard, soonCard, galleryCard, listBtn, img, heroBg, showMeta, premiumMark } from '../ui/components.js';
-import { openLightbox } from '../ui/lightbox.js';
+import { rail, enhanceRails, showCard, videoCard, reelCard, soonCard, listBtn, img, heroBg, showMeta, premiumMark } from '../ui/components.js';
 
 // Picks the featured shows for the carousel. Every banner is a still image - the latest episode's
 // backdrop, with the show's poster as fallback - and the slideshow only crossfades between them:
@@ -189,7 +188,6 @@ export default async function home(ctx) {
       ${rail({ title: 'Top 10 Episodes', items: cat.trending(10, demoteMature ? { matureCap: 2 } : {}).map((v, i) => videoCard(v, { rank: i + 1, showDuration: false })), cls: 'r-top' })}
       ${rail({ title: 'Shows', items: cat.shows.map((s) => showCard(s)), href: '#/shows', linkLabel: 'Browse all', cls: 'r-poster' })}
       ${cat.shows.map((s) => rail({ title: s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title, items: cat.episodes(s.id).slice().reverse().map((v) => videoCard(v, { showName: false, showDuration: false })), href: `#/show/${s.id}`, linkLabel: 'Open show', cls: 'r-video' }))}
-      ${rail({ title: 'Behind the Scenes', items: cat.gallery.slice(0, N).map(galleryCard), href: '#/gallery', cls: 'r-poster' })}
     </div>
     <section class="cta-band">
       <div><h2>Have a story to tell?</h2><p>ADDABAAZ produces films, web series and ad films from Kolkata. Let’s make something great together.</p></div>
@@ -199,5 +197,4 @@ export default async function home(ctx) {
   mountHero(ctx.root, ctx);
   mountReleaseSlideshow(ctx.root, ctx);
   enhanceRails(ctx.root);
-  ctx.root.addEventListener('click', (e) => { const b = e.target.closest('[data-lightbox]'); if (b) openLightbox(cat.gallery, b.dataset.lightbox); });
 }

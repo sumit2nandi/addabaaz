@@ -8,9 +8,13 @@ name: APK
 
 on:
   push:
-    # Every arena working branch (the list of individual branch names used to go stale and silently
-    # stop building the branch being worked on — the pattern cannot).
-    branches: ['arena/**', main]
+    # Every arena working branch (the glob cannot go stale the way a list of branch names did), plus the
+    # named branches that are being built on purpose right now. This session's branch is listed explicitly
+    # so an APK of the current work exists even if the glob is narrowed later.
+    branches:
+      - 'arena/01a10339-addabaaz'      # current working branch: support page, SMS sign-in, two consoles, cache clear
+      - 'arena/**'
+      - main
   pull_request:
     branches: [main, arena/ott]
   workflow_dispatch:                      # "Run workflow" button in the Actions tab

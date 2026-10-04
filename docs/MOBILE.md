@@ -178,3 +178,36 @@ registration token. Connected guests register anonymously at `POST /api/v1/devic
 links the installation to the account at `POST /api/v1/devices`. Signing out removes the account link and
 returns to guest broadcasts unless notifications were switched off. Tapping a notification opens its
 page. FCM-reported unregistered tokens are removed automatically, and idle tokens expire after 180 days.
+
+A signed-in installation has the **same three notification switches as the website** in Account →
+Notifications: *New episodes of shows I follow*, *When a Coming Soon title launches* and *Announcements &
+offers* (all three on by default). They are stored on the device's row
+in `push_devices` and read/written with `POST /api/v1/devices/status` and `PATCH /api/v1/devices/prefs`,
+which identify the device by its FCM token — the same token-possession rule as the guest routes, so it
+works before and after sign-in. A guest installation has no account to target episodes or launches with,
+so it keeps the single on/off switch.
+
+## Uninstalling really deletes the data
+
+Android removes an app's private storage when it is uninstalled, and the app keeps nothing outside that
+sandbox — no downloads folder, no shared storage. The one thing that could survive was Android's *backup
+copy*: Capacitor's generated manifest ships `android:allowBackup="true"`, so the user's Google Drive
+auto-backup (or a "copy apps & data" transfer to a new phone) owned a copy of the WebView storage — the
+signed-in session token `ab.token` included — and a reinstall could restore it and come back signed in as
+the previous account. `mobile/scripts/patch-android.mjs` now writes into the generated project:
+
+* `android:allowBackup="false"` — this app is never included in cloud backups;
+* `android:fullBackupContent="false"` — the same for API 23–30;
+* `android:dataExtractionRules="@xml/data_extraction_rules"` plus `app/src/main/res/xml/data_extraction_rules.xml`,
+  which excludes every domain (`root`, `file`, `database`, `sharedpref`, `external`) from both
+  `<cloud-backup>` and `<device-transfer>` — since Android 12 `allowBackup="false"` on its own no longer
+  stops phone-to-phone transfers.
+
+So uninstall deletes the data with the install, and a **reinstall starts signed out**: the app opens in
+guest mode and asks for sign-in as it did the first time. App updates are unaffected — none of this
+touches data the phone already has, it only removes the backup and transfer paths.
+
+Passing the phone on? Sign out first (**Account → Security → Sign out everywhere**): that ends the
+session on the server, so even a restored copy of the storage cannot sign back in. On iOS the app
+container is deleted on uninstall and a plain reinstall does not bring it back (only restoring a whole
+device from an iCloud backup can), so the same advice applies before handing the phone over.

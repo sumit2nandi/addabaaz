@@ -35,7 +35,7 @@ export function siteOrigin(req, configured) {
 export function bodyHtml(m, { view, params }, cat, studio, plans) {
   const h1 = (t) => `<h1>${esc(t)}</h1>`;
   const intro = (t, d = m.description) => `${h1(t)}<p>${esc(d)}</p>`;
-  const nav = `<nav aria-label="Site">${[['/', 'Home'], ['/shows', 'All shows'], ['/reels', 'Reels'], ['/upcoming', 'Coming soon'], ['/gallery', 'Behind the scenes'], ['/plans', 'Plans'], ['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact'], ['/privacy', 'Privacy Policy'], ['/terms', 'Terms of Use'], ['/refunds', 'Refund Policy']].map(([h, t]) => A(h, t)).join(' · ')}</nav>`;
+  const nav = `<nav aria-label="Site">${[['/', 'Home'], ['/shows', 'All shows'], ['/reels', 'Reels'], ['/upcoming', 'Coming soon'], ['/plans', 'Plans'], ['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact'], ['/privacy', 'Privacy Policy'], ['/terms', 'Terms of Use'], ['/refunds', 'Refund Policy']].map(([h, t]) => A(h, t)).join(' · ')}</nav>`;
   const showList = (list) => `<ul>${list.map((s) => li(`/show/${s.id}`, showFullName(s), s.tagline)).join('')}</ul>`;
   const epList = (list) => `<ul>${list.map((v) => li(`/watch/${v.id}`, `${v.kind === 'episode' && v.episode ? `EP ${v.episode}: ` : ''}${cat.displayTitle(v)}`, fmtDuration(v.duration))).join('')}</ul>`;
   let b = '';
@@ -64,7 +64,6 @@ export function bodyHtml(m, { view, params }, cat, studio, plans) {
     }
     case 'upcoming': b = `${intro('Coming soon')}<ul>${cat.upcoming.map((u) => li(`/soon/${u.id}`, showFullName(u), u.note)).join('')}</ul>`; break;
     case 'soon': { const u = cat.soon(params.id); b = `${intro(`${showFullName(u)} — coming soon`)}<p>${esc(u.note || '')}</p>${cat.show(u.showId) ? `<p>${A(`/show/${u.showId}`, 'Watch the show')}</p>` : ''}`; break; }
-    case 'gallery': b = `${intro('Behind the scenes')}` + cat.gallery.map((g) => `<figure><img src="${esc(g.image)}" alt="${esc(g.caption || `Behind the scenes of ${g.group} — ADDABAAZ production`)}" loading="lazy" width="400" height="300"></figure>`).join(''); break;
     // Legal pages (Privacy, Terms, ...) come from the shared legal-text module.
     case 'legal': {
       const d = legalDoc(LEGAL_PAGES[m.canonical], { studio: studio?.studio });
@@ -178,7 +177,7 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
 
   // robots.txt: staging/preview deployments block everything; production allows all but /admin and /api.
   const robotsTxt = (req) => indexable
-    ? `User-agent: *\nDisallow: /admin\nDisallow: /api/\n\nSitemap: ${originOf(req)}/sitemap.xml\n`
+    ? `User-agent: *\nDisallow: /admin\nDisallow: /content\nDisallow: /api/\n\nSitemap: ${originOf(req)}/sitemap.xml\n`
     : 'User-agent: *\nDisallow: /\n';
 
   // sitemap.xml lists every indexable page, with last-modified dates and video info for watch pages.
@@ -188,7 +187,7 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
     const url = (p, { lastmod, extra = '' } = {}) => `<url><loc>${esc(origin + p)}</loc>${lastmod ? `<lastmod>${day(lastmod)}</lastmod>` : ''}${extra}</url>`;
     const newest = (list) => list.map((v) => v.publishedAt).filter(Boolean).sort().at(-1);
     const out = [url('/', { lastmod: newest(cat.videos) })];
-    for (const p of ['/shows', '/upcoming', '/gallery', '/plans', '/about', '/services', '/contact', '/privacy', '/terms', '/refunds']) out.push(url(p));
+    for (const p of ['/shows', '/upcoming', '/plans', '/about', '/services', '/contact', '/privacy', '/terms', '/refunds']) out.push(url(p));
     for (const s of cat.shows) out.push(url(`/show/${s.id}`, { lastmod: newest(cat.videos.filter((v) => v.showId === s.id)) }));
     for (const u of cat.upcoming) out.push(url(`/soon/${u.id}`));
     for (const v of cat.videos) {

@@ -5,10 +5,11 @@
 export const ROUTES = [
   ['/', 'home'], ['/shows', 'browse'], ['/show/:id', 'show'], ['/watch/:id', 'watch'],
   ['/reels', 'reels'], ['/reels/:id', 'reels'], ['/upcoming', 'upcoming'], ['/soon/:id', 'soon'],
-  ['/gallery', 'gallery'], ['/search', 'search'], ['/list', 'mylist'], ['/account', 'account'],
+  ['/gallery', 'gallery'],   // hidden page: old links and search results bounce home (app/js/views/gallery.js)
+  ['/search', 'search'], ['/list', 'mylist'], ['/account', 'account'],
   ['/profiles', 'profiles'], ['/signin', 'auth'], ['/signup', 'auth'], ['/plans', 'plans'], ['/billing', 'billing'],
   ['/forgot', 'recover'], ['/reset', 'recover'], ['/verify', 'recover'], ['/privacy', 'legal'], ['/terms', 'legal'], ['/refunds', 'legal'],
-  ['/about', 'studio'], ['/services', 'studio'], ['/contact', 'studio'],
+  ['/about', 'studio'], ['/services', 'studio'], ['/contact', 'studio'], ['/support', 'support'],
 ].map(([pattern, view]) => ({
   pattern, view,
   keys: [...pattern.matchAll(/:(\w+)/g)].map((m) => m[1]),

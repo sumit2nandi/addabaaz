@@ -161,11 +161,14 @@ export class Router {
     const skeleton = setTimeout(() => { if (token === this.#token) this.root.innerHTML = '<div class="page-loading" aria-busy="true"><div class="spinner"></div></div>'; }, 180);
     const div = document.createElement('div');
     div.className = 'view';
-    // The context object passed to every view: its root element, URL params/query, a title setter and an `onCleanup` hook.
+    // The context object passed to every view: its root element, URL params/query, a title setter, an
+    // `onCleanup` hook and `stale()` — true once a newer navigation has started, so a view that awaited
+    // something can stop instead of drawing into a page that is already being replaced.
     const ctx = {
       root: div, params, query, path, title: '',
       setTitle: (t) => { ctx.title = t; },
       onCleanup: (fn) => this.#cleanups.push(fn),
+      stale: () => token !== this.#token,
     };
     try {
       if (!match) { div.innerHTML = notFound(); }

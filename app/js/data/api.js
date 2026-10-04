@@ -45,6 +45,9 @@ export class ApiClient {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       if (res.status === 401 && this.token && !quiet401) { this.setToken(null); window.dispatchEvent(new CustomEvent('ab:unauthorized')); }
+      // Maintenance mode (docs/MAINTENANCE.md): tell the shell so it can show the maintenance screen instead
+      // of a scatter of failed calls. app/js/maintenance.js listens for this.
+      if (res.status === 503 && data.error?.code === 'maintenance') window.dispatchEvent(new CustomEvent('ab:maintenance', { detail: { message: data.error.message, until: data.error.until || null, base: this.base } }));
       throw new ApiError(res.status, data.error?.message || data.message || httpMessage(res.status), data.error?.code);
     }
     return data;
@@ -55,7 +58,11 @@ export class ApiClient {
     let res;
     try { res = await fetch(`${this.base}/api/v1${path}`, { headers: this.token ? { Authorization: `Bearer ${this.token}` } : {} }); }
     catch { throw new ApiError(0, 'You appear to be offline.', 'network'); }
-    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new ApiError(res.status, d.error?.message || httpMessage(res.status), d.error?.code); }
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      if (res.status === 503 && d.error?.code === 'maintenance') window.dispatchEvent(new CustomEvent('ab:maintenance', { detail: { message: d.error.message, until: d.error.until || null, base: this.base } }));
+      throw new ApiError(res.status, d.error?.message || httpMessage(res.status), d.error?.code);
+    }
     return res.blob();
   }
   // Shorthand methods for each HTTP verb.

@@ -155,11 +155,10 @@ export function pageMeta({ path, query = {}, cat, studio = null, origin, plans =
     out.image = absUrl(origin, u.backdrop || u.posterLg || u.poster); out.imageAlt = `${showName(u)} poster`;
     out.jsonld = [{ '@type': 'CreativeWork', name: u.title, ...(u.titleEn && u.titleEn !== u.title ? { alternateName: u.titleEn } : {}), url: `${origin}${out.canonical}`, image: out.image, genre: u.genres || [], inLanguage: 'bn', producer: orgRef(origin) },
       crumbs(origin, [home, ['Coming soon', '/upcoming'], [showName(u), out.canonical]])];
-  // Behind-the-scenes gallery.
+  // The Behind-the-scenes gallery is hidden: old links, bookmarks and Google results go home rather than
+  // meeting a 404. The photos stay in the catalog and the CMS entry is gone (app/js/views/gallery.js).
   } else if (view === 'gallery') {
-    out.title = `Behind the Scenes — ${SITE} Sets, Shoots & Making-of Photos`; out.canonical = '/gallery';
-    out.description = `Photos from the sets of ${SITE} productions${cat.gallery.length ? ` — ${joinList([...new Set(cat.gallery.map((g) => g.group))].slice(0, 4))}` : ''}: behind-the-scenes moments from our Kolkata film and web-series shoots.`;
-    out.jsonld = [{ '@type': 'ImageGallery', name: 'Behind the scenes', url: `${origin}/gallery` }, crumbs(origin, [home, ['Behind the scenes', '/gallery']])];
+    return Object.assign(out, { redirect: '/', status: 301, robots: 'noindex,nofollow' });
   // Pricing page: describes the paid plans as schema.org offers.
   } else if (view === 'plans') {
     out.title = `Plans & Pricing — ${SITE} Plus | ${SITE}`; out.canonical = '/plans';

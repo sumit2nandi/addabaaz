@@ -139,6 +139,12 @@ test('dashboard numbers and the setup checklist', async () => {
   assert.ok(s.users.total >= 2); assert.equal(s.days.length, 30); assert.equal(s.revenue.totalPaise, 0); assert.equal(s.subscribers.active, 0); assert.equal(typeof s.openMessages, 'number'); assert.ok(Array.isArray(s.recentUsers));
   const h = (await A('GET', '/health')).body.checks; const by = Object.fromEntries(h.map((c) => [c.id, c]));
   assert.equal(by.db.ok, true); assert.equal(by.r2.ok, true); assert.equal(by.mail.ok, true); assert.equal(by.gst.ok, false); assert.equal(by.uploads.ok, true); assert.equal(by.admins.ok, true);
+  // SMS sign-in is reported too, even before MSG91 is configured — that is the whole point of the row.
+  assert.ok(by.sms, 'the checklist has an SMS row'); assert.equal(by.sms.ok, false);
+  assert.match(by.sms.detail, /MSG91/); assert.match(by.sms.detail, /docs\/MSG91\.md/);
+  assert.doesNotMatch(by.sms.detail, /MSG91_AUTH_KEY=[^ ]/, 'no values, only variable names');
+  const smsTest = await A('POST', '/sms/test', { to: '9812345678' });
+  assert.equal(smsTest.status, 503); assert.equal(smsTest.body.error.code, 'sms_not_configured', 'the diagnostic explains itself until MSG91 is set up');
 });
 
 test('users: search, filters, detail, rename, complimentary access, revoke, disable/enable, delete — with lock-out guards', async () => {

@@ -4,7 +4,7 @@
  */
 // `db`, `catalog`, `push` and `campaigns` are passed in (dependency injection) so tests can supply fakes.
 // Returns counts of notifications sent.
-export async function runScheduledJobs({ db, catalog, push, campaigns = null, log = console }) {
+export async function runScheduledJobs({ db, catalog, push, campaigns = null, promos = null, log = console }) {
   const out = { episodes: 0, launches: 0 };
   try {
     const snap = await catalog.get();   // the public snapshot: scheduled items appear once due
@@ -14,6 +14,8 @@ export async function runScheduledJobs({ db, catalog, push, campaigns = null, lo
     await Promise.all([db.authTokens.purge(), db.playback.purge(), db.errors.prune(), db.push.pruneSent(), db.devices.purge(), db.campaigns.prune()]);
     // Continue broadcasts a deploy or crash interrupted.
     out.campaigns = await (campaigns?.resume({ resolveAudience: audienceResolver(snap.catalog) }) ?? 0);
+    // Promotions: expire credit whose time ran out and hand back credit held by abandoned orders.
+    if (promos) out.promos = await promos.runMaintenance().catch((e) => { log.error?.(`[jobs] promo maintenance: ${e.message}`); return null; });
   } catch (e) { log.error?.(`[jobs] ${e.message}`); }
   return out;
 }

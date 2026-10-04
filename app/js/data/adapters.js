@@ -53,8 +53,21 @@ export class LocalAdapter {
   async signOut() {}
   async deleteAccount() { Object.keys(localStorage).filter((k) => k.startsWith('ab.')).forEach((k) => localStorage.removeItem(k)); }
   async submitContact() { throw new ApiError(400, 'This form needs a connection to ADDABAAZ — check your internet and try again.'); }
+  // Support tickets and phone sign-in need the server (the UI hides them in local mode).
+  async requestOtp() { throw new ApiError(400, 'Sign-in by SMS needs a connection to ADDABAAZ.'); }
+  async verifyOtp() { return this.requestOtp(); }
+  async submitTicket() { return this.submitContact(); }
+  async myTickets() { return { tickets: [] }; }
+  async ticket() { throw new ApiError(400, 'Support tickets need a connection to ADDABAAZ — check your internet and try again.'); }
+  async lookupTicket() { return this.ticket(); }
+  async replyTicket() { return this.submitTicket(); }
   // Features that need the server are simply absent in local mode (the UI checks `user.supportsAuth`).
   async myRatings() { return {}; } async ratingCounts() { return { up: 0, down: 0 }; }
+  // Promotions live on the account, so without a server there is nothing to show or spend.
+  async promo() { return { offer: null, viewer: null }; }
+  async credits() { throw new ApiError(400, 'Credit and invites need a connection to ADDABAAZ.'); }
+  async redeemInvite() { return this.credits(); }
+  async inviteLink() { return this.credits(); }
 }
 
 // The parental PIN travels in a header for profile changes.
@@ -79,12 +92,12 @@ export class RemoteAdapter {
   async signUp(p) { const r = await this.api.post('/auth/signup', p); this.api.setToken(r.token); return r; }
   async signIn(p) { const r = await this.api.post('/auth/login', p); this.api.setToken(r.token); return r; }
   /** Google / Facebook: the API verifies the provider credential and returns our own session. */
-  async signInSocial(provider, credential) {
-    if (provider === 'apple') return this.signInApple(credential.identityToken, credential.name);
+  async signInSocial(provider, credential, ref = '') {
+    if (provider === 'apple') return this.signInApple(credential.identityToken, credential.name, ref);
     // Native Google hands over a one-time ticket (the OAuth dance happened in a Custom Tab).
     const r = credential?.ticket
       ? await this.api.post('/auth/ticket', { ticket: credential.ticket })
-      : await this.api.post(`/auth/${provider}`, provider === 'google' ? { idToken: credential } : { accessToken: credential });
+      : await this.api.post(`/auth/${provider}`, { ...(provider === 'google' ? { idToken: credential } : { accessToken: credential }), ...(ref ? { ref } : {}) });
     this.api.setToken(r.token); return r;
   }
   async providers() { try { return this.#providers ||= await this.api.get('/auth/providers'); } catch { return { password: true }; } }
@@ -104,23 +117,39 @@ export class RemoteAdapter {
   clearProgress(pid, videoId) { return this.api.del(`/profiles/${pid}/progress/${encodeURIComponent(videoId)}`); }
   setReminder(pid, id, on) { return on ? this.api.put(`/profiles/${pid}/reminders/${id}`) : this.api.del(`/profiles/${pid}/reminders/${id}`); }
   async plans() { try { const r = await this.api.get('/plans'); return { plans: r.plans, payments: r.payments || { provider: 'none' }, billing: r.billing || NO_BILLING }; } catch { return { plans: PLANS_FALLBACK, payments: { provider: 'none' }, billing: NO_BILLING }; } }
-  async quote(planId, couponCode) { return (await this.api.post('/payments/quote', { planId, couponCode })).quote; }
+  async quote(planId, couponCode, useCredit = false) { return (await this.api.post('/payments/quote', { planId, couponCode, ...(useCredit ? { useCredit: true } : {}) })).quote; }
   async billingHistory() { return (await this.api.get('/billing')).payments; }
   invoiceBlob(id) { return this.api.blob(`/invoices/${encodeURIComponent(id)}/pdf`); }
   async emailInvoice(id) { await this.api.post(`/invoices/${encodeURIComponent(id)}/email`); }
   /** Buy / renew a plan. Razorpay: server creates the order → Checkout takes the payment → server verifies the signature.
    *  Rejects with `.cancelled` if the viewer closes the payment window. Resolves with the new subscription. */
-  async checkout(planId, { couponCode, billing } = {}) {
-    const c = await this.api.post('/payments/checkout', { planId, couponCode: couponCode || undefined, billing });
-    if (c.provider === 'mock' || c.provider === 'coupon') return c.subscription;   // demo provider / 100%-off coupon: active immediately
+  async checkout(planId, { couponCode, billing, useCredit = false } = {}) {
+    const c = await this.api.post('/payments/checkout', { planId, couponCode: couponCode || undefined, billing, ...(useCredit ? { useCredit: true } : {}) });
+    // Nothing to pay when a 100%-off coupon or the viewer's credit covered the price.
+    if (c.provider === 'mock' || c.provider === 'coupon' || c.provider === 'credit') return c.subscription;
     const paid = await openCheckout(c);
     return (await this.api.post('/payments/verify', { orderId: paid.razorpay_order_id, paymentId: paid.razorpay_payment_id, signature: paid.razorpay_signature })).subscription;
   }
   async cancelSubscription() { return (await this.api.del('/subscription'))?.subscription ?? { planId: 'free', status: 'active' }; }
   submitContact(payload) { return this.api.post('/contact', payload); }
 
+  /* ----- promotional credit & referrals (see server/src/promos.js) ----- */
+  promo() { return this.api.get('/promo'); }
+  credits() { return this.api.get('/credits'); }
+  redeemInvite(code) { return this.api.post('/promo/redeem', { code }); }
+  inviteLink() { return this.api.get('/promo/link'); }
+
+  /* ----- phone sign-in (SMS OTP) and the support desk ----- */
+  requestOtp(phone, ref = '') { return this.api.post('/auth/otp/request', { phone, ...(ref ? { ref } : {}) }); }
+  async verifyOtp(phone, code, name, ref = '') { const r = await this.api.post('/auth/otp/verify', { phone, code, name, ...(ref ? { ref } : {}) }); this.api.setToken(r.token); return r; }
+  submitTicket(payload) { return this.api.post('/support/tickets', payload); }
+  myTickets({ limit = 25, offset = 0 } = {}) { return this.api.get(`/support/tickets?limit=${limit}&offset=${offset}`); }
+  ticket(id, email = '') { return this.api.get(`/support/tickets/${encodeURIComponent(id)}${email ? `?email=${encodeURIComponent(email)}` : ''}`); }
+  lookupTicket(reference, email) { return this.api.post('/support/lookup', { reference, email }); }
+  replyTicket(id, body, email = '') { return this.api.post(`/support/tickets/${encodeURIComponent(id)}/replies`, { body, email }); }
+
   /* ----- account security ----- */
-  async signInApple(identityToken, name) { const r = await this.api.post('/auth/apple', { identityToken, name }); this.api.setToken(r.token); return r; }
+  async signInApple(identityToken, name, ref = '') { const r = await this.api.post('/auth/apple', { identityToken, name, ...(ref ? { ref } : {}) }); this.api.setToken(r.token); return r; }
   forgotPassword(email) { return this.api.post('/auth/forgot', { email }); }
   async resetPassword(token, password) { const r = await this.api.post('/auth/reset', { token, password }); this.api.setToken(r.token); return r; }
   verifyEmail(token) { return this.api.post('/auth/verify', { token }); }
@@ -153,11 +182,14 @@ export class RemoteAdapter {
   pushPrefs(endpoint, prefs) { return this.api.patch('/push/prefs', { endpoint, ...prefs }); }
   pushUnsubscribe(endpoint) { return this.api.post('/push/unsubscribe', { endpoint }); }
   // Native apps: account-linked and anonymous guest tokens (Admin → Broadcast sends to these).
-  registerDevice(token, platform = 'android', label = null) { return this.api.post('/devices', { token, platform, label }); }
+  // `prefs` carries the same three notification choices the browser has (episodes / launches / news).
+  registerDevice(token, platform = 'android', label = null, prefs = null) { return this.api.post('/devices', { token, platform, label, prefs }); }
   removeDevice(token) { return this.api.del('/devices', { token }); }
-  registerGuestDevice(token, platform = 'android', label = null) { return this.api.post('/devices/guest', { token, platform, label }); }
+  registerGuestDevice(token, platform = 'android', label = null, prefs = null) { return this.api.post('/devices/guest', { token, platform, label, prefs }); }
   removeGuestDevice(token) { return this.api.del('/devices/guest', { token }); }
   devices() { return this.api.get('/devices'); }
+  deviceStatus(token) { return this.api.post('/devices/status', { token }); }
+  devicePrefs(token, prefs) { return this.api.patch('/devices/prefs', { token, ...prefs }); }
   requestRefund(paymentId, reason) { return this.api.post(`/payments/${encodeURIComponent(paymentId)}/refund-request`, { reason }); }
   refundRequests() { return this.api.get('/refund-requests'); }
   playEvent(videoId, event, seconds) { this.api.beacon('/events/play', { videoId, event, seconds }); }
