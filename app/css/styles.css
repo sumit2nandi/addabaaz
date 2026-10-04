@@ -649,9 +649,9 @@ body.player-settings-open { overflow: hidden; }
 @keyframes ytpSettingsRise { from { transform: translateY(18px); opacity: .75; } to { transform: translateY(0); opacity: 1; } }
 .ytp-settings-handle { flex: none; height: 26px; display: grid; place-items: center; }
 .ytp-settings-handle span { display: block; width: 38px; height: 4px; border-radius: 999px; background: rgba(255,255,255,.38); }
-.ytp-settings-header { flex: none; display: grid; grid-template-columns: 48px minmax(0,1fr) 48px; align-items: center; gap: 6px; padding: 0 14px 10px; border-bottom: 1px solid rgba(255,255,255,.11); }
-.ytp-settings-header h2 { min-width: 0; margin: 0; color: #fff; font-size: 17px; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ytp-settings-header button { width: 42px; height: 42px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #fff; }
+.ytp-settings-header { flex: none; display: flex; align-items: center; gap: 12px; padding: 0 22px 10px; border-bottom: 1px solid rgba(255,255,255,.11); }
+.ytp-settings-header h2 { flex: 1 1 auto; min-width: 0; margin: 0; color: #fff; font-size: 17px; font-weight: 700; text-align: left; white-space: nowrap; overflow: visible; text-overflow: clip; }
+.ytp-settings-header button { flex: 0 0 42px; width: 42px; height: 42px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #fff; }
 .ytp-settings-header button:hover, .ytp-settings-header button:active { background: rgba(255,255,255,.12); }
 .ytp-settings-header button[hidden] { display: none !important; }
 .ytp-settings-header button:focus-visible, .ytp-menu-item:focus-visible, .ytp-menu-opt:focus-visible { outline: 2px solid rgba(255,255,255,.9); outline-offset: -3px; }
