@@ -349,6 +349,61 @@ test('Chromium HLS uses hls.js despite a native maybe-hint, and fatal errors rea
   }
 });
 
+test('native Safari quality menu refreshes after the master loads and switches to the selected variant', async () => {
+  const { document, window } = parseHTML('<!doctype html><html><head></head><body><div id="slot"></div></body></html>');
+  const previous = {
+    document: globalThis.document, window: globalThis.window, location: globalThis.location,
+    fetch: globalThis.fetch, navigator: Object.getOwnPropertyDescriptor(globalThis, 'navigator'),
+  };
+  let finishManifest, playCalls = 0;
+  const manifestRequest = new Promise((resolve) => { finishManifest = resolve; });
+  globalThis.document = document;
+  globalThis.window = window;
+  globalThis.location = { protocol: 'https:', origin: 'https://site.example', pathname: '/', hash: '', search: '' };
+  globalThis.fetch = () => manifestRequest;
+  Object.defineProperty(globalThis, 'navigator', { value: { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' }, configurable: true });
+  const createElement = document.createElement.bind(document);
+  let video;
+  document.createElement = (tag) => {
+    const el = createElement(tag);
+    if (String(tag).toLowerCase() === 'video') {
+      video = el;
+      el.canPlayType = () => 'probably';
+      el.paused = false; el.ended = false; el.currentTime = 2; el.duration = 6;
+      el.videoWidth = 854; el.videoHeight = 480; el.playbackRate = 1; el.muted = false; el.volume = 0.8;
+      el.play = () => { playCalls++; return Promise.resolve(); };
+      el.pause = () => { el.paused = true; };
+      el.load = () => setTimeout(() => el.dispatchEvent(new window.Event('loadedmetadata')), 0);
+    }
+    return el;
+  };
+  try {
+    const url = 'https://site.example/api/v1/media/token/master.m3u8';
+    const player = await createHtml5Player(document.getElementById('slot'), {
+      id: 'native-hls', title: 'Native HLS', duration: 6, source: { type: 'hls', url },
+    }, { autoplay: false, controls: true });
+    const slot = document.getElementById('slot');
+    slot.querySelector('.ytp-gear-btn').click();
+    slot.querySelector('[data-nav="quality"]').click();
+    assert.deepEqual([...slot.querySelectorAll('[data-quality]')].map((item) => item.textContent.trim()), ['Auto (480p)', '480p'], 'before the fetch resolves, the menu shows only the active native level');
+
+    finishManifest(new Response(`#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080,NAME="1080p"\n1080p/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2800000,RESOLUTION=1280x720,NAME="720p"\n720p/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1400000,RESOLUTION=854x480,NAME="480p"\n480p/index.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,NAME="360p"\n360p/index.m3u8\n`, { status: 200, headers: { 'Content-Type': 'application/vnd.apple.mpegurl' } }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual([...slot.querySelectorAll('[data-quality]')].map((item) => item.textContent.trim()), ['Auto (480p)', '1080p HD', '720p HD', '480p', '360p'], 'the open menu refreshes with every master-playlist resolution');
+
+    slot.querySelector('[data-quality="1"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(video.src, 'https://site.example/api/v1/media/token/720p/index.m3u8', 'native Safari switches to the selected child playlist');
+    assert.equal(video.currentTime, 2, 'switching quality preserves the playback position');
+    assert.equal(playCalls, 1, 'active playback resumes after the new playlist metadata loads');
+    player.destroy();
+  } finally {
+    document.createElement = createElement;
+    globalThis.document = previous.document; globalThis.window = previous.window; globalThis.location = previous.location; globalThis.fetch = previous.fetch;
+    if (previous.navigator) Object.defineProperty(globalThis, 'navigator', previous.navigator); else delete globalThis.navigator;
+  }
+});
+
 test('R2 videos (including short clips like 6s Cricket and newly started videos) appear in Continue Watching', async () => {
   const { document, window } = parseHTML('<!doctype html><html><body></body></html>');
   const prevDoc = globalThis.document, prevWin = globalThis.window, prevLoc = globalThis.location, prevLS = globalThis.localStorage, prevSS = globalThis.sessionStorage;

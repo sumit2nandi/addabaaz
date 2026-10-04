@@ -83,6 +83,36 @@ const resLabel = (h) => {
   return `${h}p`;
 };
 
+// Safari's native HLS element exposes only the active videoHeight, not the available variant ladder.
+// Parse the small master playlist separately so the Quality menu and manual native selection can use it.
+function parseHlsMaster(text, masterUrl) {
+  const lines = String(text || '').split(/\r?\n/).map((line) => line.trim());
+  const levels = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].startsWith('#EXT-X-STREAM-INF:')) continue;
+    const attributes = {};
+    const pattern = /([A-Z0-9-]+)=((?:"[^"]*")|[^,]*)/gi;
+    for (const match of lines[i].slice(lines[i].indexOf(':') + 1).matchAll(pattern)) {
+      attributes[match[1].toUpperCase()] = match[2].replace(/^"|"$/g, '').trim();
+    }
+    let uri = '';
+    for (let j = i + 1; j < lines.length; j++) {
+      if (lines[j] && !lines[j].startsWith('#')) { uri = lines[j]; i = j; break; }
+    }
+    if (!uri) continue;
+    try {
+      const url = new URL(uri, masterUrl);
+      if (!['https:', 'http:'].includes(url.protocol)) continue;
+      const resolution = /^(\d+)x(\d+)$/i.exec(attributes.RESOLUTION || '');
+      const namedHeight = /(?:^|\D)(\d{3,4})p(?:\D|$)/i.exec(attributes.NAME || '');
+      const height = Number(resolution?.[2] || namedHeight?.[1] || 0);
+      const name = attributes.NAME || '';
+      levels.push({ index: levels.length, height, label: height ? resLabel(height) : name || `Variant ${levels.length + 1}`, url: url.href });
+    } catch { /* ignore malformed variant URIs */ }
+  }
+  return levels;
+};
+
 // Only replace button innerHTML when the icon key actually changes so in-flight pointerdown→click on the button is never aborted.
 function setBtnIcon(btn, key, svg) {
   if (!btn || btn.dataset?.icon === key) return;
@@ -145,7 +175,8 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
     if (SPEEDS.includes(sp)) v.playbackRate = sp;
   } catch { /* ignore */ }
 
-  let hls = null, lastEmit = 0, selectedQuality = -1; // -1 = Auto
+  let hls = null, lastEmit = 0, selectedQuality = -1, nativeLevels = []; // -1 = Auto
+  let selectNativeQuality = () => {}, refreshQualityMenu = () => {};
   let playbackErrorReported = false, hlsEngine = 'html5';
   let uiUpdate = () => {}, uiCleanup = () => {};
 
@@ -155,16 +186,19 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
   } else {
     const wrap = buildYouTubeUI(container, v, video, {
       getHls: () => hls,
+      getNativeLevels: () => nativeLevels,
       getSelectedQuality: () => selectedQuality,
       setSelectedQuality: (lvl) => {
         selectedQuality = lvl;
         if (hls) hls.currentLevel = lvl;
+        else selectNativeQuality(lvl);
         uiUpdate();
       },
       onUserMute,
     });
     uiUpdate = wrap.update;
     uiCleanup = wrap.cleanup;
+    refreshQualityMenu = wrap.refreshQuality;
   }
 
   // Subtitle fetch/parse is optional and must never hold up the first video frame.
@@ -190,8 +224,10 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
     if (Hls?.isSupported?.()) {
       try {
         hls = new Hls({ startPosition: start || -1 });
-        hls.on?.(Hls.Events?.MANIFEST_PARSED || 'hlsManifestParsed', () => uiUpdate());
-        hls.on?.(Hls.Events?.LEVEL_SWITCHED || 'hlsLevelSwitched', () => uiUpdate());
+        const refreshQuality = () => { uiUpdate(); refreshQualityMenu(); };
+        hls.on?.(Hls.Events?.MANIFEST_PARSED || 'hlsManifestParsed', refreshQuality);
+        hls.on?.(Hls.Events?.LEVELS_UPDATED || 'hlsLevelsUpdated', refreshQuality);
+        hls.on?.(Hls.Events?.LEVEL_SWITCHED || 'hlsLevelSwitched', refreshQuality);
         hls.on?.(Hls.Events?.ERROR || 'hlsError', (_e, d) => {
           if (!d?.fatal) return;
           if (!playbackErrorReported) {
@@ -219,8 +255,49 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
       throw Object.assign(new Error('This video format isn’t supported on your device.'), { friendly: true });
     }
   } else {
-    if (type === 'hls') hlsEngine = 'native-hls';
-    v.src = url;
+    if (type === 'hls') {
+      hlsEngine = 'native-hls';
+      v.src = url;
+      let activeNativeUrl = url;
+      selectNativeQuality = (index) => {
+        const variant = index < 0 ? null : nativeLevels.find((level) => level.index === index);
+        const targetUrl = variant?.url || url;
+        if (!targetUrl || targetUrl === activeNativeUrl) return;
+        const playback = {
+          time: Number(v.currentTime) || 0,
+          playing: !v.paused && !v.ended,
+          rate: v.playbackRate || 1,
+          muted: Boolean(v.muted),
+          volume: Number.isFinite(v.volume) ? v.volume : 1,
+        };
+        const restorePlayback = () => {
+          if (playback.time > 0) { try { v.currentTime = playback.time; } catch { /* wait for metadata if the browser is not seekable yet */ } }
+          v.playbackRate = playback.rate;
+          v.muted = playback.muted;
+          v.volume = playback.volume;
+          onDimensions?.(v.videoWidth, v.videoHeight);
+          uiUpdate();
+          if (playback.playing) { try { Promise.resolve(v.play()).catch(() => {}); } catch { /* the browser may require another gesture */ } }
+        };
+        v.addEventListener('loadedmetadata', restorePlayback, { once: true });
+        activeNativeUrl = targetUrl;
+        v.src = targetUrl;
+        try { v.load(); } catch { /* setting src already initiates loading in some WebViews */ }
+      };
+      // Native HLS does not expose its variant ladder through <video>; load the master text in the
+      // background so Safari can show and switch among the same resolutions as the hls.js player.
+      fetch(url, { cache: 'no-store' })
+        .then((response) => response.ok ? response.text() : null)
+        .then((text) => {
+          if (!text) return;
+          const levels = parseHlsMaster(text, url);
+          if (!levels.length) return;
+          nativeLevels = levels;
+          uiUpdate();
+          refreshQualityMenu();
+        })
+        .catch(() => {}); // native playback itself can still work when cross-origin manifest text isn't fetchable
+    } else v.src = url;
   }
 
   v.addEventListener('loadedmetadata', () => {
@@ -307,7 +384,7 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
 }
 
 // Builds the YouTube-look player shell, scrubber, control bar, double-tap seek, and Settings menu around <video>.
-function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSelectedQuality, onUserMute }) {
+function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelectedQuality, setSelectedQuality, onUserMute }) {
   const wrap = document.createElement('div');
   wrap.className = 'ytp is-paused show-controls';
   wrap.tabIndex = 0;
@@ -616,22 +693,21 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
   };
 
   const qualityOptions = () => {
-    const h = getHls();
-    if (h?.levels?.length > 1) {
-      const seen = new Set();
-      const items = [{ id: -1, label: 'Auto', sub: h.levels[h.currentLevel]?.height ? `(${resLabel(h.levels[h.currentLevel].height)})` : '' }];
-      h.levels
-        .map((lv, idx) => ({ idx, height: lv.height || 0 }))
-        .sort((a, b) => b.height - a.height)
-        .forEach(({ idx, height }) => {
-          const lbl = resLabel(height);
-          if (!seen.has(lbl)) { seen.add(lbl); items.push({ id: idx, label: lbl, sub: '' }); }
-        });
-      return items;
-    }
-    const nativeH = v.videoHeight || 0;
-    const items = [{ id: -1, label: 'Auto', sub: nativeH ? `(${resLabel(nativeH)})` : '' }];
-    if (nativeH > 0) items.push({ id: 0, label: resLabel(nativeH), sub: '' });
+    const h = getHls(), native = getNativeLevels?.() || [];
+    const hlsLevels = h?.levels || [];
+    const levels = hlsLevels.length ? hlsLevels.map((level, index) => ({
+      index, height: Number(level.height) || 0,
+      label: Number(level.height) ? resLabel(Number(level.height)) : String(level.name || `Variant ${index + 1}`),
+    })) : native.map((level) => ({ index: level.index, height: level.height, label: level.label }));
+    const autoLevel = hlsLevels[h?.currentLevel] || hlsLevels[h?.loadLevel] || hlsLevels[0];
+    const currentHeight = Number(v.videoHeight) || Number(autoLevel?.height) || native[0]?.height || 0;
+    const items = [{ id: -1, label: 'Auto', sub: currentHeight ? `(${resLabel(currentHeight)})` : '' }];
+    const seen = new Set();
+    levels.sort((a, b) => b.height - a.height).forEach(({ index, height, label }) => {
+      const text = label || (height ? resLabel(height) : `Variant ${index + 1}`);
+      if (text && !seen.has(text)) { seen.add(text); items.push({ id: index, label: text, sub: '' }); }
+    });
+    if (!levels.length && currentHeight) items.push({ id: 0, label: resLabel(currentHeight), sub: '' });
     return items;
   };
 
@@ -704,6 +780,10 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
           </button>`).join('')}
         </div>`;
     }
+  };
+  const refreshQuality = () => {
+    if (menuView === 'quality') renderMenu('quality');
+    else if (menuView === 'main') renderMenu('main');
   };
 
   gearBtn?.addEventListener('click', (e) => {
@@ -820,5 +900,5 @@ function buildYouTubeUI(container, v, video, { getHls, getSelectedQuality, setSe
       document.removeEventListener('webkitfullscreenchange', onFsChange);
     }
   };
-  return { wrap, update, cleanup };
+  return { wrap, update, cleanup, refreshQuality };
 }
