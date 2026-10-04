@@ -85,12 +85,12 @@ export default async function reels(ctx) {
   };
   keepWindow(startIdx);
 
-  let active = -1, ctl = null, host = null, token = 0;
+  let active = -1, ctl = null, host = null, token = 0, hasPlayed = false;
   const setIcon = (sec) => { const b = $('[data-reel-sound]', sec); if (b) b.innerHTML = icon(soundOn ? 'volume' : 'mute', { size: 26 }).s; };
   async function activate(i) {
     if (i === active || i < 0 || i >= sections.length) return;
     keepWindow(i);
-    active = i; const my = ++token;
+    active = i; hasPlayed = false; const my = ++token;
     if (ctl) { ctl.destroy(); host?.remove(); ctl = null; sections.forEach((s) => s.classList.remove('playing', 'paused')); }
     const sec = sections[i], slot = $('.reel-slot', sec), frame = $('.reel-frame', sec); const v = list[i];
     if (!slot || !frame) return;   // section shell lost its content (window pruned mid-scroll): ignore this activation
@@ -111,9 +111,10 @@ export default async function reels(ctx) {
         onState: (st) => {
           if (my !== token) return;
           if (st === 'playing') {
+            hasPlayed = true;
             sec.classList.remove('paused');
             if (!started) { started = true; app.user?.remote?.playEvent(v.id, 'start'); }
-          } else if (st === 'paused') sec.classList.add('paused');
+          } else if (st === 'paused' && hasPlayed) sec.classList.add('paused'); // Ignore an initial PAUSED event before autoplay starts.
         },
         // The player starts muted for instant motion and lifts the mute on main's 600/1500/3000ms
         // schedule; if it is STILL muted by then, the reel runs muted, the sound button must say so,
@@ -159,7 +160,7 @@ export default async function reels(ctx) {
     if (e.target.closest('[data-reel-tap]')) {
       // Tap = play/pause (the tap layer also lets a swipe scroll the feed even when the finger starts on the video).
       const sec = e.target.closest('.reel'); if (!ctl || sections[active] !== sec) return;
-      if (sec.classList.contains('paused')) { Promise.resolve(ctl.play()).catch(() => {}); sec.classList.remove('paused'); } else { ctl.pause(); sec.classList.add('paused'); }
+      if (!hasPlayed || sec.classList.contains('paused')) { Promise.resolve(ctl.play()).catch(() => {}); sec.classList.remove('paused'); } else { ctl.pause(); sec.classList.add('paused'); }
       return;
     }
     if (e.target.closest('[data-reel-sound]')) {
