@@ -101,6 +101,43 @@ test('when the series has no next episode, Autoplay next recommends a related sh
   assert.equal(card.hidden, true);
 });
 
+test('recommended-next countdown ticks preserve the thumbnail and card controls', async () => {
+  const { opts } = await mount('vpy');
+  const realSetInterval = globalThis.setInterval;
+  const realClearInterval = globalThis.clearInterval;
+  let tick, cleared = false;
+  globalThis.setInterval = (fn, delay) => {
+    if (delay === 1000) { tick = fn; return 'next-countdown'; }
+    return realSetInterval(fn, delay);
+  };
+  globalThis.clearInterval = (id) => {
+    if (id === 'next-countdown') { cleared = true; return; }
+    return realClearInterval(id);
+  };
+  try {
+    opts.onEnded();
+    const card = document.querySelector('#nextUp');
+    const thumbnail = card.querySelector('.next-card img');
+    const playButton = card.querySelector('#nuPlay');
+    const countdown = card.querySelector('[data-next-countdown]');
+    assert.ok(thumbnail, 'the recommendation thumbnail is rendered');
+    assert.ok(countdown);
+    assert.match(countdown.textContent, /Recommended next in \d+s/);
+    const seconds = Number(countdown.textContent.match(/(\d+)s$/)[1]);
+
+    tick();
+    assert.equal(countdown.textContent, `Recommended next in ${seconds - 1}s`);
+    assert.equal(card.querySelector('.next-card img'), thumbnail, 'the same image node stays mounted across countdown ticks');
+    assert.equal(card.querySelector('#nuPlay'), playButton, 'the rest of the recommendation card stays mounted too');
+
+    card.querySelector('#nuCancel').dispatchEvent(new window.Event('click', { bubbles: true }));
+    assert.equal(cleared, true, 'Cancel still stops the timer');
+  } finally {
+    globalThis.setInterval = realSetInterval;
+    globalThis.clearInterval = realClearInterval;
+  }
+});
+
 test('Autoplay next disabled does not start an episode or recommendation countdown', async () => {
   const pref = app.user.pref;
   app.user.pref = () => false;

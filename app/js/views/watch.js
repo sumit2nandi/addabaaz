@@ -216,10 +216,17 @@ export default async function watch(ctx) {
   const showNextUp = ({ video: target, recommended }) => {
     const box = $('#nextUp', ctx.root);
     let n = CONFIG.autoplayCountdown;
-    const draw = () => { box.innerHTML = html`<div class="next-card">${img(cat.thumb(target, 'hqdefault'), '')}<div><div class="eyebrow">${recommended ? 'Recommended next' : 'Up next'} in ${n}s</div><strong>${cat.label(target)} \u00b7 ${cat.displayTitle(target)}</strong><div class="row"><button class="btn btn-primary btn-sm" id="nuPlay">${icon('play', { size: 16 })} Play now</button><button class="btn btn-ghost btn-sm" id="nuCancel">Cancel</button></div></div></div>`.s; };
-    box.hidden = false; draw();
+    const label = recommended ? 'Recommended next' : 'Up next';
+    // Render the card once: replacing its innerHTML every second reloads the thumbnail and makes it blink.
+    box.innerHTML = html`<div class="next-card">${img(cat.thumb(target, 'hqdefault'), '')}<div><div class="eyebrow" data-next-countdown>${label} in ${n}s</div><strong>${cat.label(target)} \u00b7 ${cat.displayTitle(target)}</strong><div class="row"><button class="btn btn-primary btn-sm" id="nuPlay">${icon('play', { size: 16 })} Play now</button><button class="btn btn-ghost btn-sm" id="nuCancel">Cancel</button></div></div></div>`.s;
+    const countdownLabel = box.querySelector('[data-next-countdown]');
+    box.hidden = false;
     const stop = () => { clearInterval(countdown); countdown = null; box.hidden = true; };
-    countdown = setInterval(() => { n -= 1; if (n <= 0) { stop(); go('/watch/' + target.id, { replace: true }); } else draw(); }, 1000);
+    countdown = setInterval(() => {
+      n -= 1;
+      if (n <= 0) { stop(); go('/watch/' + target.id, { replace: true }); }
+      else countdownLabel.textContent = `${label} in ${n}s`;
+    }, 1000);
     box.onclick = (e) => { if (e.target.closest('#nuPlay')) { stop(); go('/watch/' + target.id, { replace: true }); } else if (e.target.closest('#nuCancel')) stop(); };
   };
   // Create the player. R2 videos first ask the API for a short-lived signed URL (this is where login and payment are enforced server-side);
