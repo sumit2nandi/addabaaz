@@ -146,26 +146,41 @@ export function extraDb({ q, tx, iso }) {
      * A re-registration that only carries the token (the apps usually just send that) keeps the stored
      * platform and label instead of wiping them.
      */
-    async upsert(userId, { hash, token, platform = null, label = null }) {
+    async upsert(userId, { hash, token, platform = null, label = null, prefs = null }) {
       const plat = ['android', 'ios', 'web'].includes(platform) ? platform : null;
       const lab = label ? String(label).slice(0, 120) : null;
-      await q(`INSERT INTO push_devices (id, user_id, platform, token_hash, token, label) VALUES (UUID(),?,COALESCE(?,'android'),?,?,?)
+      // On a re-registration the stored choices are kept: the apps send the token on every start, and those
+      // columns are the viewer's settings, not part of the registration.
+      await q(`INSERT INTO push_devices (id, user_id, platform, token_hash, token, label, episodes, launches, news) VALUES (UUID(),?,COALESCE(?,'android'),?,?,?,?,?,?)
         ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), token = VALUES(token), platform = COALESCE(?, platform), label = COALESCE(?, label), fail_count = 0, last_seen = UTC_TIMESTAMP(3)`,
-      [userId, plat, hash, String(token).slice(0, 512), lab, plat, lab]);
+      [userId, plat, hash, String(token).slice(0, 512), lab,
+        prefs?.episodes === false ? 0 : 1, prefs?.launches === false ? 0 : 1, prefs?.news ? 1 : 0,
+        plat, lab]);
     },
     /** Stores a guest app token with no account association; the same device moves to a user on sign-in. */
-    async upsertGuest({ hash, token, platform = null, label = null }) {
+    async upsertGuest({ hash, token, platform = null, label = null, prefs = null }) {
       const plat = ['android', 'ios', 'web'].includes(platform) ? platform : null;
       const lab = label ? String(label).slice(0, 120) : null;
-      await q(`INSERT INTO push_devices (id, user_id, platform, token_hash, token, label) VALUES (UUID(),NULL,COALESCE(?,'android'),?,?,?)
+      await q(`INSERT INTO push_devices (id, user_id, platform, token_hash, token, label, episodes, launches, news) VALUES (UUID(),NULL,COALESCE(?,'android'),?,?,?,?,?,?)
         ON DUPLICATE KEY UPDATE user_id = NULL, token = VALUES(token), platform = COALESCE(?, platform), label = COALESCE(?, label), fail_count = 0, last_seen = UTC_TIMESTAMP(3)`,
-      [plat, hash, String(token).slice(0, 512), lab, plat, lab]);
+      [plat, hash, String(token).slice(0, 512), lab,
+        prefs?.episodes === false ? 0 : 1, prefs?.launches === false ? 0 : 1, prefs?.news ? 1 : 0,
+        plat, lab]);
     },
     /** Removes one token (sign-out, permission revoked, or account opt-out). */
     async remove(userId, hash) { return (await q('DELETE FROM push_devices WHERE user_id = ? AND token_hash = ?', [userId, hash])).affectedRows; },
     /** Removes a token by hash (FCM dead-token cleanup and public guest opt-out / stale-link cleanup). */
     async removeHash(hash) { await q('DELETE FROM push_devices WHERE token_hash = ?', [hash]); },
     async listFor(userId) { return (await q('SELECT platform, label, last_seen FROM push_devices WHERE user_id = ? ORDER BY last_seen DESC', [userId])).map((r) => ({ platform: r.platform, label: r.label, lastSeen: iso(r.last_seen) })); },
+    /** The three notification choices stored for one device token (by hash), or null when the token is unknown. */
+    async getPrefs(hash) { const r = (await q('SELECT episodes, launches, news FROM push_devices WHERE token_hash = ?', [hash]))[0]; return r ? { episodes: !!r.episodes, launches: !!r.launches, news: !!r.news } : null; },
+    /** Updates only the choices the client sent. Works for an account device or a guest device (token possession). */
+    async setPrefs(hash, prefs) {
+      const sets = [], vals = [];
+      for (const k of ['episodes', 'launches', 'news']) if (prefs[k] !== undefined) { sets.push(`${k} = ?`); vals.push(prefs[k] ? 1 : 0); }
+      if (!sets.length) return 0;
+      return (await q(`UPDATE push_devices SET ${sets.join(', ')}, last_seen = UTC_TIMESTAMP(3) WHERE token_hash = ?`, [...vals, hash])).affectedRows;
+    },
     async count() { return Number((await q('SELECT COUNT(*) AS n FROM push_devices'))[0].n); },
     /** Every registered token, for a broadcast. */
     async audience() { return (await q('SELECT token FROM push_devices')).map((r) => r.token); },
@@ -173,12 +188,15 @@ export function extraDb({ q, tx, iso }) {
     async audienceFor(a) {
       const sel = 'SELECT pd.token, pd.user_id FROM push_devices pd';
       let rows;
+      // The same three switches as the browser, applied to the same audiences: a device that turned, say,
+      // episode notifications off is skipped for a show's new-episode send but still gets a launch.
       if (a.kind === 'episodes') {
         const vids = a.videoIds?.length ? a.videoIds : ['\u0000'];
-        rows = await q(`${sel} WHERE pd.user_id IN (
+        rows = await q(`${sel} WHERE pd.episodes = 1 AND pd.user_id IN (
           SELECT p.user_id FROM profiles p JOIN list_items l ON l.profile_id = p.id AND l.item_type = 'show' AND l.item_id = ?
           UNION SELECT p.user_id FROM profiles p JOIN watch_progress w ON w.profile_id = p.id AND w.video_id IN (?))`, [a.showId, vids]);
-      } else if (a.kind === 'launches') rows = await q(`${sel} WHERE pd.user_id IN (SELECT p.user_id FROM profiles p JOIN reminders r ON r.profile_id = p.id AND r.upcoming_id = ?)`, [a.upcomingId]);
+      } else if (a.kind === 'launches') rows = await q(`${sel} WHERE pd.launches = 1 AND pd.user_id IN (SELECT p.user_id FROM profiles p JOIN reminders r ON r.profile_id = p.id AND r.upcoming_id = ?)`, [a.upcomingId]);
+      else if (a.kind === 'news') rows = await q(`${sel} WHERE pd.news = 1`);
       else if (a.kind === 'user') rows = await q(`${sel} WHERE pd.user_id = ?`, [a.userId]);
       else rows = await q(sel);
       return rows.map((r) => ({ token: r.token, userId: r.user_id }));

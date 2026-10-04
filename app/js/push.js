@@ -1,7 +1,7 @@
 /* Web Push (browser notifications) for signed-in viewers. The server decides who to notify (new episodes of shows you follow,
  * launches you set reminders for, optional announcements); this file only manages the browser side of the subscription. */
 import { app } from './app.js';
-import { nativePushSupported, nativePushState, attachNativePush, detachNativePush, initNativePush } from './push-native.js';
+import { nativePushSupported, nativePushState, attachNativePush, detachNativePush, initNativePush, setNativePushPrefs } from './push-native.js';
 
 // Helpers: convert the server's public VAPID key to bytes, and detect browser support.
 const b64ToBytes = (s) => { const p = '='.repeat((4 - (s.length % 4)) % 4), raw = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); };
@@ -55,7 +55,7 @@ export async function disablePush() {
   await sub.unsubscribe().catch(() => {});
   announce();
 }
-export async function setPushPrefs(prefs) { if (nativePushSupported()) return; const sub = await currentSubscription(); if (sub) { await app.user.remote.pushPrefs(sub.endpoint, prefs); announce(); } }
+export async function setPushPrefs(prefs) { if (nativePushSupported()) return setNativePushPrefs(prefs); const sub = await currentSubscription(); if (sub) { await app.user.remote.pushPrefs(sub.endpoint, prefs); announce(); } }
 /** On sign-out this device stops receiving the account's notifications (shared devices!) — the browser permission stays. */
 export async function detachPush() {
   if (nativePushSupported()) { await detachNativePush({ optOut: false }); return; } // sign-out detaches the account; guest default-on can register anonymously

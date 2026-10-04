@@ -182,11 +182,14 @@ export class RemoteAdapter {
   pushPrefs(endpoint, prefs) { return this.api.patch('/push/prefs', { endpoint, ...prefs }); }
   pushUnsubscribe(endpoint) { return this.api.post('/push/unsubscribe', { endpoint }); }
   // Native apps: account-linked and anonymous guest tokens (Admin → Broadcast sends to these).
-  registerDevice(token, platform = 'android', label = null) { return this.api.post('/devices', { token, platform, label }); }
+  // `prefs` carries the same three notification choices the browser has (episodes / launches / news).
+  registerDevice(token, platform = 'android', label = null, prefs = null) { return this.api.post('/devices', { token, platform, label, prefs }); }
   removeDevice(token) { return this.api.del('/devices', { token }); }
-  registerGuestDevice(token, platform = 'android', label = null) { return this.api.post('/devices/guest', { token, platform, label }); }
+  registerGuestDevice(token, platform = 'android', label = null, prefs = null) { return this.api.post('/devices/guest', { token, platform, label, prefs }); }
   removeGuestDevice(token) { return this.api.del('/devices/guest', { token }); }
   devices() { return this.api.get('/devices'); }
+  deviceStatus(token) { return this.api.post('/devices/status', { token }); }
+  devicePrefs(token, prefs) { return this.api.patch('/devices/prefs', { token, ...prefs }); }
   requestRefund(paymentId, reason) { return this.api.post(`/payments/${encodeURIComponent(paymentId)}/refund-request`, { reason }); }
   refundRequests() { return this.api.get('/refund-requests'); }
   playEvent(videoId, event, seconds) { this.api.beacon('/events/play', { videoId, event, seconds }); }

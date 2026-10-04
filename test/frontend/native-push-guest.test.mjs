@@ -92,3 +92,43 @@ test('a revoked Android permission unregisters the token and blocks token-refres
   assert.equal(localStorage.getItem('ab.pushToken'), null);
   currentPermission = 'granted';
 });
+
+test('the app keeps the same three notification choices as the browser', async () => {
+  const { nativePushState, setNativePushPrefs } = await import('../../app/js/push-native.js');
+  const { app } = await import('../../app/js/app.js');
+
+  // A signed-in installation that has never opened the switches: the server's defaults.
+  const reads = [];
+  app.user = {
+    account: { id: 'u1' }, remote: {
+      async devices() { return { devices: [{ platform: 'android', label: 'Android app', lastSeen: null }] }; },
+      async deviceStatus(token) { reads.push(token); return { prefs: null }; },
+    },
+  };
+  values.set('ab.pushToken', 'fcm-account-token-1234567890');
+  values.delete('ab.pushOptOut');
+  let state = await nativePushState();
+  assert.equal(state.native, true);
+  assert.equal(state.guest, false);
+  assert.deepEqual(state.prefs, { episodes: true, launches: true, news: false }, 'episodes and launches on, announcements off — the same defaults as the web');
+  assert.deepEqual(reads, ['fcm-account-token-1234567890'], 'the stored choices are read by token');
+
+  // What the server stores comes back to the screen.
+  const writes = [];
+  app.user.remote.deviceStatus = async () => ({ prefs: { episodes: false, launches: true, news: true } });
+  app.user.remote.devicePrefs = async (token, prefs) => { writes.push([token, prefs]); };
+  state = await nativePushState();
+  assert.deepEqual(state.prefs, { episodes: false, launches: true, news: true });
+
+  // And flipping a switch writes just that one, for this device's token.
+  await setNativePushPrefs({ news: false });
+  assert.deepEqual(writes, [['fcm-account-token-1234567890', { news: false }]]);
+
+  // A guest installation has no token-linked account to target: the switch reads/writes still go by token,
+  // which is why the account page can keep the master switch only for guests.
+  app.user = { account: null, remote: { async devices() { return { devices: [] }; }, async deviceStatus() { return { prefs: null }; }, async devicePrefs() {} } };
+  values.set('ab.pushOwner', 'guest');
+  state = await nativePushState();
+  assert.equal(state.guest, true);
+  assert.equal(state.subscribed, true, 'a registered guest device counts as switched on');
+});

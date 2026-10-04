@@ -178,3 +178,11 @@ registration token. Connected guests register anonymously at `POST /api/v1/devic
 links the installation to the account at `POST /api/v1/devices`. Signing out removes the account link and
 returns to guest broadcasts unless notifications were switched off. Tapping a notification opens its
 page. FCM-reported unregistered tokens are removed automatically, and idle tokens expire after 180 days.
+
+A signed-in installation has the **same three notification switches as the website** in Account →
+Notifications: *New episodes of shows I follow*, *When a Coming Soon title launches* and *Announcements &
+offers* (episodes and launches on, announcements off until asked for). They are stored on the device's row
+in `push_devices` and read/written with `POST /api/v1/devices/status` and `PATCH /api/v1/devices/prefs`,
+which identify the device by its FCM token — the same token-possession rule as the guest routes, so it
+works before and after sign-in. A guest installation has no account to target episodes or launches with,
+so it keeps the single on/off switch.

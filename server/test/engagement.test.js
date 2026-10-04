@@ -415,6 +415,48 @@ test('admin: app push reaches registered devices through FCM and drops dead toke
     assert.equal((await call('DELETE', '/devices/guest', { token: guestToken })).status, 204);
     assert.equal(await db.devices.count(), 1, 'guest opt-out removes the anonymous token');
 
+    // Per-device notification choices: the app now has the same three switches as the browser
+    // (episodes / launches / news), read and written by token possession.
+    const prefsToken = 'fcm-device-prefs-' + 'p'.repeat(30);
+    assert.equal((await call('POST', '/devices', { token: prefsToken }, u.token)).status, 201);
+    assert.deepEqual((await call('POST', '/devices/status', { token: prefsToken })).body.prefs,
+      { episodes: true, launches: true, news: false }, 'a fresh device gets the web defaults');
+    assert.equal((await call('PATCH', '/devices/prefs', { token: prefsToken, episodes: false, news: true })).status, 204);
+    assert.deepEqual((await call('POST', '/devices/status', { token: prefsToken })).body.prefs,
+      { episodes: false, launches: true, news: true }, 'only the switches that were sent change');
+    assert.equal((await call('PATCH', '/devices/prefs', { token: prefsToken, episodes: 'yes' })).status, 400, 'booleans only');
+    assert.equal((await call('PATCH', '/devices/prefs', { token: 'short', news: true })).status, 400);
+    assert.equal((await call('POST', '/devices/status', { token: 'unknown-token-' + 'u'.repeat(20) })).body.prefs, null);
+    // The apps re-register on every start; that must not wipe the viewer's choices.
+    assert.equal((await call('POST', '/devices', { token: prefsToken, platform: 'android', label: 'Pixel 7' }, u.token)).status, 201);
+    assert.deepEqual((await call('POST', '/devices/status', { token: prefsToken })).body.prefs,
+      { episodes: false, launches: true, news: true }, 're-registration keeps them');
+    // Audience selection honours them, exactly like the browser subscriptions.
+    assert.ok((await db.devices.audienceFor({ kind: 'all' })).some((d) => d.token === prefsToken), 'everyone-broadcasts ignore the switches');
+    assert.ok((await db.devices.audienceFor({ kind: 'news' })).some((d) => d.token === prefsToken), 'news is on for this device');
+    assert.equal((await db.devices.audienceFor({ kind: 'news' })).some((d) => d.token === token2), false, 'and off for the default device');
+
+    // The targeted audiences really do filter on the switch: follow a show, then turn episodes off.
+    const followed = (await call('GET', '/catalog')).body.shows[0];
+    const profileId = (await call('GET', '/me', null, u.token)).body.profiles[0].id;
+    await db.list.addListItem(profileId, 'show', followed.id);
+    const epAudience = { kind: 'episodes', showId: followed.id, videoIds: [] };
+    assert.ok((await db.devices.audienceFor(epAudience)).some((d) => d.token === prefsToken), 'a follower with episodes on is included');
+    await call('PATCH', '/devices/prefs', { token: prefsToken, episodes: false });
+    assert.equal((await db.devices.audienceFor(epAudience)).some((d) => d.token === prefsToken), false, 'episodes off means skipped, even while following the show');
+    await call('PATCH', '/devices/prefs', { token: prefsToken, episodes: true });
+    assert.ok((await db.devices.audienceFor(epAudience)).some((d) => d.token === prefsToken), 'turning it back on restores the notification');
+
+    // The launch switch behaves the same way, and is independent of the episode one.
+    const soon = (await call('GET', '/catalog')).body.upcoming[0];
+    await db.list.addReminder(profileId, soon.id);
+    const launchAudience = { kind: 'launches', upcomingId: soon.id };
+    assert.ok((await db.devices.audienceFor(launchAudience)).some((d) => d.token === prefsToken), 'reminder-holders with launches on are included');
+    await call('PATCH', '/devices/prefs', { token: prefsToken, launches: false });
+    assert.equal((await db.devices.audienceFor(launchAudience)).some((d) => d.token === prefsToken), false, 'launches off means skipped');
+    assert.ok((await db.devices.audienceFor(epAudience)).some((d) => d.token === prefsToken), 'while episodes — still on — keeps working');
+    assert.equal((await call('DELETE', '/devices', { token: prefsToken }, u.token)).status, 204);
+
     // E-mail campaigns: plain-text body becomes paragraphs, every mail carries a working unsubscribe link.
     mails.length = 0;
     const mailUser = await signup();

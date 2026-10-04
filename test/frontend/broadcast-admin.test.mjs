@@ -117,7 +117,7 @@ test('the databases pieces exist and the app registers its token', () => {
   assert.match(features, /api\.post\('\/devices\/guest'/, 'the guest registration endpoint is public');
   assert.match(read('server/src/db-extra.js'), /async upsertGuest\(/, 'guest devices are stored anonymously');
   assert.match(guestMigration, /user_id CHAR\(36\) NULL/, 'guest registrations may have no account foreign key');
-  assert.match(read('app/js/data/adapters.js'), /registerGuestDevice\(token, platform = 'android', label = null\)/, 'API client has an anonymous registration method');
+  assert.match(read('app/js/data/adapters.js'), /registerGuestDevice\(token, platform = 'android', label = null, prefs = null\)/, 'API client has an anonymous registration method (and can carry the device’s notification choices)');
   assert.equal(mobilePkg.dependencies['@capacitor-firebase/messaging'], '7.5.0', 'the native shell ships the Firebase Messaging plugin');
   assert.equal(mobilePkg.dependencies['@capacitor/push-notifications'], undefined, 'do not register two competing native push plugins');
   assert.match(sw, /'app\/js\/push-native\.js'/, 'the module is precached');
