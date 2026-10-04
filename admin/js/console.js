@@ -1,11 +1,10 @@
-/* Shared console shell used by BOTH consoles:
+/* Shared console shell used by both entry points:
  *
- *   /admin/    — the Admin console (customers, payments, broadcast, moderation, system …)
- *   /content/  — the Content studio (shows, videos & reels, coming soon, Top 10, studio & team)
+ *   /admin/    — the full Admin console, including the content CMS
+ *   /content/  — a focused Content studio with a shorter, editor-only sidebar
  *
- * The two are deliberately separate pages: content work is a different job, often done by different people,
- * and one sidebar with thirty entries is unusable — especially on a phone. They share this file, the API
- * client, the UI toolkit and the page modules, and each links to the other from its sidebar.
+ * Both entry points share this file, the API client, the UI toolkit and page modules. The Content studio
+ * remains available as a focused workspace, while every CMS task is also reachable from Admin.
  *
  * This module owns: sign-in (the same session token as the public site, so being signed in there is enough),
  * the page frame (sidebar + content), the hash router, the sidebar badges and session-loss handling.

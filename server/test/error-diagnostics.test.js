@@ -6,14 +6,16 @@ import { createFeatures } from '../src/features.js';
 
 const read = (path) => fs.readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
-test('the promo credit repair migration adds amount_paise only when it is missing', () => {
-  const migration = read('server/migrations/021_repair_credit_ledger_amount.sql');
-  assert.match(migration, /information_schema\.COLUMNS/);
-  assert.match(migration, /TABLE_NAME = 'user_credit'[\s\S]*COLUMN_NAME = 'amount_paise'/);
-  assert.match(migration, /'ALTER TABLE user_credit ADD COLUMN amount_paise INT NOT NULL DEFAULT 0'/);
-  assert.match(migration, /'SELECT 1'/, 'a healthy schema is a safe no-op');
-  assert.match(migration, /SET amount_paise = remaining_paise[\s\S]*WHERE amount_paise = 0 AND remaining_paise > 0/,
-    'any remaining legacy grant balance stays usable after the repair');
+test('credit-ledger migrations recheck amount_paise safely, including after an older repair was recorded', () => {
+  for (const file of ['021_repair_credit_ledger_amount.sql', '022_verify_credit_ledger_amount.sql']) {
+    const migration = read(`server/migrations/${file}`);
+    assert.match(migration, /information_schema\.COLUMNS/, `${file} checks the active database schema`);
+    assert.match(migration, /TABLE_NAME = 'user_credit'[\s\S]*COLUMN_NAME = 'amount_paise'/);
+    assert.match(migration, /'ALTER TABLE user_credit ADD COLUMN amount_paise INT NOT NULL DEFAULT 0'/);
+    assert.match(migration, /'SELECT 1'/, 'a healthy schema is a safe no-op');
+    assert.match(migration, /SET amount_paise = remaining_paise[\s\S]*WHERE amount_paise = 0 AND remaining_paise > 0/,
+      'any remaining legacy grant balance stays usable after the repair');
+  }
 });
 
 test('server error reports include verified account context and useful database diagnostics', () => {

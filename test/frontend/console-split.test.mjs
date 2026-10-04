@@ -23,17 +23,20 @@ const fcm = read('server/src/fcm.js');
 const web = read('server/src/web.js');
 const mobile = read('content/js/main.js');
 
-test('content management and administration are two separate consoles', () => {
+test('the Admin console includes the CMS while the focused Content Studio remains available', () => {
   // One shared shell, two entry points with their own sidebars.
   assert.match(consoleJs, /export function startConsole\(\{ nav, routes, name = 'Admin'/, 'the shell is shared');
   assert.match(consoleJs, /switchTo \? html`<a class="btn sm block" id="switchConsole"/, 'each console links to the other');
   assert.match(adminMain, /import \{ startConsole \} from '\.\/console\.js'/, 'the admin entry point uses it');
   assert.match(studioMain, /import \{ startConsole \} from '\/admin\/js\/console\.js'/, 'so does the studio');
-  // Admin keeps the business pages; content pages moved out of its sidebar.
+  // Admin keeps its business pages and now exposes the complete CMS in its Content group.
   for (const page of ['users', 'payments', 'refunds', 'coupons', 'support', 'messages', 'comments', 'analytics', 'notifications', 'cache', 'errors', 'audit'])
     assert.ok(adminMain.includes(`'${page}'`), `the admin sidebar still has ${page}`);
-  assert.equal(/\[\['shows', 'Shows'/.test(adminMain), false, 'shows moved to the Content studio');
-  assert.equal(adminMain.includes("import('./views/content.js')"), false, 'and so did its page module');
+  assert.match(adminMain, /\['catalog', 'Content overview', 'dashboard'\]/, 'the catalog overview is available in Admin');
+  for (const page of ['shows', 'videos', 'upcoming', 'top', 'studio']) assert.ok(adminMain.includes(`'${page}'`), `Admin includes ${page}`);
+  assert.ok(adminMain.includes("import('./views/content-overview.js')"), 'Admin loads the content overview');
+  assert.ok(adminMain.includes("import('./views/content.js')"), 'Admin reuses the catalog management pages');
+  assert.ok(adminMain.includes("import('./views/studio.js')"), 'Admin includes Studio & team');
   assert.match(studioMain, /const ROUTES = \[/, 'the studio has its own routes');
   for (const page of ['shows', 'videos', 'upcoming', 'top', 'studio']) assert.ok(studioMain.includes(`'${page}'`), `the studio has ${page}`);
   assert.equal(studioMain.includes("'gallery'"), false, 'and the photo gallery is hidden (docs/CONTENT.md)');

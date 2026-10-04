@@ -1,6 +1,6 @@
 # Managing content
 
-> **The easy way: use the Content studio** (`/content`, the CMS console — see [ADMIN.md](ADMIN.md)). The live catalog is stored in MySQL and edited there. `data/catalog.json` is the *seed* (imported once, on first start) and the bundle for static hosting and the mobile apps — after that, editing the file does not change a running site; use `npm run catalog:import -- --force` to load it, and `npm run catalog:export` to write the database back to the file.
+> **The easy way: use Admin → Content** or the focused Content studio (`/content`; see [ADMIN.md](ADMIN.md)). The live catalog is stored in MySQL and edited there. `data/catalog.json` is the *seed* (imported once, on first start) and the bundle for static hosting and the mobile apps — after that, editing the file does not change a running site; use `npm run catalog:import -- --force` to load it, and `npm run catalog:export` to write the database back to the file.
 
 The rest of this page describes the file format (used by the console, the seed and the import). Everything shown in the app comes from **`data/catalog.json`**. Validate after every edit:
 
