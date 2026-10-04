@@ -208,27 +208,33 @@ export default async function watch(ctx) {
     }) || null;
   };
   const autoplayTarget = () => {
-    if (next && u.gateFor(next, cat) === 'ok') return { video: next, recommended: false };
+    if (next && u.gateFor(next, cat) === 'ok') return { video: next };
     const video = recommendedAutoplay();
-    return video ? { video, recommended: true } : null;
+    return video ? { video } : null;
   };
 
   // Autoplay: a countdown card for the next episode, or a related recommendation when the series ends.
-  const showNextUp = ({ video: target, recommended }) => {
+  const showNextUp = ({ video: target }) => {
     const box = $('#nextUp', ctx.root);
     let n = CONFIG.autoplayCountdown;
-    const label = recommended ? 'Recommended next' : 'Up next';
-    // Render the card once: replacing its innerHTML every second reloads the thumbnail and makes it blink.
-    box.innerHTML = html`<div class="next-card">${img(cat.thumb(target, 'hqdefault'), '')}<div><div class="eyebrow" data-next-countdown>${label} in ${n}s</div><strong>${cat.label(target)} \u00b7 ${cat.displayTitle(target)}</strong><div class="row"><button class="btn btn-primary btn-sm" id="nuPlay">${icon('play', { size: 16 })} Play now</button><button class="btn btn-ghost btn-sm" id="nuCancel">Cancel</button></div></div></div>`.s;
+    // Render once: replacing the markup each second reloads the thumbnail and makes it blink.
+    box.innerHTML = html`<div class="next-card">
+      ${img(cat.thumb(target, 'hqdefault'), '')}
+      <div class="next-card-copy"><div class="eyebrow" data-next-countdown>Next in ${n}s</div>
+        <strong>${cat.label(target)} \u00b7 ${cat.displayTitle(target)}</strong>
+        <button type="button" class="btn btn-primary btn-sm" id="nuPlay">${icon('play', { size: 16 })} Play now</button>
+      </div>
+      <button type="button" class="next-close icon-btn" id="nuClose" aria-label="Dismiss next video">${icon('x', { size: 18 })}</button>
+    </div>`.s;
     const countdownLabel = box.querySelector('[data-next-countdown]');
     box.hidden = false;
     const stop = () => { clearInterval(countdown); countdown = null; box.hidden = true; };
     countdown = setInterval(() => {
       n -= 1;
       if (n <= 0) { stop(); go('/watch/' + target.id, { replace: true }); }
-      else countdownLabel.textContent = `${label} in ${n}s`;
+      else countdownLabel.textContent = `Next in ${n}s`;
     }, 1000);
-    box.onclick = (e) => { if (e.target.closest('#nuPlay')) { stop(); go('/watch/' + target.id, { replace: true }); } else if (e.target.closest('#nuCancel')) stop(); };
+    box.onclick = (e) => { if (e.target.closest('#nuPlay')) { stop(); go('/watch/' + target.id, { replace: true }); } else if (e.target.closest('#nuClose')) stop(); };
   };
   // Create the player. R2 videos first ask the API for a short-lived signed URL (this is where login and payment are enforced server-side);
   // errors map to the matching wall (401 sign in, 402 needs plan, stream_limit) or a generic failure.
