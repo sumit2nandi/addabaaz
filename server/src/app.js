@@ -75,6 +75,7 @@ export function createApp({
   contactWebhook = process.env.CONTACT_WEBHOOK_URL || '',
   youtubeFeed = createYouTubeFeed(),                         // fetched only after an administrator explicitly previews uploads
   rate = true,
+  release = '',                                               // deployment commit SHA, exposed by public health checks (never a secret)
   catalogPath = path.join(ROOT, 'data/catalog.json'),
   studioPath = path.join(path.dirname(catalogPath), 'studio.json'),
   r2 = createR2(),                                            // Cloudflare R2 (private storage for video files)
@@ -116,7 +117,7 @@ export function createApp({
   // Before every other route on this router: the guard must see viewer calls first. Only /health, /status,
   // /admin, /auth, payment webhooks and unsubscribe links pass while the switch is on (maintenance.js).
   api.use(maintenance.guard());
-  registerSystemRoutes(api, { db, catalog, payments, billing, r2, version: VERSION, maintenance });
+  registerSystemRoutes(api, { db, catalog, payments, billing, r2, version: VERSION, release, maintenance });
   // Rate limit for sign-up/login endpoints: 20 requests per minute per IP (disabled in tests with rate:false).
   const authLimit = rate ? rateLimit('auth', 20, 60_000) : (_q, _s, n) => n();
   // The user fields that are safe to send to the browser (no password hash).

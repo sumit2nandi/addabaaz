@@ -13,6 +13,15 @@ test('the shared Admin shell and page components stay usable at phone widths', (
 
   assert.match(html, /name="viewport" content="width=device-width, initial-scale=1"/,
     'mobile browsers use the device width rather than a desktop layout viewport');
+  assert.match(css, /html \{[^}]*overflow-x: hidden; overflow-x: clip;/,
+    'older mobile browsers fall back to hidden overflow when clip is unsupported');
+  assert.match(css, /@media \(max-width: 1200px\) \{[\s\S]*?#app \* \{ min-width: 0; word-wrap: break-word; overflow-wrap: anywhere; \}/,
+    'every nested Admin and Content component can shrink and wrap before widening the viewport');
+  for (const selector of ['.side', '.modal-body', '.stack', '.yt-preview-list', '.tk-thread', '.pv-json']) {
+    const rule = css.split('\n').find((line) => line.trimStart().startsWith(`${selector} {`)) || '';
+    assert.match(rule, /overflow-x: hidden; overflow-x: clip; overflow-y: auto;/,
+      `${selector} remains vertically scrollable without creating an old-browser horizontal scroller`);
+  }
   assert.match(css, /@media \(max-width: 860px\)[\s\S]*\.side \{ position: fixed/,
     'the shared navigation becomes a dismissible off-canvas menu');
   assert.match(shell, /layout\.classList\.toggle\('nav-open', open\)/,

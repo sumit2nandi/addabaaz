@@ -36,7 +36,7 @@ test('credit amount schema guard repairs drift even when no migration is pending
     'the next boot is a fast no-op once the column is present');
   assert.equal(statements.filter((s) => s.startsWith('ALTER TABLE user_credit')).length, 1);
   assert.equal(statements.filter((s) => s.startsWith('UPDATE user_credit')).length, 1);
-  assert.deepEqual(messages, ['repairing missing user_credit.amount_paise column']);
+  assert.deepEqual(messages, ['repairing missing user_credit.amount_paise column', 'verified user_credit.amount_paise column']);
 });
 
 test('error-log migrations retain parameterized SQL and structured SQL exceptions safely', () => {
@@ -116,6 +116,7 @@ test('server error reports include verified account context and useful database 
   const app = read('server/src/app.js');
   const features = read('server/src/features.js');
   const migrate = read('server/src/migrate.js');
+  const index = read('server/src/index.js');
   const db = read('server/src/db-extra.js');
 
   assert.match(app, /const userId = req\.user\?\.id \|\| req\.admin\?\.id \|\| null/,
@@ -130,6 +131,14 @@ test('server error reports include verified account context and useful database 
   assert.match(db, /sqlException: parseSqlException\(r\.sql_exception\)/);
   assert.match(migrate, /await ensureCreditLedgerAmountColumn\(conn, \{ log \}\)/,
     'the schema guard runs on every migration invocation, even if its numbered repair was already recorded');
+  assert.match(migrate, /verified user_credit\.amount_paise column/,
+    'startup logs prove the important credit column was checked when it already exists');
+  assert.match(index, /process\.env\.DB_MIGRATE !== 'false'/,
+    'startup migrations are enabled by default when DB_MIGRATE is absent');
+  assert.match(index, /automatic startup migrations enabled[\s\S]*?startup check complete/,
+    'Render boot logs state that migrations ran and how many were applied');
+  assert.match(index, /RENDER_GIT_COMMIT/,
+    'Render logs and public health checks identify the deployed source commit');
   assert.match(features, /userFromRequest\?\.\(req\)/, 'client errors resolve an optional first-party session');
   assert.match(features, /userId: user\?\.id \|\| null/, 'client-supplied IDs are not trusted');
   assert.match(db, /e\.user_agent, e\.user_id, u\.name AS account_name, u\.email AS account_email/);

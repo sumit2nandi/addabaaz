@@ -10,7 +10,7 @@ const DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../migra
 export async function ensureCreditLedgerAmountColumn(conn, { log = () => {} } = {}) {
   const [[column]] = await conn.query(`SELECT COUNT(*) AS n FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user_credit' AND COLUMN_NAME = 'amount_paise'`);
-  if (Number(column?.n || 0) > 0) return false;
+  if (Number(column?.n || 0) > 0) { log('verified user_credit.amount_paise column'); return false; }
   log('repairing missing user_credit.amount_paise column');
   await conn.query('ALTER TABLE user_credit ADD COLUMN amount_paise INT NOT NULL DEFAULT 0');
   await conn.query('UPDATE user_credit SET amount_paise = remaining_paise WHERE amount_paise = 0 AND remaining_paise > 0');
