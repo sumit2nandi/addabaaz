@@ -1,7 +1,7 @@
 import { Emitter, storage, store } from '../util.js';
 import { CONFIG } from '../config.js';
 
-const PALETTE = ['#e50914', '#f5c518', '#2f80ed', '#27ae60', '#9b51e0', '#eb5757', '#00b8a9', '#f2994a'];
+const PALETTE = ['#c90000', '#f5c518', '#2f80ed', '#27ae60', '#9b51e0', '#eb5757', '#00b8a9', '#f2994a'];
 export const avatarColor = (i) => PALETTE[(i || 0) % PALETTE.length];
 export const AVATAR_COUNT = PALETTE.length;
 
