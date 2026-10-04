@@ -9,11 +9,15 @@
 // the phone never switches the app to landscape (the whole UI is designed for portrait). To allow rotation again, remove the
 // `patch('app/src/main/AndroidManifest.xml', ...)` call at the bottom of this file - otherwise every sync would put the lock back.
 //
+// It also turns Android backup/restore off (android:allowBackup="false" + data-extraction rules), so uninstalling really deletes
+// the app's data and a reinstall starts signed out instead of bringing the old session token back from a Google Drive backup.
+//
 // It runs automatically after `npm run sync` and `npm run add:android`; you can also run it by hand:  npm run android:patch
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { lockPortrait, isPortraitLocked, addOAuthRedirect, hasOAuthRedirect } from './android-manifest.mjs';
+import { lockPortrait, isPortraitLocked, addOAuthRedirect, hasOAuthRedirect,
+  disableBackup, isBackupDisabled, backupRulesXml, BACKUP_RULES_RES } from './android-manifest.mjs';
 import { stampLauncherIcons } from './android-icons.mjs';
 import { stableSigning, hasStableSigning } from './android-gradle.mjs';
 import { patchMainActivity, mainActivityInstallsFullscreen, writeFullscreenClient, addCoreDependency, javaSourceDir } from './android-fullscreen.mjs';
@@ -51,6 +55,23 @@ patch('app/src/main/AndroidManifest.xml', 'main activity locked to portrait + OA
   if (!hasOAuthRedirect(out, APP_SCHEME)) throw new Error('[android:patch] could not add the OAuth redirect filter - AndroidManifest.xml changed shape; update mobile/scripts/android-manifest.mjs.');
   return out;
 });
+
+// Uninstalling the app must delete its data for real, and a reinstall must start signed out. Capacitor's
+// template ships android:allowBackup="true", which lets a Google Drive auto-backup (or a phone-to-phone
+// transfer) bring the WebView storage back - including the signed-in session token. Android already wipes
+// app-private data on uninstall; this closes the restore path.
+patch('app/src/main/AndroidManifest.xml', 'no backup / no device-transfer restore (uninstall really deletes the data)', (t) => {
+  const out = disableBackup(t);
+  if (!isBackupDisabled(out)) throw new Error('[android:patch] could not disable backup - AndroidManifest.xml changed shape; update mobile/scripts/android-manifest.mjs.');
+  return out;
+});
+// ...and the Android 12+ rules file that manifest points at (nothing to the cloud, nothing to a new phone).
+{
+  const rules = path.join(root, BACKUP_RULES_RES);
+  fs.mkdirSync(path.dirname(rules), { recursive: true });
+  const before = fs.existsSync(rules) ? fs.readFileSync(rules, 'utf8') : '';
+  if (before !== backupRulesXml()) { fs.writeFileSync(rules, backupRulesXml()); console.log(`[android:patch] ${BACKUP_RULES_RES}: cloud backup + device transfer excluded`); }
+}
 
 // The install screen and title bar show the brand name exactly as the user reads it on the website.
 patch('app/src/main/res/values/strings.xml', 'app_name -> Addabaaz', (t) =>

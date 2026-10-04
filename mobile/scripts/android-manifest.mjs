@@ -45,3 +45,74 @@ export function addOAuthRedirect(xml, scheme) {
 
 /** True when MainActivity can receive the app-scheme deep link used by Google sign-in. */
 export const hasOAuthRedirect = (xml, scheme) => xml.includes(`android:scheme="${scheme}"`);
+
+// ---------------------------------------------------------------------------------------------------
+// Backup / restore: uninstalling the app must really delete its data.
+//
+// Capacitor's template ships `android:allowBackup="true"`. Android then keeps a copy of the app's
+// private storage — including the WebView localStorage that holds the signed-in session token
+// (`ab.token`, see app/js/data/api.js) — in the user's Google Drive auto-backup and in "copy apps &
+// data" phone transfers. Reinstalling the app could therefore restore that copy and come back signed
+// in as the previous account, even though uninstalling had removed everything from the phone.
+//
+// `android:allowBackup="false"` stops cloud backup. Since Android 12 that attribute no longer stops
+// device-to-device transfers, so the manifest also points `android:dataExtractionRules` at the rules
+// file below, and `android:fullBackupContent="false"` covers API 23–30.
+// ---------------------------------------------------------------------------------------------------
+
+/** The app's own `<application ...>` opening tag (a manifest has exactly one). */
+const APPLICATION_TAG = /<application\b[^>]*>/;
+/** Where the backup rules live inside the generated Android project. */
+export const BACKUP_RULES_RES = 'app/src/main/res/xml/data_extraction_rules.xml';
+export const BACKUP_RULES_ATTR = '@xml/data_extraction_rules';
+
+/**
+ * Turns every Android backup/restore path off for this app. Idempotent: existing values are rewritten,
+ * missing attributes are added to <application>, everything else is left byte for byte alone.
+ */
+export function disableBackup(xml, rules = BACKUP_RULES_ATTR) {
+  const wanted = new Map([['allowBackup', 'false'], ['fullBackupContent', 'false'], ['dataExtractionRules', rules]]);
+  return xml.replace(APPLICATION_TAG, (tag) => {
+    const missing = [...wanted].filter(([name]) => !new RegExp(`android:${name}\\s*=`).test(tag));
+    const rewritten = tag.replace(new RegExp(`android:(${[...wanted.keys()].join('|')})\\s*=\\s*(["'])[^"']*\\2`, 'g'),
+      (m, name) => `android:${name}="${wanted.get(name)}"`);
+    return missing.length
+      ? rewritten.replace(/<application\b/, '<application\n' + missing.map(([n, v]) => `        android:${n}="${v}"`).join('\n'))
+      : rewritten;
+  });
+}
+
+/** True when the manifest really forbids cloud backup, device transfers and the pre-12 backup file. */
+export const isBackupDisabled = (xml) => {
+  const tag = (xml.match(APPLICATION_TAG) || [''])[0];
+  return /android:allowBackup\s*=\s*"false"/.test(tag)
+    && /android:fullBackupContent\s*=\s*"false"/.test(tag)
+    && /android:dataExtractionRules\s*=\s*"@xml\/data_extraction_rules"/.test(tag);
+};
+
+/**
+ * The Android 12+ rules file the manifest points at: nothing goes to the cloud (`allowBackup` already
+ * says that) and nothing travels to a new phone — every domain excluded, so the WebView storage cannot
+ * arrive on a fresh install by that route either.
+ */
+export const backupRulesXml = () => `<?xml version="1.0" encoding="utf-8"?>
+<!-- Written by mobile/scripts/patch-android.mjs. A restored copy of the app's storage is exactly what
+     used to sign a reinstalled app back in as the old account, so nothing is backed up and nothing is
+     transferred. See docs/MOBILE.md -> "Uninstalling really deletes the data". -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>
+`;

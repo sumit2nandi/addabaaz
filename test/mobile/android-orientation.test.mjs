@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { lockPortrait, isPortraitLocked, addOAuthRedirect, hasOAuthRedirect } from '../../mobile/scripts/android-manifest.mjs';
+import { lockPortrait, isPortraitLocked, addOAuthRedirect, hasOAuthRedirect, disableBackup, isBackupDisabled, BACKUP_RULES_RES } from '../../mobile/scripts/android-manifest.mjs';
 import { stableSigning, hasStableSigning } from '../../mobile/scripts/android-gradle.mjs';
 import { mainActivityInstallsFullscreen, hasCoreDependency } from '../../mobile/scripts/android-fullscreen.mjs';
 
@@ -141,7 +141,10 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'src', 'main', 'res', 'drawable', 'splash.png')), 'the template splash.png itself is overwritten');
     const patched = fs.readFileSync(manifest, 'utf8');
     assert.equal(isPortraitLocked(patched), true);
-    assert.equal(patched, addOAuthRedirect(lockPortrait(generated), 'in.addabaaz.app'), 'portrait lock plus the Google sign-in deep-link filter');
+    assert.equal(patched, disableBackup(addOAuthRedirect(lockPortrait(generated), 'in.addabaaz.app')), 'portrait lock, the Google sign-in deep-link filter and no backup/restore');
+    assert.equal(isBackupDisabled(patched), true, 'an uninstalled app cannot be restored from a backup, signed-in token included');
+    assert.ok(fs.existsSync(path.join(dir, 'android', BACKUP_RULES_RES)), 'the Android 12+ backup rules file is written into the project');
+    assert.match(fs.readFileSync(path.join(dir, 'android', BACKUP_RULES_RES), 'utf8'), /<device-transfer>/, 'device transfers are excluded too');
     assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'ci-debug.p12')), 'the shared CI key was copied into the app module');
     assert.ok(hasStableSigning(fs.readFileSync(buildGradle, 'utf8')), 'debug builds are signed with the shared key, so new APKs install over old ones');
     assert.ok(hasCoreDependency(fs.readFileSync(buildGradle, 'utf8')), 'androidx.core is on the app classpath for the fullscreen insets');
@@ -162,6 +165,7 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
 
     const second = run();
     assert.equal(/locked to portrait/.test(second), false, 'a second run has nothing to change');
+    assert.equal(/no backup/.test(second), false, 'the backup patch is idempotent as well');
     assert.equal(fs.readFileSync(mainActivity, 'utf8'), patchedActivity, 'a second run leaves MainActivity alone');
     assert.equal(fs.readFileSync(manifest, 'utf8'), patched);
 
