@@ -537,10 +537,10 @@ export default async function content(root, [section], ctx) {
     });
     const ids = picks.map((v) => v.id);
     const swap = (id, dir) => { const i = ids.indexOf(id), j = i + dir; if (i < 0 || j < 0 || j >= ids.length) return; [ids[i], ids[j]] = [ids[j], ids[i]]; mutate(() => saveTop(ids), 'Order saved'); };
-    $('[data-top-up]', root).forEach((b) => b.onclick = () => swap(b.dataset.topUp, -1));
-    $('[data-top-down]', root).forEach((b) => b.onclick = () => swap(b.dataset.topDown, 1));
-    $('[data-top-out]', root).forEach((b) => b.onclick = () => mutate(() => saveTop(ids.filter((x) => x !== b.dataset.topOut)), 'Removed from the rail'));
-    $('[data-top-in]', root).forEach((b) => b.onclick = () => mutate(() => saveTop([...ids, b.dataset.topIn]), 'Added to the rail'));
+    $$('[data-top-up]', root).forEach((b) => b.onclick = () => swap(b.dataset.topUp, -1));
+    $$('[data-top-down]', root).forEach((b) => b.onclick = () => swap(b.dataset.topDown, 1));
+    $$('[data-top-out]', root).forEach((b) => b.onclick = () => mutate(() => saveTop(ids.filter((x) => x !== b.dataset.topOut)), 'Removed from the rail'));
+    $$('[data-top-in]', root).forEach((b) => b.onclick = () => mutate(() => saveTop([...ids, b.dataset.topIn]), 'Added to the rail'));
     $('#topReset', root)?.addEventListener('click', () => mutate(clearTop, 'The rail is ranked by views again'));
   }
 

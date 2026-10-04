@@ -19,6 +19,12 @@ test('Admin Errors shows account context and copies a complete individual report
   assert.match(view, /`User ID: \$\{e\.userId \|\| 'unknown \/ anonymous'\}`/, 'the copied report includes the account ID');
   assert.match(view, /`User agent: \$\{e\.userAgent \|\| '\(not recorded\)'\}`[\s\S]*'Stack:'/,
     'the copied report includes device and stack diagnostics');
+  assert.match(view, /Failed SQL template/,
+    'database errors display the failed parameterized SQL separately from the stack');
+  assert.match(view, /bound parameter\(s\); values omitted/,
+    'the page clearly states that bound values are not stored');
+  assert.match(view, /SQL template \(bound values omitted; \$\{e\.sqlParamCount \?\? 'unknown'\} parameter\(s\)\):/,
+    'copy includes the SQL template and safe parameter count');
   assert.match(view, /navigator\.clipboard\?\.writeText/, 'copy uses the secure clipboard API when available');
   assert.match(view, /document\.execCommand\?\.\('copy'\)/, 'older browsers have a selection-based fallback');
   assert.match(ui, /copy: '<rect/, 'the button has a clipboard icon');

@@ -191,10 +191,12 @@ export function createApp({
         `errorCode=${err.code || 'unknown'}`,
         ...(err.errno ? [`errno=${err.errno}`] : []),
         ...(err.sqlState ? [`sqlState=${err.sqlState}`] : []),
+        ...(err.sqlParamCount != null ? [`sqlParamCount=${err.sqlParamCount} (bound values omitted)`] : []),
       ].join('\n');
       db.errors.add({
         source: 'server', message: `${req.method} ${safeErrorUrl(req.path)} [${status}${err.code ? ` ${err.code}` : ''}]: ${err.message}`,
         stack: `Request diagnostics:\n${diagnostic}\n\n${err.stack || 'No stack trace.'}`,
+        sqlQuery: err.sqlTemplate || null, sqlParamCount: err.sqlParamCount ?? null,
         url: safeErrorUrl(req.originalUrl), userAgent: req.get('user-agent'), userId,
       }).catch(() => {});
     }   // expected 5xx (provider down, storage off) are not logged as crashes
