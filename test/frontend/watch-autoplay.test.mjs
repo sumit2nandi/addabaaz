@@ -114,7 +114,8 @@ test('Autoplay next counts down to the next episode when one exists', async () =
   const card = document.querySelector('#nextUp');
   assert.ok(card && !card.hidden, 'the next-up countdown appears when the video ends');
   assert.match(card.textContent, /Next in \d+s/);
-  assert.match(card.textContent, /EP 02.*Premium episode/, 'the next episode is selected ahead of recommendations');
+  assert.match(card.textContent, /Premium episode/, 'the next episode is selected ahead of recommendations');
+  assert.doesNotMatch(card.textContent, /Episode\s·/, 'the video type is not shown in the popup');
   assert.doesNotMatch(card.textContent, /recommended/i, 'the popup does not label the next video as recommended');
   assert.equal(card.querySelector('#nuCancel'), null, 'the large Cancel button is gone');
   card.querySelector('#nuClose').dispatchEvent(new window.Event('click', { bubbles: true }));
@@ -128,7 +129,8 @@ test('when the series has no next episode, Autoplay next recommends a related sh
   assert.ok(card && !card.hidden, 'a related recommendation appears at the end of the playlist');
   assert.match(card.textContent, /Next in \d+s/);
   assert.doesNotMatch(card.textContent, /recommended/i, 'no Recommended label appears in the popup');
-  assert.match(card.textContent, /EP 01.*Related show premiere/, 'recommendations start with a related show episode');
+  assert.match(card.textContent, /Related show premiere/, 'recommendations start with a related show episode');
+  assert.doesNotMatch(card.textContent, /Episode\s·/, 'the video type is omitted');
   card.querySelector('#nuClose').dispatchEvent(new window.Event('click', { bubbles: true }));
   assert.equal(card.hidden, true);
 });
@@ -173,13 +175,15 @@ test('recommended-next countdown ticks preserve the thumbnail and card controls'
 test('the next-up popup is translucent, compact and dismissible with a top-right cross', () => {
   const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
   const view = fs.readFileSync(new URL('../../app/js/views/watch.js', import.meta.url), 'utf8');
-  assert.match(css, /\.next-card \{[^}]*background: rgba\(15,15,20,\.62\)[^}]*backdrop-filter: blur\(18px\) saturate\(1\.25\)/,
-    'a blurred translucent glass panel replaces the opaque box');
-  assert.match(css, /\.next-close \{[^}]*top: 8px; right: 8px;[^}]*width: 32px; height: 32px;/,
-    'the dismiss control is a compact cross at the upper-right corner');
+  assert.match(css, /\.next-up \{[^}]*right: 12px; bottom: 12px;[^}]*width: fit-content;/,
+    'the popup shrink-wraps to content at the video bottom-right');
+  assert.match(css, /\.next-card \{[^}]*grid-template-columns: 80px minmax\(0,1fr\); align-items: end;[^}]*background: rgba\(15,15,20,\.42\)[^}]*backdrop-filter: blur\(14px\)/,
+    'the compact glass card aligns the thumbnail bottom with the Play now button');
+  assert.match(css, /\.next-close \{[^}]*top: 6px; right: 6px;[^}]*width: 28px; height: 28px;/,
+    'the dismiss control is a small cross at the upper-right corner');
   assert.match(view, /Next in \$\{n\}s/, 'the countdown does not use a Recommended label');
   assert.match(view, /id="nuClose" aria-label="Dismiss next video"/, 'the cross has an accessible name');
-  assert.doesNotMatch(view, /id="nuCancel"|Recommended next/, 'no large Cancel button or Recommended copy remains');
+  assert.doesNotMatch(view, /cat\.label\(target\)|id="nuCancel"|Recommended next/, 'the video type, large Cancel button, and Recommended copy are removed');
 });
 
 test('Autoplay next disabled does not start an episode or recommendation countdown', async () => {

@@ -221,7 +221,7 @@ export default async function watch(ctx) {
     box.innerHTML = html`<div class="next-card">
       ${img(cat.thumb(target, 'hqdefault'), '')}
       <div class="next-card-copy"><div class="eyebrow" data-next-countdown>Next in ${n}s</div>
-        <strong>${cat.label(target)} \u00b7 ${cat.displayTitle(target)}</strong>
+        <strong>${cat.displayTitle(target)}</strong>
         <button type="button" class="btn btn-primary btn-sm" id="nuPlay">${icon('play', { size: 16 })} Play now</button>
       </div>
       <button type="button" class="next-close icon-btn" id="nuClose" aria-label="Dismiss next video">${icon('x', { size: 18 })}</button>
