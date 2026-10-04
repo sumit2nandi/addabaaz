@@ -36,11 +36,11 @@ test('the poster box, the expand button and the banner all open the full artwork
     assert.match(view, /#detailPoster'[^\n]*openArtwork\(art, 'poster'\)/, `${file}: the poster box opens the poster`);
     assert.match(view, /<section class="detail-hero" id="detailHero">/, `${file}: the banner has an id to hang the tap handler on`);
     assert.match(view, /tapArtwork\(.{0,40}art\);/, `${file}: and tapping the banner opens the artwork`);
-    assert.match(view, /id="artBtn" aria-label="View the full artwork"/, `${file}: an expand button sits with Share (the only visible way in on a phone)`);
+    assert.match(view, /id="artBtn" aria-label="View the full artwork"/, `${file}: an expand button remains available`);
     assert.match(view, /#artBtn'[^\n]*openArtwork\(art, 'poster'\)/, `${file}: the expand button opens the poster`);
   }
-  // On a phone the poster box is display:none, so the banner tap is the way in — but it must never steal
-  // clicks from the buttons in the hero, and it must not fire when the viewer was selecting text.
+  // On a phone the poster box is display:none, so the banner remains another easy artwork entry point —
+  // but it must never steal clicks from the buttons in the hero or fire when the viewer was selecting text.
   const lightbox = read('app/js/ui/lightbox.js');
   assert.match(lightbox, /export function tapArtwork\(hero, art\)/, 'tapArtwork exists');
   assert.match(lightbox, /if \(e\.target\.closest\('a, button, input, select, textarea, label'\)\) return;/, 'buttons and links keep their own job');
@@ -52,6 +52,23 @@ test('the poster box, the expand button and the banner all open the full artwork
   assert.match(lightbox, /e\.target\.closest\('\.lb-close'\) \|\| e\.target === root/, 'the X and the backdrop close it');
   // And the phone layout itself is untouched: the poster box stays hidden, the banner carries the feature.
   assert.match(read('app/css/styles.css'), /@media \(min-width: 760px\) \{ \.hero-poster, \.detail-poster \{ display: block; \} \}/, 'the poster box is still desktop-only');
+});
+
+test('Coming Soon keeps the artwork expand button beside My List on phones', () => {
+  const soon = read('app/js/views/soon.js');
+  const actions = soon.match(/<div class="hero-actions soon-hero-actions">([\s\S]*?)<\/div>/)?.[1] || '';
+  assert.ok(actions, 'the Coming Soon page has its own action row');
+  assert.ok(actions.indexOf('remindBtn(') < actions.indexOf('listBtn('), 'Remind me remains first');
+  assert.ok(actions.indexOf('listBtn(') < actions.indexOf('id="artBtn"'), 'the artwork action follows My List');
+  assert.match(soon, /id="shareBtn"/, 'the Share action is preserved');
+
+  const css = read('app/css/styles.css');
+  assert.match(css, /\.soon-hero-actions \{ display: grid; grid-template-columns: minmax\(0,1fr\) minmax\(0,1fr\) 48px;/,
+    'mobile Coming Soon actions use two flexible button columns and a fixed artwork-button column');
+  assert.match(css, /\.soon-hero-actions > #artBtn \{ width: 48px; height: 48px; padding: 0; \}/,
+    'the artwork control keeps its compact, fixed size beside My List');
+  assert.match(css, /@media \(max-width: 359px\) \{\n  \.soon-hero-actions \{ grid-template-columns: minmax\(0,1fr\) minmax\(0,1fr\) 44px; gap: 6px; \}/,
+    'the same row adapts for especially narrow phones');
 });
 
 test('the artwork popup shows the banner and the poster, each once', async () => {
