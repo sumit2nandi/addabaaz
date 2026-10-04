@@ -92,19 +92,19 @@ export default async function plans(ctx) {
   const draw = () => {
     const s = u.subscription || {}, active = u.isPremium, cur = active ? s.planId : 'free';
     const status = active
-      ? html`<div class="notice ok">${icon('check', { size: 18 })} Your plan is active until <b>${fmtDate(s.expiresAt)}</b>. Renew any time — the extra time is added to the end.</div>`
-      : s.status === 'expired' ? html`<div class="notice">${icon('info', { size: 18 })} Your plan expired on ${fmtDate(s.expiresAt)}. Choose a plan to watch premium videos again.</div>` : '';
+      ? html`<div class="notice ok">${icon('check', { size: 18 })}<span>Your plan is active until <b>${fmtDate(s.expiresAt)}</b>. Renew any time — the extra time is added to the end.</span></div>`
+      : s.status === 'expired' ? html`<div class="notice">${icon('info', { size: 18 })}<span>Your plan expired on ${fmtDate(s.expiresAt)}. Choose a plan to watch premium videos again.</span></div>` : '';
     const why = isNative
-      ? html`<div class="notice">${icon('info', { size: 18 })} Plans are managed on the ADDABAAZ website. Once you’ve subscribed with this account, premium videos unlock here automatically.</div>`
-      : payments.provider === 'mock' ? html`<div class="notice">${icon('info', { size: 18 })} Demo checkout — no real payment is taken. Add Razorpay keys on the API to go live (docs/PREMIUM.md).</div>`
-      : payments.provider === 'none' ? html`<div class="notice">${icon('info', { size: 18 })} Payments aren’t available right now. Please try again later.</div>` : '';
+      ? html`<div class="notice">${icon('info', { size: 18 })}<span>Plans are managed on the ADDABAAZ website. Once you’ve subscribed with this account, premium videos unlock here automatically.</span></div>`
+      : payments.provider === 'mock' ? html`<div class="notice">${icon('info', { size: 18 })}<span>Demo checkout — no real payment is taken. Add Razorpay keys on the API to go live (docs/PREMIUM.md).</span></div>`
+      : payments.provider === 'none' ? html`<div class="notice">${icon('info', { size: 18 })}<span>Payments aren’t available right now. Please try again later.</span></div>` : '';
     ctx.root.innerHTML = html`<div class="page">
       ${sectionHeader({ tag: 'ADDABAAZ Plus', title: 'Choose your plan', subtitle: 'Pay once for the period — no auto-renewal, nothing to cancel.' })}
       ${status}${why}
-      ${creditPaise > 0 ? html`<div class="notice ok">${icon('gift', { size: 18 })} You have <b>${inr(creditPaise)}</b> of ADDABAAZ credit${offer?.expiryDays ? html` — it expires ${offer.expiryDays} days after it was added` : ''}. Tick “use my credit” at checkout and it comes straight off the price.</div>` : ''}
+      ${creditPaise > 0 ? html`<div class="notice ok">${icon('gift', { size: 18 })}<span>You have <b>${inr(creditPaise)}</b> of ADDABAAZ credit${offer?.expiryDays ? html` — it expires ${offer.expiryDays} days after it was added` : ''}. Tick “use my credit” at checkout and it comes straight off the price.</span></div>` : ''}
       <div class="plans">${list.map((p) => html`<article class="plan ${p.id === cur ? 'current' : ''} ${p.id === 'plus-yearly' ? 'best' : ''}">
         ${p.id === 'plus-yearly' ? html`<span class="badge">Best value</span>` : ''}
-        <h2>${p.name}</h2><div class="price">${p.priceINR ? html`₹${p.priceINR}<small>/${p.interval}</small>` : 'Free'}</div>
+        <h2>${p.name}</h2><div class="price">₹${p.priceINR}<small>/${p.interval}</small></div>
         <ul>${p.features.map((f) => html`<li>${icon('check', { size: 16 })} ${f}</li>`)}</ul>
         ${p.id === 'free' ? html`<button class="btn btn-ghost block" disabled>${cur === 'free' ? 'Current plan' : 'Included'}</button>`
           : !canBuy ? (p.id === cur ? html`<button class="btn btn-ghost block" disabled>Current plan</button>` : '')

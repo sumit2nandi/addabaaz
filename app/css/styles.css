@@ -449,13 +449,19 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .plans { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 20px; } .plan { position: relative; background: var(--panel); border: 1px solid var(--border-2); border-radius: 20px; padding: 28px 24px; display: grid; gap: 16px; align-content: start; } .plan.best { border-color: var(--gold); } .plan.current { box-shadow: 0 0 0 2px var(--accent); }
 .plan .price { font-size: 38px; font-weight: 800; } .plan .price small { font-size: 14px; color: var(--muted); font-weight: 500; } .plan li { display: flex; gap: 8px; align-items: flex-start; color: var(--text-2); font-size: 14px; margin-bottom: 8px; } .plan li svg { color: var(--ok); margin-top: 3px; }
 .badge { position: absolute; top: -12px; right: 20px; background: var(--gold); color: #000; font-size: 12px; font-weight: 800; padding: 4px 12px; border-radius: 999px; }
-/* Inline notice ("Your plan is active until…"): the icon stays with the first line and never shrinks, the
- * text takes the rest of the row and wraps normally — on a phone the old centred layout squeezed the
- * sentence into a thin column beside a squashed icon. */
+/* Inline notice ("Your plan is active until…"): the icon stays with the first line and never shrinks,
+ * and the sentence is ONE text column. That column is the whole point: as bare flex children the words
+ * before a <b>, the <b> itself and the words after it become three separate flex items, and flex items
+ * never reflow into each other — on a phone the nowrap date was painted on top of "Renew any time…".
+ * Inside a real text column the same <b> simply moves to the next line when the row is too narrow.
+ * The icon's own wrapper must not grow either: with flex: 1 it took half the row and squeezed the
+ * support e-mail into "gmail.c / om". */
 .notice { display: flex; gap: 10px; align-items: flex-start; background: #2a2200; border: 1px solid #5c4a00; color: var(--gold); padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
 .notice > svg, .notice > .i { flex: 0 0 auto; margin-top: 2px; }
-.notice > span, .notice > div, .notice > b { min-width: 0; flex: 1; }
+.notice > span, .notice > div { min-width: 0; flex: 1; }
+.notice > div:first-child { flex: 0 0 auto; }
 .notice b { font-weight: 700; white-space: nowrap; }
+.card-panel.notice b { white-space: normal; }
 @media (max-width: 520px) { .notice { font-size: 13.5px; padding: 11px 13px; gap: 8px; } }
 .notice.ok { background: #0f2415; border-color: #1f5c31; color: #7be495; } .page > .notice { margin-top: 14px; }
 

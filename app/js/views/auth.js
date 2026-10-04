@@ -44,7 +44,7 @@ export default async function auth(ctx) {
     <form class="auth-card form" id="af" novalidate>
       <button type="button" class="auth-close" id="authClose" aria-label="Close">${icon('x', { size: 16 })}</button>
       <h1>${signup ? 'Create your account' : 'Welcome back'}</h1>
-      ${ref ? html`<div class="notice ok" id="refNote">${icon('gift', { size: 18 })} Invite code <b>${ref}</b> will be applied — you and your friend both get credit.</div>` : ''}
+      ${ref ? html`<div class="notice ok" id="refNote">${icon('gift', { size: 18 })}<span>Invite code <b>${ref}</b> will be applied — you and your friend both get credit.</span></div>` : ''}
       <p class="muted" id="authSub">${canOtp ? 'Sign in or create your account with your mobile number — we’ll text you a code.' : (signup ? 'Sync My List and Continue Watching across all your devices.' : 'Sign in to pick up where you left off.')}</p>
 
       ${canOtp ? html`<div class="seg seg-full" role="tablist" aria-label="Sign-in method">

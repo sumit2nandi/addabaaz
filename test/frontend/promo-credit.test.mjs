@@ -114,6 +114,27 @@ test('the plan notice reads properly on a phone', () => {
   assert.match(rule, /align-items: flex-start/, 'the icon sits with the first line instead of the middle of a wrapped block');
   assert.match(rule, /overflow-wrap: anywhere/, 'long words cannot push the box out of shape');
   assert.match(css, /\.notice > svg, \.notice > \.i \{ flex: 0 0 auto;/, 'the icon never shrinks to a sliver');
+  assert.match(css, /\.notice > div:first-child \{ flex: 0 0 auto; \}/, 'an icon wrapped in a <div> does not grow and squeeze the text');
   assert.match(css, /@media \(max-width: 520px\) \{ \.notice \{ font-size: 13\.5px/, 'slightly smaller type on phones');
-  assert.match(css, /\.notice b \{ font-weight: 700; white-space: nowrap; \}/, 'the date stays on one line');
+  assert.match(css, /\.notice b \{ font-weight: 700; white-space: nowrap; \}/, 'the active-until date stays in one piece');
+  assert.match(css, /\.card-panel\.notice b \{ white-space: normal; \}/, 'but a viewer’s name may still wrap');
+});
+
+test('every notice keeps its words in one column, not as separate flex items', () => {
+  // The phone bug: the icon, the sentence before <b>, the <b> date and the sentence after it were four
+  // flex items. Flex items never reflow into each other, so the nowrap date was painted on top of
+  // "Renew any time…". A single <span> after the icon makes the whole sentence wrap as one paragraph.
+  const inline = [];
+  for (const f of fs.readdirSync(new URL('../../app/js/views/', import.meta.url)).filter((n) => n.endsWith('.js'))) {
+    const src = fs.readFileSync(new URL('../../app/js/views/' + f, import.meta.url), 'utf8');
+    for (const m of src.match(new RegExp('class="notice[^"]*">\\$\\{icon\\([^)]*\\)\\}(?!<)', 'g')) || []) inline.push(`${f}: ${m.slice(0, 70)}`);
+  }
+  assert.deepEqual(inline, [], 'notice text must sit in <span>/<div> after the icon');
+  assert.match(plans, /\$\{icon\('check', \{ size: 18 \}\)\}<span>Your plan is active until <b>\$\{fmtDate\(s\.expiresAt\)\}<\/b>\. Renew any time/, 'the active-plan sentence is one column');
+  assert.match(plans, /\$\{icon\('gift', \{ size: 18 \}\)\}<span>You have <b>/, 'so is the credit notice');
+  assert.match(auth, /\$\{icon\('gift', \{ size: 18 \}\)\}<span>Invite code <b>\$\{ref\}<\/b>/, 'and the invite-code note');
+});
+
+test('the Free card no longer prints its own name twice', () => {
+  assert.match(plans, /<h2>\$\{p\.name\}<\/h2><div class="price">₹\$\{p\.priceINR\}<small>\/\$\{p\.interval\}<\/small><\/div>/, 'every card shows a price — the free plan reads ₹0/forever instead of "Free" under "Free"');
 });
