@@ -1,0 +1,47 @@
+# Render Blueprint for the converter: a Docker web service (ffmpeg is inside the image).
+#
+#   Render → New → Blueprint → pick this repository → set the root directory to `hls-service`.
+#
+# IMPORTANT, and not a small print: encoding needs CPU and RAM. Render's free/starter instances are
+# small — a 45-minute 1080p episode will take a long time and may be killed. For anything past short
+# clips, run this service on your own machine (or a small VPS) with `docker compose up`, where the
+# encode is free and the finished package goes straight to R2. See README.md → “Where to run it”.
+services:
+  - type: web
+    name: addabaaz-hls
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter                    # `free` works for trying the portal out, but not for real encodes
+    region: singapore                # keep it close to your R2 bucket / your own uploads
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:                            # keeps staged uploads + job history across deploys (paid plans)
+      name: hls-data
+      mountPath: /app/data
+      sizeGB: 10
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /app/data
+      - key: CONVERTER_TOKEN
+        generateValue: true          # Render generates a long secret; read it from the dashboard
+      - key: TRUST_PROXY
+        value: "1"
+      - key: MAX_UPLOAD_GB
+        value: "8"
+      - key: CONCURRENCY
+        value: "1"
+      - key: LOCAL_RETENTION_HOURS
+        value: "24"                  # keep finished packages (and their ZIP downloads) for a day
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false                  # needs Object Read & Write (NOT the read-only site token)
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_PREFIX
+        value: premium

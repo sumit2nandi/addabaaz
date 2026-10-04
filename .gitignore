@@ -22,3 +22,7 @@ backups/
 .build/
 # local scratch (e.g. the sandbox preview server) — never part of the app
 .arena/
+# the standalone HLS converter microservice (hls-service/): staged uploads, encoded packages,
+# job history and the optional locally-downloaded ffmpeg build
+hls-service/data/
+hls-service/.tools/

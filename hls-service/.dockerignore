@@ -1,0 +1,16 @@
+# Never ship the local state, the toolchain or the tests.
+node_modules
+data
+.tools
+test
+test/*
+.env
+.env.*
+!.env.example
+*.log
+.git
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose.yml
+npm-debug.log*

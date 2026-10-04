@@ -1,0 +1,31 @@
+# One-command run for a machine that has nothing but Docker:
+#
+#   cd hls-service
+#   cp .env.example .env      # then fill in CONVERTER_TOKEN and R2_*
+#   docker compose up --build
+#   open http://localhost:8080
+#
+# Encodes are CPU-bound: the container uses every core it is given, so close other heavy apps and
+# leave it running while a video is being converted. The named volume holds the data directory
+# (staged uploads, finished packages, job history) across restarts.
+services:
+  hls:
+    build: .
+    image: addabaaz-hls
+    container_name: addabaaz-hls
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      # Keep everything inside the mounted volume, whatever .env says.
+      DATA_DIR: /app/data
+    volumes:
+      - hls-data:/app/data
+    # Uncomment to give ffmpeg a hard ceiling (helps keep the machine responsive):
+    #   cpus: "4"
+    #   mem_limit: 4g
+
+volumes:
+  hls-data:

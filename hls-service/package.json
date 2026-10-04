@@ -1,0 +1,26 @@
+{
+  "name": "addabaaz-hls-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone portal + microservice that converts any uploaded video into a multi-resolution HLS package ready for Cloudflare R2",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test \"test/*.test.js\"",
+    "test:unit": "node --test test/ffmpeg.test.js test/r2.test.js test/zip.test.js test/store.test.js test/server.test.js",
+    "test:api": "node --test test/api.test.js test/site.test.js test/portal.test.js",
+    "doctor": "node scripts/doctor.mjs",
+    "get:ffmpeg": "node scripts/get-ffmpeg.mjs",
+    "test:e2e": "node --test test/e2e-ffmpeg.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.1"
+  }
+}

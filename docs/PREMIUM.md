@@ -44,6 +44,11 @@ ffmpeg -i episode.mov -filter_complex "[0:v]split=2[a][b];[a]scale=-2:720[v720];
   -master_pl_name master.m3u8 -var_stream_map "v:0,a:0,name:720p v:1,a:1,name:480p" "ep6/%v/index.m3u8"
 ```
 
+> **Easier:** the repository also ships a standalone converter that does all of this for you —
+> [`hls-service/`](../hls-service) is a small web portal where you drop in any video, pick a ladder and
+> get the finished `premium/<slug>/master.m3u8` in your bucket (progress, retries, verification included).
+> The manual commands below are still the reference for what it does under the hood.
+
 Upload (any S3 tool with a *write* token — examples):
 
 ```bash

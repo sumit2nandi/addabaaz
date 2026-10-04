@@ -49,6 +49,7 @@ content/             the Content studio (served at /content) — shows, videos &
 data/catalog.json    content SEED + static/mobile bundle (live catalog is in MySQL; `npm run catalog:export` syncs it back)
 data/studio.json     About / team / services / contact details (same role)
 media/               optimised WebP artwork + app icons (generated)
+hls-service/         standalone HLS converter microservice (portal + API → multi-resolution HLS in R2)
 server/              REST API + static file server (Express), MySQL layer, SQL migrations, tests
 mobile/              Capacitor config for Android & iOS
 scripts/             optimize-images.sh, validate-catalog.mjs, build-www.mjs
@@ -70,6 +71,7 @@ BTS/, UpcomingReleases/, images/, resources/   original artwork (untouched) & na
 - [Maintenance mode](docs/MAINTENANCE.md) — take the viewer side offline from Admin → Maintenance, what still works, and how the site comes back (on its own or when you flip the switch)
 - [Billing: GST invoices, coupons, refunds, emails](docs/BILLING.md) — setup, admin API, sales register
 - [Premium video on Cloudflare R2](docs/PREMIUM.md) — bucket, upload, catalog entry, access rules, Razorpay payments, security
+- [HLS converter service](hls-service/README.md) — the standalone microservice that turns any video into a multi-resolution HLS package in R2 (portal, API, Docker image)
 - [Database (MySQL)](docs/DATABASE.md) — schema, migrations, configuration, backups
 - [Android & iOS](docs/MOBILE.md) — build, sign and publish the apps
 - [Managing content](docs/CONTENT.md) — add episodes, shows, posters, your own hosted video

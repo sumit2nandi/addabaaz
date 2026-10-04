@@ -53,7 +53,7 @@ Two ways to run it:
 | **Docker + Docker Compose** | quick start / production | Optional but the easiest way. |
 | A domain with **HTTPS** | production | Required for sign-in providers, payments, push notifications and PWA install. |
 | Accounts you may need later | | Google Cloud, Facebook developers, Apple Developer ($99/yr), Cloudflare (R2), Razorpay, an SMTP email provider, Google Search Console. Each is optional — see section 8. |
-| `ffmpeg` (only on your own computer) | encoding premium video | Only for `npm run encode:hls`. |
+| `ffmpeg` (only on your own computer, or use the converter's Docker image) | encoding premium video | Needed by the `hls-service` converter (section 8.4) and by `npm run encode:hls`. |
 | Android Studio / Xcode (macOS) | mobile apps only | See section 12. |
 
 ---
@@ -178,7 +178,8 @@ npm run validate:catalog                        # checks data/catalog.json and e
 | `npm run images` | Re-generate optimised WebP artwork (needs ImageMagick). |
 | `npm run backup` / `npm run restore -- <file>` | Backup and restore (section 13). |
 | `npm run loadtest` | Load test a staging server (section 13). |
-| `npm run encode:hls -- video.mov` | Convert a video for premium streaming (section 8.4). |
+| `cd hls-service && npm start` | The HLS converter service (section 8.4) — portal + API, encodes and uploads to R2. |
+| `npm run encode:hls -- video.mov` | The original one-shot encoder CLI (section 8.4) — kept for quick conversions. |
 | `npm run r2:check` | Check that R2 credentials and a video key work. |
 | `npm run mobile:android` / `mobile:ios` | Build the web bundle and open the native project (section 12). |
 
@@ -394,7 +395,7 @@ Premium is an app-level access setting and is independent of source. This walkth
    ```
 5. **Getting a video in** — either
    * *MP4 (simplest):* `ffmpeg -i episode.mov -c:v libx264 -crf 21 -preset slow -c:a aac -b:a 128k -movflags +faststart ep6.mp4`, then upload it in the admin (Videos → New video → *Private Cloudflare R2* → Upload — this needs a **write-capable** token, so either use a read/write token in `R2_*` or upload with another tool such as `rclone` and type the key), or
-   * *Adaptive HLS (better on mobile networks):* on your own computer, `npm run encode:hls -- episode.mov --name shahid-ep6 --upload`. It needs `ffmpeg` and a write-capable token, and prints the key to use (`premium/shahid-ep6/master.m3u8`). Try a short clip first.
+   * *Adaptive HLS (better on mobile networks):* run the standalone converter — `cd hls-service && npm install && npm run doctor && npm start`, open the portal, drop the video in and press **Start conversion** (see [`hls-service/README.md`](hls-service/README.md)); it encodes the whole ladder, uploads it to `premium/<slug>/` and shows the key to paste. The older one-shot script still works too: `npm run encode:hls -- episode.mov --name shahid-ep6 --upload` (needs `ffmpeg` and a write-capable token). Try a short clip first.
 6. In the admin, create the video with *Source = Private Cloudflare R2* and that key; set *Access = Premium*.
 7. Verify: `npm run r2:check -- premium/shahid-ep6/master.m3u8`.
 

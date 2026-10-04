@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0b0b0d">
+  <title>ADDABAAZ · HLS Converter</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <!-- Everything on this page is drawn by /app.js; the markup here is the fixed frame. -->
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">▶</span>
+      <div><strong>ADDABAAZ</strong> <span class="tag">HLS Converter</span></div>
+    </div>
+    <div class="pills" id="pills" aria-live="polite"></div>
+    <div class="top-actions">
+      <button class="btn ghost sm" id="checkR2" title="Upload a probe file, read it back and delete it">Test R2</button>
+      <button class="btn ghost sm" id="settingsBtn" title="Service address / API token">Settings</button>
+    </div>
+  </header>
+
+  <!-- Sign-in / settings card, shown when there is no usable token or when Settings is pressed. -->
+  <section class="gate" id="gate" hidden>
+    <form class="card gate-card" id="gateForm" novalidate>
+      <h1>Connect to the converter</h1>
+      <p class="muted">This portal runs on the converter service itself. Paste the <code>CONVERTER_TOKEN</code> you set in its <code>.env</code> — it is kept in this browser only.</p>
+      <div class="field"><label for="tok">API token</label><input id="tok" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="at least 24 characters"></div>
+      <div class="err" id="gateErr" hidden></div>
+      <div class="row">
+        <button class="btn primary" type="submit">Connect</button>
+        <button class="btn ghost" type="button" id="gateCancel" hidden>Cancel</button>
+      </div>
+      <p class="small muted">Not set yet? On the server: <code>node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"</code> → <code>CONVERTER_TOKEN=…</code> in <code>hls-service/.env</code>, then restart.</p>
+    </form>
+  </section>
+
+  <main id="main" hidden>
+    <section class="card" id="newCard">
+      <div class="card-head">
+        <h2>New conversion</h2>
+        <span class="muted small" id="limitsNote"></span>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-src="upload" role="tab">Upload a file</button>
+        <button class="tab" data-src="r2" role="tab">From R2</button>
+        <button class="tab" data-src="url" role="tab">From a URL</button>
+      </div>
+
+      <!-- 1 · source -->
+      <div class="src" id="srcUpload">
+        <label class="drop" id="drop">
+          <input type="file" id="file" accept="video/*,.mkv,.avi,.mov,.m4v,.webm,.flv,.wmv,.ts,.mts,.m2ts,.mpg,.mpeg,.3gp,.ogv,.vob,.rm,.rmvb,.mxf,.divx,.xvid" hidden>
+          <strong>Drop a video here</strong>
+          <span class="muted">or click to choose — mp4, mov, mkv, avi, webm, ts, flv, wmv, 3gp, mpeg, mxf … any container ffmpeg can read</span>
+          <span class="file" id="fileName" hidden></span>
+        </label>
+        <div class="progress slim" id="upBar" hidden><div></div></div>
+        <p class="small muted" id="upNote"></p>
+      </div>
+      <div class="src" id="srcR2" hidden>
+        <div class="field"><label for="r2Key">Object key in the bucket</label><input id="r2Key" placeholder="raw/shahid-ep6.mkv"></div>
+        <p class="small muted">The service downloads it from R2 itself, then uploads the HLS package next to it.</p>
+      </div>
+      <div class="src" id="srcUrl" hidden>
+        <div class="field"><label for="srcUrlIn">Video URL</label><input id="srcUrlIn" type="url" placeholder="https://example.com/episode.mp4"></div>
+        <p class="small muted">Any http(s) link the server can reach (a direct file link, not a page).</p>
+      </div>
+
+      <!-- 2 · output -->
+      <div class="grid">
+        <div class="field"><label for="slug">Folder name (slug)</label><input id="slug" placeholder="shahid-ep6"><span class="hint">Filled from the file name. Output lands in <code>&lt;prefix&gt;/&lt;slug&gt;/</code>.</span></div>
+        <div class="field"><label for="prefix">R2 prefix</label><input id="prefix" placeholder="premium"><span class="hint">Where packages live in the bucket. Keep <code>premium</code> for the site's private videos.</span></div>
+        <div class="field"><label for="preset">Quality ladder</label><select id="preset"></select><span class="hint" id="presetHint"></span></div>
+        <div class="field"><label for="segments">Segment length</label><select id="segments"></select><span class="hint">6 s is the usual choice; 4 s starts faster, 10 s means fewer files.</span></div>
+        <div class="field"><label for="packaging">Packaging</label><select id="packaging"></select><span class="hint" id="packHint"></span></div>
+        <div class="field"><label for="speed">Encoding effort</label><select id="speed">
+          <option value="veryfast">Very fast (bigger files)</option>
+          <option value="fast">Fast</option>
+          <option value="medium" selected>Balanced (recommended)</option>
+          <option value="slow">Slow (smaller files)</option>
+        </select><span class="hint">Affects encoding time and file size, not the resolutions.</span></div>
+      </div>
+
+      <label class="check"><input type="checkbox" id="upload" checked> <span>Upload the package to R2 when it is ready</span></label>
+      <label class="check"><input type="checkbox" id="keepLocal"> <span>Keep the local copy after upload (otherwise the nightly sweep removes it)</span></label>
+
+      <div class="row end">
+        <span class="muted small" id="estimate"></span>
+        <button class="btn primary" id="start" disabled>Start conversion</button>
+      </div>
+      <div class="err" id="newErr" hidden></div>
+    </section>
+
+    <section class="card" id="jobsCard">
+      <div class="card-head">
+        <h2>Jobs</h2>
+        <div class="chips" id="filters">
+          <button class="chip active" data-status="">All</button>
+          <button class="chip" data-status="running">Running</button>
+          <button class="chip" data-status="queued">Queued</button>
+          <button class="chip" data-status="done">Done</button>
+          <button class="chip" data-status="failed">Failed</button>
+          <button class="chip" data-status="canceled">Canceled</button>
+        </div>
+        <button class="btn ghost sm" id="refresh">Refresh</button>
+      </div>
+      <div id="jobs" class="jobs"><p class="muted">Loading…</p></div>
+    </section>
+  </main>
+
+  <!-- Job detail: probe results, per-quality progress, log tail and the finished package. -->
+  <aside class="drawer" id="drawer" hidden aria-modal="true" role="dialog">
+    <div class="drawer-inner" id="drawerBody"></div>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
