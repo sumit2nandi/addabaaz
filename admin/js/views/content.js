@@ -519,13 +519,13 @@ export default async function content(root, [section], ctx) {
       <div class="grid two">
         <section class="card">
           <h2>${icon('crown', 18)} In the rail <span class="muted small">${picks.length} / 10</span></h2>
-          ${picks.length ? html`<ol class="top-list">${picks.map((v, i) => row(v, i)).join('')}</ol>` : empty('Nothing picked yet — the rail currently shows the ten most-watched episodes.')}
+          ${picks.length ? html`<ol class="top-list">${picks.map((v, i) => row(v, i))}</ol>` : empty('Nothing picked yet — the rail currently shows the ten most-watched episodes.')}
           <p class="muted small">A picked episode always appears, mature or not: it is an editorial choice, not a recommendation.</p>
         </section>
         <section class="card">
           <h2>${icon('play', 18)} Most watched</h2>
           <input type="search" id="topSearch" placeholder="Search episodes…" value="${TOP.q.replace(/"/g, '&quot;')}" autocomplete="off">
-          ${candidates.length ? html`<ul class="top-list">${candidates.map((v) => row(v)).join('')}</ul>` : html`<p class="empty">${q ? 'No episode matches that search.' : 'Every episode is already in the rail.'}</p>`}
+          ${candidates.length ? html`<ul class="top-list">${candidates.map((v) => row(v))}</ul>` : html`<p class="empty">${q ? 'No episode matches that search.' : 'Every episode is already in the rail.'}</p>`}
         </section>
       </div>
       <p class="muted small">${note}</p>`.s;

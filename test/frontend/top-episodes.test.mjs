@@ -75,6 +75,10 @@ test('the Content studio has a Top 10 page that writes ranks', () => {
   assert.match(view, /const ranked = \(\) => data\.videos\.filter\(\(v\) => v\.kind === 'episode' && Number\(v\.topRank\) >= 1\)/, 'picks are the ranked episodes');
   assert.match(view, /api\.put\(`\/catalog\/videos\/\$\{encodeURIComponent\(w\.id\)\}`, \{ \.\.\.byId\.get\(w\.id\), topRank: w\.rank \}\)/, 'writing a rank saves the whole video document');
   assert.match(view, /data-top-up|data-top-in/, 'add / move / remove controls');
+  assert.ok(view.includes('<ol class="top-list">${picks.map((v, i) => row(v, i))}</ol>'),
+    'picked row templates remain safe HTML values instead of escaped strings');
+  assert.ok(view.includes('<ul class="top-list">${candidates.map((v) => row(v))}</ul>'),
+    'candidate row templates render as markup too');
   for (const action of ['up', 'down', 'out', 'in'])
     assert.ok(view.includes(`$$('[data-top-${action}]', root).forEach`), `${action} handlers tolerate an empty selector result`);
   assert.match(view, /Rank by views/, 'and a way back to the automatic list');

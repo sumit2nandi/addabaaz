@@ -5,6 +5,7 @@ import express from 'express';
 import { createFeatures } from '../src/features.js';
 import { queryRows } from '../src/db.js';
 import { extraDb } from '../src/db-extra.js';
+import { ensureCreditLedgerAmountColumn } from '../src/migrate.js';
 
 const read = (path) => fs.readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
@@ -18,6 +19,24 @@ test('credit-ledger migrations recheck amount_paise safely, including after an o
     assert.match(migration, /SET amount_paise = remaining_paise[\s\S]*WHERE amount_paise = 0 AND remaining_paise > 0/,
       'any remaining legacy grant balance stays usable after the repair');
   }
+});
+
+test('credit amount schema guard repairs drift even when no migration is pending', async () => {
+  let hasColumn = false;
+  const statements = [], messages = [];
+  const conn = { async query(sql) {
+    statements.push(sql);
+    if (sql.includes('information_schema.COLUMNS')) return [[{ n: hasColumn ? 1 : 0 }], []];
+    if (sql.startsWith('ALTER TABLE user_credit ADD COLUMN amount_paise')) hasColumn = true;
+    return [{ affectedRows: 0 }, []];
+  } };
+
+  assert.equal(await ensureCreditLedgerAmountColumn(conn, { log: (m) => messages.push(m) }), true);
+  assert.equal(await ensureCreditLedgerAmountColumn(conn, { log: (m) => messages.push(m) }), false,
+    'the next boot is a fast no-op once the column is present');
+  assert.equal(statements.filter((s) => s.startsWith('ALTER TABLE user_credit')).length, 1);
+  assert.equal(statements.filter((s) => s.startsWith('UPDATE user_credit')).length, 1);
+  assert.deepEqual(messages, ['repairing missing user_credit.amount_paise column']);
 });
 
 test('error-log migration stores parameterized SQL and the bound-parameter count only', () => {
@@ -80,6 +99,7 @@ test('error records persist and return safe SQL-template diagnostics', async () 
 test('server error reports include verified account context and useful database diagnostics', () => {
   const app = read('server/src/app.js');
   const features = read('server/src/features.js');
+  const migrate = read('server/src/migrate.js');
   const db = read('server/src/db-extra.js');
 
   assert.match(app, /const userId = req\.user\?\.id \|\| req\.admin\?\.id \|\| null/,
@@ -91,6 +111,8 @@ test('server error reports include verified account context and useful database 
     'server failures pass safe SQL context to the error log');
   assert.match(db, /sql_query, sql_param_count/, 'the error log persists SQL templates and parameter counts');
   assert.match(db, /sqlQuery: r\.sql_query \|\| null/);
+  assert.match(migrate, /await ensureCreditLedgerAmountColumn\(conn, \{ log \}\)/,
+    'the schema guard runs on every migration invocation, even if its numbered repair was already recorded');
   assert.match(features, /userFromRequest\?\.\(req\)/, 'client errors resolve an optional first-party session');
   assert.match(features, /userId: user\?\.id \|\| null/, 'client-supplied IDs are not trusted');
   assert.match(db, /e\.user_agent, e\.user_id, u\.name AS account_name, u\.email AS account_email/);
