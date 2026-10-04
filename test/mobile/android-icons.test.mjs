@@ -11,9 +11,9 @@ import { stampLauncherIcons, ICON_SOURCE } from '../../mobile/scripts/android-ic
 
 const DENSITIES = ['mdpi', 'hdpi', 'xxhdpi', 'xxxhdpi', 'xhdpi'];
 
-// Read the top-left pixel's alpha from the first PNG scanline. Its filter predictor is zero for
-// the first pixel, so the stored alpha byte is also the decoded alpha for that corner.
-function topLeftAlpha(file) {
+// Read the top-left pixel from the first PNG scanline. Its filter predictor is zero for the first
+// pixel, so the stored RGBA bytes are also the decoded color for that corner.
+function topLeftRgba(file) {
   const png = fs.readFileSync(file);
   assert.deepEqual(png.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), `${file} is PNG`);
   let offset = 8, bitDepth, colorType, interlace;
@@ -30,28 +30,31 @@ function topLeftAlpha(file) {
   assert.equal(bitDepth, 8, `${file} uses 8-bit channels`);
   assert.equal(colorType, 6, `${file} has an RGBA alpha channel`);
   assert.equal(interlace, 0, `${file} is non-interlaced`);
-  return inflateSync(Buffer.concat(idat))[4];
+  const row = inflateSync(Buffer.concat(idat));
+  return { r: row[1], g: row[2], b: row[3], a: row[4] };
 }
 
 test('the repo ships a full logo icon set (all densities + playstore)', () => {
   for (const d of DENSITIES) {
-    for (const f of ['ic_launcher.png', 'ic_launcher_round.png']) {
+    for (const f of ['ic_launcher.png', 'ic_launcher_round.png', 'ic_launcher_foreground.png']) {
       assert.ok(fs.existsSync(path.join(ICON_SOURCE, d, f)), `${d}/${f} exists`);
     }
   }
   assert.ok(fs.existsSync(path.join(ICON_SOURCE, 'ic_launcher_playstore.png')), 'playstore icon exists');
 });
 
-test('Android and OAuth logo assets have transparent corners around the round mark', () => {
-  const files = [
+test('Android launcher uses a dark background, with a large transparent foreground and a round OAuth logo', () => {
+  const tileFiles = [
     ...DENSITIES.flatMap((d) => ['ic_launcher.png', 'ic_launcher_round.png'].map((f) => path.join(ICON_SOURCE, d, f))),
     path.join(ICON_SOURCE, 'ic_launcher_playstore.png'),
-    new URL('../../resources/icon-only.png', import.meta.url),
   ];
-  for (const file of files) assert.equal(topLeftAlpha(file), 0, `${file} has no opaque square corner`);
+  const roundForegrounds = DENSITIES.map((d) => path.join(ICON_SOURCE, d, 'ic_launcher_foreground.png'));
+  for (const file of tileFiles) assert.deepEqual(topLeftRgba(file), { r: 5, g: 5, b: 5, a: 255 }, `${file} fills the corners with brand black, not white`);
+  for (const file of roundForegrounds) assert.equal(topLeftRgba(file).a, 0, `${file} preserves the circular foreground`);
+  assert.equal(topLeftRgba(new URL('../../resources/icon-only.png', import.meta.url)).a, 0, 'OAuth logo has transparent corners to show its round shape');
 });
 
-test('stampLauncherIcons replaces the stock icons and drops the adaptive XML', () => {
+test('stampLauncherIcons replaces stock icons with the branded adaptive foreground/background', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-icons-'));
   const res = path.join(tmp, 'app', 'src', 'main', 'res');
   fs.mkdirSync(path.join(res, 'mipmap-anydpi-v26'), { recursive: true });
@@ -60,10 +63,15 @@ test('stampLauncherIcons replaces the stock icons and drops the adaptive XML', (
   fs.writeFileSync(path.join(res, 'mipmap-mdpi', 'ic_launcher.png'), 'stock capacitor bot');
 
   const done = stampLauncherIcons(tmp);
-
-  assert.equal(fs.existsSync(path.join(res, 'mipmap-anydpi-v26')), false, 'adaptive XML removed so the logo PNGs win');
+  const adaptiveDir = path.join(res, 'mipmap-anydpi-v26');
+  for (const f of ['ic_launcher.xml', 'ic_launcher_round.xml']) {
+    const xml = fs.readFileSync(path.join(adaptiveDir, f), 'utf8');
+    assert.match(xml, /<background android:drawable="@color\/addabaaz_icon_background" \/>/, `${f} paints the brand background instead of white`);
+    assert.match(xml, /<foreground android:drawable="@mipmap\/ic_launcher_foreground" \/>/, `${f} uses the large circular logo`);
+  }
+  assert.match(fs.readFileSync(path.join(res, 'values', 'addabaaz_icon_colors.xml'), 'utf8'), /#050505/, 'adaptive background is brand black');
   for (const d of DENSITIES) {
-    for (const f of ['ic_launcher.png', 'ic_launcher_round.png']) {
+    for (const f of ['ic_launcher.png', 'ic_launcher_round.png', 'ic_launcher_foreground.png']) {
       const target = path.join(res, `mipmap-${d}`, f);
       assert.ok(fs.existsSync(target), `${d}/${f} stamped`);
       assert.ok(fs.readFileSync(target).equals(fs.readFileSync(path.join(ICON_SOURCE, d, f))), `${d}/${f} is the logo asset`);
@@ -71,7 +79,7 @@ test('stampLauncherIcons replaces the stock icons and drops the adaptive XML', (
   }
   assert.ok(fs.existsSync(path.join(res, 'drawable', 'ic_launcher_playstore.png')), 'playstore icon stamped');
   assert.ok(!fs.readFileSync(path.join(res, 'mipmap-mdpi', 'ic_launcher.png')).equals(Buffer.from('stock capacitor bot')), 'stock icon replaced');
-  assert.ok(done.length >= 11);
+  assert.ok(done.length >= 20);
 
   assert.doesNotThrow(() => stampLauncherIcons(tmp), 'running it twice (every sync) is fine');
   fs.rmSync(tmp, { recursive: true, force: true });

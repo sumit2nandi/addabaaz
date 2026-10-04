@@ -7,15 +7,15 @@ cd "$(dirname "$0")/../.."
 SRC=media/icons/icon-512.png
 OUT=mobile/android-icons
 rm -rf "$OUT"; mkdir -p "$OUT"/{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}
-for spec in "mdpi 48" "hdpi 72" "xhdpi 96" "xxhdpi 144" "xxxhdpi 192"; do
-  set -- $spec; d=$1; s=$2; c=$((s / 2))
-  convert -size "${s}x${s}" xc:none -fill white -draw "circle $c,$c $c,0" /tmp/round-mask.png
-  # Keep the corners transparent. Compositing onto #050505 bakes in the black square shown by Android's installer and account sheet.
-  convert "$SRC" -resize "${s}x${s}" -alpha set /tmp/round-mask.png -compose DstIn -composite -strip -depth 8 "PNG32:$OUT/$d/ic_launcher.png"
+for spec in "mdpi 48 108" "hdpi 72 162" "xhdpi 96 216" "xxhdpi 144 324" "xxxhdpi 192 432"; do
+  set -- $spec; d=$1; s=$2; fg=$3
+  # The launcher icon needs a full-bleed dark tile: Android fills transparent legacy-icon corners with white.
+  # The adaptive foreground uses the full circular artwork so it stays large inside the system's rounded mask.
+  convert -size "${s}x${s}" xc:"#050505" "$SRC" -resize "${s}x${s}" -gravity center -compose Over -composite -strip -depth 8 "PNG32:$OUT/$d/ic_launcher.png"
   cp "$OUT/$d/ic_launcher.png" "$OUT/$d/ic_launcher_round.png"
+  convert "$SRC" -resize "${fg}x${fg}" -strip -depth 8 "PNG32:$OUT/$d/ic_launcher_foreground.png"
 done
-convert -size 512x512 xc:none -fill white -draw "circle 256,256 256,0" /tmp/round-mask.png
-convert "$SRC" -resize 512x512 -alpha set /tmp/round-mask.png -compose DstIn -composite -strip -depth 8 "PNG32:$OUT/ic_launcher_playstore.png"
+convert -size 512x512 xc:"#050505" "$SRC" -resize 512x512 -gravity center -compose Over -composite -strip -depth 8 "PNG32:$OUT/ic_launcher_playstore.png"
 # Branded splash (dark bg + centred round logo): replaces the stock white Capacitor tile that
 # flashes on launch; stamped over res/drawable*/splash.png by patch-android.mjs.
 mkdir -p "$OUT/splash"
