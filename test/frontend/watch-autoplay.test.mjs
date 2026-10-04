@@ -179,8 +179,8 @@ test('the next-up popup is translucent, compact and dismissible with a top-right
     'the popup shrink-wraps to content at the video bottom-right');
   assert.match(css, /\.next-card \{[^}]*grid-template-columns: 80px minmax\(0,1fr\); align-items: end;[^}]*background: rgba\(15,15,20,\.42\)[^}]*backdrop-filter: blur\(14px\)/,
     'the compact glass card aligns its contents to the bottom');
-  assert.match(css, /\.next-card img \{[^}]*transform: translateY\(8px\);/,
-    'the thumbnail sits lower so its base lines up with Play now');
+  assert.match(css, /\.next-card img \{ width: 68px; max-width: 68px; align-self: center; justify-self: end; \}/,
+    'on phones the thumbnail sits in the upper-left content area beside the title and play action');
   assert.match(css, /\.next-close \{[^}]*inset: 6px 6px auto auto;[^}]*width: 28px; height: 28px;/,
     'the dismiss control is pinned to the upper-right corner');
   assert.match(view, /Next in \$\{n\}s/, 'the countdown does not use a Recommended label');
