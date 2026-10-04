@@ -1,4 +1,4 @@
-// CC controls should exist only when a subtitle file actually loads for the current video.
+// Subtitles/CC belong in the player's Settings menu, never as a standalone control-bar icon.
 // Run: node --test test/frontend/subtitle-icon.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -47,11 +47,10 @@ const mount = async (subtitles) => {
 };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-test('no subtitle tracks: hide the CC icon and omit subtitles from Settings', async () => {
+test('without subtitle tracks there is no CC control or Settings entry', async () => {
   const { box, player, cc, menu, gear } = await mount([]);
   try {
-    assert.ok(cc);
-    assert.equal(cc.hidden, true);
+    assert.equal(cc, null, 'the control bar has no standalone CC icon');
     assert.equal(player.hasSubtitles(), false);
     assert.equal(box.querySelector('.ytp-settings-overlay'), null, 'the settings sheet is portalled outside the player');
     gear.dispatchEvent(new window.Event('click', { bubbles: true }));
@@ -59,31 +58,34 @@ test('no subtitle tracks: hide the CC icon and omit subtitles from Settings', as
   } finally { player.destroy(); box.remove(); }
 });
 
-test('an unavailable subtitle file does not leave a dead CC icon', async () => {
+test('an unavailable subtitle file does not add a dead Settings entry or CC icon', async () => {
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async () => ({ ok: false, status: 404 });
-  const { box, player, cc } = await mount([{ url: '/missing.vtt', lang: 'en', label: 'English' }]);
+  const { box, player, cc, menu, gear } = await mount([{ url: '/missing.vtt', lang: 'en', label: 'English' }]);
   try {
     await settle();
     assert.equal(player.hasSubtitles(), false);
-    assert.equal(cc.hidden, true);
+    assert.equal(cc, null, 'there is never a standalone CC icon');
+    gear.dispatchEvent(new window.Event('click', { bubbles: true }));
+    assert.doesNotMatch(menu.textContent, /Subtitles\/CC/);
   } finally { player.destroy(); box.remove(); globalThis.fetch = previousFetch; }
 });
 
-test('a loaded subtitle track reveals the CC icon and Settings entry', async () => {
+test('a loaded subtitle track is available only from the Settings menu', async () => {
   const previousFetch = globalThis.fetch;
   let resolveFetch;
   globalThis.fetch = () => new Promise((resolve) => { resolveFetch = resolve; });
   const { box, player, cc, menu, gear } = await mount([{ url: '/english.vtt', lang: 'en', label: 'English' }]);
   try {
-    assert.equal(cc.hidden, true, 'the icon stays hidden while the subtitle fetch is pending');
+    assert.equal(cc, null, 'the control bar has no standalone CC icon');
     resolveFetch({ ok: true, text: async () => 'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello' });
     await settle();
     assert.equal(player.hasSubtitles(), true);
-    assert.equal(cc.hidden, false);
     gear.dispatchEvent(new window.Event('click', { bubbles: true }));
-    assert.match(menu.textContent, /Subtitles\/CC/);
-    menu.querySelector('[data-nav="subs"]').dispatchEvent(new window.Event('click', { bubbles: true }));
+    const subs = menu.querySelector('[data-nav="subs"]');
+    assert.ok(subs, 'the Settings sheet includes Subtitles/CC when a track is loaded');
+    assert.ok(subs.querySelector('svg'), 'the CC icon is only present inside the Settings menu');
+    subs.dispatchEvent(new window.Event('click', { bubbles: true }));
     assert.match(menu.textContent, /English/);
   } finally { player.destroy(); box.remove(); globalThis.fetch = previousFetch; }
 });

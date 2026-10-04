@@ -628,7 +628,6 @@ body:has(#consentBar) .auth-page { padding-bottom: 190px; } body:has(#consentBar
 .ytp-btn svg { pointer-events: none; }
 .ytp-btn:hover, .ytp-btn:active { opacity: 1; background: rgba(255,255,255,.12); }
 .ytp-btn[hidden] { display: none !important; }
-.ytp-cc-btn.is-active::after { content: ''; position: absolute; bottom: 5px; left: 9px; right: 9px; height: 2.5px; border-radius: 2px; background: #ff0033; }
 .ytp-gear-btn svg { transition: transform .25s ease; }
 .ytp-gear-btn.is-open svg { transform: rotate(30deg); }
 .ytp-gear-badge { position: absolute; top: 5px; right: 3px; background: #ff0033; color: #fff; font-size: 9px; font-weight: 800; line-height: 1; padding: 2px 3.5px; border-radius: 3px; letter-spacing: .2px; pointer-events: none; }

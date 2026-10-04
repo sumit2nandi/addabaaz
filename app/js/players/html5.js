@@ -417,7 +417,6 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
           <div class="ytp-time"><span class="ytp-cur">0:00</span><span class="ytp-sep"> / </span><span class="ytp-dur">${initDur}</span></div>
         </div>
         <div class="ytp-right">
-          <button type="button" class="ytp-btn ytp-cc-btn" aria-label="Subtitles/closed captions" title="Subtitles/closed captions (c)">${YT_ICONS.cc}</button>
           <button type="button" class="ytp-btn ytp-gear-btn" aria-label="Settings" aria-expanded="false" title="Settings">${YT_ICONS.gear}<span class="ytp-gear-badge" hidden>HD</span></button>
           <button type="button" class="ytp-btn ytp-pip-btn" aria-label="Picture-in-Picture" title="Miniplayer / Picture-in-Picture" hidden>${YT_ICONS.pip}</button>
           <button type="button" class="ytp-btn ytp-fs-btn" data-icon="enter" aria-label="Full screen" title="Full screen (f)">${YT_ICONS.fsEnter}</button>
@@ -465,7 +464,6 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
   const hoverTime = $('.ytp-hover-time');
   const bufBar = $('.ytp-bar-buf');
   const playBar = $('.ytp-bar-play');
-  const ccBtn = $('.ytp-cc-btn');
   const gearBtn = $('.ytp-gear-btn');
   const gearBadge = $('.ytp-gear-badge');
   const pipBtn = $('.ytp-pip-btn');
@@ -641,7 +639,7 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
   prog?.addEventListener('pointerup', endScrub);
   prog?.addEventListener('pointercancel', endScrub);
 
-  // Subtitles / CC button.
+  // Subtitles / CC are available from Settings when subtitle tracks exist.
   const getTracks = () => [...(v.textTracks || [])];
   const activeTrack = () => getTracks().find((t) => t.mode === 'showing') || null;
   const setTrack = (lang) => {
@@ -649,14 +647,6 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
     try { localStorage.setItem('ab.subLang', lang || 'off'); } catch { /* ignore */ }
     update();
   };
-  ccBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const tracks = getTracks();
-    if (!tracks.length) return;
-    const cur = activeTrack();
-    setTrack(cur ? null : tracks[0].language);
-    showControls();
-  });
 
   // Picture-in-Picture toggle.
   pipBtn?.addEventListener('click', async (e) => {
@@ -877,7 +867,7 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
     }
   });
 
-  // Keyboard shortcuts when player is focused (Space/K play, Left/Right 5s, J/L 10s, M mute, F fullscreen, C captions).
+  // Keyboard shortcuts when player is focused (Space/K play, Left/Right 5s, J/L 10s, M mute, F fullscreen).
   wrap.addEventListener('keydown', (e) => {
     // The sheet is re-parented into the fullscreen player when necessary; don't let its keys trigger player shortcuts.
     if (menu.contains(e.target) || e.target?.tagName === 'INPUT') return;
@@ -929,10 +919,6 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
       prog.setAttribute('aria-valuenow', String(Math.round(cur)));
     }
 
-    if (ccBtn) {
-      ccBtn.hidden = getTracks().length === 0;
-      ccBtn.classList.toggle('is-active', !!activeTrack());
-    }
     if (gearBadge) {
       const h = getHls()?.levels?.[getHls()?.currentLevel]?.height || v.videoHeight || 0;
       const rate = v.playbackRate || 1;
