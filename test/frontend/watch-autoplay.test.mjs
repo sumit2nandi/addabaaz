@@ -29,10 +29,11 @@ const VIDEO = { id: 'v1', kind: 'episode', episode: 1, title: 'Test episode', sh
 const PREMIUM_VIDEO = { ...VIDEO, id: 'vp', episode: 2, title: 'Premium episode', access: 'premium', poster: 'media/premium-vp.webp', source: { type: 'r2', key: 'premium/x.mp4' } };
 const PREMIUM_YT = { ...VIDEO, id: 'vpy', episode: 3, title: 'Premium on YouTube', access: 'premium', source: { type: 'youtube', id: 'zzz' } };
 const RELATED_EPISODE = { ...VIDEO, id: 'r1', episode: 1, title: 'Related show premiere', showId: 's2', source: { type: 'youtube', id: 'def' } };
+const R2_STANDALONE = { ...VIDEO, id: 'r2-standalone', title: 'Standalone R2', showId: null, source: { type: 'r2', key: 'testing/standalone.mp4' } };
 app.catalog = app.fullCatalog = new Catalog({ schema: 1, updatedAt: '', shows: [
   { id: 's1', title: 'Show', titleEn: 'Show', genres: ['comedy'], cast: [], type: 'series', poster: 'media/shows/s1.webp' },
   { id: 's2', title: 'Related Show', titleEn: 'Related Show', genres: ['comedy'], cast: [], type: 'series' },
-], videos: [VIDEO, PREMIUM_VIDEO, PREMIUM_YT, RELATED_EPISODE], upcoming: [], gallery: [] });
+], videos: [VIDEO, PREMIUM_VIDEO, PREMIUM_YT, RELATED_EPISODE, R2_STANDALONE], upcoming: [], gallery: [] });
 app.user = {
   remote: null, account: null, profiles: [], profile: { id: 'p1', name: 'T' }, activeId: 'p1', supportsAuth: false, isKids: false,
   gateFor: () => 'ok', progressOf: () => null, isFinished: () => false, pref: () => true, setPref: () => {},
@@ -66,6 +67,34 @@ test('public watch metadata does not show the catalog view count', async () => {
   assert.ok(meta);
   assert.doesNotMatch(meta.textContent, /views?/i);
   assert.doesNotMatch(meta.textContent, /\b1\s+views?\b/i, 'the fixture has one catalog view, which is no longer exposed');
+});
+
+test('watch actions are source-specific for YouTube and R2 videos', async () => {
+  const { ctx: youtube } = await mount('v1');
+  const ytActions = youtube.root.querySelector('.watch-actions');
+  assert.equal(ytActions.querySelector('[data-list="video:v1"]'), null, 'YouTube has no Save video action');
+  assert.equal(ytActions.querySelectorAll('[data-list="show:s1"]').length, 1, 'the show-level My List action remains');
+  assert.ok(ytActions.querySelector('#castBtn'), 'the cast action is still available for other sources when supported');
+  assert.ok(ytActions.querySelector('#shareBtn'), 'Share is preserved');
+  assert.ok(ytActions.querySelector('#autoNext'), 'Autoplay next is preserved');
+
+  streamUrlRequests = 0;
+  const { ctx: r2 } = await mount('vp');
+  const r2Actions = r2.root.querySelector('.watch-actions');
+  assert.equal(streamUrlRequests, 1, 'the R2 media still uses its signed stream URL');
+  assert.equal(r2Actions.querySelector('#castBtn'), null, 'R2 has no Cast action');
+  assert.equal(r2Actions.querySelector('[data-list="video:vp"]'), null, 'R2 no longer saves just the episode');
+  assert.equal(r2Actions.querySelectorAll('[data-list="show:s1"]').length, 1, 'R2 offers one show-level My List action');
+  assert.match(r2Actions.querySelector('[data-list="show:s1"]').textContent, /Add show to My List/);
+
+  streamUrlRequests = 0;
+  const { ctx: standalone } = await mount('r2-standalone');
+  const soloActions = standalone.root.querySelector('.watch-actions');
+  assert.equal(soloActions.querySelector('#castBtn'), null, 'standalone R2 also has no Cast action');
+  assert.equal(soloActions.querySelector('[data-list^="video:"]'), null, 'without a parent show, the replacement list action is omitted');
+  assert.equal(soloActions.querySelector('[data-list^="show:"]'), null, 'there is no invalid show ID to add');
+  assert.ok(soloActions.querySelector('#shareBtn'), 'standalone R2 keeps Share');
+  streamUrlRequests = 0;
 });
 
 test('the first successful playback records one database view start for this watch page', async () => {

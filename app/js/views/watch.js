@@ -21,6 +21,7 @@ export default async function watch(ctx) {
   const v = cat.video(ctx.params.id);
   if (!v) throw new Error('This video is not available.');
   const show = cat.show(v.showId), soon = !show && cat.soon(v.showId);
+  const isYouTube = v.source.type === 'youtube', isR2 = v.source.type === 'r2';
   const next = cat.nextEpisode(v);
   const title = cat.displayTitle(v);
   // Can this viewer play it? 'ok' | 'login' | 'plan' | 'unavailable' (premium in static mode).
@@ -57,9 +58,9 @@ export default async function watch(ctx) {
           ${metaLine([cat.label(v), fmtDate(v.publishedAt), v.duration > 0 ? fmtDuration(v.duration) : ''])}
           <div class="watch-actions">
             ${show ? listBtn('show', show.id, { label: 'Add show to My List', cls: 'btn btn-ghost' }) : ''}
-            ${listBtn('video', v.id, { label: 'Save video', cls: 'btn btn-ghost' })}
+            ${!isYouTube && !isR2 ? listBtn('video', v.id, { label: 'Save video', cls: 'btn btn-ghost' }) : ''}
             ${next ? html`<a class="btn btn-ghost" href="#/watch/${next.id}">${icon('next', { size: 18 })} Next: ${cat.label(next)}</a>` : ''}
-            <button type="button" class="btn btn-ghost" id="castBtn" hidden>${icon('cast', { size: 18 })} Cast</button>
+            ${!isR2 ? html`<button type="button" class="btn btn-ghost" id="castBtn" hidden>${icon('cast', { size: 18 })} Cast</button>` : ''}
             <button type="button" class="btn btn-ghost" id="shareBtn">${icon('share', { size: 18 })} Share</button>
             <label class="switch" title="Play the next episode or a related recommendation automatically"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span><span>Autoplay next</span></label>
           </div>
@@ -289,7 +290,8 @@ export default async function watch(ctx) {
         },
       });
       if (dead) ctl.destroy();
-      if (ctl.castSupported?.()) { const cb = $('#castBtn', ctx.root); cb.hidden = false; cb.onclick = () => ctl.cast().catch((e) => { if (e?.name !== 'NotAllowedError') toast('No cast devices found nearby.'); }); }
+      const cb = $('#castBtn', ctx.root);
+      if (cb && ctl.castSupported?.()) { cb.hidden = false; cb.onclick = () => ctl.cast().catch((e) => { if (e?.name !== 'NotAllowedError') toast('No cast devices found nearby.'); }); }
     } catch (e) {
       console.warn(e);
       if (e instanceof ApiError && e.status === 401) return wall('login');       // session expired or never signed in
