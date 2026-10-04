@@ -462,7 +462,16 @@ input, textarea, select { font: inherit; }
 /* ---------- panels, account, profiles, auth, plans ---------- */
 .card-panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px; display: grid; gap: 14px; align-content: start; } .card-panel h2, .card-panel h3 { font-size: 19px; }
 .card-panel.list { padding: 6px; gap: 0; }
-.who { grid-template-columns: auto 1fr; align-items: center; gap: 16px; } .who-actions { grid-column: 1 / -1; display: flex; gap: 10px; flex-wrap: wrap; } .who h2 { font-size: 22px; }
+.who { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 16px; } .who > div:nth-child(2) { min-width: 0; } .who-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; } .who h2 { font-size: 22px; }
+.account-grid { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.account-section { min-width: 0; }
+.account-section:empty { display: none; }
+@media (min-width: 900px) {
+  .page.account-page { max-width: 1320px; }
+  .who { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .who-actions { grid-column: auto; }
+  .account-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: clamp(24px, 3vw, 42px); }
+}
 .row-link, .row-switch { display: flex; align-items: center; gap: 16px; width: 100%; padding: 14px 16px; border-radius: 12px; background: none; border: 0; text-align: left; color: #fff; } a.row-link:hover, button.row-link:hover, .row-switch:hover { background: var(--panel-2); }
 .row-link > span, .row-switch > span:first-child { flex: 1; display: grid; gap: 2px; } .row-link small, .row-switch small { color: var(--muted); font-size: 13px; font-weight: 400; } .chev { color: var(--muted); } .row-link.danger { color: #ff8a8c; } .row-link.static { cursor: default; } .row-switch { cursor: pointer; justify-content: space-between; }
 .row-link[hidden] { display: none; }

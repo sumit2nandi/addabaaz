@@ -103,29 +103,35 @@ export function accountExtras() {
   if (!acc) {
     return {
       banner: '',
-      sections: html`<div id="notifySlot"></div><h2 class="sub-h">Privacy</h2><div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}<a class="row-link" href="#/privacy">${icon('info', { size: 22 })}<span><b>Privacy Policy</b></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>`,
+      sections: html`<div id="notifySlot" class="account-section"></div><section class="account-section"><h2 class="sub-h">Privacy</h2><div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}<a class="row-link" href="#/privacy">${icon('info', { size: 22 })}<span><b>Privacy Policy</b></span>${icon('right', { size: 18, cls: 'chev' })}</a></div></section>`,
       wire(root, ctx) { $('#consentBtn', root)?.addEventListener('click', openConsentDialog); wireNotifications(root, { guest: true, onCleanup: ctx?.onCleanup }); },
     };
   }
   const verified = acc.emailVerified !== false;
   const banner = verified ? '' : html`<section class="card-panel notice" id="verifyBanner"><div>${icon('mail', { size: 22 })}</div><div><b>Confirm your email</b><p class="muted">We sent a link to ${acc.email}. Confirming lets you buy a plan and post comments.</p></div><button class="btn btn-primary" id="resendVerify">Resend link</button></section>`;
   const sections = html`
-    <h2 class="sub-h">Security</h2>
-    <div class="card-panel list">
-      ${row('chgPw', 'lock', acc.hasPassword === false ? 'Set a password' : 'Change password', acc.hasPassword === false ? 'You signed up with a social account — add a password too.' : 'Signs you out on your other devices.')}
-      ${row('signOutAll', 'logout', 'Sign out everywhere', 'Ends your session on every phone, TV and browser.')}
-      ${row('supportBtn', 'chat', 'Help & support', 'Trouble signing in, payments, playback — raise a ticket.')}
-      ${row('devices', 'tv', 'Your devices', 'See where you’re watching and how many screens your plan allows.')}
-    </div>
-    <h2 class="sub-h">Kids &amp; parental controls</h2>
-    <div class="card-panel list">
-      ${row('pinBtn', 'lock', u.hasPin ? 'Change or remove parental PIN' : 'Set a parental PIN', u.hasPin ? 'Needed to leave a Kids profile or change profiles.' : 'Keeps children on their Kids profile and stops profile changes.')}
-      <a class="row-link" href="#/profiles?manage=1">${icon('user', { size: 22 })}<span><b>Kids profiles</b><small>Mark any profile as “Kids” to show only titles rated for children.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a>
-    </div>
-    <div id="referSlot"></div>
-    <div id="notifySlot"></div>
-    <h2 class="sub-h">Privacy</h2>
-    <div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}<a class="row-link" href="#/privacy">${icon('info', { size: 22 })}<span><b>Privacy Policy</b></span>${icon('right', { size: 18, cls: 'chev' })}</a><a class="row-link" href="#/terms">${icon('info', { size: 22 })}<span><b>Terms of Use</b></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>`;
+    <section class="account-section">
+      <h2 class="sub-h">Security</h2>
+      <div class="card-panel list">
+        ${row('chgPw', 'lock', acc.hasPassword === false ? 'Set a password' : 'Change password', acc.hasPassword === false ? 'You signed up with a social account — add a password too.' : 'Signs you out on your other devices.')}
+        ${row('signOutAll', 'logout', 'Sign out everywhere', 'Ends your session on every phone, TV and browser.')}
+        ${row('supportBtn', 'chat', 'Help & support', 'Trouble signing in, payments, playback — raise a ticket.')}
+        ${row('devices', 'tv', 'Your devices', 'See where you’re watching and how many screens your plan allows.')}
+      </div>
+    </section>
+    <section class="account-section">
+      <h2 class="sub-h">Kids &amp; parental controls</h2>
+      <div class="card-panel list">
+        ${row('pinBtn', 'lock', u.hasPin ? 'Change or remove parental PIN' : 'Set a parental PIN', u.hasPin ? 'Needed to leave a Kids profile or change profiles.' : 'Keeps children on their Kids profile and stops profile changes.')}
+        <a class="row-link" href="#/profiles?manage=1">${icon('user', { size: 22 })}<span><b>Kids profiles</b><small>Mark any profile as “Kids” to show only titles rated for children.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a>
+      </div>
+    </section>
+    <div id="referSlot" class="account-section"></div>
+    <div id="notifySlot" class="account-section"></div>
+    <section class="account-section">
+      <h2 class="sub-h">Privacy</h2>
+      <div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}<a class="row-link" href="#/privacy">${icon('info', { size: 22 })}<span><b>Privacy Policy</b></span>${icon('right', { size: 18, cls: 'chev' })}</a><a class="row-link" href="#/terms">${icon('info', { size: 22 })}<span><b>Terms of Use</b></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>
+    </section>`;
 
   const wire = (root, ctx) => {
     $('#resendVerify', root)?.addEventListener('click', async (e) => { e.target.disabled = true; try { await u.remote.resendVerification(); toast('Sent — check your inbox.'); } catch (err) { toast(friendly(err)); e.target.disabled = false; } });
