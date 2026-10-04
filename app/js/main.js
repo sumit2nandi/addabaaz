@@ -61,7 +61,7 @@ async function boot() {
   }
   router.start();
   networkStatus();
-  initPullToRefresh(softRefresh);   // app AND mobile browsers: never a reload, so never the boot logo
+  initPullToRefresh();   // the custom pull gesture reloads the current page so the latest server catalog is fetched
   initFullscreenRotation();   // the app is portrait-only; the screen turns only in video fullscreen
   initConsent(); initErrorReporting(); initPush();
   // Maintenance mode: an open tab or a resumed app shows the maintenance screen the moment the API says so.
@@ -84,23 +84,6 @@ function setNotifyPrompt() {
   ask();
   window.addEventListener('ab:ready', ask);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) ask(); });
-}
-
-/** Pull-to-refresh EVERYWHERE (the app and mobile browsers): re-fetch catalog + account and
- * re-render the current screen in place. A full location.reload() would replay the website's boot
- * logo splash, and a refresh must never show that - the small pull indicator covers the update
- * instead (the browser's own pull-to-refresh, which reloads, is turned off in styles.css). */
-async function softRefresh() {
-  try {
-    const base = CONFIG.apiBase, useApi = !!app.api;
-    const catalog = await loadCatalog(useApi ? `${base}/api/v1/catalog` : 'data/catalog.json', undefined, { mediaBase: useApi ? base : '' });
-    app.fullCatalog = catalog; app.catalog = catalog; applyKids();
-    await app.user.init();
-  } catch { /* offline or API hiccup: re-render with the data we already have */ }
-  // `rerender` re-draws the current screen in place: it must not touch the navigation depth or
-  // scroll bookkeeping (those are for forward/back navigation), or Back would go wrong after a
-  // pull-to-refresh.
-  app.router?.resolve({ rerender: true });
 }
 
 /** A Kids profile browses a filtered catalog (only titles rated U or 7+). */

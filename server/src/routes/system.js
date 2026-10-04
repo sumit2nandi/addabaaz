@@ -20,8 +20,9 @@ export function registerSystemRoutes(api, { db, catalog, payments, billing, r2, 
     const m = maintenance ? await maintenance.state() : { active: false, enabled: false, message: '', until: null };
     res.set('Cache-Control', 'no-store, max-age=0').json({ ok: true, service: 'addabaaz', version, maintenance: m, time: new Date().toISOString() });
   }));
-  // The whole catalog as JSON; cached for 15 s by browsers and CDNs.
-  api.get('/catalog', wrap(async (_req, res) => { res.set('Cache-Control', 'public, max-age=15'); res.json((await catalog.get()).catalog); }));
+  // The app fetches this after a page reload so edits made in Admin appear immediately, including
+  // when the request lands on another server with an in-memory catalog snapshot.
+  api.get('/catalog', wrap(async (_req, res) => { res.set('Cache-Control', 'no-store, max-age=0'); res.json((await catalog.get({ fresh: true })).catalog); }));
   api.get('/studio', wrap(async (_req, res) => {
     const s = (await catalog.get()).studio; if (!s) throw new HttpError(404, 'not_found', 'No studio profile.');
     res.set('Cache-Control', 'public, max-age=15'); res.json(s);

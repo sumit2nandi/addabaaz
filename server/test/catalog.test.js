@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Catalog } from '../../app/js/data/catalog.js';
+import { createCatalogStore } from '../src/catalog.js';
 
 test('upcoming categories support multiple releases and a legacy featured-title fallback', () => {
   const cat = new Catalog({
@@ -32,4 +33,24 @@ test('premium access is inherited from a series for every child video', () => {
   assert.equal(cat.isPremium(cat.video('series-episode')), true);
   assert.equal(cat.isPremium(cat.video('premium-clip')), true);
   assert.equal(cat.isPremium(cat.video('free-clip')), false);
+});
+
+test('a fresh catalog read checks the database version even inside the in-memory TTL', async () => {
+  let version = 1;
+  let snapshot = { catalog: { shows: [], upcoming: [], videos: [{ id: 'before-admin-edit' }] }, studio: null };
+  let snapshotReads = 0;
+  const db = {
+    catalog: {
+      async version() { return version; },
+      async snapshot() { snapshotReads++; return structuredClone(snapshot); },
+    },
+  };
+  const store = createCatalogStore({ db, catalogPath: null, ttl: 60_000 });
+
+  assert.equal((await store.get()).catalog.videos[0].id, 'before-admin-edit');
+  version++;
+  snapshot = { catalog: { shows: [], upcoming: [], videos: [{ id: 'after-admin-edit' }] }, studio: null };
+  assert.equal((await store.get()).catalog.videos[0].id, 'before-admin-edit', 'the ordinary cached read remains within its TTL');
+  assert.equal((await store.get({ fresh: true })).catalog.videos[0].id, 'after-admin-edit', 'the refresh path sees Admin writes immediately');
+  assert.equal(snapshotReads, 2);
 });

@@ -201,13 +201,13 @@ export function rebaseUploads(data, base) {
 // Fetch the catalog; if the API is unreachable fall back to the JSON file bundled with the app (so the site still works offline).
 export async function loadCatalog(url, fallbackUrl = 'data/catalog.json', { mediaBase = '' } = {}) {
   try {
-    const r = await fetch(url, { cache: 'no-cache' });
+    const r = await fetch(url, { cache: 'no-store' });
     if (!r.ok) throw Object.assign(new Error('Couldn’t load the catalogue — please try again.'), { friendly: true });
     return new Catalog(rebaseUploads(await r.json(), mediaBase));
   } catch (e) {
     if (url === fallbackUrl) throw e;
     console.warn('[catalog] falling back to bundled catalog', e);
-    const r = await fetch(fallbackUrl);
+    const r = await fetch(fallbackUrl, { cache: 'no-store' });
     if (!r.ok) throw Object.assign(new Error('Couldn’t load the catalogue — please try again.'), { friendly: true });
     return new Catalog(await r.json());
   }

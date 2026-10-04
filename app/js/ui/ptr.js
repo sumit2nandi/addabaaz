@@ -1,16 +1,12 @@
-/* Pull-to-refresh: dragging the page down while already at the top refreshes the current screen.
- * The refresh happens IN PLACE through the `refresh` callback main.js hands in (re-fetch data and
- * re-render the current screen) - in the app and in mobile browsers alike: a page reload would
- * replay the website's boot logo splash, and a refresh must never show that. The browser's own
- * pull-to-refresh (which does reload) is turned off in styles.css (`overscroll-behavior-y:
- * contain`), so this custom gesture is the only one. Without a callback it falls back to a plain
- * reload (kept for safety; main.js always passes the soft refresh). */
+/* Pull-to-refresh: dragging down while at the top reloads the current page. That boot fetch gets
+ * the latest catalog edited in Admin. The browser's built-in pull-to-refresh is disabled in
+ * styles.css so this custom gesture is the only refresh path. */
 const THRESHOLD = 88;   // px of pull required to trigger a refresh
 const MAX = 96;         // px the indicator may travel
 let startY = null, pulled = 0, engaged = false, el = null;
 
 // Leave the gesture alone where it would mean something else: the reels feed swipes vertically,
-// dialogs freeze the scroll at the top, and a soft refresh mid-video would tear down the player
+// dialogs freeze the scroll at the top, and a page reload mid-video would tear down the player
 // and restart the episode/reel from the top - hostile, so it is refused while media is playing.
 const blocked = () => document.body.classList.contains('reels-mode')
   || document.body.classList.contains('no-scroll')
@@ -30,7 +26,7 @@ const ensure = () => {
 const move = (dy) => { const e = ensure(); e.style.transform = `translateY(${-80 + Math.min(dy, MAX)}px)`; e.classList.add('on'); };
 const rest = () => { if (el) { el.classList.remove('on'); el.style.transform = ''; } };
 
-export function initPullToRefresh(refresh = null) {
+export function initPullToRefresh() {
   if (typeof document === 'undefined' || document.__ptrInit) return;
   document.__ptrInit = true;
 
@@ -61,8 +57,7 @@ export function initPullToRefresh(refresh = null) {
     abandon();
     if (fire) {
       const e = ensure(); e.classList.add('on'); e.style.transform = 'translateY(0px)';
-      if (refresh) Promise.resolve(refresh()).catch(() => {}).finally(rest);   // native: re-render in place, never the boot logo
-      else setTimeout(() => location.reload(), 220);                          // web: full reload
+      setTimeout(() => location.reload(), 220);   // allow the indicator to appear before a full page reload
     }
     else rest();
   };
