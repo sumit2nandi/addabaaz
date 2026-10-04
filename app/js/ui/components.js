@@ -174,9 +174,10 @@ export function avatar(profile, { size = 36, cls = '' } = {}) {
 export function metaLine(parts) {
   return html`<div class="meta-line">${parts.filter(Boolean).map((p, i) => html`${i ? html`<span class="dot" aria-hidden="true"></span>` : ''}<span>${p}</span>`)}</div>`;
 }
-export function showMeta(s) {
+export function showMeta(s, { maxGenres = Infinity } = {}) {
   const n = app.catalog.episodes(s.id).length;
-  return metaLine([s.year, (s.genres || []).join(' · '), n ? `${n} episode${n > 1 ? 's' : ''}` : '', s.language]);
+  const genres = (s.genres || []).slice(0, maxGenres).join(' · ');
+  return metaLine([s.year, genres, n ? `${n} episode${n > 1 ? 's' : ''}` : '', s.language]);
 }
 // Friendly placeholder for empty lists and errors.
 export function emptyState({ iconName = 'film', title, text = '', action = '' }) {

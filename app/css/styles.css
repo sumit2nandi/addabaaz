@@ -168,6 +168,8 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .hero-title-en { font-size: 16px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-2); font-weight: 700; margin-top: -6px; }
 .hero-desc { color: var(--text-2); font-size: 15.5px; max-width: 56ch; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; }
+.hero-actions .btn-lg { height: 48px; min-height: 48px; }
+.hero-actions .btn-lg.icon-only { flex: 0 0 48px; width: 48px; padding: 0; }
 .show-art-actions { display: flex; align-items: center; gap: 8px; flex: none; }
 .show-art-actions .list-btn { white-space: nowrap; }
 .show-art-actions > #artBtn { display: grid; place-items: center; flex: 0 0 48px; width: 48px; height: 48px; padding: 0; }
@@ -541,11 +543,10 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
   .soon-hero-actions > #artBtn { width: 48px; height: 48px; padding: 0; }
 }
 @media (max-width: 359px) {
-  .soon-hero-actions { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 44px; gap: 6px; }
+  .soon-hero-actions { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 48px; gap: 6px; }
   .soon-hero-actions > .remind-btn, .soon-hero-actions > .list-btn { gap: 5px; padding: 10px 5px; font-size: 13px; }
-  .soon-hero-actions > #artBtn { width: 44px; height: 44px; }
-  .show-art-actions .list-btn { padding: 9px 8px; font-size: 13px; }
-  .show-art-actions > #artBtn { flex-basis: 44px; width: 44px; height: 44px; }
+  .soon-hero-actions > #artBtn { width: 48px; height: 48px; }
+  .show-art-actions > #artBtn { flex-basis: 48px; width: 48px; height: 48px; }
 }
 @media (max-width: 480px) { .ep-row { grid-template-columns: 26px 112px 1fr; gap: 10px; padding: 8px 4px; } .watch-actions .btn { padding: 9px 13px; } }
 [data-platform="ios"] .rail-arrow, [data-platform="android"] .rail-arrow { display: none !important; }

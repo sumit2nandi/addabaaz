@@ -97,6 +97,25 @@ test('a horizontal swipe changes slides without following the banner link', asyn
   });
 });
 
+test('the home banner omits its type eyebrow, shows one genre and uses a plus-only list action', async () => {
+  await withHome(async (root) => {
+    const slides = [...root.querySelectorAll('.hero-slide')];
+    for (const slide of slides) {
+      assert.equal(slide.querySelector('.hero-copy > .eyebrow'), null, 'Original Series / category eyebrow is omitted from the home banner');
+      const parts = [...slide.querySelectorAll('.meta-line > span:not(.dot)')].map((part) => part.textContent.trim());
+      assert.ok(parts[1], 'the first genre remains in banner metadata');
+      assert.doesNotMatch(parts[1], /·/, 'only one genre is shown');
+      const list = slide.querySelector('.hero-actions [data-list]');
+      assert.ok(list.classList.contains('icon-only'), 'My List uses a compact icon button');
+      assert.equal(list.querySelector('.lbl'), null, 'the My List text label is removed');
+      assert.ok(list.getAttribute('aria-label'), 'the plus/check button stays accessible');
+    }
+    const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
+    assert.match(css, /\.hero-actions \.btn-lg \{ height: 48px; min-height: 48px; \}/, 'hero actions share one button height across pages');
+    assert.match(css, /\.hero-actions \.btn-lg\.icon-only \{ flex: 0 0 48px; width: 48px; padding: 0; \}/, 'icon-only hero actions keep the same 48px height and width');
+  });
+});
+
 test('the slideshow crossfades between the featured shows and drops no media when it moves on', async () => {
   await withHome(async (root, window) => {
     await sleep(60);

@@ -29,13 +29,12 @@ function heroHtml(slides) {
         ${show.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
         <div class="hero-inner">
           <div class="hero-copy">
-            <div class="eyebrow">${icon('play', { size: 12 })} ${show.type === 'series' ? 'Original Series' : show.type === 'podcast' ? 'Fake Podcast' : 'Stand-up Comedy'}</div>
             <h1 class="hero-title bn">${show.title}</h1>
             ${show.titleEn && show.titleEn !== show.title ? html`<div class="hero-title-en">${show.titleEn}</div>` : ''}
-            ${showMeta(show)}
+            ${showMeta(show, { maxGenres: 1 })}
             <div class="hero-actions">
               <a class="btn btn-primary btn-lg" href="#/watch/${(t?.video || latest).id}">${icon('play', { size: 20 })} Watch Now</a>
-              ${listBtn('show', show.id, { cls: 'btn btn-glass btn-lg' })}
+              ${listBtn('show', show.id, { cls: 'btn btn-glass btn-lg icon-only', iconOnly: true })}
               <a class="btn btn-glass btn-lg" href="#/show/${show.id}">${icon('info', { size: 20 })} More info</a>
             </div>
           </div>

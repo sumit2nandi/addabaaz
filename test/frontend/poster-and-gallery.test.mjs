@@ -67,7 +67,7 @@ test('Coming Soon keeps the artwork expand button beside My List on phones', () 
     'mobile Coming Soon actions use two flexible button columns and a fixed artwork-button column');
   assert.match(css, /\.soon-hero-actions > #artBtn \{ width: 48px; height: 48px; padding: 0; \}/,
     'the artwork control keeps its compact, fixed size beside My List');
-  assert.match(css, /@media \(max-width: 359px\) \{\n  \.soon-hero-actions \{ grid-template-columns: minmax\(0,1fr\) minmax\(0,1fr\) 44px; gap: 6px; \}/,
+  assert.match(css, /@media \(max-width: 359px\) \{\n  \.soon-hero-actions \{ grid-template-columns: minmax\(0,1fr\) minmax\(0,1fr\) 48px; gap: 6px; \}/,
     'the same row adapts for especially narrow phones');
 });
 
@@ -76,6 +76,8 @@ test('show details keep the artwork-view button beside My List on phones', () =>
   const actions = show.match(/<div class="show-art-actions">([\s\S]*?)<\/div>/)?.[1] || '';
   assert.ok(actions, 'My List and the artwork button share a compact action group');
   assert.ok(actions.indexOf('listBtn(') < actions.indexOf('id="artBtn"'), 'the artwork control follows My List');
+  assert.match(actions, /listBtn\('show', s\.id, \{ cls: 'btn btn-glass btn-lg icon-only', iconOnly: true \}\)/,
+    'the show-page My List action is the accessible plus/check icon only');
   assert.match(show, /id="shareBtn"/, 'Share remains available outside the grouped pair');
 
   const css = read('app/css/styles.css');
