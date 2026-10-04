@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import { parseHTML } from 'linkedom';
 import { videoKey } from '../../server/src/uploads.js';
 import { createR2 } from '../../server/src/r2.js';
+import { app } from '../../app/js/app.js';
 import { createHtml5Player } from '../../app/js/players/html5.js';
 
 const read = (p) => fs.readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
@@ -211,6 +212,66 @@ test('createHtml5Player renders a uniform YouTube-style player (.ytp) with Setti
   } finally {
     globalThis.document = prevDoc;
     globalThis.window = prevWin;
+  }
+});
+
+test('fatal HLS playback errors reach Admin → Errors with useful details and no signed URLs', async () => {
+  const { document, window } = parseHTML('<!doctype html><html><head></head><body><div id="slot"></div></body></html>');
+  const previous = { document: globalThis.document, window: globalThis.window, location: globalThis.location, user: app.user };
+  const reports = [], states = [];
+  app.user = { remote: { reportError: (error) => reports.push(error) } };
+  globalThis.document = document;
+  globalThis.window = window;
+  globalThis.location = { pathname: '/watch/hls-test', search: '', hash: '' };
+  class MockHls {
+    static Events = { ERROR: 'hlsError', MANIFEST_PARSED: 'manifestParsed', LEVEL_SWITCHED: 'levelSwitched' };
+    static isSupported() { return true; }
+    constructor() { this.handlers = new Map(); MockHls.instance = this; }
+    on(name, fn) { this.handlers.set(name, fn); }
+    loadSource() {}
+    attachMedia() {}
+    destroy() {}
+  }
+  const append = document.head.appendChild.bind(document.head);
+  document.head.appendChild = (el) => {
+    if (el.tagName === 'SCRIPT' && String(el.src).includes('hls.min.js')) {
+      window.Hls = MockHls;
+      el.onload?.();
+      return el;
+    }
+    return append(el);
+  };
+  try {
+    const player = await createHtml5Player(document.getElementById('slot'), {
+      id: 'hls-test', title: 'HLS test', duration: 6,
+      source: { type: 'hls', url: 'https://site.example/api/v1/media/test-token/master.m3u8' },
+    }, { autoplay: false, controls: false, onState: (...state) => states.push(state) });
+    const signedUrl = 'https://acct.r2.cloudflarestorage.com/bucket/premium/hls-test/segment.ts?X-Amz-Signature=secret-signature';
+    const mediaToken = 'eyJhbGciOiJIUzI1NiJ9.eyJ2aWQiOiJoc2wtdGVzdCJ9.signature';
+    const onHlsError = MockHls.instance.handlers.get(MockHls.Events.ERROR);
+    onHlsError(null, { fatal: false, type: 'networkError', details: 'fragLoadError' });
+    assert.equal(reports.length, 0, 'recoverable HLS errors are not reported as playback failures');
+    onHlsError(null, {
+      fatal: true, type: 'networkError', details: 'fragLoadError', level: 3,
+      response: { code: 403, url: signedUrl },
+      reason: `Request failed for ${signedUrl}; media token /api/v1/media/${mediaToken}/master.m3u8`,
+    });
+    assert.equal(reports.length, 1, 'one fatal HLS error is reported');
+    assert.match(reports[0].message, /video=hls-test; type=networkError; detail=fragLoadError; http=403; fatal=true/);
+    assert.match(reports[0].stack, /Playback diagnostic \(signed media URLs omitted\)/);
+    assert.match(reports[0].stack, /reason=Request failed for \[redacted URL\]\s+media token \/api\/v1\/media\/\[redacted token\]\/master\.m3u8/);
+    assert.match(reports[0].stack, /level=3/);
+    assert.equal(reports[0].url, '/watch/hls-test');
+    assert.equal(Object.hasOwn(reports[0], 'force'), false, 'the reporter-only force flag is not sent to the API');
+    assert.doesNotMatch(JSON.stringify(reports[0]), /acct\.r2\.cloudflarestorage\.com|secret-signature|eyJhbGciOiJIUzI1NiJ9/);
+    assert.deepEqual(states, [['error', 2]], 'the viewer still receives the existing generic playback error state');
+    player.destroy();
+  } finally {
+    document.head.appendChild = append;
+    app.user = previous.user;
+    for (const key of ['document', 'window', 'location']) {
+      if (previous[key] === undefined) delete globalThis[key]; else globalThis[key] = previous[key];
+    }
   }
 });
 

@@ -1,3 +1,5 @@
+import { reportClientError } from '../errors.js';
+
 // hls.js (needed for HLS in browsers without native support) is downloaded only when an HLS video is played.
 let hlsPromise = null;
 const loadHls = () => hlsPromise || (hlsPromise = new Promise((res, rej) => {
@@ -6,6 +8,34 @@ const loadHls = () => hlsPromise || (hlsPromise = new Promise((res, rej) => {
   s.onload = () => res(window.Hls); s.onerror = () => rej(new Error('hls.js failed to load'));
   document.head.appendChild(s);
 }));
+
+// HLS error objects can contain signed media URLs. Keep only the diagnostic text and redact bearer material.
+function diagnosticText(value, limit = 180) {
+  return String(value ?? '')
+    .replace(/https?:\/\/[^\s"'<>]+/gi, '[redacted URL]')
+    .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g, '[redacted token]')
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted token]')
+    .replace(/([?&](?:access_token|media_token|token|auth|authorization|sig|signature|credential|x-amz-[\w-]+|awsaccesskeyid|key-pair-id|policy)=)[^&#\s]+/gi, '$1[redacted]')
+    .replace(/[\r\n\t]+/g, ' ')
+    .slice(0, limit);
+}
+const diagnosticNumber = (value) => Number.isFinite(Number(value)) ? String(Number(value)) : 'n/a';
+function reportPlaybackDiagnostic(video, { engine, type, detail, status, fatal = null, reason = '', level = null, mediaError = null, media = null }) {
+  const fields = [
+    `engine=${diagnosticText(engine, 32) || 'unknown'}`,
+    `video=${diagnosticText(video?.id || 'unknown', 64)}`,
+    `type=${diagnosticText(type, 48) || 'unknown'}`,
+    `detail=${diagnosticText(detail, 100) || 'unknown'}`,
+    `http=${status == null ? 'n/a' : diagnosticNumber(status)}`,
+    ...(fatal == null ? [] : [`fatal=${fatal ? 'true' : 'false'}`]),
+    ...(level == null ? [] : [`level=${diagnosticNumber(level)}`]),
+    ...(reason ? [`reason=${diagnosticText(reason, 180)}`] : []),
+    ...(mediaError == null ? [] : [`mediaError=${diagnosticText(mediaError, 120)}`]),
+    ...(media ? [`readyState=${diagnosticNumber(media.readyState)}`, `networkState=${diagnosticNumber(media.networkState)}`, `duration=${diagnosticNumber(media.duration)}`, `time=${diagnosticNumber(media.currentTime)}`] : []),
+  ];
+  const message = `Playback failure: ${fields.join('; ')}`.slice(0, 300);
+  reportClientError({ message, stack: ['Playback diagnostic (signed media URLs omitted)', ...fields].join('\n') }, { force: true });
+}
 
 // Format seconds as M:SS or H:MM:SS (YouTube time display format).
 function fmtTime(sec) {
@@ -115,7 +145,7 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
     if (SPEEDS.includes(sp)) v.playbackRate = sp;
   } catch { /* ignore */ }
 
-  let hls = null, lastEmit = 0, selectedQuality = -1; // -1 = Auto
+  let hls = null, lastEmit = 0, selectedQuality = -1, playbackErrorReported = false; // -1 = Auto
   let uiUpdate = () => {}, uiCleanup = () => {};
 
   if (!controls || typeof container.querySelector !== 'function') {
@@ -142,15 +172,42 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
 
   const { type, url } = video.source;
   if (type === 'hls' && !v.canPlayType?.('application/vnd.apple.mpegurl')) {
-    const Hls = await loadHls();
-    if (Hls.isSupported()) {
-      hls = new Hls({ startPosition: start || -1 });
-      hls.on?.(Hls.Events?.MANIFEST_PARSED || 'hlsManifestParsed', () => uiUpdate());
-      hls.on?.(Hls.Events?.LEVEL_SWITCHED || 'hlsLevelSwitched', () => uiUpdate());
-      hls.on?.(Hls.Events?.ERROR || 'hlsError', (_e, d) => { if (d?.fatal) onState?.('error', d.response?.code === 404 ? 4 : 2); });
-      hls.loadSource(url);
-      hls.attachMedia(v);
+    let Hls;
+    try { Hls = await loadHls(); }
+    catch (e) {
+      playbackErrorReported = true;
+      reportPlaybackDiagnostic(video, { engine: 'hls.js', type: 'setup', detail: 'library-load-failed', reason: e?.message, media: v });
+      throw e;
+    }
+    if (Hls?.isSupported?.()) {
+      try {
+        hls = new Hls({ startPosition: start || -1 });
+        hls.on?.(Hls.Events?.MANIFEST_PARSED || 'hlsManifestParsed', () => uiUpdate());
+        hls.on?.(Hls.Events?.LEVEL_SWITCHED || 'hlsLevelSwitched', () => uiUpdate());
+        hls.on?.(Hls.Events?.ERROR || 'hlsError', (_e, d) => {
+          if (!d?.fatal) return;
+          if (!playbackErrorReported) {
+            playbackErrorReported = true;
+            reportPlaybackDiagnostic(video, {
+              engine: 'hls.js', type: d.type, detail: d.details, status: d.response?.code, fatal: true,
+              reason: d.reason || d.error?.message, level: d.level, mediaError: v.error?.message, media: v,
+            });
+          }
+          onState?.('error', d.response?.code === 404 ? 4 : 2);
+        });
+        hls.loadSource(url);
+        hls.attachMedia(v);
+      } catch (e) {
+        if (!playbackErrorReported) {
+          playbackErrorReported = true;
+          reportPlaybackDiagnostic(video, { engine: 'hls.js', type: 'setup', detail: 'initialization-failed', reason: e?.message, media: v });
+        }
+        try { hls?.destroy?.(); } catch { /* cleanup must not mask the setup error */ }
+        throw e;
+      }
     } else {
+      playbackErrorReported = true;
+      reportPlaybackDiagnostic(video, { engine: 'hls.js', type: 'setup', detail: 'unsupported-browser', reason: 'Neither native HLS nor hls.js is supported.', media: v });
       throw Object.assign(new Error('This video format isn’t supported on your device.'), { friendly: true });
     }
   } else {
@@ -174,7 +231,22 @@ export async function createHtml5Player(container, video, { start = 0, autoplay 
   v.addEventListener('playing', () => { uiUpdate(); onState?.('playing'); });
   v.addEventListener('pause', () => { uiUpdate(); onProgress?.(v.currentTime, v.duration || video.duration || 0, true); onState?.('paused'); });
   v.addEventListener('waiting', () => { uiUpdate(); onState?.('buffering'); });
-  v.addEventListener('error', () => { uiUpdate(); onState?.('error', v.error?.code); });
+  v.addEventListener('error', () => {
+    uiUpdate();
+    if (!playbackErrorReported) {
+      playbackErrorReported = true;
+      const code = v.error?.code;
+      const names = ['', 'aborted', 'network', 'decode', 'unsupported-source'];
+      reportPlaybackDiagnostic(video, {
+        engine: type === 'hls'
+          ? (v.canPlayType?.('application/vnd.apple.mpegurl') ? 'native-hls' : 'hls.js')
+          : 'html5',
+        type: 'media-element', detail: names[code] || 'media-error', status: null,
+        reason: v.error?.message, mediaError: code == null ? null : `${code}${v.error?.message ? `: ${v.error.message}` : ''}`, media: v,
+      });
+    }
+    onState?.('error', v.error?.code);
+  });
   v.addEventListener('ended', () => { uiUpdate(); onState?.('ended'); onEnded?.(); });
 
   if (typeof navigator !== 'undefined' && 'mediaSession' in navigator && typeof window !== 'undefined' && window.MediaMetadata) {
