@@ -245,20 +245,11 @@ export default async function watch(ctx) {
         const s = await getStreamUrl();
         media = { ...v, source: { type: s.type, url: s.url }, poster: cat.thumb(v) };
       }
-      $('#unmutePill', ctx.root)?.remove(); $('#playPill', ctx.root)?.remove();
+      $('#playPill', ctx.root)?.remove();
       ctl = await createPlayer(slot, media, {
         start, autoplay: true,
-        // The player keeps its own controls (like the YouTube app): their fullscreen button is the
-        // one way into full screen, where the screen may turn (see the rotation note above).
-        // If the browser rejects sound-first autoplay and its muted retry starts, offer a deliberate
-        // tap for sound; the player never unmutes itself later.
-        onAutoplayMuted: () => {
-          if (dead || $('#unmutePill', ctx.root)) return;
-          const b = document.createElement('button'); b.type = 'button'; b.id = 'unmutePill'; b.className = 'unmute-pill';
-          b.innerHTML = icon('mute', { size: 18 }).s + '<span>Tap to unmute</span>';
-          b.onclick = () => { ctl?.unmute(); b.remove(); };
-          $('#playerBox', ctx.root).appendChild(b);
-        },
+        // The player keeps its own controls (like the YouTube app): its volume button handles mute/unmute,
+        // and its fullscreen button is the one way into full screen (see the rotation note above).
         // Even muted autoplay was refused (Low Power Mode, aggressive data saver): one obvious tap starts it —
         // the tap itself is the gesture the browser was waiting for (reels shows a play glyph in this case).
         onAutoplayBlocked: () => {
@@ -268,8 +259,6 @@ export default async function watch(ctx) {
           b.onclick = () => { Promise.resolve(ctl?.play?.()).catch(() => {}); b.remove(); };
           $('#playerBox', ctx.root).appendChild(b);
         },
-        // A user gesture enabled sound: the fallback prompt is now obsolete.
-        onGestureUnmuted: () => { if (dead) return; $('#unmutePill', ctx.root)?.remove(); },
         onProgress: persist,
         onEnded: () => {
           u.saveProgress(v.id, lastD || v.duration, lastD || v.duration, { flush: true });

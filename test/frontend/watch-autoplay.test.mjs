@@ -1,6 +1,6 @@
 // Watch page (#/watch/:id) autoplay fallbacks: when a phone refuses even muted autoplay (Low Power Mode,
 // data saver...), the page must offer an obvious "Tap to play" pill — and the tap itself is the gesture
-// the browser needs. The muted-start case must offer "Tap to unmute".
+// the browser needs. When muted autoplay works, the player’s own volume control handles unmuting.
 // Run:  node --test test/frontend/watch-autoplay.test.mjs
 import { test, before } from 'node:test';
 import assert from 'node:assert';
@@ -178,9 +178,11 @@ test('the next-up popup is translucent, compact and dismissible with a top-right
   assert.match(css, /\.next-up \{[^}]*right: 12px; bottom: 12px;[^}]*width: fit-content;/,
     'the popup shrink-wraps to content at the video bottom-right');
   assert.match(css, /\.next-card \{[^}]*grid-template-columns: 80px minmax\(0,1fr\); align-items: end;[^}]*background: rgba\(15,15,20,\.42\)[^}]*backdrop-filter: blur\(14px\)/,
-    'the compact glass card aligns the thumbnail bottom with the Play now button');
-  assert.match(css, /\.next-close \{[^}]*top: 6px; right: 6px;[^}]*width: 28px; height: 28px;/,
-    'the dismiss control is a small cross at the upper-right corner');
+    'the compact glass card aligns its contents to the bottom');
+  assert.match(css, /\.next-card img \{[^}]*transform: translateY\(8px\);/,
+    'the thumbnail sits lower so its base lines up with Play now');
+  assert.match(css, /\.next-close \{[^}]*inset: 6px 6px auto auto;[^}]*width: 28px; height: 28px;/,
+    'the dismiss control is pinned to the upper-right corner');
   assert.match(view, /Next in \$\{n\}s/, 'the countdown does not use a Recommended label');
   assert.match(view, /id="nuClose" aria-label="Dismiss next video"/, 'the cross has an accessible name');
   assert.doesNotMatch(view, /cat\.label\(target\)|id="nuCancel"|Recommended next/, 'the video type, large Cancel button, and Recommended copy are removed');
@@ -218,13 +220,10 @@ test('when even muted autoplay is blocked, a "Tap to play" pill starts playback 
   assert.ok(ctx);
 });
 
-test('muted autostart offers a one-tap "Tap to unmute" pill', async () => {
-  const { ctl, opts } = await mount();
-  opts.onAutoplayMuted();     // autoplay with sound refused: video is running muted
-  const pill = document.querySelector('#unmutePill');
-  assert.ok(pill, 'unmute pill shown for muted autostart');
-  pill.dispatchEvent(new window.Event('click', { bubbles: true }));
-  assert.equal(ctl.__unmuted, true);
+test('muted autostart uses the player volume control without a duplicate unmute pill', async () => {
+  const { opts } = await mount();
+  assert.equal(opts.onAutoplayMuted, undefined, 'watch does not add an app-level unmute prompt');
+  assert.equal(document.querySelector('#unmutePill'), null, 'the player remains free of a duplicate Tap to unmute button');
 });
 
 // The player mock is not given a stream URL for R2 videos, so give the premium page one.
