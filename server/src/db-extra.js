@@ -121,19 +121,19 @@ export function extraDb({ q, tx, iso }) {
     /** Subscriptions to notify. audience: { kind: 'episodes', showId, videoIds } | { kind: 'launches', upcomingId } | { kind: 'news' } | { kind: 'all' } | { kind: 'user', userId } */
     // Works out who should get a notification: followers of a show, people waiting for a launch, everyone opted in to news, or one user.
     async audience(a) {
-      const cols = 'ps.id, ps.user_id, ps.endpoint, ps.p256dh, ps.auth';
+      const cols = 'ps.id, ps.user_id, u.name, u.email, ps.endpoint, ps.p256dh, ps.auth';
       let rows;
       if (a.kind === 'episodes') {
         const vids = a.videoIds?.length ? a.videoIds : ['\u0000'];
-        rows = await q(`SELECT ${cols} FROM push_subscriptions ps WHERE ps.episodes = 1 AND ps.user_id IN (
+        rows = await q(`SELECT ${cols} FROM push_subscriptions ps LEFT JOIN users u ON u.id = ps.user_id WHERE ps.episodes = 1 AND ps.user_id IN (
           SELECT p.user_id FROM profiles p JOIN list_items l ON l.profile_id = p.id AND l.item_type = 'show' AND l.item_id = ?
           UNION SELECT p.user_id FROM profiles p JOIN watch_progress w ON w.profile_id = p.id AND w.video_id IN (?))`, [a.showId, vids]);
       } else if (a.kind === 'launches') {
-        rows = await q(`SELECT ${cols} FROM push_subscriptions ps WHERE ps.launches = 1 AND ps.user_id IN (SELECT p.user_id FROM profiles p JOIN reminders r ON r.profile_id = p.id AND r.upcoming_id = ?)`, [a.upcomingId]);
-      } else if (a.kind === 'news') rows = await q(`SELECT ${cols} FROM push_subscriptions ps WHERE ps.news = 1`);
-      else if (a.kind === 'user') rows = await q(`SELECT ${cols} FROM push_subscriptions ps WHERE ps.user_id = ?`, [a.userId]);
-      else rows = await q(`SELECT ${cols} FROM push_subscriptions ps`);
-      return rows.map((r) => ({ id: r.id, userId: r.user_id, endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } }));
+        rows = await q(`SELECT ${cols} FROM push_subscriptions ps LEFT JOIN users u ON u.id = ps.user_id WHERE ps.launches = 1 AND ps.user_id IN (SELECT p.user_id FROM profiles p JOIN reminders r ON r.profile_id = p.id AND r.upcoming_id = ?)`, [a.upcomingId]);
+      } else if (a.kind === 'news') rows = await q(`SELECT ${cols} FROM push_subscriptions ps LEFT JOIN users u ON u.id = ps.user_id WHERE ps.news = 1`);
+      else if (a.kind === 'user') rows = await q(`SELECT ${cols} FROM push_subscriptions ps LEFT JOIN users u ON u.id = ps.user_id WHERE ps.user_id = ?`, [a.userId]);
+      else rows = await q(`SELECT ${cols} FROM push_subscriptions ps LEFT JOIN users u ON u.id = ps.user_id`);
+      return rows.map((r) => ({ id: r.id, userId: r.user_id, name: r.name || null, email: r.email || null, endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } }));
     },
     /** True the first time (kind, ref, user) is claimed — makes automatic notifications send-once. */
     async claim(kind, ref, userId) { return (await q('INSERT IGNORE INTO notify_sent (kind, ref, user_id) VALUES (?,?,?)', [kind, ref, userId])).affectedRows === 1; },
@@ -187,7 +187,7 @@ export function extraDb({ q, tx, iso }) {
     async audience() { return (await q('SELECT token FROM push_devices')).map((r) => r.token); },
     /** The tokens (+ owner) of the people a targeted audience reaches (same audience shapes as db.push.audience). */
     async audienceFor(a) {
-      const sel = 'SELECT pd.token, pd.user_id FROM push_devices pd';
+      const sel = 'SELECT pd.token, pd.token_hash, pd.user_id, pd.platform, pd.label, u.name, u.email FROM push_devices pd LEFT JOIN users u ON u.id = pd.user_id';
       let rows;
       // The same three switches as the browser, applied to the same audiences: a device that turned, say,
       // episode notifications off is skipped for a show's new-episode send but still gets a launch.
@@ -200,7 +200,7 @@ export function extraDb({ q, tx, iso }) {
       else if (a.kind === 'news') rows = await q(`${sel} WHERE pd.news = 1`);
       else if (a.kind === 'user') rows = await q(`${sel} WHERE pd.user_id = ?`, [a.userId]);
       else rows = await q(sel);
-      return rows.map((r) => ({ token: r.token, userId: r.user_id }));
+      return rows.map((r) => ({ token: r.token, tokenHash: r.token_hash, userId: r.user_id, platform: r.platform, label: r.label || null, name: r.name || null, email: r.email || null }));
     },
     async ok(hash) { await q('UPDATE push_devices SET last_seen = UTC_TIMESTAMP(3), fail_count = 0 WHERE token_hash = ?', [hash]); },
     /** A failed (but not dead) send; tokens failing 5 times in a row are dropped by purge(). */
@@ -646,9 +646,10 @@ export function extraDb({ q, tx, iso }) {
     async list({ limit = 100 } = {}) {
       const [groups, recent] = await Promise.all([
         q('SELECT source, message, COUNT(*) AS n, MAX(created_at) AS last_at, MIN(created_at) AS first_at, MAX(url) AS url FROM error_log WHERE created_at > UTC_TIMESTAMP(3) - INTERVAL 7 DAY GROUP BY source, message ORDER BY last_at DESC LIMIT ?', [limit]),
-        q('SELECT id, source, message, stack, url, user_agent, user_id, created_at FROM error_log ORDER BY id DESC LIMIT 20'),
+        q(`SELECT e.id, e.source, e.message, e.stack, e.url, e.user_agent, e.user_id, u.name AS account_name, u.email AS account_email, e.created_at
+           FROM error_log e LEFT JOIN users u ON u.id = e.user_id ORDER BY e.id DESC LIMIT 20`),
       ]);
-      return { groups: groups.map((r) => ({ source: r.source, message: r.message, count: Number(r.n), lastAt: iso(r.last_at), firstAt: iso(r.first_at), url: r.url })), recent: recent.map((r) => ({ id: r.id, source: r.source, message: r.message, stack: r.stack, url: r.url, userAgent: r.user_agent, userId: r.user_id || null, at: iso(r.created_at) })) };
+      return { groups: groups.map((r) => ({ source: r.source, message: r.message, count: Number(r.n), lastAt: iso(r.last_at), firstAt: iso(r.first_at), url: r.url })), recent: recent.map((r) => ({ id: r.id, source: r.source, message: r.message, stack: r.stack, url: r.url, userAgent: r.user_agent, userId: r.user_id || null, accountName: r.account_name || null, accountEmail: r.account_email || null, at: iso(r.created_at) })) };
     },
     async clear() { await q('DELETE FROM error_log'); },
     async prune() { await q('DELETE FROM error_log WHERE created_at < UTC_TIMESTAMP(3) - INTERVAL 30 DAY'); },
@@ -673,6 +674,47 @@ export function extraDb({ q, tx, iso }) {
         c.imageUrl ? String(c.imageUrl).slice(0, 500) : null, c.imageAlt ? String(c.imageAlt).slice(0, 200) : null, c.status || 'queued', c.test ? 1 : 0, c.by || null]);
     },
     async get(id) { const r = (await q('SELECT * FROM campaigns WHERE id = ?', [id]))[0]; return r ? mapCampaign(r) : null; },
+    /** Upserts one endpoint/account result. The unique digest makes retries update the same recipient row. */
+    async recordDelivery(campaignId, d) {
+      const channel = d.channel === 'email' ? 'email' : 'push';
+      const transport = ['email', 'web_push', 'app_push'].includes(d.transport) ? d.transport : (channel === 'email' ? 'email' : 'web_push');
+      const status = ['pending', 'sent', 'failed', 'skipped'].includes(d.status) ? d.status : 'pending';
+      const key = String(d.deliveryKey || '');
+      if (!/^[a-f0-9]{64}$/i.test(key)) throw new Error('A SHA-256 campaign delivery key is required.');
+      await q(`INSERT INTO campaign_deliveries
+        (id, campaign_id, delivery_key, channel, transport, user_id, recipient_name, recipient_email, destination, status, error)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        ON DUPLICATE KEY UPDATE user_id = VALUES(user_id), recipient_name = VALUES(recipient_name), recipient_email = VALUES(recipient_email),
+          destination = VALUES(destination), status = VALUES(status), error = VALUES(error), updated_at = UTC_TIMESTAMP(3)`,
+      [crypto.randomUUID(), campaignId, key, channel, transport, d.userId || null,
+        d.name ? String(d.name).slice(0, 120) : null, d.email ? String(d.email).slice(0, 254) : null,
+        d.destination ? String(d.destination).slice(0, 160) : null, status, d.error ? String(d.error).slice(0, 500) : null]);
+    },
+    /** Recipient-level history is paged so a large campaign never loads every address into one response. */
+    async deliveries(campaignId, { status = 'all', search = '', limit = 50, offset = 0 } = {}) {
+      const where = ['campaign_id = ?'], params = [campaignId];
+      if (['pending', 'sent', 'failed', 'skipped'].includes(status)) { where.push('status = ?'); params.push(status); }
+      const text = String(search || '').trim().slice(0, 100);
+      if (text) {
+        const pattern = `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+        where.push('(recipient_name LIKE ? OR recipient_email LIKE ? OR user_id LIKE ?)'); params.push(pattern, pattern, pattern);
+      }
+      const clause = where.join(' AND ');
+      const [rows, [{ n }]] = await Promise.all([
+        q(`SELECT id, user_id, recipient_name, recipient_email, destination, transport, status, error, created_at, updated_at
+           FROM campaign_deliveries WHERE ${clause} ORDER BY created_at, id LIMIT ? OFFSET ?`, [...params, limit, offset]),
+        q(`SELECT COUNT(*) AS n FROM campaign_deliveries WHERE ${clause}`, params),
+      ]);
+      return { total: Number(n), limit, offset, deliveries: rows.map((r) => ({
+        id: r.id, userId: r.user_id || null, name: r.recipient_name || null, email: r.recipient_email || null,
+        destination: r.destination || null, transport: r.transport, status: r.status, error: r.error || null,
+        at: iso(r.created_at), updatedAt: iso(r.updated_at),
+      })) };
+    },
+    async deliveryCounts(campaignId) {
+      const rows = await q('SELECT status, COUNT(*) AS n FROM campaign_deliveries WHERE campaign_id = ? GROUP BY status', [campaignId]);
+      return Object.fromEntries(rows.map((r) => [r.status, Number(r.n)]));
+    },
     /** Claims a queued campaign, or takes over only after another instance's lease expires. */
     async claim(id, token, leaseSeconds = 300) {
       const lease = Math.min(Math.max(Number(leaseSeconds) || 300, 30), 900);

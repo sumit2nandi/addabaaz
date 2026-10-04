@@ -189,9 +189,21 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
   }));
   // Progress of one broadcast (polled by the console while it sends).
   router.get('/notifications/:id', wrap(async (req, res) => {
-    const c = await db.campaigns.get(String(req.params.id));
+    const id = String(req.params.id);
+    const c = await db.campaigns.get(id);
     if (!c) throw new HttpError(404, 'not_found', 'Unknown broadcast.');
-    res.json({ ...c, at: c.createdAt, done: ['sent', 'partial', 'failed', 'cancelled'].includes(c.status) });
+    const deliveryCounts = await db.campaigns.deliveryCounts?.(id) || {};
+    res.json({ ...c, deliveryCounts, at: c.createdAt, done: ['sent', 'partial', 'failed', 'cancelled'].includes(c.status) });
+  }));
+  // Per-recipient outcomes (including device-level rows for app/browser push), filtered and paged for large audiences.
+  router.get('/notifications/:id/deliveries', wrap(async (req, res) => {
+    const id = String(req.params.id);
+    if (!(await db.campaigns.get(id))) throw new HttpError(404, 'not_found', 'Unknown broadcast.');
+    if (typeof db.campaigns.deliveries !== 'function') return res.json({ total: 0, limit: 50, offset: 0, deliveries: [] });
+    const { limit, offset } = asPage(req, 50, 100);
+    const status = ['pending', 'sent', 'failed', 'skipped'].includes(req.query.status) ? req.query.status : 'all';
+    const search = String(req.query.q || '').trim().slice(0, 100);
+    res.json(await db.campaigns.deliveries(id, { status, search, limit, offset }));
   }));
   // Send one test message to the signed-in administrator (push: their own devices; e-mail: their address).
   router.post('/notifications/test', wrap(async (req, res) => {

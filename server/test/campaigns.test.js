@@ -1,16 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCampaigns } from '../src/campaigns.js';
+import { createMailer } from '../src/mailer.js';
 
-function fixture() {
+function fixture(overrides = {}) {
   const row = {
     id: 'campaign-1', channel: 'push', audience: 'all', title: 'New episode', body: 'Watch now', url: '/', button: null,
     status: 'queued', total: 0, sent: 0, failed: 0, skipped: 0, cursor: 0, error: null,
-    claimToken: null, claimUntil: 0,
+    claimToken: null, claimUntil: 0, ...overrides,
   };
+  const deliveries = [];
   const db = {
     campaigns: {
       async get(id) { return id === row.id ? { ...row } : null; },
+      async recordDelivery(id, delivery) {
+        assert.equal(id, row.id);
+        const index = deliveries.findIndex((item) => item.deliveryKey === delivery.deliveryKey);
+        if (index < 0) deliveries.push({ ...delivery }); else deliveries[index] = { ...deliveries[index], ...delivery };
+      },
       async claim(id, token, leaseSeconds) {
         if (id !== row.id || !['queued', 'sending'].includes(row.status) || (row.claimToken && row.claimUntil > Date.now())) return false;
         row.status = 'sending'; row.claimToken = token; row.claimUntil = Date.now() + leaseSeconds * 1000;
@@ -37,7 +44,7 @@ function fixture() {
       async unfinished() { return row.status === 'queued' || row.claimUntil <= Date.now() ? [{ ...row }] : []; },
     },
   };
-  return { db, row };
+  return { db, row, deliveries };
 }
 
 const quietLog = { log() {}, warn() {}, error() {} };
@@ -73,4 +80,66 @@ test('an expired campaign lease can be reclaimed after a worker crash', async ()
   assert.equal(sends, 1);
   assert.equal(row.status, 'sent');
   assert.equal(row.claimToken, null);
+});
+
+test('push campaigns persist account-associated per-device outcomes', async () => {
+  const { db, row, deliveries } = fixture();
+  const push = {
+    configured: true,
+    async notify(_audience, _message, { onDelivery }) {
+      await onDelivery({ recipientKey: 'device-hash-a', userId: 'account-a', name: 'Priya Das', email: 'priya@example.com', transport: 'app_push', destination: 'Android · Pixel 7', status: 'pending' });
+      await onDelivery({ recipientKey: 'device-hash-a', userId: 'account-a', name: 'Priya Das', email: 'priya@example.com', transport: 'app_push', destination: 'Android · Pixel 7', status: 'sent' });
+      await onDelivery({ recipientKey: 'device-hash-b', userId: 'account-b', name: 'Ravi Sen', email: 'ravi@example.com', transport: 'web_push', destination: 'Browser / web app', status: 'pending' });
+      await onDelivery({ recipientKey: 'device-hash-b', userId: 'account-b', name: 'Ravi Sen', email: 'ravi@example.com', transport: 'web_push', destination: 'Browser / web app', status: 'failed', error: 'Web Push HTTP 503' });
+      return { sent: 1, failed: 1, removed: 0 };
+    },
+  };
+  await createCampaigns({ db, push, log: quietLog }).run(row.id);
+  assert.equal(row.status, 'partial');
+  assert.equal(deliveries.length, 2);
+  assert.deepEqual(deliveries.map((d) => [d.userId, d.name, d.email, d.status]), [
+    ['account-a', 'Priya Das', 'priya@example.com', 'sent'],
+    ['account-b', 'Ravi Sen', 'ravi@example.com', 'failed'],
+  ]);
+  assert.equal(deliveries[1].error, 'Web Push HTTP 503');
+});
+
+test('SMTP recipient-level rejection is surfaced as a failed delivery', async () => {
+  const rejected = createMailer({ transport: { async sendMail() { return { accepted: [], rejected: ['viewer@example.com'] }; } } });
+  await assert.rejects(() => rejected.send({ to: 'viewer@example.com', subject: 'T', text: 'B' }), { code: 'smtp_recipient_rejected' });
+  const accepted = createMailer({ transport: { async sendMail() { return { accepted: ['viewer@example.com'], rejected: [] }; } } });
+  assert.deepEqual(await accepted.send({ to: 'viewer@example.com', subject: 'T', text: 'B' }), { sent: true });
+});
+
+test('email campaigns persist recipient names, addresses, and each final outcome', async () => {
+  const { db, row, deliveries } = fixture({ id: 'email-campaign', channel: 'email', title: 'Update', cursor: 0 });
+  const audience = [
+    { id: 'account-a', name: 'Priya Das', email: 'same@example.com' },
+    { id: 'account-b', name: 'P. Das', email: 'SAME@example.com' },
+    { id: 'account-c', name: 'Ravi Sen', email: 'failed@example.com' },
+    { id: 'account-d', name: 'Nita Roy', email: 'skipped@example.com' },
+  ];
+  db.adminUsers = { async emailAudience(_filter, { limit, offset }) { return audience.slice(offset, offset + limit); } };
+  const campaigns = createCampaigns({
+    db, log: quietLog, pageSize: 2,
+    mailer: { provider: 'smtp', async send({ to }) {
+      if (to === 'failed@example.com') throw new Error('SMTP connection refused');
+      if (to === 'skipped@example.com') return { sent: false };
+      return { sent: true };
+    } },
+    email: ({ subject }) => ({ subject, text: 'message' }),
+  });
+
+  await campaigns.run(row.id, { siteUrl: 'https://addabaaz.test' });
+  assert.equal(row.status, 'partial');
+  assert.deepEqual([row.sent, row.failed, row.skipped, row.total], [1, 1, 2, 4]);
+  assert.equal(deliveries.length, 4, 'one durable recipient record per eligible account');
+  const result = new Map(deliveries.map((d) => [d.userId, d]));
+  assert.deepEqual([result.get('account-a').status, result.get('account-b').status, result.get('account-c').status, result.get('account-d').status],
+    ['sent', 'skipped', 'failed', 'skipped']);
+  assert.deepEqual([result.get('account-a').name, result.get('account-a').email], ['Priya Das', 'same@example.com']);
+  assert.match(result.get('account-b').error, /already included/);
+  assert.match(result.get('account-c').error, /SMTP connection refused/);
+  assert.match(result.get('account-d').error, /did not accept/);
+  assert.ok(deliveries.every((d) => /^[a-f0-9]{64}$/i.test(d.deliveryKey)), 'recipient keys are digests, not account identifiers');
 });

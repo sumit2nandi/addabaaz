@@ -41,39 +41,93 @@ export function createPush({ db, vapid = {}, sender = null, fcm = null, log = co
   });
   // Native app push (FCM). Absent in tests that only exercise Web Push, and when FCM_SERVICE_ACCOUNT is not set.
   const nativeConfigured = !!fcm?.configured;
-  /** Sends `message` to the given native device tokens (the caller has already applied any send-once claim). */
-  async function notifyNative(tokens, message) {
-    if (!nativeConfigured || !tokens.length) return { sent: 0, failed: 0, removed: 0 };
-    const r = await fcm.send(tokens, { title: message.title, body: message.body, url: message.url, image: message.image, tag: message.tag });
-    if (r.dead?.length) for (const t of r.dead) await db.devices.removeHash(endpointHash(t)).catch(() => {});
-    return { sent: r.sent, failed: r.failed, removed: r.dead?.length || 0 };
+  /** Sends `message` to native rows after audience/claim filtering; tokens stay inside this service. */
+  async function notifyNative(rows, message, onDelivery = null) {
+    if (!nativeConfigured || !rows.length) return { sent: 0, failed: 0, removed: 0 };
+    const report = async (row, status, error = null) => {
+      if (!onDelivery) return;
+      const platform = ({ android: 'Android', ios: 'iOS', web: 'Web' })[row.platform] || 'App';
+      await onDelivery({
+        recipientKey: row.tokenHash || row.token, userId: row.userId || null,
+        name: row.name || (row.userId ? null : 'Guest device'), email: row.email || null,
+        transport: 'app_push', destination: `${platform}${row.label ? ` · ${row.label}` : ''}`,
+        status, error,
+      });
+    };
+    for (const row of rows) await report(row, 'pending');
+
+    let r;
+    try {
+      r = await fcm.send(rows.map((row) => row.token), { title: message.title, body: message.body, url: message.url, image: message.image, tag: message.tag });
+    } catch (e) {
+      const reason = `FCM delivery failed: ${String(e?.message || e || 'unknown error').replace(/[\r\n]+/g, ' ').slice(0, 400)}`;
+      for (const row of rows) await report(row, 'failed', reason);
+      log.warn?.(`[push] native send failed: ${e.message}`);
+      return { sent: 0, failed: rows.length, removed: 0 };
+    }
+
+    const dead = new Set(r.dead || []), byToken = new Map((r.results || []).map((item) => [item.token, item]));
+    let successBudget = Number(r.sent) || 0, failureBudget = Number(r.failed) || 0;
+    let sent = 0, failed = 0, removed = 0;
+    for (const row of rows) {
+      let result = byToken.get(row.token);
+      if (!result) {
+        if (dead.has(row.token)) result = { ok: false, dead: true };
+        else if (successBudget > 0) { result = { ok: true }; successBudget--; }
+        else if (failureBudget > 0) { result = { ok: false, dead: false }; failureBudget--; }
+        else result = { ok: false, dead: false, error: 'No delivery result was returned.' };
+      }
+      if (result.ok) { sent++; await report(row, 'sent'); }
+      else if (result.dead) {
+        removed++; await report(row, 'skipped', 'Device token is expired or no longer registered.');
+      } else {
+        failed++;
+        const reason = String(result.error || 'FCM delivery failed').replace(/[\r\n]+/g, ' ').slice(0, 400);
+        await report(row, 'failed', reason);
+      }
+    }
+    if (dead.size) for (const token of dead) await db.devices.removeHash(endpointHash(token)).catch(() => {});
+    return { sent, failed, removed };
   }
 
   const svc = {
     configured, nativeConfigured, publicKey: vapid.publicKey || '',
-    /** Sends `message` ({title, body, url, image?, tag?}) to an audience (see db.push.audience). Returns { sent, failed, removed, native }. */
-    async notify(audience, message, { claim = null } = {}) {
+    /** Sends `message` ({title, body, url, image?, tag?}) to an audience. `onDelivery` is an optional private campaign-reporting callback. */
+    async notify(audience, message, { claim = null, onDelivery = null } = {}) {
       // Both channels are looked up first: a send-once claim (automatic notifications) must be decided
       // ONCE per user and then applied to their browser subscriptions AND their app devices together.
       const subs = configured ? await db.push.audience(audience) : [];
       const rows = nativeConfigured ? await db.devices.audienceFor(audience).catch((e) => { log.warn?.(`[push] app audience failed: ${e.message}`); return []; }) : [];
-      let allowedNative = rows.map((r) => r.token), keptSubs = subs;
+      let allowedNative = rows, keptSubs = subs;
       if (claim) {
         const decided = new Map();
         for (const userId of new Set([...subs.map((s) => s.userId), ...rows.map((r) => r.userId)])) decided.set(userId, await db.push.claim(claim.kind, claim.ref, userId));
-        allowedNative = rows.filter((r) => decided.get(r.userId)).map((r) => r.token);
+        allowedNative = rows.filter((r) => decided.get(r.userId));
         keptSubs = subs.filter((s) => decided.get(s.userId));
       }
-      const native = await notifyNative(allowedNative, message).catch((e) => { log.warn?.(`[push] native send failed: ${e.message}`); return { sent: 0, failed: 0, removed: 0 }; });
+      const native = await notifyNative(allowedNative, message, onDelivery).catch((e) => { log.warn?.(`[push] native send failed: ${e.message}`); return { sent: 0, failed: 0, removed: 0 }; });
       if (!configured) return { sent: native.sent, failed: native.failed, removed: native.removed, native, skipped: 'not_configured' };
       const payload = JSON.stringify(notificationPayload(message));
       let sent = 0, failed = 0, removed = 0;
       for (const s of keptSubs) {
-        try { await send({ endpoint: s.endpoint, keys: s.keys }, payload); sent++; await db.push.ok(s.id); }
-        catch (e) {
+        const report = async (status, error = null) => onDelivery?.({
+          recipientKey: s.id, userId: s.userId || null, name: s.name || null, email: s.email || null,
+          transport: 'web_push', destination: 'Browser / web app', status, error,
+        });
+        await report('pending');
+        try {
+          await send({ endpoint: s.endpoint, keys: s.keys }, payload);
+          sent++; await db.push.ok(s.id); await report('sent');
+        } catch (e) {
           // 404/410 mean the browser unsubscribed: delete it. Other errors are counted so dead subscriptions can be found.
-          if (e?.statusCode === 404 || e?.statusCode === 410) { await db.push.removeId(s.id); removed++; }   // the browser unsubscribed
-          else { failed++; await db.push.failed(s.id); log.warn?.(`[push] send failed (${e?.statusCode || e?.message})`); }
+          if (e?.statusCode === 404 || e?.statusCode === 410) {
+            await db.push.removeId(s.id); removed++; await report('skipped', 'Push subscription expired or was removed.');
+          } else {
+            failed++; await db.push.failed(s.id);
+            const reason = e?.statusCode ? `Web Push HTTP ${e.statusCode}` : `Web Push delivery failed${e?.code ? ` (${String(e.code).slice(0, 40)})` : ''}`;
+            await report('failed', reason);
+            log.warn?.(`[push] send failed (${e?.statusCode || e?.message})`);
+          }
         }
       }
       return { sent: sent + native.sent, failed: failed + native.failed, removed: removed + native.removed, native };

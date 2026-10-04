@@ -30,8 +30,11 @@ test('server error reports include verified account context and useful database 
   assert.match(app, /sqlState=\$\{err\.sqlState\}/, 'SQL state is retained when the driver provides it');
   assert.match(features, /userFromRequest\?\.\(req\)/, 'client errors resolve an optional first-party session');
   assert.match(features, /userId: user\?\.id \|\| null/, 'client-supplied IDs are not trusted');
-  assert.match(db, /user_agent, user_id, created_at FROM error_log/);
+  assert.match(db, /e\.user_agent, e\.user_id, u\.name AS account_name, u\.email AS account_email/);
+  assert.match(db, /LEFT JOIN users u ON u\.id = e\.user_id/, 'deleted accounts stay visible as error records through the left join');
   assert.match(db, /userId: r\.user_id \|\| null/, 'recent error reports include their account ID');
+  assert.match(db, /accountName: r\.account_name \|\| null/);
+  assert.match(db, /accountEmail: r\.account_email \|\| null/);
 });
 
 test('client error reports are linked to a verified session, never a browser-supplied user ID', async () => {

@@ -11,6 +11,10 @@ test('Admin Errors shows account context and copies a complete individual report
 
   assert.match(view, /<div><b>Account ID:<\/b> <code>\$\{e\.userId \|\| 'unknown \/ anonymous'\}<\/code><\/div>/,
     'recent errors show the associated account ID or that it was not resolved');
+  assert.match(view, /<div><b>Account name:<\/b> \$\{e\.accountName \|\| '\(not available\)'\}<\/div>/);
+  assert.match(view, /<div><b>Account email:<\/b> \$\{e\.accountEmail \|\| '\(not available\)'\}<\/div>/);
+  assert.match(view, /`Account name: \$\{e\.accountName \|\| '\(not available\)'\}`/);
+  assert.match(view, /`Account email: \$\{e\.accountEmail \|\| '\(not available\)'\}`/);
   assert.match(view, /data-copy-error="\$\{e\.id\}"/, 'every recent report gets its own compact Copy button');
   assert.match(view, /`User ID: \$\{e\.userId \|\| 'unknown \/ anonymous'\}`/, 'the copied report includes the account ID');
   assert.match(view, /`User agent: \$\{e\.userAgent \|\| '\(not recorded\)'\}`[\s\S]*'Stack:'/,

@@ -25,6 +25,8 @@ const errorText = (e) => [
   `Source: ${e.source}`,
   `Message: ${e.message}`,
   `User ID: ${e.userId || 'unknown / anonymous'}`,
+  `Account name: ${e.accountName || '(not available)'}`,
+  `Account email: ${e.accountEmail || '(not available)'}`,
   `URL: ${e.url || '(not recorded)'}`,
   `User agent: ${e.userAgent || '(not recorded)'}`,
   'Stack:', e.stack || 'No stack trace.',
@@ -39,6 +41,8 @@ export default async function errors(root, _p, ctx) {
       <div class="error-detail-bar"><div class="error-context small muted">
         <div><b>Report:</b> #${e.id} · ${fmtDT(e.at)}</div>
         <div><b>Account ID:</b> <code>${e.userId || 'unknown / anonymous'}</code></div>
+        <div><b>Account name:</b> ${e.accountName || '(not available)'}</div>
+        <div><b>Account email:</b> ${e.accountEmail || '(not available)'}</div>
         <div><b>URL:</b> ${e.url || '(not recorded)'}</div>
         <div><b>User agent:</b> ${e.userAgent || '(not recorded)'}</div>
       </div><button class="btn sm" type="button" data-copy-error="${e.id}" aria-label="Copy error report ${e.id}">${icon('copy', 14)} Copy</button></div>

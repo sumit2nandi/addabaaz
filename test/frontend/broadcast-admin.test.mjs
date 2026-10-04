@@ -22,6 +22,7 @@ const features = read('server/src/features.js');
 const emails = read('server/src/emails.js');
 const jobs = read('server/src/jobs.js');
 const migration = read('server/migrations/011_notifications.sql');
+const deliveryMigration = read('server/migrations/023_campaign_delivery_details.sql');
 const guestMigration = read('server/migrations/013_guest_push_devices.sql');
 const sw = read('sw.js');
 const mobilePkg = JSON.parse(read('mobile/package.json'));
@@ -39,6 +40,9 @@ test('the console has a Broadcast section that offers both channels', () => {
   // Test sends, and the live progress poller.
   assert.match(view, /api\.post\('\/notifications\/test', payload\(\)\)/, 'Send a test to me');
   assert.match(view, /`\/notifications\/\$\{id\}`|api\.get\('\/notifications'\)/, 'progress is polled while sending');
+  assert.match(view, /`\/notifications\/\$\{encodeURIComponent\(id\)\}\/deliveries\?/,
+    'the detail popup loads paged recipient-level delivery outcomes');
+  for (const status of ['pending', 'sent', 'failed', 'skipped']) assert.match(view, new RegExp(`\\b${status}: \\[`), `${status} is visible as an individual outcome`);
   assert.match(view, /!done\(c\.status\)/, 'the poller only runs while a broadcast is in flight');
   assert.match(view, /ctx\.stale\(\)/, 'the poller stops when the page is left');
   // Nothing may go back to the old push-only wording/flow.
@@ -76,6 +80,13 @@ test('a recent broadcast opens a detail modal and Refresh preview reads the curr
     if (url === '/api/v1/admin/notifications') data = meta;
     else if (url === '/api/v1/admin/notifications/preview') data = { channel: 'push', push: { title: 'Draft title', body: 'Draft body', url: '/show/example' } };
     else if (url === '/api/v1/admin/notifications/campaign-1') data = { ...campaign, body: 'Latest full campaign details', done: true };
+    else if (url.startsWith('/api/v1/admin/notifications/campaign-1/deliveries?')) data = {
+      total: 3, limit: 50, offset: 0, deliveries: [
+        { id: 'delivery-1', userId: 'account-1', name: 'Priya Das', email: 'priya@example.com', destination: 'Browser / web app', transport: 'web_push', status: 'sent' },
+        { id: 'delivery-2', userId: 'account-2', name: 'Ravi Sen', email: 'ravi@example.com', destination: 'E-mail', transport: 'email', status: 'failed', error: 'SMTP connection refused' },
+        { id: 'delivery-3', userId: null, name: 'Guest device', email: null, destination: 'Android · Guest Android', transport: 'app_push', status: 'skipped', error: 'Device token is expired.' },
+      ],
+    };
     else throw new Error(`Unexpected request ${options.method} ${url}`);
     return new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json' } });
   };
@@ -117,6 +128,16 @@ test('a recent broadcast opens a detail modal and Refresh preview reads the curr
     assert.match(modal.textContent, /31/);
     assert.match(modal.textContent, /1/);
     assert.match(modal.textContent, /2/);
+    assert.match(modal.textContent, /Recipients and outcomes/);
+    assert.match(modal.textContent, /Priya Das/);
+    assert.match(modal.textContent, /priya@example\.com/);
+    assert.match(modal.textContent, /account-1/);
+    assert.match(modal.textContent, /Ravi Sen/);
+    assert.match(modal.textContent, /SMTP connection refused/);
+    assert.match(modal.textContent, /Guest device/);
+    assert.match(modal.textContent, /Skipped/);
+    assert.ok(calls.some((call) => call.url.startsWith('/api/v1/admin/notifications/campaign-1/deliveries?')),
+      'the popup loads per-recipient outcomes from the paged details endpoint');
   } finally {
     for (const [key, descriptor] of Object.entries(previous)) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor);
@@ -128,6 +149,7 @@ test('a recent broadcast opens a detail modal and Refresh preview reads the curr
 test('the server exposes the broadcast API: send, status, test, devices, unsubscribe', () => {
   assert.match(extra, /router\.post\('\/notifications\/send'/, 'POST /admin/notifications/send');
   assert.match(extra, /router\.get\('\/notifications\/:id'/, 'GET /admin/notifications/:id (progress)');
+  assert.match(extra, /router\.get\('\/notifications\/:id\/deliveries'/, 'GET /admin/notifications/:id/deliveries pages recipient outcomes');
   assert.match(extra, /router\.post\('\/notifications\/test'/, 'POST /admin/notifications/test');
   assert.match(extra, /const channel = b\.channel === 'email' \? 'email' : 'push'/, 'the channel is chosen by the request');
   assert.match(extra, /mailConfigured\(\)/, 'e-mail needs SMTP');
@@ -169,7 +191,7 @@ test('app push uses FCM with the service-account env, and dead tokens are cleane
   assert.match(fcm, /FCM_SERVICE_ACCOUNT_FILE/); assert.match(fcm, /FCM_SERVICE_ACCOUNT\b/);
   assert.match(fcm, /UNREGISTERED\|NOT_FOUND\|INVALID_ARGUMENT/, 'unregistered tokens are detected');
   assert.match(read('server/src/push.js'), /nativeConfigured/, 'push.notify reports/uses the native channel');
-  assert.match(read('server/src/push.js'), /db\.devices\.removeHash\(endpointHash\(t\)\)/, 'dead tokens are deleted');
+  assert.match(read('server/src/push.js'), /db\.devices\.removeHash\(endpointHash\(token\)\)/, 'dead tokens are deleted');
   assert.match(app, /fcmFromEnv\(\)/, 'the server builds the FCM service from the environment');
   assert.match(adminServer, /item\('apppush', 'App push'/, 'the dashboard checklist reports app push');
 });
@@ -178,6 +200,12 @@ test('the databases pieces exist and the app registers its token', () => {
   assert.match(migration, /CREATE TABLE IF NOT EXISTS push_devices/, 'native device tokens');
   assert.match(migration, /CREATE TABLE IF NOT EXISTS campaigns/, 'broadcast history + progress');
   assert.match(migration, /ALTER TABLE users ADD COLUMN email_opt_out_at/, 'unsubscribe flag');
+  assert.match(deliveryMigration, /CREATE TABLE IF NOT EXISTS campaign_deliveries/, 'recipient-level delivery records');
+  assert.match(deliveryMigration, /delivery_key\s+CHAR\(64\)/, 'raw device tokens are not used as durable delivery keys');
+  assert.match(read('server/src/db-extra.js'), /async recordDelivery\(/, 'per-recipient outcomes are persisted');
+  assert.match(read('server/src/db-extra.js'), /async deliveries\(/, 'outcomes can be searched and paged');
+  assert.match(read('server/src/db-extra.js'), /async deliveryCounts\(/, 'the detail view gets status counts');
+  assert.match(read('server/src/db-extra.js'), /u\.name AS account_name, u\.email AS account_email/, 'error records include their account snapshot lookup');
   assert.match(read('server/src/db-extra.js'), /const campaigns = \{/, 'db.campaigns');
   assert.match(read('server/src/db-extra.js'), /const devices = \{/, 'db.devices');
   assert.match(read('server/src/db-admin.js'), /async emailAudience\(/, 'e-mail audiences come from the Users filters');

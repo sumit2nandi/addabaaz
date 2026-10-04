@@ -296,7 +296,11 @@ test('analytics events are aggregated, validated and capped', async () => {
 test('client error reports are stored and grouped; server errors are logged', async () => {
   assert.equal((await call('POST', '/client-errors', { message: 'TypeError: x is undefined', stack: 'at a.js:1', url: '/show/x' })).status, 204);
   await call('POST', '/client-errors', { message: 'TypeError: x is undefined', url: '/watch/y' }); await call('POST', '/client-errors', { url: 'no message' });
-  const e = await db.errors.list(); const g = e.groups.find((x) => x.message.startsWith('TypeError')); assert.equal(g.count, 2); assert.equal(g.source, 'client'); assert.equal(e.groups.length, 1);
+  const identified = await signup();
+  await call('POST', '/client-errors', { message: 'Identified playback report' }, identified.token);
+  const e = await db.errors.list(); const g = e.groups.find((x) => x.message.startsWith('TypeError')); assert.equal(g.count, 2); assert.equal(g.source, 'client'); assert.equal(e.groups.length, 2);
+  const accountReport = e.recent.find((x) => x.message === 'Identified playback report');
+  assert.deepEqual([accountReport.userId, accountReport.accountName, accountReport.accountEmail], [identified.user.id, 'Eng Test', identified.email]);
 });
 
 test('refund requests: only real paid purchases inside the window, once; the customer is told', async () => {
@@ -360,6 +364,10 @@ test('admin: push broadcasts go to the chosen audience, with progress and audit;
   assert.equal(c.status, 'sent'); assert.equal(c.channel, 'push');
   // Assert on this subscription, not on the total: other tests in this file keep their own rows.
   assert.ok(pushed.some((p) => p.endpoint === 'https://push.example/admin1'), 'announcements reach a subscriber by default');
+  const webResults = await adm('GET', `/notifications/${c.id}/deliveries?limit=100`);
+  const myWeb = webResults.body.deliveries.find((d) => d.userId === u.user.id);
+  assert.equal(myWeb.name, 'Eng Test'); assert.equal(myWeb.email, u.email);
+  assert.equal(myWeb.status, 'sent'); assert.equal(myWeb.transport, 'web_push');
   await call('PATCH', '/push/prefs', { endpoint: sub.endpoint, news: false }, u.token);
   pushed.length = 0;
   c = await broadcast({ title: 'One more thing', body: 'Body', audience: 'news' });
@@ -382,7 +390,10 @@ test('admin: push broadcasts go to the chosen audience, with progress and audit;
 test('admin: app push reaches registered devices through FCM and drops dead tokens; e-mail campaigns honour unsubscribe', async () => {
   // A second app whose push service has a fake Firebase Cloud Messaging sender (no credentials needed).
   const fcmSent = []; const dead = ['dead-token-' + 'z'.repeat(24)];
-  const fcm = { configured: true, send: async (tokens, message) => { fcmSent.push({ tokens, message }); return { sent: tokens.length - 1, failed: 0, dead }; } };
+  const fcm = { configured: true, send: async (tokens, message) => {
+    fcmSent.push({ tokens, message });
+    return { sent: tokens.length - 1, failed: 0, dead, results: tokens.map((token) => ({ token, ok: token !== dead[0], dead: token === dead[0], error: token === dead[0] ? 'Device token is unregistered.' : null })) };
+  } };
   const push2 = createPush({ db, vapid: { publicKey: 'x' }, sender: fakeSender, fcm });
   const app2 = createApp({ db, jwtSecret: 'test-secret', rate: false, mailer: createMailer({ transport: { sendMail: async (m) => { mails.push(m); } } }), push: push2, adminToken: ADMIN, features: { streamLimit: 1, reportsToHide: 2, refundWindowDays: 7 } });
   const server2 = app2.listen(0); await new Promise((r) => server2.once('listening', r));
@@ -429,6 +440,16 @@ test('admin: app push reaches registered devices through FCM and drops dead toke
     assert.equal(fcmSent.at(-1).message.title, 'App push'); assert.equal(fcmSent.at(-1).message.body, 'Hello phones'); assert.equal(fcmSent.at(-1).message.url, '/');
     assert.equal(fcmSent.at(-1).message.tag, `campaign-${c.id}`);
     assert.deepEqual([...fcmSent.at(-1).tokens].sort(), [token2, dead[0], guestToken].sort());
+    const recipientPage = await adm2('GET', `/notifications/${c.id}/deliveries?limit=100`);
+    assert.equal(recipientPage.status, 200); assert.ok(recipientPage.body.total >= 3, 'the page includes native devices and any web-push subscriptions');
+    const accountDelivery = recipientPage.body.deliveries.find((d) => d.email === u.email && d.status === 'sent');
+    assert.equal(accountDelivery.userId, u.user.id); assert.equal(accountDelivery.name, 'Eng Test'); assert.equal(accountDelivery.destination, 'Android');
+    const skippedDelivery = recipientPage.body.deliveries.find((d) => d.status === 'skipped');
+    assert.equal(skippedDelivery.email, u.email); assert.match(skippedDelivery.error, /unregistered/);
+    const guestDelivery = recipientPage.body.deliveries.find((d) => d.userId === null);
+    assert.equal(guestDelivery.name, 'Guest device'); assert.equal(guestDelivery.status, 'sent');
+    const filtered = await adm2('GET', `/notifications/${c.id}/deliveries?status=skipped&limit=1`);
+    assert.equal(filtered.body.total, 1); assert.equal(filtered.body.deliveries[0].status, 'skipped');
     assert.equal(await db.devices.count(), 2, 'the dead token was removed; account and guest tokens remain');
     assert.equal((await call('DELETE', '/devices/guest', { token: guestToken })).status, 204);
     assert.equal(await db.devices.count(), 1, 'guest opt-out removes the anonymous token');
@@ -487,6 +508,10 @@ test('admin: app push reaches registered devices through FCM and drops dead toke
     assert.equal(mail.status, 'sent'); assert.ok(mail.sent >= 1); assert.equal(mail.total >= mail.sent, true);
     const got = mails.find((m) => m.to === mailUser.email && /New this week/.test(m.subject));
     assert.ok(got, 'the announcement reached a normal account (the account’s own verification mail is not it)');
+    const mailDetails = await adm('GET', `/notifications/${mail.id}/deliveries?q=${encodeURIComponent(mailUser.email)}`);
+    assert.equal(mailDetails.body.total, 1);
+    assert.deepEqual([mailDetails.body.deliveries[0].userId, mailDetails.body.deliveries[0].name, mailDetails.body.deliveries[0].email, mailDetails.body.deliveries[0].status],
+      [mailUser.user.id, 'Eng Test', mailUser.email, 'sent']);
     assert.match(got.subject, /New this week/);
     assert.match(got.html, /Season 2 is streaming/); assert.match(got.html, /Watch now/);
     const unsub = String(got.text).match(/https:\/\/addabaaz\.in\/api\/v1\/notifications\/unsubscribe\?u=[^&\s]+&t=[\w-]+/)[0];

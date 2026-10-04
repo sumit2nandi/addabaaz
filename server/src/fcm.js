@@ -105,16 +105,20 @@ export function createFcm({ credentials = null, fetchImpl = null, log = console 
 
   return {
     configured, projectId, sendOne,
-    /** Sends `m` to many tokens, a few in flight at a time. @returns { sent, failed, dead: string[] } */
+    /** Sends `m` to many tokens, a few in flight at a time. Includes one private result per token for campaign reporting. */
     async send(tokens, m, { concurrency = 8 } = {}) {
       const list = [...new Set((tokens || []).filter(Boolean))];
-      if (!configured || !list.length) return { sent: 0, failed: 0, dead: [] };
-      let sent = 0, failed = 0; const dead = [];
+      if (!configured || !list.length) return { sent: 0, failed: 0, dead: [], results: [] };
+      let sent = 0, failed = 0; const dead = [], deliveries = [];
       for (let i = 0; i < list.length; i += concurrency) {
         const results = await Promise.all(list.slice(i, i + concurrency).map((t) => sendOne(t, m).catch((e) => ({ ok: false, dead: false, error: e?.message }))));
-        results.forEach((r, k) => { if (r.ok) sent++; else if (r.dead) dead.push(list[i + k]); else failed++; });
+        results.forEach((r, k) => {
+          const token = list[i + k];
+          if (r.ok) sent++; else if (r.dead) dead.push(token); else failed++;
+          deliveries.push({ token, ok: !!r.ok, dead: !!r.dead, error: r.error || null });
+        });
       }
-      return { sent, failed, dead };
+      return { sent, failed, dead, results: deliveries };
     },
   };
 }
