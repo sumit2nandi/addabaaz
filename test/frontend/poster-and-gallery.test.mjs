@@ -48,7 +48,7 @@ test('the poster box, the expand button and the banner all open the full artwork
   assert.match(lightbox, /openArtwork\(art, 'backdrop'\)/, 'and it opens what the banner is showing');
   // The popup itself: a single image has no arrows and no counter; tapping the dark background closes it.
   assert.match(lightbox, /const many = items\.length > 1;/, 'a single image has no arrows');
-  assert.match(lightbox, /cap\.textContent = many \?/, 'and no "1 / 1" counter');
+  assert.match(lightbox, /cap\.textContent = !showCaption \? '' : many \?/, 'gallery counters remain conditional while artwork popups can hide captions');
   assert.match(lightbox, /e\.target\.closest\('\.lb-close'\) \|\| e\.target === root/, 'the X and the backdrop close it');
   // And the phone layout itself is untouched: the poster box stays hidden, the banner carries the feature.
   assert.match(read('app/css/styles.css'), /@media \(min-width: 760px\) \{ \.hero-poster, \.detail-poster \{ display: block; \} \}/, 'the poster box is still desktop-only');
@@ -99,8 +99,11 @@ test('show facts sit below the banner and the tagline uses the page font', () =>
   assert.doesNotMatch(show, /show-tagline-below bn/, 'the tagline no longer uses the Bengali serif display override');
 
   const css = read('app/css/styles.css');
-  assert.match(css, /\.page-tight\.show-details-page \{ padding-top: 20px; \}/, 'the below-banner information has breathing room');
+  assert.match(css, /\.page-tight\.show-details-page \{ padding-top: 12px; \}/, 'desktop below-banner information has a small gap');
   assert.match(css, /\.show-tagline-below \{[^}]*font-family: var\(--font\)/, 'the tagline uses the same font stack as the rest of the page');
+  assert.match(css, /\.detail-hero \{ min-height: 74vh; min-height: 74svh; \}/, 'the phone detail banner matches the home banner height');
+  assert.match(css, /\.detail-hero \.hero-inner \{ padding-bottom: 12px; \}/, 'the hero text block sits lower to align with the home banner');
+  assert.match(css, /\.page-tight\.show-details-page \{ padding-top: 0; \}/, 'mobile show facts start directly under the banner with no dead gap');
 });
 
 test('the artwork popup shows the banner and the poster, each once', async () => {
@@ -140,7 +143,8 @@ test('a tap on the banner really opens the popup (the reported bug)', async () =
   assert.ok(lb, 'tapping the banner artwork opens the popup');
   assert.equal(lb.querySelector('img').getAttribute('src'), 'b.jpg', 'and shows the banner full size first');
   assert.equal(lb.querySelectorAll('.lb-nav').length, 2, 'the poster is one swipe away');
-  assert.equal(lb.querySelector('figcaption').textContent, 'Artwork · 1 / 2');
+  assert.equal(lb.querySelector('figcaption').textContent, '', 'the banner popup has no visible Artwork caption or counter');
+  assert.equal(lb.querySelector('figcaption').hidden, true, 'the artwork and poster labels stay hidden in this popup');
   assert.equal(lb.querySelector('.lb-close') !== null, true, 'with a close button');
 });
 
