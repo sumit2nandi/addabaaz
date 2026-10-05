@@ -148,25 +148,39 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 
 /* ---------- hero ---------- */
 .hero, .detail-hero { position: relative; overflow: hidden; background: #000; isolation: isolate; }
-.hero { min-height: min(84vh, 780px); display: grid; }
+/* The action dock hangs this far above the bottom edge, and the banner text clears it by --hero-dock-gap:
+   the banner copy slides, the dock never does, so the two must not end up on top of each other. */
+.hero { min-height: min(84vh, 780px); display: grid; --hero-dock-bottom: 56px; --hero-dock-h: 48px; --hero-dock-gap: 18px; --hero-pb: calc(var(--hero-dock-bottom) + var(--hero-dock-h) + var(--hero-dock-gap)); }
 /* pan-y: vertical scrolling stays native while horizontal finger drags reach the carousel's
    pointer handlers - without this, touch WebViews (the Android app) cancel the swipe. */
 .hero { touch-action: pan-y; }
 .hero-slide { grid-area: 1 / 1; position: relative; display: flex; align-items: flex-end; isolation: isolate; opacity: 1; visibility: hidden; transform: translateX(100%); transition: transform 1.2s cubic-bezier(.22,.68,0,1), visibility 1.2s linear; }
 .hero-slide.before { transform: translateX(-100%); } .hero-slide.after { transform: translateX(100%); }
 .hero-slide.active { visibility: visible; transform: translateX(0); z-index: 2; }
+/* A finger drag: the banner under the finger and the neighbour it is pulling in follow it exactly
+   (no easing), and the neighbour is made visible for the duration. On release the inline transform
+   is dropped and the normal transition above carries both the rest of the way home. */
+.hero-slide.dragging { transition: none; }
+.hero-slide.peek { visibility: visible; z-index: 2; }
+.hero.is-dragging { user-select: none; -webkit-user-select: none; }
 .hero-banner-link { position: absolute; inset: 0; z-index: 0; display: block; cursor: pointer; }
 .hero-banner-link .hero-bg { z-index: 0; }
 .hero-slide > .hero-shade { z-index: 1; pointer-events: none; }
 .hero-slide > .hero-inner { position: relative; z-index: 2; pointer-events: none; }
 .hero-slide > .hero-inner a, .hero-slide > .hero-inner button { pointer-events: auto; }
+/* The three banner actions belong to the carousel, not to one banner: they sit in a single dock above
+   the slides, so they stay put while the banners move underneath them (the home view repoints them at
+   whichever show is on screen). The dock itself is transparent to the pointer - the banner link below
+   must stay clickable - and only its own buttons take the tap. */
+.hero-dock { position: absolute; z-index: 4; left: var(--pad); right: var(--pad); bottom: var(--hero-dock-bottom); margin: 0; pointer-events: none; }
+.hero-dock > a, .hero-dock > button { pointer-events: auto; }
 .hero-bg { position: absolute; inset: 0; z-index: -2; }
 .hero-bg img { width: 100%; height: 100%; object-fit: cover; object-position: center 25%; animation: kenburns 24s ease-out both; filter: saturate(1.05); }
 .hero-slide:not(.active) .hero-bg img { animation: none; }
 .hero-bg picture { display: block; width: 100%; height: 100%; }
 @keyframes kenburns { from { transform: scale(1.02); } to { transform: scale(1.12); } }
 .hero-shade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(5,5,5,.94) 0%, rgba(5,5,5,.7) 38%, rgba(5,5,5,.15) 75%), linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.5) 22%, rgba(5,5,5,0) 50%), linear-gradient(180deg, rgba(5,5,5,.8), rgba(5,5,5,0) 22%); }
-.hero-inner { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; padding: calc(var(--topbar-h) + var(--sat) + 40px) var(--pad) 72px; }
+.hero-inner { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; padding: calc(var(--topbar-h) + var(--sat) + 40px) var(--pad) var(--hero-pb, 72px); }
 .hero-copy { max-width: 620px; display: grid; gap: 14px; }
 /* Uniform across every slide: same stack for all titles — Latin glyphs take the display sans, Bengali glyphs
  * fall back to Tiro Bangla in the SAME weight (the old .bn override rendered Bengali titles serif + thin,
@@ -277,6 +291,11 @@ img.img-failed { opacity: 0; }
 .home-release-slide { position: absolute; inset: 0; display: block; opacity: 1; visibility: hidden; transform: translateX(100%); transition: transform 1.2s cubic-bezier(.22,.68,0,1), visibility 1.2s linear; }
 .home-release-slide.before { transform: translateX(-100%); } .home-release-slide.after { transform: translateX(100%); }
 .home-release-slide.active { visibility: visible; transform: translateX(0); z-index: 1; }
+/* A finger drag: the release under the finger and the one being pulled in follow it exactly, and the
+   incoming artwork is visible for the whole gesture in either direction. */
+.home-release-slide.dragging { transition: none; }
+.home-release-slide.peek { visibility: visible; z-index: 2; }
+.home-release-carousel.is-dragging { user-select: none; -webkit-user-select: none; }
 /* The whole artwork is always visible. `contain` shows 16:9 art edge to edge; any other shape (e.g. a portrait poster) sits centred over a
    blurred copy of itself, so nothing is ever cropped. Nothing is drawn over the art: release posters carry their own title and logo. */
 .home-release-slide > img { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -528,18 +547,21 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 }
 @media (max-width: 899px) {
   .topbar { gap: 12px; } .brand-text { font-size: 17px; } #installBtn { display: none !important; }
-  .hero { min-height: 74vh; min-height: 74svh; } .hero-inner { padding-bottom: 60px; } .hero-desc { -webkit-line-clamp: 3; font-size: 14.5px; }
+  .hero { min-height: 74vh; min-height: 74svh; --hero-dock-bottom: 48px; } .hero-desc { -webkit-line-clamp: 3; font-size: 14.5px; }
   .hero-actions .btn-lg { padding: 11px 18px; font-size: 15px; } .hero-actions > .btn-glass:last-child { display: none; }
   /* The "Have a story to tell? / Start a project" band is for producers finding us on desktop — drop it on phones. */
   .cta-band { display: none; }
 }
 @media (max-width: 759px) {
   .hero-bg img { object-position: center 15%; }
-  .hero-shade { background: linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.88) 30%, rgba(5,5,5,.35) 58%, rgba(5,5,5,0) 78%), linear-gradient(180deg, rgba(5,5,5,.75), rgba(5,5,5,0) 20%); }
+  /* Phones: one lower-only fade, shared by the home hero and the show / Coming Soon banners. It starts
+     where the title and the action dock begin and is gone by the upper third, so the poster artwork on
+     top stays clear - no top-down wash and no side-to-side darkening on top of it. */
+  :root { --hero-fade-mobile: linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.92) 26%, rgba(5,5,5,.72) 46%, rgba(5,5,5,.3) 62%, rgba(5,5,5,0) 78%); }
+  .hero-shade, .detail-hero .hero-shade { background: var(--hero-fade-mobile); }
   .detail-hero { min-height: 74vh; min-height: 74svh; }
   .detail-hero .hero-inner { padding-bottom: 12px; }
   .page-tight.show-details-page { padding-top: 0; }
-  .detail-hero .hero-shade { background: linear-gradient(90deg, rgba(5,5,5,.34), rgba(5,5,5,.1)), linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.94) 30%, rgba(5,5,5,.72) 60%, rgba(5,5,5,.18) 83%, transparent 100%), linear-gradient(180deg, rgba(5,5,5,.8), transparent 20%); }
   .detail-hero .hero-copy { width: 100%; min-width: 0; }
   .detail-hero .hero-actions { gap: 8px; flex-wrap: nowrap; }
   .detail-hero .hero-actions > .btn-lg { flex: 0 1 auto; min-width: 0; padding: 10px 12px; font-size: 14px; }
