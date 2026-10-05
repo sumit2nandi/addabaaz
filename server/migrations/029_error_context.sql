@@ -1,8 +1,11 @@
 -- Keep the original message/stack fields while making request, runtime and structured client details searchable.
 -- Every addition is guarded so a partially applied DDL change is safe to retry manually.
+-- Dynamic DDL is kept in single-quoted string literals: with ANSI_QUOTES enabled MySQL reads a
+-- double-quoted token as an identifier, so the earlier double-quoted form failed with
+-- Unknown column 'ALTER TABLE ...' in 'field list'. Inner single quotes are doubled instead.
 SET @error_severity_ddl = (
   SELECT IF(COUNT(*) = 0,
-    "ALTER TABLE error_log ADD COLUMN severity ENUM('warning','error','fatal') NOT NULL DEFAULT 'error' AFTER source",
+    'ALTER TABLE error_log ADD COLUMN severity ENUM(''warning'',''error'',''fatal'') NOT NULL DEFAULT ''error'' AFTER source',
     'SELECT 1')
   FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'error_log' AND COLUMN_NAME = 'severity'
