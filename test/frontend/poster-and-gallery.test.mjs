@@ -93,8 +93,11 @@ test('show details keep all four hero controls in one row on phones', () => {
     'the other three controls use equal compact columns');
   assert.match(css, /\.detail-hero \.hero-actions > \.btn-lg\.icon-only \{ flex-basis: 44px; width: 44px; \}/,
     'the compact controls narrow further on very small phones without shrinking in height');
-  assert.match(css, /\.detail-hero \.hero-shade \{[^}]*rgba\(5,5,5,\.72\) 60%/,
-    'a stronger lower scrim keeps poster lettering from colliding with the remaining hero text');
+  const mobileDetailShade = css.match(/\.detail-hero \.hero-shade \{[^}]*\}/)?.[0] || '';
+  assert.match(mobileDetailShade, /rgba\(5,5,5,\.72\) 26%[^}]*transparent 48%/,
+    'the dark scrim is concentrated around the lower text area instead of washing out the poster above it');
+  assert.doesNotMatch(mobileDetailShade, /linear-gradient\(90deg|linear-gradient\(180deg/,
+    'the mobile detail poster has no all-over side or top darkening');
 });
 
 test('show facts sit below the banner and the tagline uses the page font', () => {
