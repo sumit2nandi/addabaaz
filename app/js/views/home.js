@@ -37,6 +37,137 @@ function primeIncomingSlide(slide, direction) {
   void slide.offsetWidth;
 }
 
+// Let a horizontal pointer drag move the artwork itself, not just queue a slide change for release.
+// Keeping this shared also makes the home hero and the Releasing This Month showcase behave alike
+// in touch browsers and in the Android/iOS WebViews.
+function attachSwipe(surface, slides, getIndex, onSwipe, { ignoreTarget = () => false } = {}) {
+  let pointerStart = null, settleTimer, clickTimer, suppressClick = false;
+
+  const widthOf = () => Number(surface.clientWidth) || Number(surface.getBoundingClientRect?.().width)
+    || Number(window.innerWidth) || 1;
+  const clearStyles = () => {
+    clearTimeout(settleTimer); settleTimer = null;
+    slides.forEach((slide) => { slide.style.transform = ''; slide.style.transition = ''; });
+    surface.classList.remove('is-dragging');
+  };
+  const setDrag = (start, dx) => {
+    const direction = dx < 0 ? 1 : dx > 0 ? -1 : (start.direction || 1);
+    const current = getIndex();
+    const incoming = slides[(current + direction + slides.length) % slides.length];
+    if (start.incoming && start.incoming !== incoming) {
+      start.incoming.style.transform = ''; start.incoming.style.transition = '';
+    }
+    const outgoing = slides[current], width = widthOf();
+    outgoing.style.transition = 'none'; incoming.style.transition = 'none';
+    outgoing.style.transform = `translate3d(${dx}px, 0, 0)`;
+    incoming.style.transform = `translate3d(${dx + direction * width}px, 0, 0)`;
+    surface.classList.add('is-dragging');
+    start.direction = direction; start.incoming = incoming;
+    start.drag = { outgoing, incoming, dx, width, direction };
+    return start.drag;
+  };
+  const settle = (drag, commit) => {
+    if (!drag) return;
+    clearTimeout(settleTimer);
+    const { outgoing, incoming, dx, width, direction } = drag;
+    const remaining = commit ? Math.max(0, width - Math.min(width, Math.abs(dx))) : Math.min(width, Math.abs(dx));
+    const duration = commit
+      ? Math.round(Math.max(120, Math.min(320, 320 * remaining / width)))
+      : Math.round(Math.max(160, Math.min(240, 140 + 100 * remaining / width)));
+    const transition = `transform ${duration}ms cubic-bezier(.22,.68,0,1), visibility 1.2s linear`;
+    outgoing.style.transition = transition; incoming.style.transition = transition;
+    // Commit the current finger positions before animating the short remaining distance.
+    void outgoing.offsetWidth; void incoming.offsetWidth;
+    if (commit) {
+      outgoing.style.transform = `translate3d(${-direction * width}px, 0, 0)`;
+      incoming.style.transform = 'translate3d(0px, 0, 0)';
+    } else {
+      outgoing.style.transform = 'translate3d(0px, 0, 0)';
+      incoming.style.transform = `translate3d(${direction * width}px, 0, 0)`;
+    }
+    settleTimer = setTimeout(clearStyles, duration + 60);
+  };
+  const position = (event, start) => {
+    const x = Number.isFinite(event.clientX) ? event.clientX : start.x;
+    const y = Number.isFinite(event.clientY) ? event.clientY : start.y;
+    const dx = x - start.x, dy = y - start.y;
+    if (!start.drag && !start.vertical) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return null;
+      // Leave vertical swipes to the page; touch-action: pan-y allows those to scroll natively.
+      if (Math.abs(dy) >= Math.abs(dx)) { start.vertical = true; return null; }
+    }
+    if (start.vertical) return null;
+    return setDrag(start, dx);
+  };
+  const samePointer = (event, start) => event.pointerId == null || start.pointerId == null || event.pointerId === start.pointerId;
+
+  const onPointerDown = (event) => {
+    if (event.isPrimary === false || (event.button != null && event.button !== 0)) return;
+    // A fresh press means any old swipe-generated click has already been dropped; let this control work.
+    clearTimeout(clickTimer); suppressClick = false;
+    if (ignoreTarget(event)) return;
+    clearStyles();
+    pointerStart = {
+      x: Number.isFinite(event.clientX) ? event.clientX : 0,
+      y: Number.isFinite(event.clientY) ? event.clientY : 0,
+      pointerId: event.pointerId,
+      direction: 0, incoming: null, drag: null, vertical: false,
+    };
+  };
+  const onPointerMove = (event) => {
+    const start = pointerStart;
+    if (!start || !samePointer(event, start) || slides.length < 2) return;
+    position(event, start);
+  };
+  const onPointerUp = (event) => {
+    const start = pointerStart;
+    if (!start || !samePointer(event, start)) return;
+    pointerStart = null;
+    if (slides.length < 2 || start.vertical) { if (start.drag) settle(start.drag, false); return; }
+    const drag = position(event, start) || start.drag;
+    if (!drag) return;
+    const dx = Number.isFinite(event.clientX) ? event.clientX - start.x : drag.dx;
+    const dy = Number.isFinite(event.clientY) ? event.clientY - start.y : 0;
+    if (Math.abs(dx) > 12) {
+      suppressClick = true; clearTimeout(clickTimer);
+      clickTimer = setTimeout(() => { suppressClick = false; }, 500);
+    }
+    if (Math.abs(dx) >= Math.max(60, drag.width * .15) && Math.abs(dx) > Math.abs(dy)) {
+      onSwipe(drag.direction, drag);
+    } else settle(drag, false);
+  };
+  const onPointerCancel = (event) => {
+    const start = pointerStart;
+    if (!start || !samePointer(event, start)) return;
+    pointerStart = null;
+    if (start.drag) settle(start.drag, false);
+  };
+  const onClick = (event) => {
+    if (!suppressClick) return;
+    suppressClick = false; clearTimeout(clickTimer);
+    event.preventDefault(); event.stopPropagation();
+  };
+
+  surface.addEventListener('pointerdown', onPointerDown);
+  surface.addEventListener('pointermove', onPointerMove);
+  surface.addEventListener('pointerup', onPointerUp);
+  surface.addEventListener('pointercancel', onPointerCancel);
+  surface.addEventListener('click', onClick, true);
+
+  return {
+    clear() { pointerStart = null; clearStyles(); },
+    settle,
+    destroy() {
+      pointerStart = null; clearStyles(); clearTimeout(clickTimer);
+      surface.removeEventListener('pointerdown', onPointerDown);
+      surface.removeEventListener('pointermove', onPointerMove);
+      surface.removeEventListener('pointerup', onPointerUp);
+      surface.removeEventListener('pointercancel', onPointerCancel);
+      surface.removeEventListener('click', onClick, true);
+    },
+  };
+}
+
 // Picks the featured shows for the carousel. Every banner is a still image - the latest episode's
 // backdrop, with the show's poster as fallback - and the slideshow moves smoothly between them:
 // the banners play no trailer or episode video.
@@ -47,58 +178,63 @@ function heroSlides() {
     .sort((a, b) => b.latest.publishedAt.localeCompare(a.latest.publishedAt));
 }
 
-// Markup for the hero carousel.
+function heroActionButtons(slide) {
+  const cat = app.catalog, u = app.user, { show, latest } = slide;
+  const target = u.resumeTarget(cat, show.id);
+  return html`<a class="btn btn-primary btn-lg" href="#/watch/${(target?.video || latest).id}">${icon('play', { size: 20 })} Watch Now</a>
+    ${listBtn('show', show.id, { cls: 'btn btn-glass btn-lg icon-only', iconOnly: true })}
+    <a class="btn btn-glass btn-lg" href="#/show/${show.id}">${icon('info', { size: 20 })} More info</a>`;
+}
+
+// Markup for the hero carousel. The action dock is a sibling of the moving slides so its buttons
+// stay anchored in place while the artwork glides between shows.
 function heroHtml(slides) {
-  const cat = app.catalog, u = app.user;
+  const cat = app.catalog;
   return html`<section class="hero" aria-roledescription="carousel" aria-label="Featured shows">
-    ${slides.map(({ show, latest }, i) => {
-      const t = u.resumeTarget(cat, show.id);
-      return html`<article class="hero-slide ${initialSlideClass(i, slides.length)}" data-i="${i}" data-show-id="${show.id}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
-        <a class="hero-banner-link" href="#/show/${show.id}" aria-label="View ${show.titleEn || show.title} details">
-          <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault') })}</div>
-        </a>
-        <div class="hero-shade"></div>
-        ${show.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
-        <div class="hero-inner">
-          <div class="hero-copy">
-            <h1 class="hero-title bn">${show.title}</h1>
-            ${show.titleEn && show.titleEn !== show.title ? html`<div class="hero-title-en">${show.titleEn}</div>` : ''}
-            ${showMeta(show, { maxGenres: 1 })}
-            <div class="hero-actions">
-              <a class="btn btn-primary btn-lg" href="#/watch/${(t?.video || latest).id}">${icon('play', { size: 20 })} Watch Now</a>
-              ${listBtn('show', show.id, { cls: 'btn btn-glass btn-lg icon-only', iconOnly: true })}
-              <a class="btn btn-glass btn-lg" href="#/show/${show.id}">${icon('info', { size: 20 })} More info</a>
-            </div>
-          </div>
-          <a class="hero-poster" href="#/show/${show.id}" tabindex="-1" aria-hidden="true">${img(show.posterLg || show.poster, '', { lazy: i > 0 })}</a>
+    ${slides.map(({ show, latest }, i) => html`<article class="hero-slide ${initialSlideClass(i, slides.length)}" data-i="${i}" data-show-id="${show.id}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
+      <a class="hero-banner-link" href="#/show/${show.id}" aria-label="View ${show.titleEn || show.title} details">
+        <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault') })}</div>
+      </a>
+      <div class="hero-shade"></div>
+      ${show.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
+      <div class="hero-inner">
+        <div class="hero-copy">
+          <h1 class="hero-title bn">${show.title}</h1>
+          ${show.titleEn && show.titleEn !== show.title ? html`<div class="hero-title-en">${show.titleEn}</div>` : ''}
+          ${showMeta(show, { maxGenres: 1 })}
         </div>
-      </article>`;
-    })}
+        <a class="hero-poster" href="#/show/${show.id}" tabindex="-1" aria-hidden="true">${img(show.posterLg || show.poster, '', { lazy: i > 0 })}</a>
+      </div>
+    </article>`)}
+    <div class="hero-actions hero-actions-fixed" data-hero-actions>${heroActionButtons(slides[0])}</div>
     ${slides.length > 1 ? html`<div class="hero-dots" role="tablist" aria-label="Choose slide">${slides.map((_, i) => html`<button type="button" role="tab" class="${i === 0 ? 'active' : ''}" data-dot="${i}" aria-label="Slide ${i + 1}" aria-selected="${i === 0}"></button>`)}</div>` : ''}
   </section>`;
 }
 
 // Slow, direction-aware banner slides with dots and swipe; pause on hover/focus (pointer devices)
-// avoids freezing on touch. Banners remain images only.
-function mountHero(root, ctx) {
+// avoids freezing on touch. Touch drags track the finger while the action dock stays still.
+function mountHero(root, ctx, slideModels) {
   const hero = $('.hero', root); if (!hero) return;
-  const slides = $$('.hero-slide', hero), dots = $$('[data-dot]', hero);
-  let i = 0, timer, paused = false;
+  const slides = $$('.hero-slide', hero), dots = $$('[data-dot]', hero), actions = $('[data-hero-actions]', hero);
+  let i = 0, timer, paused = false, swipe;
   const SLIDE_MS = 8000;
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   positionSlides(slides, i);
-  const show = (n, directionHint = 0) => {
+  const show = (n, directionHint = 0, gesture = null) => {
+    if (!gesture) swipe?.clear();
     const next = (n + slides.length) % slides.length;
     if (next === i) return;
     const forward = (next - i + slides.length) % slides.length;
     const direction = directionHint || (forward * 2 < slides.length ? 1
       : forward * 2 > slides.length ? -1 : (next > i ? 1 : -1));
     const previous = i;
-    primeIncomingSlide(slides[next], direction);
+    if (!gesture) primeIncomingSlide(slides[next], direction);
     i = next;
     positionSlides(slides, i, direction, previous);
     dots.forEach((d, k) => { d.classList.toggle('active', k === i); d.setAttribute('aria-selected', String(k === i)); });
+    if (actions && slideModels[next]) actions.innerHTML = heroActionButtons(slideModels[next]).s;
     $$('img[loading=lazy]', slides[i]).forEach((im) => (im.loading = 'eager'));
+    if (gesture) swipe?.settle(gesture, true);
   };
   const schedule = () => { clearInterval(timer); if (slides.length > 1 && !reducedMotion) timer = setInterval(() => { if (!paused && !document.hidden) show(i + 1, 1); }, SLIDE_MS); };
   dots.forEach((d) => d.addEventListener('click', () => { show(+d.dataset.dot); schedule(); }));
@@ -108,43 +244,31 @@ function mountHero(root, ctx) {
     hero.addEventListener('mouseenter', () => (paused = true)); hero.addEventListener('mouseleave', () => (paused = false));
     hero.addEventListener('focusin', () => (paused = true)); hero.addEventListener('focusout', () => (paused = false));
   }
-  let x0 = null, suppressClick = false, clickTimer;
-  hero.addEventListener('click', (e) => {
-    if (!suppressClick) return;
-    suppressClick = false; clearTimeout(clickTimer);
-    e.preventDefault(); e.stopPropagation();
-  }, true);
-  hero.addEventListener('pointerdown', (e) => { x0 = e.clientX; });
-  hero.addEventListener('pointerup', (e) => {
-    if (x0 != null && Math.abs(e.clientX - x0) > 60) {
-      suppressClick = true; clearTimeout(clickTimer); clickTimer = setTimeout(() => { suppressClick = false; }, 500);
-      const direction = e.clientX < x0 ? 1 : -1;
-      show(i + direction, direction); schedule();
-    }
-    x0 = null;
-  });
-  hero.addEventListener('pointercancel', () => { x0 = null; suppressClick = false; clearTimeout(clickTimer); });    // touch drags handed to scrolling must not leave a stale swipe
-  schedule(); ctx.onCleanup(() => { clearInterval(timer); clearTimeout(clickTimer); });
+  swipe = attachSwipe(hero, slides, () => i, (direction, gesture) => {
+    show(i + direction, direction, gesture); schedule();
+  }, { ignoreTarget: (event) => !!event.target.closest('.hero-actions-fixed, .hero-dots') });
+  schedule(); ctx.onCleanup(() => { clearInterval(timer); swipe.destroy(); });
 }
 
 // Homepage release slideshow: slow horizontal slides, pausing while hovered/focused and respecting
-// reduced-motion preferences. Arrows, dots, mouse/touch swipes all use the same animated transition.
+// reduced-motion preferences. Arrows and dots animate; touch drags track the finger before settling.
 function mountReleaseSlideshow(root, ctx) {
   const carousel = $('[data-release-carousel]', root); if (!carousel) return;
   const region = carousel.parentElement;
   const slides = $$('[data-release-slide]', carousel), dots = $$('[data-release-dot]', region);
   if (slides.length < 2) return;
-  let i = 0, timer, paused = false, hovering = false, focused = false;
+  let i = 0, timer, paused = false, hovering = false, focused = false, swipe;
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const updatePause = () => { paused = hovering || focused; };
-  const show = (n, directionHint = 0) => {
+  const show = (n, directionHint = 0, gesture = null) => {
+    if (!gesture) swipe?.clear();
     const next = (n + slides.length) % slides.length;
     if (next === i) return;
     const forward = (next - i + slides.length) % slides.length;
     const direction = directionHint || (forward * 2 < slides.length ? 1
       : forward * 2 > slides.length ? -1 : (next > i ? 1 : -1));
     const previous = i;
-    primeIncomingSlide(slides[next], direction);
+    if (!gesture) primeIncomingSlide(slides[next], direction);
     i = next;
     positionSlides(slides, i, direction, previous, true);
     dots.forEach((dot, k) => {
@@ -152,6 +276,7 @@ function mountReleaseSlideshow(root, ctx) {
       dot.setAttribute('aria-selected', String(k === i));
     });
     $$('img[loading=lazy]', slides[i]).forEach((image) => { image.loading = 'eager'; });
+    if (gesture) swipe?.settle(gesture, true);
   };
   const schedule = () => {
     clearInterval(timer);
@@ -160,35 +285,16 @@ function mountReleaseSlideshow(root, ctx) {
   $('[data-release-prev]', carousel).addEventListener('click', () => { show(i - 1, -1); schedule(); });
   $('[data-release-next]', carousel).addEventListener('click', () => { show(i + 1, 1); schedule(); });
   dots.forEach((dot) => dot.addEventListener('click', () => { show(+dot.dataset.releaseDot); schedule(); }));
-  let pointerStart = null, suppressClick = false, clickTimer;
-  carousel.addEventListener('click', (event) => {
-    if (!suppressClick) return;
-    suppressClick = false; clearTimeout(clickTimer);
-    event.preventDefault(); event.stopPropagation();
-  }, true);
-  carousel.addEventListener('pointerdown', (event) => {
-    if (event.isPrimary === false) return;
-    pointerStart = { x: event.clientX, y: event.clientY };
-  });
-  carousel.addEventListener('pointerup', (event) => {
-    if (!pointerStart) return;
-    const start = pointerStart; pointerStart = null;
-    const dx = event.clientX - start.x, dy = event.clientY - start.y;
-    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
-      suppressClick = true; clearTimeout(clickTimer);
-      clickTimer = setTimeout(() => { suppressClick = false; }, 500);
-      const direction = dx < 0 ? 1 : -1;
-      show(i + direction, direction); schedule();
-    }
-  });
-  carousel.addEventListener('pointercancel', () => { pointerStart = null; suppressClick = false; clearTimeout(clickTimer); });
+  swipe = attachSwipe(carousel, slides, () => i, (direction, gesture) => {
+    show(i + direction, direction, gesture); schedule();
+  }, { ignoreTarget: (event) => !!event.target.closest('[data-release-prev], [data-release-next]') });
   region.addEventListener('mouseenter', () => { hovering = true; updatePause(); });
   region.addEventListener('mouseleave', () => { hovering = false; updatePause(); });
   region.addEventListener('focusin', () => { focused = true; updatePause(); });
   region.addEventListener('focusout', (event) => { if (!region.contains(event.relatedTarget)) { focused = false; updatePause(); } });
   positionSlides(slides, 0, 1, -1, true);
   schedule();
-  ctx.onCleanup(() => { clearInterval(timer); clearTimeout(clickTimer); });
+  ctx.onCleanup(() => { clearInterval(timer); swipe.destroy(); });
 }
 
 // One Recently Added section with reels first, followed by full-length episodes and videos.
@@ -272,7 +378,7 @@ export default async function home(ctx) {
       <a class="btn btn-primary btn-lg" href="#/contact">Start a project</a>
     </section>`.s;
 
-  mountHero(ctx.root, ctx);
+  mountHero(ctx.root, ctx, slides);
   mountReleaseSlideshow(ctx.root, ctx);
   enhanceRails(ctx.root);
 }

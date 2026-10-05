@@ -67,20 +67,25 @@ test('every banner is a still image and the slideshow ticks every 8 seconds', as
   });
 });
 
-test('each hero banner links to its own show details without covering the action buttons', async () => {
+test('each hero banner links to its show and the action dock stays outside the moving slides', async () => {
   await withHome(async (root) => {
     const slides = [...root.querySelectorAll('.hero-slide')];
+    const actions = root.querySelector('.hero-actions-fixed');
     assert.ok(slides.length >= 2, 'featured shows have slides');
+    assert.ok(actions, 'the hero has one action dock');
+    assert.equal(actions.closest('.hero-slide'), null, 'the action dock is not part of a moving banner');
     for (const slide of slides) {
       const link = slide.querySelector('.hero-banner-link');
       assert.ok(link, 'the banner image is an accessible link');
       assert.equal(link.getAttribute('href'), `#/show/${slide.dataset.showId}`, 'the link targets the show on this slide');
       assert.match(link.getAttribute('aria-label'), /details$/, 'the image link has an accessible name');
       assert.ok(link.querySelector('.hero-bg img'), 'the slideshow artwork is inside the link');
-      assert.ok(slide.querySelector('.hero-actions a[href^="#/watch/"]'), 'Watch Now remains a separate action');
-      assert.ok(slide.querySelector('.hero-actions [data-list]'), 'My List remains a separate action');
-      assert.ok(slide.querySelector('.hero-actions a[href^="#/show/"]'), 'More info remains a separate action');
+      assert.equal(slide.querySelector('.hero-actions'), null, 'buttons do not slide with the banner');
     }
+    const active = root.querySelector('.hero-slide.active');
+    assert.equal(actions.querySelector('.list-btn').dataset.list, `show:${active.dataset.showId}`, 'the fixed actions target the active show');
+    assert.ok(actions.querySelector('a[href^="#/watch/"]'), 'Watch Now remains available in the fixed dock');
+    assert.ok(actions.querySelector('a[href^="#/show/"]'), 'More info remains available in the fixed dock');
   });
 });
 
@@ -97,6 +102,35 @@ test('a horizontal swipe changes slides without following the banner link', asyn
   });
 });
 
+test('hero artwork follows a touch drag while its button dock stays anchored and updates for the active show', async () => {
+  await withHome(async (root, window) => {
+    const hero = root.querySelector('.hero');
+    const actions = root.querySelector('.hero-actions-fixed');
+    const originalDock = actions;
+    hero.getBoundingClientRect = () => ({ width: 400 });
+    const outgoing = root.querySelector('.hero-slide.active');
+    const down = new window.Event('pointerdown', { bubbles: true }); down.clientX = 300; down.clientY = 100;
+    const move = new window.Event('pointermove', { bubbles: true }); move.clientX = 210; move.clientY = 108;
+    hero.dispatchEvent(down); hero.dispatchEvent(move);
+    const incoming = [...root.querySelectorAll('.hero-slide')].find((slide) => slide !== outgoing);
+    assert.match(outgoing.style.transform, /translate3d\(-90px/, 'the current banner moves with the finger');
+    assert.match(incoming.style.transform, /translate3d\(310px/, 'the next banner enters from the edge as the finger drags');
+    assert.equal(actions.style.transform, '', 'the action dock does not move with either banner');
+
+    const up = new window.Event('pointerup', { bubbles: true }); up.clientX = 120; up.clientY = 106;
+    hero.dispatchEvent(up);
+    const active = root.querySelector('.hero-slide.active');
+    assert.notEqual(active, outgoing, 'releasing the drag advances the banner');
+    assert.equal(root.querySelector('.hero-actions-fixed'), originalDock, 'the same button dock remains in place');
+    const list = actions.querySelector('.list-btn');
+    assert.equal(list.dataset.list, `show:${active.dataset.showId}`, 'its actions now belong to the newly active show');
+    const press = new window.Event('pointerdown', { bubbles: true }); press.clientX = 120; press.clientY = 106;
+    list.dispatchEvent(press);
+    const click = new window.Event('click', { bubbles: true, cancelable: true }); list.dispatchEvent(click);
+    assert.equal(click.defaultPrevented, false, 'the anchored action remains tappable immediately after a swipe');
+  });
+});
+
 test('the home banner omits its type eyebrow, shows one genre and uses a plus-only list action', async () => {
   await withHome(async (root) => {
     const slides = [...root.querySelectorAll('.hero-slide')];
@@ -105,11 +139,12 @@ test('the home banner omits its type eyebrow, shows one genre and uses a plus-on
       const parts = [...slide.querySelectorAll('.meta-line > span:not(.dot)')].map((part) => part.textContent.trim());
       assert.ok(parts[1], 'the first genre remains in banner metadata');
       assert.doesNotMatch(parts[1], /·/, 'only one genre is shown');
-      const list = slide.querySelector('.hero-actions [data-list]');
-      assert.ok(list.classList.contains('icon-only'), 'My List uses a compact icon button');
-      assert.equal(list.querySelector('.lbl'), null, 'the My List text label is removed');
-      assert.ok(list.getAttribute('aria-label'), 'the plus/check button stays accessible');
     }
+    const actions = root.querySelector('.hero-actions-fixed');
+    const list = actions.querySelector('[data-list]');
+    assert.ok(list.classList.contains('icon-only'), 'My List uses a compact icon button');
+    assert.equal(list.querySelector('.lbl'), null, 'the My List text label is removed');
+    assert.ok(list.getAttribute('aria-label'), 'the plus/check button stays accessible');
     const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
     assert.match(css, /\.hero-actions \.btn-lg \{ height: 48px; min-height: 48px; \}/, 'hero actions share one button height across pages');
     assert.match(css, /\.hero-actions \.btn-lg\.icon-only \{ flex: 0 0 48px; width: 48px; padding: 0; \}/, 'icon-only hero actions keep the same 48px height and width');
@@ -145,7 +180,8 @@ test('the hero CSS keeps the swipe working and carries no player styling', async
     assert.match(css, /\.hero-bg img \{[^}]*object-fit: cover/, 'the banner image fills the banner');
     assert.match(css, /\.hero-banner-link \.hero-bg \{ z-index: 0; \}/, 'the banner link remains the clickable image layer');
     assert.match(css, /\.hero-slide > \.hero-shade \{ z-index: 1; pointer-events: none; \}/, 'the visual scrim does not block the link');
-    assert.match(css, /\.hero-slide > \.hero-inner a, \.hero-slide > \.hero-inner button \{ pointer-events: auto; \}/, 'the existing hero actions stay clickable above the banner link');
+    assert.match(css, /\.hero-slide > \.hero-inner a, \.hero-slide > \.hero-inner button \{ pointer-events: auto; \}/, 'the hero poster link stays clickable above the banner image');
+    assert.match(css, /\.hero-actions-fixed \{[^}]*position: absolute;[^}]*z-index: 4/, 'the action dock is independently layered above moving banners');
     assert.match(css, /\.hero-slide \{[^}]*transform: translateX\(100%\); transition: transform 1\.2s cubic-bezier/, 'banner slides move slowly with a smooth easing curve');
     assert.match(css, /\.hero-slide\.before \{ transform: translateX\(-100%\); \}/, 'the previous slide moves off to the left');
     assert.match(css, /\.hero-slide\.active \{ visibility: visible; transform: translateX\(0\); z-index: 2; \}/, 'the active banner settles in the frame');

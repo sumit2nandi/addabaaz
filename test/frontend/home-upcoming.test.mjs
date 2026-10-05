@@ -76,16 +76,21 @@ test('homepage releases rotate as detail-linked slides and Recently Added keeps 
   });
 });
 
-test('release posters swipe smoothly and a swipe never opens the poster link', async () => {
+test('release posters follow the finger and a swipe never opens the poster link', async () => {
   const seed = seedCatalog();
   seed.upcoming = seed.upcoming.slice(0, 2).map((item) => ({ ...item, category: 'releasing-this-month' }));
 
   await withHome(seed, async (root, { window }) => {
     const carousel = root.querySelector('[data-release-carousel]');
     const slides = [...root.querySelectorAll('[data-release-slide]')];
+    carousel.getBoundingClientRect = () => ({ width: 400 });
     const down = new window.Event('pointerdown', { bubbles: true }); down.clientX = 300; down.clientY = 100;
-    const up = new window.Event('pointerup', { bubbles: true }); up.clientX = 120; up.clientY = 100;
-    carousel.dispatchEvent(down); carousel.dispatchEvent(up);
+    const move = new window.Event('pointermove', { bubbles: true }); move.clientX = 220; move.clientY = 106;
+    const up = new window.Event('pointerup', { bubbles: true }); up.clientX = 120; up.clientY = 108;
+    carousel.dispatchEvent(down); carousel.dispatchEvent(move);
+    assert.match(slides[0].style.transform, /translate3d\(-80px/, 'the current release moves under the finger');
+    assert.match(slides[1].style.transform, /translate3d\(320px/, 'the next release tracks in from the side');
+    carousel.dispatchEvent(up);
     assert.equal(slides[1].classList.contains('active'), true, 'a left swipe advances to the next release');
     assert.equal(slides[0].classList.contains('before'), true, 'the previous artwork moves left');
     const click = new window.Event('click', { bubbles: true, cancelable: true });
