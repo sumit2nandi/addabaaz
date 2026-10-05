@@ -25,7 +25,7 @@ const noop = (_q, _s, n) => n();
  */
 // Returns helper functions plus two route registrars, `public(api)` and `authed(api)`, which app.js calls
 // (before and after the authentication middleware respectively). Behaviour limits come from `options` or environment variables.
-export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rate = true, publicUser, notDisabled, userFromRequest, plans = [], promos = null, options = {} }) {
+export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rate = true, publicUser, notDisabled, userFromRequest, plans = [], promos = null, reportError = null, logger = console, options = {} }) {
   // Tunable limits: screens at once, refund window, reports needed to hide a comment, comment rate, whether an e-mail must be verified before commenting/buying.
   const cfg = {
     supportEmail: options.supportEmail ?? process.env.SUPPORT_EMAIL ?? '',
@@ -42,7 +42,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
   // With no SMTP configured (development) print the mail's link to the console so flows can still be tested.
   const devLog = (msg) => { if (mailer.provider === 'none' && process.env.NODE_ENV !== 'production') console.log(`[mail:dev] ${msg}`); };
   // Fire-and-forget: a mail failure is logged but never breaks the request.
-  const sendMail = (to, built, note) => { devLog(note); mailer.send({ to, ...built }).catch((e) => console.warn(`[mail] send failed${e.code ? ` (${e.code})` : ''}:`, e.message)); };
+  const sendMail = (to, built, note) => { devLog(note); mailer.send({ to, ...built }).catch((e) => logger.warn(`[mail] send failed${e.code ? ` (${e.code})` : ''}:`, e)); };
   // Strict variants for endpoints that PROMISE the reader an email. The UI's "check your inbox" must
   // never be shown for a mail that didn't go out: in production an unconfigured mailer is a 503, and a
   // failed send is a 503 in every environment — swallowing it is how the site ended up lying to users.
@@ -51,7 +51,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
   const sendMailStrict = async (to, built, note) => {
     devLog(note);
     let sent;
-    try { sent = await mailer.send({ to, ...built }); } catch (e) { console.warn(`[mail] send failed${e.code ? ` (${e.code})` : ''}:`, e.message); throw new HttpError(503, 'email_send_failed', MAIL_DOWN); }
+    try { sent = await mailer.send({ to, ...built }); } catch (e) { throw new HttpError(503, 'email_send_failed', MAIL_DOWN, { cause: e }); }
     if (!sent?.sent && process.env.NODE_ENV === 'production') throw new HttpError(503, 'email_send_failed', MAIL_DOWN);
   };
   // Builds the `{ token, user }` response used after password changes.
@@ -139,7 +139,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         notDisabled(user);
         const sv = await db.accounts.setPassword(uid, await hashPassword(password), { verify: true });      // signs out every other device
         // Opening the reset link proves the address is theirs, so a held referral reward can be released too.
-        if (promos) promos.qualify({ ...user, id: uid }, { reason: 'verified' }).catch(() => {});
+        if (promos) promos.qualify({ ...user, id: uid }, { reason: 'verified' }).catch((e) => logger.error('[promos] referral qualification after password reset failed:', e));
         sendMail(user.email, mail.passwordChangedEmail({ name: user.name, siteUrl, supportEmail: cfg.supportEmail }), `password changed for ${user.email}`);
         res.json({ ...sessionFor({ ...user, emailVerifiedAt: user.emailVerifiedAt || new Date().toISOString() }, sv), profiles: await db.profiles.list(uid) });
       }));
@@ -150,7 +150,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         if (!uid) throw new HttpError(400, 'invalid_token', 'This confirmation link is invalid or has expired. Sign in and request a new one from Account.');
         await db.accounts.markVerified(uid);
         // A confirmed e-mail is what a referral reward was waiting for — pay the inviter now (see promos.js).
-        if (promos) { const u = await db.users.byId(uid); if (u) promos.qualify(u, { reason: 'verified' }).catch(() => {}); }
+        if (promos) { const u = await db.users.byId(uid); if (u) promos.qualify(u, { reason: 'verified' }).catch((e) => logger.error('[promos] referral qualification after verification failed:', e)); }
         res.json({ verified: true });
       }));
 
@@ -164,14 +164,34 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         await db.playStats.record(v.id, v.showId, { play: event === 'start', seconds: event === 'progress' ? secs : 0 });
         res.sendStatus(204);
       }));
-      // Browser error reports (rate limited, stored for the admin Errors page).
+      // Browser/app error reports (rate limited and shown in Admin → Errors). The page may have crashed
+      // before sign-in, but account attribution always comes from a verified first-party session, never body.userId.
       api.post('/client-errors', limit('clienterr', 20, 60_000), wrap(async (req, res) => {
         const b = req.body || {};
-        // The route is public so a crashed page can still report, but resolve a first-party bearer token
-        // when present. Never accept an account id supplied by the browser itself.
+        if (typeof b.message !== 'string' || !b.message.trim()) return res.sendStatus(204);
         let user = null;
-        try { user = await userFromRequest?.(req) || null; } catch { /* retain the report without account attribution */ }
-        if (typeof b.message === 'string' && b.message) await db.errors.add({ source: 'client', message: b.message, stack: b.stack, url: safeErrorUrl(b.url), userAgent: req.get('user-agent'), userId: user?.id || null });
+        try { user = await userFromRequest?.(req) || null; }
+        catch (error) {
+          // A failure resolving attribution should not discard the original browser report.
+          await reportError?.(error, { kind: 'client-error-session-lookup', requestId: req.requestId, method: req.method, url: req.originalUrl, userAgent: req.get('user-agent') });
+        }
+        const clientError = new Error(b.message.trim().slice(0, 500));
+        clientError.name = typeof b.errorName === 'string' ? b.errorName.replace(/[^\w.$-]/g, '').slice(0, 128) || 'Error' : 'Error';
+        if (typeof b.stack === 'string' && b.stack) clientError.stack = b.stack.slice(0, 12_000);
+        if (typeof b.errorCode === 'string') clientError.code = b.errorCode.slice(0, 128);
+        if (reportError) {
+          await reportError(clientError, {
+            source: 'client', severity: 'error', kind: 'browser-error', requestId: req.requestId, method: req.method,
+            url: safeErrorUrl(b.url), userAgent: req.get('user-agent'), userId: user?.id || null,
+            details: b.details && typeof b.details === 'object' ? { client: b.details } : {},
+          });
+        } else {
+          await db.errors.add({
+            source: 'client', message: clientError.message, errorName: clientError.name, code: clientError.code || null,
+            stack: clientError.stack, requestId: req.requestId || null, method: req.method, url: safeErrorUrl(b.url),
+            userAgent: req.get('user-agent'), userId: user?.id || null, details: b.details || null,
+          });
+        }
         res.sendStatus(204);
       }));
 
@@ -186,7 +206,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         if (!(await catalog.video(req.params.id))) throw new HttpError(404, 'not_found', 'Unknown video.');
         const before = req.query.before ? Date.parse(String(req.query.before)) : null;
         const [items, total] = await Promise.all([db.comments.list(req.params.id, { limit: 30, before: Number.isNaN(before) ? null : before }), db.comments.count(req.params.id)]);
-        const me = await userFromRequest(req).catch(() => null);
+        const me = await userFromRequest(req).catch((e) => { logger.warn('[comments] could not resolve the optional viewer session:', e); return null; });
         res.set('Cache-Control', 'no-store');
         res.json({ total, comments: items.map((c) => ({ id: c.id, author: c.author, body: c.body, createdAt: c.createdAt, ...(me && c.userId === me.id ? { mine: true } : {}) })) });
       }));

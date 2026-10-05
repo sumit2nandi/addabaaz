@@ -1,7 +1,7 @@
 // Shared HTTP helpers used by the public API (app.js) and the admin router (admin.js).
 /** Shared HTTP helpers for the API and the admin router. */
 // An error that carries an HTTP status and a machine-readable `code`; the error middleware turns it into `{ error: { code, message } }`.
-export class HttpError extends Error { constructor(status, code, message) { super(message); this.status = status; this.code = code; } }
+export class HttpError extends Error { constructor(status, code, message, options = {}) { super(message, options); this.name = new.target.name; this.status = status; this.code = code; } }
 // Shortcut for a 400 Bad Request error.
 export const bad = (msg, code = 'bad_request') => new HttpError(400, code, msg);
 /** Removes query/fragment secrets and short-lived HLS bearer tokens before a URL is persisted in an error report. */

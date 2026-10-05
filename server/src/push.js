@@ -62,7 +62,7 @@ export function createPush({ db, vapid = {}, sender = null, fcm = null, log = co
     } catch (e) {
       const reason = `FCM delivery failed: ${String(e?.message || e || 'unknown error').replace(/[\r\n]+/g, ' ').slice(0, 400)}`;
       for (const row of rows) await report(row, 'failed', reason);
-      log.warn?.(`[push] native send failed: ${e.message}`);
+      log.warn?.('[push] native send failed:', e);
       return { sent: 0, failed: rows.length, removed: 0 };
     }
 
@@ -86,7 +86,7 @@ export function createPush({ db, vapid = {}, sender = null, fcm = null, log = co
         await report(row, 'failed', reason);
       }
     }
-    if (dead.size) for (const token of dead) await db.devices.removeHash(endpointHash(token)).catch(() => {});
+    if (dead.size) for (const token of dead) await db.devices.removeHash(endpointHash(token)).catch((e) => log.warn?.('[push] could not remove an expired device token:', e));
     return { sent, failed, removed };
   }
 
@@ -97,7 +97,7 @@ export function createPush({ db, vapid = {}, sender = null, fcm = null, log = co
       // Both channels are looked up first: a send-once claim (automatic notifications) must be decided
       // ONCE per user and then applied to their browser subscriptions AND their app devices together.
       const subs = configured ? await db.push.audience(audience) : [];
-      const rows = nativeConfigured ? await db.devices.audienceFor(audience).catch((e) => { log.warn?.(`[push] app audience failed: ${e.message}`); return []; }) : [];
+      const rows = nativeConfigured ? await db.devices.audienceFor(audience).catch((e) => { log.warn?.('[push] app audience failed:', e); return []; }) : [];
       let allowedNative = rows, keptSubs = subs;
       if (claim) {
         const decided = new Map();
@@ -105,7 +105,7 @@ export function createPush({ db, vapid = {}, sender = null, fcm = null, log = co
         allowedNative = rows.filter((r) => decided.get(r.userId));
         keptSubs = subs.filter((s) => decided.get(s.userId));
       }
-      const native = await notifyNative(allowedNative, message, onDelivery).catch((e) => { log.warn?.(`[push] native send failed: ${e.message}`); return { sent: 0, failed: 0, removed: 0 }; });
+      const native = await notifyNative(allowedNative, message, onDelivery).catch((e) => { log.warn?.('[push] native send failed:', e); return { sent: 0, failed: 0, removed: 0 }; });
       if (!configured) return { sent: native.sent, failed: native.failed, removed: native.removed, native, skipped: 'not_configured' };
       const payload = JSON.stringify(notificationPayload(message));
       let sent = 0, failed = 0, removed = 0;
@@ -126,7 +126,7 @@ export function createPush({ db, vapid = {}, sender = null, fcm = null, log = co
             failed++; await db.push.failed(s.id);
             const reason = e?.statusCode ? `Web Push HTTP ${e.statusCode}` : `Web Push delivery failed${e?.code ? ` (${String(e.code).slice(0, 40)})` : ''}`;
             await report('failed', reason);
-            log.warn?.(`[push] send failed (${e?.statusCode || e?.message})`);
+            log.warn?.('[push] web delivery failed:', e);
           }
         }
       }
@@ -164,7 +164,7 @@ export function createPush({ db, vapid = {}, sender = null, fcm = null, log = co
 }
 
 // Builds the service from the VAPID_* and FCM_SERVICE_ACCOUNT* environment variables.
-export const pushFromEnv = (db, env = process.env, { fcm = null } = {}) => createPush({
-  db, fcm,
+export const pushFromEnv = (db, env = process.env, { fcm = null, log = console } = {}) => createPush({
+  db, fcm, log,
   vapid: { publicKey: env.VAPID_PUBLIC_KEY || '', privateKey: env.VAPID_PRIVATE_KEY || '', subject: env.VAPID_SUBJECT || (env.SUPPORT_EMAIL ? `mailto:${env.SUPPORT_EMAIL}` : '') },
 });

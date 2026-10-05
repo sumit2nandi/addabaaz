@@ -11,14 +11,14 @@ const asPage = (req, dflt = 50, max = 200) => ({ limit: Math.min(Math.max(Number
  * Admin routes for the engagement features: analytics, comment moderation, refund requests, push notifications, error log.
  * Mounted by createAdminRouter (so they sit behind the same admin sign-in, rate limit and audit log).
  */
-export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns = null, unsubscribeUrlFor = null, log, siteUrl, sms = null, email = mail.campaignEmail }) {
+export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns = null, unsubscribeUrlFor = null, log, logger = console, siteUrl, sms = null, email = mail.campaignEmail }) {
   // Notifications and e-mail images are rendered by the viewer's device: a site-relative path has to be
   // absolute before it leaves the server, or the image will not load.
   const absoluteUrl = (v) => (/^https?:/i.test(v) ? v : `${String(siteUrl || '').replace(/\/+$/, '')}${String(v).startsWith('/') ? '' : '/'}${v}`);
   /* ---------- badges for the sidebar ---------- */
   // Counts shown as badges in the admin sidebar: comments to review, refund requests pending, recent errors.
   router.get('/inbox', wrap(async (_req, res) => {
-    const [comments, refunds, errors, tickets] = await Promise.all([db.comments.reviewCount(), db.refundRequests.pendingCount(), db.errors.count24h(), db.tickets.awaitingCount().catch(() => 0)]);
+    const [comments, refunds, errors, tickets] = await Promise.all([db.comments.reviewCount(), db.refundRequests.pendingCount(), db.errors.count24h(), db.tickets.awaitingCount().catch((e) => { logger.warn('[admin] ticket inbox count failed:', e); return 0; })]);
     res.json({ comments, refunds, errors, tickets });
   }));
 
@@ -37,8 +37,7 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
       if (!result?.sent) throw new Error('The mailer did not send the test message.');
     } catch (e) {
       const code = typeof e.code === 'string' ? e.code.replace(/[^\w.-]/g, '').slice(0, 40) : '';
-      console.error(`[mail] admin test failed${code ? ` (${code})` : ''}:`, e.message);
-      throw new HttpError(503, 'email_send_failed', `The SMTP test email could not be sent${code ? ` (${code})` : ''}. Check the server runtime logs and SMTP settings.`);
+      throw new HttpError(503, 'email_send_failed', `The SMTP test email could not be sent${code ? ` (${code})` : ''}. Check the server runtime logs and SMTP settings.`, { cause: e });
     }
     await log(req, 'email.test', req.admin.email);
     res.json({ sent: true, to: req.admin.email });
@@ -57,8 +56,7 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
       await sms.send({ phone, code: generateOtp(6), minutes: 10 });
     } catch (e) {
       const code = typeof e.code === 'string' ? e.code.replace(/[^\w.-]/g, '').slice(0, 40) : '';
-      console.error(`[sms] admin test failed${code ? ` (${code})` : ''}:`, e.message);
-      throw new HttpError(e.status === 502 || e.status === 503 ? e.status : 502, code || 'sms_send_failed', `${e.message || 'The test SMS could not be sent.'} Check MSG91 (auth key, template, DLT header) and the server log.`);
+      throw new HttpError(e.status === 502 || e.status === 503 ? e.status : 502, code || 'sms_send_failed', `${e.message || 'The test SMS could not be sent.'} Check MSG91 (auth key, template, DLT header) and the server log.`, { cause: e });
     }
     await log(req, 'sms.test', maskPhone(phone));
     res.json({ sent: true, to: maskPhone(phone) });
@@ -120,7 +118,7 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
     const r = await requestOr404(req.params.id), note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 300) : '';
     if (!(await db.refundRequests.decide(r.id, 'declined', req.admin.email, note))) throw new HttpError(409, 'already_decided', `This request was already ${r.status === 'pending' ? 'decided' : r.status}.`);
     const [user, pay] = await Promise.all([db.users.byId(r.userId), db.payments.byId(r.paymentId)]);
-    if (user && mailer?.provider === 'smtp') mailer.send({ to: user.email, ...mail.refundDeclinedEmail({ name: user.name, planName: pay?.planId || 'your plan', note, supportEmail: billing.config.supportEmail, siteUrl }) }).catch(() => {});
+    if (user && mailer?.provider === 'smtp') mailer.send({ to: user.email, ...mail.refundDeclinedEmail({ name: user.name, planName: pay?.planId || 'your plan', note, supportEmail: billing.config.supportEmail, siteUrl }) }).catch((e) => logger.warn('[refund] decline e-mail failed:', e));
     await log(req, 'refund_request.decline', r.id, { paymentId: r.paymentId, note });
     res.sendStatus(204);
   }));
@@ -238,7 +236,7 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
     if (!ticket) throw new HttpError(404, 'not_found', 'Unknown support ticket.');
     const replies = await db.tickets.replies(ticket.id);
     // The account behind the ticket (if any) helps the admin see the plan/verification state at a glance.
-    const account = ticket.userId ? await db.users.byId(ticket.userId).catch(() => null) : null;
+    const account = ticket.userId ? await db.users.byId(ticket.userId).catch((e) => { logger.warn('[admin] support ticket account lookup failed:', e); return null; }) : null;
     res.json({ ticket, replies, account: account ? { id: account.id, email: account.email, name: account.name, disabled: !!account.disabledAt, phone: account.phone || null } : null });
   }));
   router.patch('/tickets/:id', wrap(async (req, res) => {
@@ -267,7 +265,7 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
         const built = emailTemplates.adminAnswered({ body, ref: `ADD-${ticket.id.slice(0, 8).toUpperCase()}`, subject: ticket.subject, supportEmail: billing?.config?.supportEmail || '', siteUrl });
         const r = await mailer.send({ to: ticket.email, ...built });
         emailed = !!r?.sent;
-      } catch (e) { console.warn('[support] reply e-mail failed:', e.message); }
+      } catch (e) { logger.warn('[support] reply e-mail failed:', e); }
     }
     await log(req, 'ticket.reply', ticket.id, { status, emailed });
     res.status(201).json({ ok: true, emailed, ticket: await db.tickets.get(ticket.id), replies: await db.tickets.replies(ticket.id) });
@@ -320,8 +318,12 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
   }
 
   /* ---------- error log ---------- */
-  // Error log: browser and server errors grouped by message (see the Errors page).
-  router.get('/errors', wrap(async (_req, res) => res.json(await db.errors.list())));
+  // Error log: recent browser, server, background and process failures; records are paged and filterable.
+  router.get('/errors', wrap(async (req, res) => {
+    const source = ['server', 'client'].includes(req.query.source) ? req.query.source : '';
+    const search = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 120) : '';
+    res.json(await db.errors.list({ ...asPage(req, 50, 200), source, search }));
+  }));
   router.delete('/errors', wrap(async (req, res) => { await db.errors.clear(); await log(req, 'errors.clear'); res.sendStatus(204); }));
 }
 

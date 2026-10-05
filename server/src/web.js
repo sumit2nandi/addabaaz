@@ -6,7 +6,7 @@ import { createSeo } from './seo.js';
 import { wrap } from './http.js';
 import { UPLOAD_NAME, uploadType, cacheUpload } from './uploads.js';
 
-export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg, maintenance = null }) {
+export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg, maintenance = null, logger = console }) {
   // Maintenance mode (docs/MAINTENANCE.md): while the switch is on, viewers get the branded page with a real
   // 503 and the API refuses viewer calls — but the consoles, the API allow-list and /maintenance itself keep
   // working so the operator can finish the job and turn it back off.
@@ -127,7 +127,7 @@ export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS
         if (r.redirect) return res.redirect(r.status || 301, r.redirect);
         res.status(r.status).set(r.headers).send(r.body);
       } catch (e) {
-        console.error('[seo] page render failed:', e.message);
+        logger.error('[seo] page render failed:', e);
         res.status(503).set({ 'Cache-Control': 'no-store', 'Retry-After': '30' }).sendFile(path.join(ROOT, 'index.html'));   // 503, not 200: never let a crawler index a broken page
       }
     });

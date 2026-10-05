@@ -6,12 +6,12 @@ import fs from 'node:fs';
  * - Several servers stay in sync through the `version` counter that every write bumps (checked at most every `ttl` ms).
  */
 // `ttl` is how long (ms) a loaded snapshot is trusted before the version counter is checked again.
-export function createCatalogStore({ db, catalogPath, studioPath = null, ttl = 3000 }) {
+export function createCatalogStore({ db, catalogPath, studioPath = null, ttl = 3000, log = console }) {
   // `snap` = everything (admin view), `pub` = what visitors may see; `version` detects changes made by other servers.
   let snap = null, pub = null, version = -1, checked = 0, seeding = null;
 
   // Seed files are optional; a missing or broken file is treated as empty.
-  const readJson = (p) => { try { return p && fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : null; } catch (e) { console.error(`[catalog] cannot read ${p}: ${e.message}`); return null; } };
+  const readJson = (p) => { try { return p && fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : null; } catch (e) { log.error?.(`[catalog] cannot read ${p}:`, e); return null; } };
   const seedHomePosters = readJson(studioPath)?.homePosters || readJson(catalogPath)?.homePosters || {};
   // Import data/catalog.json into MySQL once (only the first server to try wins; the rest skip).
   const ensureSeeded = () => seeding ||= (async () => {

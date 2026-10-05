@@ -124,4 +124,4 @@ export function createFcm({ credentials = null, fetchImpl = null, log = console 
 }
 
 /** Builds the service from FCM_SERVICE_ACCOUNT / FCM_SERVICE_ACCOUNT_FILE. */
-export const fcmFromEnv = (env = process.env) => createFcm({ credentials: serviceAccountFromEnv(env) });
+export const fcmFromEnv = (env = process.env, options = {}) => createFcm({ credentials: serviceAccountFromEnv(env), ...options });

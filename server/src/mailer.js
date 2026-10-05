@@ -28,4 +28,4 @@ export function createMailer({ url = '', from = 'ADDABAAZ <no-reply@localhost>',
 }
 
 // Builds the mailer from SMTP_URL / MAIL_FROM.
-export const mailerFromEnv = (env = process.env) => createMailer({ url: env.SMTP_URL || '', from: env.MAIL_FROM || 'ADDABAAZ <no-reply@localhost>' });
+export const mailerFromEnv = (env = process.env, { log = console } = {}) => createMailer({ url: env.SMTP_URL || '', from: env.MAIL_FROM || 'ADDABAAZ <no-reply@localhost>', log });

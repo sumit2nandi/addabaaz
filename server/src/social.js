@@ -67,7 +67,7 @@ export function createFacebookVerifier({ appId, appSecret, version = 'v21.0', fe
     const bad = () => new SocialError('invalid_credential', 'Facebook sign-in failed. Please try again.');
     if (typeof accessToken !== 'string' || accessToken.length < 10 || accessToken.length > 2048) throw bad();
     const get = async (url) => {
-      let r; try { r = await fetchImpl(url); } catch { throw new SocialError('provider_unavailable', 'Could not reach Facebook to verify your sign-in.'); }
+      let r; try { r = await fetchImpl(url); } catch (cause) { throw new SocialError('provider_unavailable', 'Could not reach Facebook to verify your sign-in.', { cause }); }
       if (r.status >= 500) throw new SocialError('provider_unavailable', 'Facebook is unavailable right now. Please try again.');
       return r.ok ? r.json() : null;
     };

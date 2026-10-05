@@ -54,7 +54,7 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
   // Tracks in-flight e-mail promises (see `track`).
   const pending = new Set();
   /** Emails are best-effort: they never delay or fail a payment. `idle()` lets tests (and graceful shutdown) wait for them. */
-  const track = (p) => { const t = p.catch((e) => log.error('[billing] email failed:', e?.message || e)).finally(() => pending.delete(t)); pending.add(t); return t; };
+  const track = (p) => { const t = p.catch((e) => log.error('[billing] email failed:', e)).finally(() => pending.delete(t)); pending.add(t); return t; };
   // Small helpers shared by the functions below.
   const seller = config.seller;
   const mailOpts = { supportEmail: config.supportEmail, siteUrl: config.siteUrl };
@@ -186,7 +186,7 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
       if (creditPaise > 0) {
         // An invoice is issued because credit was used; the receipt e-mail explains what covered the price.
         const r = await db.payments.settle(pay, `credit_${id}`, plan.days, { invoice: invoiceFields });
-        if (r.applied) await promos.finaliseOrder(id).catch((e) => log.error('[billing] could not settle credit:', e?.message || e));
+        if (r.applied) await promos.finaliseOrder(id).catch((e) => log.error('[billing] could not settle credit:', e));
         if (r.applied && r.invoice) track(sendReceipt({ ...pay, creditAppliedPaise: creditPaise }, r.invoice));
       } else {
         const r = await db.payments.settle(pay, `coupon_${id}`, plan.days);
@@ -226,7 +226,7 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
     const plan = paidPlan(payment.planId);
     const r = await db.payments.settle(payment, providerPaymentId, plan.days, { invoice: invoiceFields });
     // The order is paid: the credit that was held for it is now spent for good.
-    if (r.applied && promos && payment.creditAppliedPaise > 0) { try { await promos.finaliseOrder(payment.id); } catch (e) { log.error('[billing] could not settle credit:', e?.message || e); } }
+    if (r.applied && promos && payment.creditAppliedPaise > 0) { try { await promos.finaliseOrder(payment.id); } catch (e) { log.error('[billing] could not settle credit:', e); } }
     if (r.applied && r.invoice && payment.userId) track(sendReceipt(payment, r.invoice));
     return r;
   }
@@ -246,7 +246,7 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
     if (!p || !p.userId || p.status !== 'created') return;
     if (!(await db.payments.claimFailedNotice(p.id))) return;
     const user = await db.users.byId(p.userId); if (!user) return;
-    const release = () => db.payments.releaseFailedNotice(p.id).catch((releaseError) => log.error('[billing] failed-notice claim release failed:', releaseError?.message || releaseError));
+    const release = () => db.payments.releaseFailedNotice(p.id).catch((releaseError) => log.error('[billing] failed-notice claim release failed:', releaseError));
     track(mailer.send({ to: user.email, ...mail.paymentFailedEmail({ ...mailOpts, name: user.name, planName: planName(p.planId), reason: String(entity.error_description || '').slice(0, 120), retryUrl: `${config.siteUrl}/#/plans` }) }).then(async (r) => {
       if (!r?.sent) await release();
     }).catch(async (e) => { await release(); throw e; }));
@@ -259,7 +259,7 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
     // A refund returns the buyer's money — the promotional credit they spent on the order comes back too.
     if (promos && payment.creditAppliedPaise > 0) {
       try { await promos.refundOrderCredit({ userId: payment.userId, paymentId: payment.id, amountPaise: payment.creditAppliedPaise, reason: 'Credit returned — order refunded' }); }
-      catch (e) { log.error('[billing] could not return credit after a refund:', e?.message || e); }
+      catch (e) { log.error('[billing] could not return credit after a refund:', e); }
     }
     const user = await db.users.byId(payment.userId); if (!user) return;
     const attachments = rec.creditNote ? [await pdf(rec.creditNote)] : [];
@@ -340,7 +340,7 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
     for (const s of await db.subscriptions.dueForReminder(config.reminderDays)) {
       if (!(await db.subscriptions.claimReminder(s.userId, s.expiresAt))) continue;
       sent++;
-      const release = () => db.subscriptions.releaseReminder(s.userId, s.expiresAt).catch((releaseError) => log.error('[billing] reminder claim release failed:', releaseError?.message || releaseError));
+      const release = () => db.subscriptions.releaseReminder(s.userId, s.expiresAt).catch((releaseError) => log.error('[billing] reminder claim release failed:', releaseError));
       track(mailer.send({ to: s.email, ...mail.expiringEmail({ ...mailOpts, name: s.name, planName: planName(s.planId), expiresAt: s.expiresAt, renewUrl: `${config.siteUrl}/#/plans` }) }).then(async (r) => {
         if (!r?.sent) await release();
       }).catch(async (e) => { await release(); throw e; }));

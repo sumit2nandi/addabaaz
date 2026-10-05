@@ -36,10 +36,10 @@ export function registerSupportRoutes(api, { db, userFromRequest, mailer, email,
   // Notifications are fire-and-forget: a mail failure must never fail the request that raised the ticket.
   const notify = (to, built, note) => {
     if (!to || !canMail() || !built) return;
-    mailer.send({ to, ...built }).catch((e) => log.warn?.(`[support] mail failed${e.code ? ` (${e.code})` : ''}: ${e.message} — ${note}`));
+    mailer.send({ to, ...built }).catch((e) => log.warn?.(`[support] mail failed${e.code ? ` (${e.code})` : ''} — ${note}:`, e));
   };
   // The signed-in user, or null for a guest — never throws (a bad/expired token simply means "guest").
-  const me = async (req) => (userFromRequest ? await userFromRequest(req).catch(() => null) : null);
+  const me = async (req) => (userFromRequest ? await userFromRequest(req).catch((e) => { log.warn?.('[support] could not resolve the optional viewer session:', e); return null; }) : null);
 
   /* ---------- raise a ticket ---------- */
   api.post('/support/tickets', ticketLimit, wrap(async (req, res) => {

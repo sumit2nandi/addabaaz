@@ -41,10 +41,10 @@ const page = (req, dflt = 25, max = 100) => ({ limit: Math.min(Math.max(Number(r
  */
 // Every route below runs after the authentication middleware, so `req.admin` is always set.
 // Write actions call `log(...)` so the audit log records who did what.
-export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2, payments, mailer, push = null, campaigns = null, unsubscribeUrlFor = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', sms = null, promos = null, maintenance = null, applicationMonitor = null, siteUrl = '', env = process.env }) {
+export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2, payments, mailer, push = null, campaigns = null, unsubscribeUrlFor = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', sms = null, promos = null, maintenance = null, applicationMonitor = null, siteUrl = '', logger = console, env = process.env }) {
   // The shared ADMIN_TOKEN (for scripts) only counts when it is long enough to be unguessable.
   const tokenOn = adminToken.length >= 24;
-  if (adminToken && !tokenOn) console.warn('[admin] ADMIN_TOKEN is shorter than 24 characters — the token is ignored (admin accounts still work).');
+  if (adminToken && !tokenOn) logger.warn('[admin] ADMIN_TOKEN is shorter than 24 characters — the token is ignored (admin accounts still work).');
   const router = express.Router();
 
   // Generous rate limit for the console (600 requests/min per IP).
@@ -65,7 +65,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     next();
   }));
   // Writes an entry to the audit log (who, what, which target, extra details, from which IP).
-  const log = (req, action, target = null, meta = null) => db.audit.add({ actorId: req.admin.id, actor: req.admin.email, action, target, meta, ip: req.ip }).catch((e) => console.error('[audit]', e.message));
+  const log = (req, action, target = null, meta = null) => db.audit.add({ actorId: req.admin.id, actor: req.admin.email, action, target, meta, ip: req.ip }).catch((e) => logger.error('[audit] audit record failed:', e));
   // The signed preview token contains only an opaque DB snapshot ID, so even a very large channel fits the API body limit.
   const signYoutubePreview = (payload) => {
     const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -367,7 +367,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     if (!youtubeFeed?.refresh) throw new HttpError(503, 'youtube_not_configured', 'Full-channel YouTube preview is not configured on this server.');
     let feed;
     try { feed = await youtubeFeed.refresh(); }
-    catch (e) { console.warn(`[youtube] manual full-channel preview failed: ${e?.message || 'upstream request failed'}`); throw new HttpError(503, 'youtube_unavailable', 'YouTube could not be reached or its upload list could not be fully scanned. No catalog changes were made. Please try again.'); }
+    catch (e) { throw new HttpError(503, 'youtube_unavailable', 'YouTube could not be reached or its upload list could not be fully scanned. No catalog changes were made. Please try again.', { cause: e }); }
     if (!feed?.configured) {
       const detail = feed?.reason === 'missing_api_key'
         ? 'Set YOUTUBE_API_KEY to a server-side YouTube Data API v3 key before previewing the full channel.'
@@ -528,7 +528,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     if (typeof r2.head !== 'function') return;
     let h;
     try { h = await r2.head(doc.source.key); }
-    catch (e) { throw new HttpError(502, 'r2_unreachable', `Could not reach Cloudflare R2 to verify “${doc.source.key}” (${e?.message || 'network error'}). Check R2_ACCOUNT_ID and R2_ENDPOINT.`); }
+    catch (e) { throw new HttpError(502, 'r2_unreachable', `Could not reach Cloudflare R2 to verify “${doc.source.key}” (${e?.message || 'network error'}). Check R2_ACCOUNT_ID and R2_ENDPOINT.`, { cause: e }); }
     if (h.status === 404) throw new HttpError(400, 'r2_object_missing', `The video file “${doc.source.key}” was not found in your R2 bucket${r2.bucket ? ` “${r2.bucket}”` : ''}. Click “Upload video” and wait for “Uploaded ✓”, or upload the file to R2 first.`);
     if (h.status === 403) throw new HttpError(502, 'r2_access_denied', `Cloudflare R2 rejected access to “${doc.source.key}”${r2.bucket ? ` in bucket “${r2.bucket}”` : ''} (HTTP 403). Check R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_BUCKET.`);
     if (h.status !== 200) throw new HttpError(502, 'r2_error', `Cloudflare R2 returned HTTP ${h.status} when checking “${doc.source.key}”.`);
@@ -608,7 +608,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   }));
 
   // More admin endpoints (analytics, comments moderation, refund requests, notifications, errors ...) live in admin-extra.js.
-  adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns, unsubscribeUrlFor, log, siteUrl: siteUrl || billing.config.siteUrl, sms });
+  adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns, unsubscribeUrlFor, log, logger, siteUrl: siteUrl || billing.config.siteUrl, sms });
   // Credit & referrals (Admin → Promotions). Without a promos collaborator the section is simply absent,
   // exactly like the other optional features — the console hides it when /admin/promos answers 404.
   if (promos) adminPromoRoutes({ router, db, promos, log });

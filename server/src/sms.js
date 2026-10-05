@@ -18,8 +18,9 @@ import crypto from 'node:crypto';
 
 /** Error for SMS-provider problems (503 unreachable, 502 provider rejected the request). */
 export class SmsError extends Error {
-  constructor(status, code, message) {
-    super(message);
+  constructor(status, code, message, options = {}) {
+    super(message, options);
+    this.name = new.target.name;
     this.status = status;
     this.code = code;
   }
@@ -114,8 +115,8 @@ export function createMsg91({ authKey, templateId, senderId = '', countryCode = 
           headers: { authkey: authKey, 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify({ otp: String(code) }),
         });
-      } catch {
-        throw new SmsError(503, 'sms_unavailable', 'We couldn’t send the code right now — please try again in a minute.');
+      } catch (cause) {
+        throw new SmsError(503, 'sms_unavailable', 'We couldn’t send the code right now — please try again in a minute.', { cause });
       }
       const body = await res.json().catch(() => ({}));
       // MSG91 answers HTTP 200 even for failures; `type` is the field that decides.

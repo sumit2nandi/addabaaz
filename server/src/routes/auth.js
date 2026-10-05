@@ -6,7 +6,7 @@ import { HttpError, bad, wrap } from '../http.js';
 import { normalizeEmail } from '../email-address.js';
 import { SocialError } from '../social-errors.js';
 
-export function registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled, sms = null, promos = null }) {
+export function registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled, sms = null, promos = null, logger = console }) {
   // Create an account with e-mail + password. A verification-mail failure must be visible to the user (the account is still created so they can sign in and retry).
   api.post('/auth/signup', authLimit, wrap(async (req, res) => {
     const { name = '', email = '', password = '', ref = '' } = req.body || {};      // `ref` = an inviter's code
@@ -34,7 +34,7 @@ export function registerAuthRoutes(api, { db, secret, social, features, mailer, 
       verificationEmailSent = mailer.provider === 'smtp';
     } catch (e) {
       // Keep the newly created account usable, but don't silently pretend its confirmation mail went out.
-      console.warn(`[auth] verification email failed${e.code ? ` (${e.code})` : ''}:`, e.message);
+      logger.warn(`[auth] verification email failed${e.code ? ` (${e.code})` : ''}:`, e);
     }
     // Promotions: the welcome bonus, and the referral bonus for both sides when a code came with the sign-up.
     // A promotion must never break an account creation, so `onSignup` swallows its own errors.
@@ -76,7 +76,7 @@ export function registerAuthRoutes(api, { db, secret, social, features, mailer, 
     if (!verifier) throw new HttpError(501, 'provider_not_configured', `${LABEL[provider]} sign-in isn’t enabled on this server.`);
     let claims;
     try { claims = await verifier(credential); }
-    catch (e) { if (e instanceof SocialError) throw new HttpError(e.code === 'provider_unavailable' ? 503 : 401, e.code, e.message); throw e; }
+    catch (e) { if (e instanceof SocialError) { const status = e.code === 'provider_unavailable' ? 503 : 401; throw new HttpError(status, e.code, e.message, status >= 500 ? { cause: e } : {}); } throw e; }
     const ident = { provider, subject: claims.subject, email: claims.email };
     let user = await db.identities.userFor(provider, claims.subject), isNew = false;
     // First time we see this social identity.
