@@ -11,6 +11,11 @@
 import { app } from './app.js';
 import { resolveNativeMessagingPlugin } from './native-messaging-plugin.js';
 
+const reportClientIssue = (error, where) => {
+  if (Number.isInteger(error?.status) && error.status > 0 && error.status < 500) return;
+  import('./errors.js').then(({ reportClientError }) => reportClientError(error, { where })).catch(() => {});
+};
+
 const TOKEN_KEY = 'ab.pushToken';
 const OWNER_KEY = 'ab.pushOwner';
 const OPT_OUT_KEY = 'ab.pushOptOut';
@@ -29,7 +34,10 @@ const setOptOut = (off) => { try { off ? localStorage.setItem(OPT_OUT_KEY, '1') 
 const stateChanged = () => { try { app.user?.emit?.('push'); } catch { /* UI refresh is best effort */ } };
 
 /** Calls a plugin method that may not exist in an older build (never throws). */
-const tryCall = async (P, method, ...args) => { try { return await P[method]?.(...args); } catch { return null; } };
+const tryCall = async (P, method, ...args) => {
+  try { return await P[method]?.(...args); }
+  catch (error) { reportClientIssue(error, `native-push-${method}`); return null; }
+};
 
 /** Requests permission if needed and returns the platform-independent FCM registration token. */
 async function fetchToken() {
@@ -92,6 +100,7 @@ export async function attachNativePush({ force = false } = {}) {
   } catch (e) {
     // If Android permission was revoked, stop sending to the old token too. Network errors keep the
     // last-known registration so a temporary outage does not silently unsubscribe the device.
+    if (e?.code !== 'notification_permission_denied') reportClientIssue(e, 'native-push-registration');
     if (e?.code === 'notification_permission_denied') {
       const previous = knownToken(), owner = knownOwner() || 'account';
       if (await removeRegisteredToken(previous, owner, u)) { rememberToken(''); rememberOwner(''); }
@@ -137,7 +146,7 @@ function listenForTokenRefresh(P) {
       return;
     }
     try { await registerToken(token, u); }
-    catch (e) { console.warn('[push] token refresh failed:', e?.message || e); }
+    catch (e) { console.warn('[push] token refresh failed:', e?.message || e); reportClientIssue(e, 'native-push-token-refresh'); }
   }); } catch { /* no listener support in this build */ }
 }
 

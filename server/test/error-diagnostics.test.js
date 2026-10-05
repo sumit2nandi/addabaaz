@@ -330,12 +330,14 @@ test('client error reports are linked to a verified session, never a browser-sup
   try {
     const response = await fetch(base, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-session' },
-      body: JSON.stringify({ message: 'Playback failure', errorName: 'MediaError', stack: 'diagnostic trace', url: '/watch/title?token=secret', details: { browser: 'test' }, userId: 'forged-user' }),
+      body: JSON.stringify({ message: 'Playback failure', errorName: 'MediaError', errorCode: 'UPSTREAM_DOWN', status: 503, stack: 'diagnostic trace', url: '/watch/title?token=secret', details: { browser: 'test' }, userId: 'forged-user' }),
     });
     assert.equal(response.status, 204);
     assert.equal(reports[0].userId, 'verified-user-17');
     assert.equal(reports[0].url, '/watch/title', 'the query string is still removed from saved URLs');
     assert.equal(reports[0].errorName, 'MediaError');
+    assert.equal(reports[0].code, 'UPSTREAM_DOWN');
+    assert.equal(reports[0].status, 503);
     assert.deepEqual(reports[0].details, { browser: 'test' });
 
     await fetch(base, {

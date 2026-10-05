@@ -1,6 +1,11 @@
 import { Emitter, storage, store } from '../util.js';
 import { CONFIG } from '../config.js';
 
+const reportClientIssue = (error, where) => {
+  if (Number.isInteger(error?.status) && error.status > 0 && error.status < 500) return Promise.resolve(false);
+  return import('../errors.js').then(({ reportClientError }) => reportClientError(error, { where })).catch(() => {});
+};
+
 const PALETTE = ['#b80000', '#f5c518', '#2f80ed', '#27ae60', '#9b51e0', '#eb5757', '#00b8a9', '#f2994a'];
 export const avatarColor = (i) => PALETTE[(i || 0) % PALETTE.length];
 export const AVATAR_COUNT = PALETTE.length;
@@ -35,7 +40,7 @@ export class User extends Emitter {
 
   // Load state at start-up: the signed-in account if there is one, otherwise the guest profile; then re-select the last used profile.
   async init() {
-    let s = this.remote ? await this.remote.init().catch(() => null) : null;
+    let s = this.remote ? await this.remote.init().catch((error) => { reportClientIssue(error, 'session-restore'); return null; }) : null;
     if (!s || !s.account) s = await this.local.init();
     this.account = s.account; this.profiles = s.profiles; this.subscription = s.subscription || this.subscription;
     const saved = storage('ab.activeProfile', null);
@@ -128,7 +133,7 @@ export class User extends Emitter {
       for (const it of lib.list || []) await this.adapter.addToList(this.activeId, it.type, it.id);
       for (const [id, p] of Object.entries(lib.progress || {})) await this.adapter.saveProgress(this.activeId, id, p.position, p.duration);
       this.lib = await this.adapter.loadLibrary(this.activeId); this.emit('library');
-    } catch (e) { console.warn('[user] migrate failed', e); }
+    } catch (e) { console.warn('[user] migrate failed', e); reportClientIssue(e, 'guest-data-migration'); }
   }
 
   /* ---------- profiles ---------- */
@@ -136,8 +141,8 @@ export class User extends Emitter {
   async selectProfile(id, { silent = false } = {}) {
     this.activeId = id; store('ab.activeProfile', id); sessionStorage.setItem('ab.profileChosen', '1');
     this.lib = { list: [], progress: {}, reminders: [] }; this.ratings = {};
-    try { this.lib = await this.adapter.loadLibrary(id); } catch (e) { console.warn('[user] library load failed', e); }
-    if (this.account && this.remote) this.ratings = await this.remote.myRatings(id).catch(() => ({}));
+    try { this.lib = await this.adapter.loadLibrary(id); } catch (e) { console.warn('[user] library load failed', e); reportClientIssue(e, 'library-load'); }
+    if (this.account && this.remote) this.ratings = await this.remote.myRatings(id).catch((error) => { reportClientIssue(error, 'ratings-load'); return {}; });
     if (!silent) { this.emit('profile'); this.emit('library'); }
   }
   async createProfile({ name, color, kids = false }) {
@@ -199,7 +204,8 @@ export class User extends Emitter {
     const has = this.inList(type, id);
     this.lib.list = has ? this.lib.list.filter((x) => !(x.type === type && x.id === id)) : [...this.lib.list, { type, id, addedAt: new Date().toISOString() }];
     this.#persistLib(); this.emit('library');
-    try { await (has ? this.adapter.removeFromList(this.activeId, type, id) : this.adapter.addToList(this.activeId, type, id)); } catch (e) { console.warn(e); }
+    try { await (has ? this.adapter.removeFromList(this.activeId, type, id) : this.adapter.addToList(this.activeId, type, id)); }
+    catch (e) { console.warn('[user] My List sync failed:', e); reportClientIssue(e, 'my-list-sync'); }
     return !has;
   }
 
@@ -210,7 +216,8 @@ export class User extends Emitter {
     const on = !this.hasReminder(id);
     this.lib.reminders = on ? [...this.lib.reminders, id] : this.lib.reminders.filter((x) => x !== id);
     this.#persistLib(); this.emit('library');
-    try { await this.adapter.setReminder(this.activeId, id, on); } catch (e) { console.warn(e); }
+    try { await this.adapter.setReminder(this.activeId, id, on); }
+    catch (e) { console.warn('[user] reminder sync failed:', e); reportClientIssue(e, 'reminder-sync'); }
     return on;
   }
 
@@ -233,12 +240,15 @@ export class User extends Emitter {
     this.lib.progress[videoId] = { position: pos, duration: dur, updatedAt: new Date().toISOString() };
     this.#persistLib();
     clearTimeout(this.#progressTimers.get(videoId));
-    const send = () => { this.#progressTimers.delete(videoId); this.adapter.saveProgress(this.activeId, videoId, pos, dur).catch(() => {}); };
+    const send = () => {
+      this.#progressTimers.delete(videoId);
+      this.adapter.saveProgress(this.activeId, videoId, pos, dur).catch((error) => reportClientIssue(error, 'watch-progress-sync'));
+    };
     if (flush) send(); else this.#progressTimers.set(videoId, setTimeout(send, 4000));
   }
   clearProgress(videoId) {
     delete this.lib.progress[videoId]; this.#persistLib(); this.emit('library');
-    if (this.activeId) this.adapter.clearProgress(this.activeId, videoId).catch(() => {});
+    if (this.activeId) this.adapter.clearProgress(this.activeId, videoId).catch((error) => reportClientIssue(error, 'watch-progress-clear'));
   }
   /** Videos partially watched (plus short videos recently played), newest first. Signed-in accounts only — guests have no history. */
   continueWatching(catalog) {

@@ -179,6 +179,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         clientError.name = typeof b.errorName === 'string' ? b.errorName.replace(/[^\w.$-]/g, '').slice(0, 128) || 'Error' : 'Error';
         if (typeof b.stack === 'string' && b.stack) clientError.stack = b.stack.slice(0, 12_000);
         if (typeof b.errorCode === 'string') clientError.code = b.errorCode.slice(0, 128);
+        if (Number.isInteger(b.status) && b.status >= 100 && b.status <= 599) clientError.status = b.status;
         if (reportError) {
           await reportError(clientError, {
             source: 'client', severity: 'error', kind: 'browser-error', requestId: req.requestId, method: req.method,
@@ -187,7 +188,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
           });
         } else {
           await db.errors.add({
-            source: 'client', message: clientError.message, errorName: clientError.name, code: clientError.code || null,
+            source: 'client', message: clientError.message, errorName: clientError.name, code: clientError.code || null, status: clientError.status || null,
             stack: clientError.stack, requestId: req.requestId || null, method: req.method, url: safeErrorUrl(b.url),
             userAgent: req.get('user-agent'), userId: user?.id || null, details: b.details || null,
           });
