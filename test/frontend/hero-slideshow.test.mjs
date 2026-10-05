@@ -186,6 +186,8 @@ test('the hero CSS keeps the swipe working and carries no player styling', async
     assert.ok(root.querySelector('.hero'), 'the hero rendered');
     const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
     assert.match(css, /\.hero \{ touch-action: pan-y; \}/, 'touch-action lets touch WebViews deliver the swipe');
+    assert.match(css, /\.hero-shade \{ background: linear-gradient\(0deg, var\(--bg\) 0%, rgba\(5,5,5,\.94\) 12%, rgba\(5,5,5,\.72\) 26%, rgba\(5,5,5,\.2\) 38%, transparent 48%\); \}/,
+      'on phones, the featured-banner scrim starts around the lower text area and leaves the upper artwork clear');
     assert.doesNotMatch(css, /\.hero-video|\.hero-sound/, 'the banner player styling is gone');
     assert.match(css, /\.hero-bg img \{[^}]*object-fit: cover/, 'the banner image fills the banner');
     assert.match(css, /\.hero-banner-link \.hero-bg \{ z-index: 0; \}/, 'the banner link remains the clickable image layer');

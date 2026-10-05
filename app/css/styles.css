@@ -540,12 +540,11 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 }
 @media (max-width: 759px) {
   .hero-bg img { object-position: center 15%; }
-  .hero-shade { background: linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.88) 30%, rgba(5,5,5,.35) 58%, rgba(5,5,5,0) 78%), linear-gradient(180deg, rgba(5,5,5,.75), rgba(5,5,5,0) 20%); }
+  /* On phones, keep hero artwork clear until the lower copy/action area. */
+  .hero-shade { background: linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.94) 12%, rgba(5,5,5,.72) 26%, rgba(5,5,5,.2) 38%, transparent 48%); }
   .detail-hero { min-height: 74vh; min-height: 74svh; }
   .detail-hero .hero-inner { padding-bottom: 12px; }
   .page-tight.show-details-page { padding-top: 0; }
-  /* Keep poster artwork clear above the copy; begin the dark scrim only around the text/action area. */
-  .detail-hero .hero-shade { background: linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.94) 12%, rgba(5,5,5,.72) 26%, rgba(5,5,5,.2) 38%, transparent 48%); }
   .detail-hero .hero-copy { width: 100%; min-width: 0; }
   .detail-hero .hero-actions { gap: 8px; flex-wrap: nowrap; }
   .detail-hero .hero-actions > .btn-lg { flex: 0 1 auto; min-width: 0; padding: 10px 12px; font-size: 14px; }
