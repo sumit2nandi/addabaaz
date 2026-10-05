@@ -192,7 +192,7 @@ test('app push uses FCM with the service-account env, and dead tokens are cleane
   assert.match(fcm, /UNREGISTERED\|NOT_FOUND\|INVALID_ARGUMENT/, 'unregistered tokens are detected');
   assert.match(read('server/src/push.js'), /nativeConfigured/, 'push.notify reports/uses the native channel');
   assert.match(read('server/src/push.js'), /db\.devices\.removeHash\(endpointHash\(token\)\)/, 'dead tokens are deleted');
-  assert.match(app, /fcmFromEnv\(\)/, 'the server builds the FCM service from the environment');
+  assert.match(app, /fcmFromEnv\(process\.env, \{ log: logger \}\)/, 'the server builds the FCM service from the environment and shares the diagnostic logger');
   assert.match(adminServer, /item\('apppush', 'App push'/, 'the dashboard checklist reports app push');
 });
 

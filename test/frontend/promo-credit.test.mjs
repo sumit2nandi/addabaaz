@@ -94,7 +94,7 @@ test('Admin → Promotions runs the offer, the ledger and the referral list', ()
   assert.match(adminPromos, /Credit expires after \(days, 0 = never\)/, 'the expiry is editable, not hard-coded');
   const admin = read('server/src/admin.js');
   assert.match(admin, /if \(promos\) adminPromoRoutes\(\{ router, db, promos, log \}\)/, 'the API is mounted only when promotions exist');
-  assert.match(read('server/src/app.js'), /registerPromoRoutes\(api, \{ db, promos, userFromRequest, rate \}\)/, 'the viewer routes are public-safe');
+  assert.match(read('server/src/app.js'), /registerPromoRoutes\(api, \{ db, promos, userFromRequest, rate, logger \}\)/, 'the viewer routes are mounted with the shared logger and remain public-safe');
 });
 
 test('promotions are cleaned up by the background job and never break an unconfigured server', () => {
