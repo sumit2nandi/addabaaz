@@ -470,7 +470,132 @@ export function adminDb({ q, tx, self, iso }) {
   // TABLE_ROWS / DATA_LENGTH / INDEX_LENGTH are MySQL's table statistics. For InnoDB they are estimates,
   // so this deliberately reports schema storage as an estimated footprint rather than claiming to measure
   // the MySQL process's RAM. The buffer-pool and server counters below are instance-wide, not per schema.
+  const MONITOR_RETENTION_KEY = 'database_monitor_retention_days';
+  const MONITOR_RETENTION_DAYS = [1, 3, 7, 14, 30];
+  const numberOrNull = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const valueNumber = Number(value);
+    return Number.isFinite(valueNumber) && valueNumber >= 0 ? valueNumber : null;
+  };
+  const wholeOrNull = (value) => {
+    const n = numberOrNull(value);
+    return n === null ? null : Math.trunc(n);
+  };
+  const counterDelta = (current, previous) => {
+    const now = wholeOrNull(current), before = wholeOrNull(previous);
+    // A counter that reset after a MySQL restart starts a new series at its current value.
+    return now === null || before === null ? null : now >= before ? now - before : now;
+  };
+  const pruneMonitorHistory = async (days) => {
+    await q('DELETE FROM database_monitor_samples WHERE sampled_at < UTC_TIMESTAMP(3) - INTERVAL ? DAY', [days]);
+  };
+  const getRetentionDays = async () => {
+    const configured = Number(await self.settings.get(MONITOR_RETENTION_KEY, '7'));
+    return MONITOR_RETENTION_DAYS.includes(configured) ? configured : 7;
+  };
+
   const monitoring = {
+    async retentionDays() { return getRetentionDays(); },
+    async setRetentionDays(days) {
+      const value = Number(days);
+      if (!MONITOR_RETENTION_DAYS.includes(value)) throw new TypeError('Unsupported database-monitor history retention.');
+      await self.settings.set(MONITOR_RETENTION_KEY, value);
+      await pruneMonitorHistory(value);
+      return value;
+    },
+    /** Save one minute bucket. The primary key makes collection safe across multiple app instances. */
+    async record(snapshot) {
+      const sampledMs = Date.parse(snapshot?.sampledAt || '');
+      if (!Number.isFinite(sampledMs)) throw new TypeError('A valid sampledAt timestamp is required to store a database-monitor sample.');
+      const sampledAt = new Date(Math.floor(sampledMs / 60_000) * 60_000);
+      const previous = (await q(`SELECT sampled_at, queries_since_restart, slow_queries_since_restart, disk_tmp_tables_since_restart
+        FROM database_monitor_samples WHERE sampled_at < ? ORDER BY sampled_at DESC LIMIT 1`, [sampledAt]))[0] || null;
+      const instance = snapshot.instance || {};
+      const storage = snapshot.storage || {};
+      const connections = instance.connections || {};
+      const activity = instance.activity || {};
+      const pool = instance.bufferPool || {};
+      const estimatedRows = Number(storage.rowEstimateTables) > 0 ? wholeOrNull(storage.estimatedRows) : null;
+      const intervalSeconds = previous
+        ? Math.max(1, Math.round((sampledAt.getTime() - new Date(previous.sampled_at).getTime()) / 1000))
+        : 0;
+      const values = [
+        sampledAt,
+        wholeOrNull(storage.totalBytes) ?? 0,
+        wholeOrNull(storage.dataBytes) ?? 0,
+        wholeOrNull(storage.indexBytes) ?? 0,
+        estimatedRows,
+        wholeOrNull(storage.tableCount) ?? 0,
+        wholeOrNull(pool.capacityBytes),
+        wholeOrNull(pool.usedBytes),
+        numberOrNull(pool.hitRatePct),
+        wholeOrNull(connections.connected),
+        wholeOrNull(connections.running),
+        wholeOrNull(connections.max),
+        wholeOrNull(activity.queriesSinceStart),
+        wholeOrNull(activity.slowQueries),
+        wholeOrNull(activity.diskTemporaryTables),
+        counterDelta(activity.queriesSinceStart, previous?.queries_since_restart),
+        counterDelta(activity.slowQueries, previous?.slow_queries_since_restart),
+        counterDelta(activity.diskTemporaryTables, previous?.disk_tmp_tables_since_restart),
+        intervalSeconds,
+      ];
+      const result = await q(`INSERT IGNORE INTO database_monitor_samples (
+        sampled_at, total_storage_bytes, data_bytes, index_bytes, estimated_rows, table_count,
+        buffer_pool_capacity_bytes, buffer_pool_used_bytes, buffer_pool_hit_rate_pct,
+        connections_current, connections_running, connections_max,
+        queries_since_restart, slow_queries_since_restart, disk_tmp_tables_since_restart,
+        queries_delta, slow_queries_delta, disk_tmp_tables_delta, sample_interval_seconds
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, values);
+      return Number(result?.affectedRows || 0) === 1;
+    },
+    /** Return a compact, time-bucketed series suitable for an admin chart (at most about 600 points). */
+    async history({ since, bucketSeconds = 60 } = {}) {
+      const bucket = Math.max(60, Math.min(2_592_000, Math.ceil(Number(bucketSeconds) / 60) * 60 || 60));
+      const rows = await q(`SELECT FLOOR(UNIX_TIMESTAMP(sampled_at) / ?) * ? AS bucket_epoch,
+          AVG(total_storage_bytes) AS total_storage_bytes,
+          AVG(data_bytes) AS data_bytes,
+          AVG(index_bytes) AS index_bytes,
+          AVG(estimated_rows) AS estimated_rows,
+          AVG(buffer_pool_capacity_bytes) AS buffer_pool_capacity_bytes,
+          AVG(buffer_pool_used_bytes) AS buffer_pool_used_bytes,
+          AVG(buffer_pool_hit_rate_pct) AS buffer_pool_hit_rate_pct,
+          AVG(connections_current) AS connections_current,
+          AVG(connections_running) AS connections_running,
+          AVG(connections_max) AS connections_max,
+          CASE WHEN SUM(CASE WHEN queries_delta IS NOT NULL THEN sample_interval_seconds ELSE 0 END) > 0
+            THEN SUM(queries_delta) * 60 / SUM(CASE WHEN queries_delta IS NOT NULL THEN sample_interval_seconds ELSE 0 END) ELSE NULL END AS queries_per_minute,
+          CASE WHEN SUM(CASE WHEN slow_queries_delta IS NOT NULL THEN sample_interval_seconds ELSE 0 END) > 0
+            THEN SUM(slow_queries_delta) * 60 / SUM(CASE WHEN slow_queries_delta IS NOT NULL THEN sample_interval_seconds ELSE 0 END) ELSE NULL END AS slow_queries_per_minute,
+          CASE WHEN SUM(CASE WHEN disk_tmp_tables_delta IS NOT NULL THEN sample_interval_seconds ELSE 0 END) > 0
+            THEN SUM(disk_tmp_tables_delta) * 60 / SUM(CASE WHEN disk_tmp_tables_delta IS NOT NULL THEN sample_interval_seconds ELSE 0 END) ELSE NULL END AS disk_tmp_tables_per_minute
+        FROM database_monitor_samples
+        WHERE sampled_at >= ? AND sampled_at <= UTC_TIMESTAMP(3)
+        GROUP BY bucket_epoch ORDER BY bucket_epoch`, [bucket, bucket, since, bucket]);
+      const value = (row, key) => numberOrNull(row[key]);
+      return rows.map((row) => ({
+        at: new Date(Number(row.bucket_epoch) * 1000).toISOString(),
+        totalStorageBytes: value(row, 'total_storage_bytes'),
+        dataBytes: value(row, 'data_bytes'),
+        indexBytes: value(row, 'index_bytes'),
+        estimatedRows: value(row, 'estimated_rows'),
+        bufferPoolCapacityBytes: value(row, 'buffer_pool_capacity_bytes'),
+        bufferPoolUsedBytes: value(row, 'buffer_pool_used_bytes'),
+        bufferPoolHitRatePct: value(row, 'buffer_pool_hit_rate_pct'),
+        connectionsCurrent: value(row, 'connections_current'),
+        connectionsRunning: value(row, 'connections_running'),
+        connectionsMax: value(row, 'connections_max'),
+        queriesPerMinute: value(row, 'queries_per_minute'),
+        slowQueriesPerMinute: value(row, 'slow_queries_per_minute'),
+        diskTempTablesPerMinute: value(row, 'disk_tmp_tables_per_minute'),
+      }));
+    },
+    async collect() {
+      const snapshot = await this.snapshot();
+      const stored = await this.record(snapshot);
+      await pruneMonitorHistory(await getRetentionDays());
+      return { sampledAt: snapshot.sampledAt, stored };
+    },
     async snapshot() {
       const [metaRows, tableRows, statusRows, variableRows] = await Promise.all([
         q('SELECT DATABASE() AS schema_name, VERSION() AS server_version'),

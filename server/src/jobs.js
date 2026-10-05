@@ -6,6 +6,12 @@
 // Returns counts of notifications sent.
 export async function runScheduledJobs({ db, catalog, push, campaigns = null, promos = null, log = console }) {
   const out = { episodes: 0, launches: 0 };
+  // Save one low-cardinality database sample every minute for Admin → System → Database history.
+  // Keep it independent of notification/cleanup failures so a bad job does not leave gaps in the charts.
+  if (db.monitoring?.collect) {
+    try { await db.monitoring.collect(); }
+    catch (e) { log.error?.(`[jobs] database monitor: ${e.message}`); }
+  }
   try {
     const snap = await catalog.get();   // the public snapshot: scheduled items appear once due
     // Send scheduled push notifications (new episodes, launches) if push is configured.

@@ -16,6 +16,8 @@ import { suggestYouTubeKind } from './youtube-feed.js';
 import { smsHealthCheck } from './sms.js';
 
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+const DATABASE_MONITOR_RETENTION_DAYS = [1, 3, 7, 14, 30];
+const DATABASE_MONITOR_RANGES = { '1h': 3_600, '6h': 21_600, '24h': 86_400, '3d': 259_200, '7d': 604_800, '14d': 1_209_600, '30d': 2_592_000 };
 // UTC half-open bounds for the current calendar day in Asia/Kolkata (MySQL timestamps are stored in UTC).
 const istDayBounds = (now = new Date()) => {
   const ist = new Date(now.getTime() + 330 * 60_000);
@@ -89,11 +91,36 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   /* ---------- dashboard & setup checklist ---------- */
   // Dashboard numbers (users, subscribers, revenue, signups).
   router.get('/stats', wrap(async (_req, res) => res.json(await db.stats.overview())));
-  // Database storage and MySQL instance diagnostics. The latter are clearly marked as server-wide by the page.
-  router.get('/database/monitor', wrap(async (_req, res) => {
-    if (!db.monitoring?.snapshot) throw new HttpError(503, 'database_monitor_unavailable', 'Database monitoring is not available on this server.');
+  // Current database metrics plus a compact historical series for the Grafana-like charts.
+  router.get('/database/monitor', wrap(async (req, res) => {
+    if (!db.monitoring?.snapshot || !db.monitoring?.history || !db.monitoring?.retentionDays) {
+      throw new HttpError(503, 'database_monitor_unavailable', 'Database monitoring is not available on this server.');
+    }
+    const [snapshot, retentionDays] = await Promise.all([db.monitoring.snapshot(), db.monitoring.retentionDays()]);
+    const maxSeconds = retentionDays * 86_400;
+    const requestedValue = typeof req.query.range === 'string' ? req.query.range : '';
+    const requested = Object.hasOwn(DATABASE_MONITOR_RANGES, requestedValue) ? requestedValue : '7d';
+    let range = requested;
+    if (DATABASE_MONITOR_RANGES[range] > maxSeconds) {
+      range = Object.keys(DATABASE_MONITOR_RANGES).filter((key) => DATABASE_MONITOR_RANGES[key] <= maxSeconds).at(-1) || '1h';
+    }
+    const rangeSeconds = Math.min(DATABASE_MONITOR_RANGES[range], maxSeconds);
+    const since = new Date(Date.now() - rangeSeconds * 1000);
+    // Downsample longer ranges in MySQL, keeping responses to roughly 600 chart points.
+    const bucketSeconds = Math.max(60, Math.ceil(rangeSeconds / 600 / 60) * 60);
+    const history = await db.monitoring.history({ since, bucketSeconds });
     res.set('Cache-Control', 'private, no-store');
-    res.json(await db.monitoring.snapshot());
+    res.json({ ...snapshot, history, range, rangeSeconds, retentionDays, sampleIntervalSeconds: 60 });
+  }));
+  // Retention is persisted in app_settings; reducing it also removes samples outside the newly selected window.
+  router.patch('/database/monitor/settings', wrap(async (req, res) => {
+    if (!db.monitoring?.setRetentionDays) throw new HttpError(503, 'database_monitor_unavailable', 'Database monitoring settings are not available on this server.');
+    const days = Number(req.body?.retentionDays);
+    if (!DATABASE_MONITOR_RETENTION_DAYS.includes(days)) throw bad('Choose a supported history retention period.');
+    await db.monitoring.setRetentionDays(days);
+    await log(req, 'database_monitor.retention_updated', null, { retentionDays: days });
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ retentionDays: days });
   }));
   // Setup checklist: reports which optional services (payments, mail, R2, social logins ...) are configured. Never reveals secret values.
   router.get('/health', wrap(async (_req, res) => {

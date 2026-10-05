@@ -504,3 +504,54 @@ main#main { overflow-x: clip; }
   .db-facts { gap: 9px; }
 }
 .db-tables td:first-child > small { display: block; margin-top: 3px; font-size: 10.5px; }
+
+/* Historical database-monitor charts and their time/retention controls. */
+.db-monitor-toolbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 14px; padding: 14px 16px; margin-bottom: 18px; }
+.db-monitor-control { display: grid; gap: 5px; min-width: 0; }
+.db-monitor-control > span { color: var(--text-2); font-size: 12px; font-weight: 650; }
+.db-monitor-control select { width: 100%; min-width: 0; }
+.db-monitor-control small { line-height: 1.35; }
+.db-history-section { margin: 24px 0 20px; }
+.db-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.db-section-heading h2 { font-size: 18px; }
+.db-section-heading p { margin: 4px 0 0; }
+.db-section-heading .badge { white-space: nowrap; }
+.db-chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.db-chart-card { min-width: 0; overflow: hidden; margin: 0; padding: 14px 14px 12px; }
+.db-chart-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-height: 38px; }
+.db-chart-head h3 { color: var(--text); font-size: 14px; }
+.db-chart-head p { margin: 4px 0 0; line-height: 1.35; }
+.db-chart-unit { flex: none; border: 1px solid var(--border); border-radius: 99px; padding: 3px 7px; color: var(--muted); font-size: 10px; white-space: nowrap; }
+.db-chart-svg { display: block; width: 100%; height: auto; margin: 8px 0 0; overflow: visible; }
+.db-chart-gridline { stroke: rgba(255,255,255,.085); stroke-width: 1; stroke-dasharray: 3 5; vector-effect: non-scaling-stroke; }
+.db-chart-axis, .db-chart-x-tick { stroke: rgba(255,255,255,.2); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.db-chart-y-label, .db-chart-x-label { fill: var(--muted); font: 11px var(--font); font-variant-numeric: tabular-nums; }
+.db-chart-line { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.db-chart-point { stroke-width: 2; vector-effect: non-scaling-stroke; }
+.db-chart-line.blue, .db-chart-swatch.blue, .db-chart-point.blue { stroke: var(--info); background: var(--info); }
+.db-chart-point.blue, .db-chart-point.gold, .db-chart-point.green, .db-chart-point.red, .db-chart-point.purple { fill: var(--panel); }
+.db-chart-line.gold, .db-chart-swatch.gold, .db-chart-point.gold { stroke: var(--gold); background: var(--gold); }
+.db-chart-line.green, .db-chart-swatch.green, .db-chart-point.green { stroke: var(--ok); background: var(--ok); }
+.db-chart-line.red, .db-chart-swatch.red, .db-chart-point.red { stroke: var(--danger); background: var(--danger); }
+.db-chart-line.purple, .db-chart-swatch.purple, .db-chart-point.purple { stroke: #b185ff; background: #b185ff; }
+.db-chart-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 7px 10px; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
+.db-chart-legend-item { display: grid; grid-template-columns: 15px minmax(0, 1fr) auto; align-items: center; gap: 6px; min-width: 0; color: var(--text-2); font-size: 11px; }
+.db-chart-swatch { display: block; width: 14px; height: 3px; border-radius: 99px; }
+.db-chart-legend-item > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-chart-legend-item strong { color: var(--text); font-size: 10.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.db-chart-empty { display: grid; place-items: center; min-height: 190px; margin-top: 8px; border: 1px dashed var(--border-2); border-radius: var(--r-sm); color: var(--muted); font-size: 12px; text-align: center; }
+.db-history-empty { display: flex; align-items: flex-start; gap: 12px; margin: 0; }
+.db-history-empty h3 { color: var(--text); }
+.db-history-empty p { margin: 5px 0 0; }
+.db-history-empty-icon { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: var(--r-sm); color: var(--info); background: rgba(90,169,255,.1); }
+@media (max-width: 850px) {
+  .db-chart-grid { grid-template-columns: minmax(0, 1fr); }
+  .db-monitor-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 540px) {
+  .db-monitor-toolbar { grid-template-columns: minmax(0, 1fr); gap: 11px; }
+  .db-section-heading { align-items: flex-start; }
+  .db-section-heading .badge { font-size: 10px; }
+  .db-chart-head { gap: 6px; }
+  .db-chart-unit { max-width: 46%; overflow: hidden; text-overflow: ellipsis; }
+}
