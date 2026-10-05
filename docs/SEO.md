@@ -21,7 +21,7 @@ What is built, what you must do after deploying, and what is *not* in our contro
 |---|---|
 | Home | `WebSite` + `SearchAction` (sitelinks search box), `Organization` |
 | Show | `TVSeries` (`CreativeWorkSeries` for stand-up/podcast), trailer `VideoObject`, `BreadcrumbList` |
-| Watch | `VideoObject` (upload date, ISO-8601 duration, YouTube `embedUrl`, thumbnail, free/premium), `BreadcrumbList` |
+| Watch | `VideoObject` (upload date, YouTube `embedUrl`, thumbnail, free/premium; no content duration), `BreadcrumbList` |
 | Lists (shows, upcoming) | `CollectionPage` + `ItemList` |
 | Plans | `Product` with `Offer`s in INR |
 | About / Contact | `AboutPage` / `ContactPage`, `Organization` (address, phone, email, social profiles from the studio profile) |

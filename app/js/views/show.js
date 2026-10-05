@@ -1,7 +1,7 @@
 // Show page (#/show/:id): banner, action buttons, episode list, extras (trailers/clips), cast and related shows.
 import { app } from '../app.js';
 import { go } from '../router.js';
-import { html, $, fmtDuration, fmtDate, timeAgo, fmtRuntime } from '../util.js';
+import { html, $, fmtDate, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { rail, enhanceRails, showCard, videoCard, reelCard, listBtn, img, heroBg, showMeta, premiumMark, toast, fitPoster } from '../ui/components.js';
 import { openArtwork, tapArtwork } from '../ui/lightbox.js';
@@ -16,7 +16,7 @@ export function epRow(v, { current = false } = {}) {
     <span class="ep-num">${v.episode || '•'}</span>
     <span class="ep-thumb">${img(cat.thumb(v), '')}${cat.isPremium(v) ? premiumMark({ cls: 'premium-mark-compact' }) : ''}${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}<span class="play-overlay">${icon('play', { size: 18 })}</span></span>
     <span class="ep-info"><span class="ep-title">${cat.displayTitle(v)}</span>
-      <span class="ep-meta">${fmtDuration(v.duration)} · ${fmtDate(v.publishedAt)} ${frac >= 0.94 ? html`<em class="watched">${icon('check', { size: 12 })} Watched</em>` : ''}</span></span>
+      <span class="ep-meta">${fmtDate(v.publishedAt)} ${frac >= 0.94 ? html`<em class="watched">${icon('check', { size: 12 })} Watched</em>` : ''}</span></span>
   </a>`;
 }
 
@@ -29,7 +29,6 @@ export default async function showView(ctx) {
   const t = u.resumeTarget(cat, s.id);
   const label = !t ? 'Play' : t.resume ? `Resume ${cat.label(t.video)}` : t.continued ? `Continue ${cat.label(t.video)}` : `Play ${cat.label(t.video)}`;
   const trailer = extras.find((v) => v.kind === 'trailer');
-  const totalRun = eps.reduce((n, e) => n + e.duration, 0);
   ctx.setTitle(s.titleEn || s.title);
 
   ctx.root.innerHTML = html`
@@ -58,7 +57,6 @@ export default async function showView(ctx) {
       <dl class="facts show-facts-below">
         ${s.cast?.length ? html`<div><dt>Featuring</dt><dd>${s.cast.join(', ')}</dd></div>` : ''}
         <div><dt>Genres</dt><dd>${(s.genres || []).join(', ')}</dd></div>
-        ${eps.length ? html`<div><dt>Runtime</dt><dd>${eps.length} episodes · ${fmtRuntime(totalRun)}</dd></div>` : ''}
         ${latest ? html`<div><dt>Latest</dt><dd>${fmtDate(latest.publishedAt)} (${timeAgo(latest.publishedAt)})</dd></div>` : ''}
       </dl>
       ${s.tagline ? html`<p class="show-tagline-below">${s.tagline}</p>` : ''}

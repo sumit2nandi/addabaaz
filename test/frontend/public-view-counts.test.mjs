@@ -1,5 +1,5 @@
-// Public cards, show/watch metadata and search structured data must not reveal view counts.
-// Popularity ordering may still consume catalog views internally; Admin retains the counts.
+// Public cards, show/watch metadata and search structured data must not reveal private metrics or content runtimes.
+// Popularity ordering and playback progress may still consume catalog views/durations internally; Admin retains them.
 // Run: node --test test/frontend/public-view-counts.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -21,6 +21,14 @@ test('a rendered public video card omits its catalog view count', async () => {
   const meta = root.querySelector('.card-meta');
   assert.ok(meta);
   assert.doesNotMatch(meta.textContent, /views?|123,456/i);
+  assert.equal(root.querySelector('.chip-dur'), null, 'video cards no longer display content runtime badges');
+  assert.doesNotMatch(root.textContent, /\b1:00\b/);
+
+  const { reelCard } = await import('../../app/js/ui/components.js');
+  const reel = { ...video, id: 'reel-1', kind: 'reel', title: 'Short reel', duration: 90 };
+  root.innerHTML = reelCard(reel).s;
+  assert.equal(root.querySelector('.chip-dur'), null, 'reel cards do not show runtime badges');
+  assert.doesNotMatch(root.textContent, /\b1:30\b/);
 });
 
 test('show episode rows omit their catalog view count too', async () => {
@@ -28,12 +36,14 @@ test('show episode rows omit their catalog view count too', async () => {
   const { epRow } = await import('../../app/js/views/show.js');
   const root = document.createElement('div'); root.innerHTML = epRow(app.catalog.video('video-1')).s;
   assert.doesNotMatch(root.textContent, /views?|123,456/i);
+  assert.doesNotMatch(root.textContent, /\b1:00\b/, 'episode rows retain publication dates but omit runtime');
 });
 
-test('public card, show and watch renderers no longer format or label view counts', () => {
+test('public card, show and watch renderers never display content durations or catalog view counts', () => {
   for (const file of ['app/js/ui/components.js', 'app/js/views/show.js', 'app/js/views/watch.js']) {
     const source = read(file);
     assert.doesNotMatch(source, /fmtViews|\bviews\s*\$\{/i, `${file} must not render a view count`);
+    assert.doesNotMatch(source, /fmtDuration|fmtRuntime|chip-dur|<dt>Runtime<\/dt>/, `${file} must not render a content duration`);
   }
 });
 
@@ -46,4 +56,5 @@ test('public video structured data does not publish a view interaction statistic
   const videoObject = jsonld.find((item) => item['@type'] === 'VideoObject');
   assert.ok(videoObject);
   assert.equal(videoObject.interactionStatistic, undefined);
+  assert.equal(videoObject.duration, undefined, 'public structured data does not disclose content runtime');
 });

@@ -8,7 +8,7 @@ import { createDb } from '../src/db.js';
 import { migrate } from '../src/migrate.js';
 import { dbConfigFromEnv } from '../src/config.js';
 import { Catalog } from '../../app/js/data/catalog.js';
-import { pageMeta, isoDuration, clip, videoIndexable } from '../../app/js/seo/meta.js';
+import { pageMeta, clip, videoIndexable } from '../../app/js/seo/meta.js';
 import { matchRoute } from '../../app/js/routes.js';
 
 // Database for the tests: TEST_DATABASE_URL or a local MySQL. Each file creates its own throw-away database (unique name) and drops it at the end, so tests never touch real data.
@@ -81,10 +81,9 @@ test('pageMeta: JSON-LD for home, show, watch, listings', () => {
   const show = meta('/show/shahid').jsonld; const tv = show.find((n) => n['@type'] === 'TVSeries'); assert.equal(tv.alternateName, 'Shahid'); assert.equal(tv.url, `${SITE}/show/shahid`);
   assert.equal(show.find((n) => n['@type'] === 'BreadcrumbList').itemListElement.length, 3);
   const ep = cat.episodes('shahid')[0]; const v = meta(`/watch/${ep.id}`).jsonld.find((n) => n['@type'] === 'VideoObject');
-  assert.match(v.duration, /^PT(\d+H)?(\d+M)?(\d+S)?$/); assert.equal(v.embedUrl, `https://www.youtube.com/embed/${ep.source.id}`); assert.ok(v.uploadDate && v.thumbnailUrl[0] && v.name && v.description);
+  assert.equal(v.duration, undefined, 'public structured data must not publish content length'); assert.equal(v.embedUrl, `https://www.youtube.com/embed/${ep.source.id}`); assert.ok(v.uploadDate && v.thumbnailUrl[0] && v.name && v.description);
   assert.equal(v.interactionStatistic, undefined, 'search metadata must not publish the public view count');
   assert.equal(meta('/shows').jsonld.find((n) => n['@type'] === 'ItemList').numberOfItems, cat.shows.length);
-  assert.equal(isoDuration(3725), 'PT1H2M5S'); assert.equal(isoDuration(60), 'PT1M'); assert.equal(isoDuration(0), 'PT0S');
   const premium = new Catalog({ ...catalogJson, videos: catalogJson.videos.map((x) => (x.id === ep.id ? { ...x, access: 'premium', source: { type: 'r2', key: 'premium/a/master.m3u8' } } : x)) });
   const pv = pageMeta({ path: `/watch/${ep.id}`, cat: premium, origin: SITE }).jsonld.find((n) => n['@type'] === 'VideoObject');
   assert.equal(pv.isAccessibleForFree, false); assert.equal(pv.embedUrl, undefined); assert.equal(pv.contentUrl, undefined);   // never expose a private stream URL
@@ -172,7 +171,7 @@ test('robots.txt and sitemap.xml', async () => {
   for (const p of ['/search', '/signin', '/account', '/billing', '/admin', '/youtube', '/gallery']) assert.ok(!locs.includes(SITE + p), `${p} must not be in the sitemap`);
   const reel = cat.videos.find((v) => v.kind === 'reel'), ep = cat.episodes('shahid')[0];
   assert.ok(!locs.includes(`${SITE}/watch/${reel.id}`), 'undescribed reels stay out of the sitemap'); assert.ok(locs.includes(`${SITE}/watch/${ep.id}`));
-  assert.match(xml, /<video:video><video:thumbnail_loc>https:\/\/i\.ytimg\.com/); assert.match(xml, /<video:duration>\d+<\/video:duration>/);
+  assert.match(xml, /<video:video><video:thumbnail_loc>https:\/\/i\.ytimg\.com/); assert.doesNotMatch(xml, /<video:duration>/, 'video sitemap metadata must not publish content length');
   assert.ok(locs.every((l) => !l.includes('/show/central-calcutta-boarding')), 'upcoming ids live under /soon/');
 });
 
