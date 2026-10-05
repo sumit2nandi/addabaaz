@@ -209,7 +209,32 @@ dialog.modal > header { display: flex; align-items: center; justify-content: spa
 .error-context code { color: var(--text-2); font: inherit; overflow-wrap: anywhere; }
 .error-detail-bar > .btn { flex: none; }
 .error-sql { min-width: 0; margin: 12px 0; overflow-wrap: anywhere; }
+.error-sql h3, .error-diagnostics h3 { margin: 0 0 8px; font-size: 14px; }
+.error-sql p { margin: 0; }
 .error-sql .stack { margin: 6px 0 0; }
+.error-toolbar .search { flex: 1 1 280px; max-width: none; }
+.error-toolbar select { flex: 0 1 190px; }
+.error-group-section { margin: 12px 0 22px; }
+.error-group-section .card-head { align-items: baseline; flex-wrap: wrap; }
+.error-group-message { min-width: 200px; max-width: 580px; overflow-wrap: anywhere; }
+.error-group-message > div { margin-top: 3px; color: var(--muted); font-size: 12px; }
+.error-group-url { margin-top: 4px; overflow-wrap: anywhere; }
+.error-recent-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 18px 0 8px; }
+.error-recent-heading h2 { margin: 0; }
+.error-entry { margin: 10px 0; overflow: hidden; }
+.error-entry > summary { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 5px 10px; overflow-wrap: anywhere; }
+.error-entry-badges { display: flex; flex-wrap: wrap; gap: 4px; grid-row: span 2; }
+.error-entry-message { min-width: 0; }
+.error-entry-subtitle { min-width: 0; overflow-wrap: anywhere; }
+.error-diagnostics { min-width: 0; margin: 14px 0; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2, #0b0b0d); }
+.error-runtime-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); gap: 8px; }
+.error-runtime-item { min-width: 0; display: grid; gap: 3px; padding: 8px; border-radius: 7px; background: var(--panel-2, rgba(255,255,255,.025)); overflow-wrap: anywhere; }
+.error-runtime-item > span { color: var(--muted); font-size: 11px; }
+.error-runtime-item > strong { color: var(--text-2); font-size: 12px; font-weight: 550; }
+.error-raw { margin: 12px 0; }
+.error-raw > summary { cursor: pointer; color: var(--text-2); font-size: 13px; font-weight: 650; }
+.error-raw .stack { margin: 8px 0 0; }
+.error-groups code { margin-left: 4px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
 details.card > summary { cursor: pointer; } details.card { padding: 12px 16px; }
 .sub-rows { display: grid; gap: 8px; margin-bottom: 8px; } .sub-row { display: grid !important; grid-template-columns: 70px 130px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; } .sub-row input { min-width: 0; width: 100%; }
 @media (max-width: 600px) { .sub-row { grid-template-columns: 70px 1fr auto auto; } .sub-row [name=subUrl] { grid-column: 1 / -1; grid-row: 2; } }
