@@ -26,7 +26,7 @@ function monitoringDb({ denyGlobal = false, sampleQuery = null, settingValues = 
     async set(key, value) { settingValues.set(key, String(value)); },
   };
   const q = async (sql, params = []) => {
-    if (/database_monitor_samples/i.test(sql) && sampleQuery) {
+    if (/(?:database|application)_monitor_samples/i.test(sql) && sampleQuery) {
       const result = await sampleQuery(sql, params);
       if (result !== undefined) return result;
     }
@@ -161,6 +161,68 @@ test('database monitor stores one minute buckets, derives counter rates, and pru
   await assert.rejects(db.monitoring.setRetentionDays(8), /retention/i);
 });
 
+test('application monitoring stores per-process samples and aggregates memory, traffic, latency and errors', async () => {
+  const saved = [];
+  let historyParams = null, pruneDays = null;
+  const sampleQuery = async (sql, params) => {
+    if (/^INSERT IGNORE INTO application_monitor_samples/i.test(sql.trim())) {
+      if (saved.some((row) => row.instance_id === params[0] && row.sampled_at.getTime() === params[1].getTime())) return { affectedRows: 0 };
+      saved.push({ instance_id: params[0], sampled_at: params[1], values: params.slice(2) });
+      return { affectedRows: 1 };
+    }
+    if (/^SELECT bucket_epoch,/i.test(sql.trim())) {
+      historyParams = params;
+      return [{ bucket_epoch: '1791201600', cpu_percent: '25.5', memory_rss_bytes: '67108864', heap_used_bytes: '32000000',
+        heap_total_bytes: '48000000', load_1: '0.8', active_instances: '2', requests_per_minute: '12.5',
+        response_average_ms: '80.5', response_p50_ms: '100', response_p95_ms: '500', response_max_ms: '1200',
+        client_errors_per_minute: '0.5', server_errors_per_minute: '0.25', server_error_rate_pct: '2' }];
+    }
+    if (/^DELETE FROM application_monitor_samples/i.test(sql.trim())) { pruneDays = params[0]; return { affectedRows: 0 }; }
+    return undefined;
+  };
+  const settings = new Map();
+  const db = monitoringDb({ sampleQuery, settingValues: settings });
+  const sample = {
+    instanceId: '88888888-8888-4888-8888-888888888888', sampledAt: '2026-10-05T12:01:20.000Z', intervalSeconds: 60,
+    processors: 4, cpuPercent: 12.5,
+    memory: { rssBytes: 33_554_432, heapUsedBytes: 16_000_000, heapTotalBytes: 24_000_000, externalBytes: 512_000, arrayBuffersBytes: 128_000 },
+    system: { load1: 0.4, load5: 0.3, load15: 0.2 },
+    http: { requests: 10, clientErrors: 1, serverErrors: 0, latencySumMs: 800, p50ResponseMs: 100, p95ResponseMs: 300, maxResponseMs: 400 },
+  };
+  assert.equal(await db.applicationMonitoring.record(sample), true);
+  assert.equal(await db.applicationMonitoring.record(sample), false, 'one app instance cannot duplicate a minute bucket');
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].sampled_at.toISOString(), '2026-10-05T12:01:00.000Z');
+  assert.equal(saved[0].values[0], 12.5, 'CPU is stored as a per-process percentage');
+
+  const since = new Date('2026-10-05T11:00:00.000Z');
+  const history = await db.applicationMonitoring.history({ since, bucketSeconds: 900 });
+  assert.deepEqual(historyParams, [900, 900, 900, 900, 900, since]);
+  assert.equal(history[0].memoryRssBytes, 67_108_864, 'memory is aggregated across instances');
+  assert.equal(history[0].requestsPerMinute, 12.5);
+  assert.equal(history[0].responseP95Ms, 500);
+  assert.equal(history[0].serverErrorRatePct, 2);
+  assert.equal(history[0].activeInstances, 2);
+  assert.equal(await db.applicationMonitoring.retentionDays(), 7);
+  assert.equal(await db.applicationMonitoring.setRetentionDays(14), 14);
+  assert.equal(settings.get('application_monitor_retention_days'), '14');
+  assert.equal(pruneDays, 14);
+  await assert.rejects(db.applicationMonitoring.setRetentionDays(8), /retention/i);
+});
+
+test('scheduled application samples are persisted independently of housekeeping failures', async () => {
+  let saved = null, catalogRead = false;
+  const { runScheduledJobs } = await import('../src/jobs.js');
+  await runScheduledJobs({
+    db: { applicationMonitoring: { record: async (sample) => { saved = sample; } } },
+    applicationMonitor: { takeSnapshot: () => ({ sampledAt: '2026-10-05T12:00:00.000Z', instanceId: 'app-1' }) },
+    catalog: { async get() { catalogRead = true; throw new Error('catalog temporarily unavailable'); } },
+    push: null, log: { error() {} },
+  });
+  assert.equal(saved.instanceId, 'app-1');
+  assert.equal(catalogRead, true);
+});
+
 test('scheduled database sampling runs independently of other housekeeping jobs', async () => {
   const messages = [];
   let sampled = 0, catalogRead = false;
@@ -180,8 +242,10 @@ test('database monitoring endpoint is admin-only and is not cached', async (t) =
   const snapshot = { schemaName: 'private_schema', sampledAt: '2026-10-05T12:00:00.000Z', storage: { totalBytes: 42 }, tables: [], instance: {} };
   const history = [{ at: '2026-10-05T12:00:00.000Z', totalStorageBytes: 42 }];
   const audit = [];
-  let requestedHistory = null;
-  let savedRetention = 7;
+  let requestedHistory = null, requestedApplicationHistory = null;
+  let savedRetention = 7, savedApplicationRetention = 7;
+  const applicationCurrent = { sampledAt: '2026-10-05T12:00:00.000Z', instanceId: 'app-instance', cpuPercent: 12.5, http: { requests: 3 } };
+  const applicationHistory = [{ at: '2026-10-05T12:00:00.000Z', cpuPercent: 12.5, requestsPerMinute: 3 }];
   const app = express();
   app.use(express.json());
   app.use('/api/v1/admin', createAdminRouter({
@@ -190,7 +254,12 @@ test('database monitoring endpoint is admin-only and is not cached', async (t) =
       retentionDays: async () => savedRetention,
       history: async (query) => { requestedHistory = query; return history; },
       setRetentionDays: async (days) => { savedRetention = days; },
+    }, applicationMonitoring: {
+      retentionDays: async () => savedApplicationRetention,
+      history: async (query) => { requestedApplicationHistory = query; return applicationHistory; },
+      setRetentionDays: async (days) => { savedApplicationRetention = days; },
     }, audit: { add: async (entry) => audit.push(entry) } },
+    applicationMonitor: { current: () => applicationCurrent },
     billing: { config: { siteUrl: '' } }, catalog: {}, r2: { configured: false }, payments: { provider: 'none' }, mailer: {},
     push: null, campaigns: null, social: {}, adminToken: token, secret: 'monitor-test-secret', uploadDir: '/tmp',
     mediaDir: '/tmp', rate: false, sms: null,
@@ -229,4 +298,29 @@ test('database monitoring endpoint is admin-only and is not cached', async (t) =
     body: JSON.stringify({ retentionDays: 8 }),
   });
   assert.equal(invalid.status, 400);
+
+  const applicationUrl = url.replace('/database/monitor', '/application/monitor');
+  assert.equal((await fetch(applicationUrl)).status, 401, 'application metrics remain admin-only');
+  const appResponse = await fetch(applicationUrl, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(appResponse.status, 200);
+  assert.equal(appResponse.headers.get('cache-control'), 'private, no-store');
+  assert.deepEqual(await appResponse.json(), {
+    current: applicationCurrent, history: applicationHistory, range: '7d', rangeSeconds: 604_800,
+    retentionDays: 7, sampleIntervalSeconds: 60,
+  });
+  assert.equal(requestedApplicationHistory.bucketSeconds, 1_020);
+  const appRetentionUpdate = await fetch(`${applicationUrl}/settings`, {
+    method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ retentionDays: 14 }),
+  });
+  assert.equal(appRetentionUpdate.status, 200);
+  assert.equal(savedApplicationRetention, 14);
+  assert.equal(audit.at(-1).action, 'application_monitor.retention_updated');
+  const appClamped = await fetch(`${applicationUrl}?range=30d`, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal((await appClamped.json()).range, '14d');
+  const appInvalidRetention = await fetch(`${applicationUrl}/settings`, {
+    method: 'PATCH', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ retentionDays: 8 }),
+  });
+  assert.equal(appInvalidRetention.status, 400);
 });

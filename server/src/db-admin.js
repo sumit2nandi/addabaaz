@@ -694,6 +694,113 @@ export function adminDb({ q, tx, self, iso }) {
     },
   };
 
+  // ---- Application monitoring (Admin → System → Application) ----
+  const APP_MONITOR_RETENTION_KEY = 'application_monitor_retention_days';
+  const APP_MONITOR_RETENTION_DAYS = [1, 3, 7, 14, 30];
+  const pruneApplicationHistory = async (days) => {
+    await q('DELETE FROM application_monitor_samples WHERE sampled_at < UTC_TIMESTAMP(3) - INTERVAL ? DAY', [days]);
+  };
+  const getApplicationRetention = async () => {
+    const configured = Number(await self.settings.get(APP_MONITOR_RETENTION_KEY, '7'));
+    return APP_MONITOR_RETENTION_DAYS.includes(configured) ? configured : 7;
+  };
+  const applicationMonitoring = {
+    async retentionDays() { return getApplicationRetention(); },
+    async setRetentionDays(days) {
+      const value = Number(days);
+      if (!APP_MONITOR_RETENTION_DAYS.includes(value)) throw new TypeError('Unsupported application-monitor history retention.');
+      await self.settings.set(APP_MONITOR_RETENTION_KEY, value);
+      await pruneApplicationHistory(value);
+      return value;
+    },
+    /** Persist one per-process minute sample; the UUID key prevents app instances from overwriting each other. */
+    async record(snapshot) {
+      const sampledMs = Date.parse(snapshot?.sampledAt || '');
+      if (!Number.isFinite(sampledMs) || typeof snapshot.instanceId !== 'string') {
+        throw new TypeError('A valid application-monitor sample is required.');
+      }
+      const sampledAt = new Date(Math.floor(sampledMs / 60_000) * 60_000);
+      const memory = snapshot.memory || {};
+      const system = snapshot.system || {};
+      const http = snapshot.http || {};
+      const result = await q(`INSERT IGNORE INTO application_monitor_samples (
+        instance_id, sampled_at, cpu_percent, processor_count,
+        memory_rss_bytes, heap_used_bytes, heap_total_bytes, external_bytes, array_buffers_bytes,
+        load_1, load_5, load_15, sample_interval_seconds,
+        http_request_count, http_client_error_count, http_server_error_count,
+        http_latency_count, http_latency_sum_ms, http_latency_p50_ms, http_latency_p95_ms, http_latency_max_ms
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+        snapshot.instanceId, sampledAt, numberOrNull(snapshot.cpuPercent), wholeOrNull(snapshot.processors) ?? 1,
+        wholeOrNull(memory.rssBytes) ?? 0, wholeOrNull(memory.heapUsedBytes) ?? 0,
+        wholeOrNull(memory.heapTotalBytes) ?? 0, wholeOrNull(memory.externalBytes) ?? 0,
+        wholeOrNull(memory.arrayBuffersBytes), numberOrNull(system.load1), numberOrNull(system.load5), numberOrNull(system.load15),
+        wholeOrNull(snapshot.intervalSeconds) ?? 0, wholeOrNull(http.requests) ?? 0,
+        wholeOrNull(http.clientErrors) ?? 0, wholeOrNull(http.serverErrors) ?? 0,
+        wholeOrNull(http.requests) ?? 0, numberOrNull(http.latencySumMs) ?? 0,
+        numberOrNull(http.p50ResponseMs), numberOrNull(http.p95ResponseMs), numberOrNull(http.maxResponseMs),
+      ]);
+      await pruneApplicationHistory(await getApplicationRetention());
+      return Number(result?.affectedRows || 0) === 1;
+    },
+    /** Aggregate per-process gauge means, fleet totals, and request-weighted latency into about 600 buckets. */
+    async history({ since, bucketSeconds = 60 } = {}) {
+      const bucket = Math.max(60, Math.min(2_592_000, Math.ceil(Number(bucketSeconds) / 60) * 60 || 60));
+      const rows = await q(`SELECT bucket_epoch,
+          AVG(cpu_percent) AS cpu_percent,
+          SUM(memory_rss_bytes) AS memory_rss_bytes,
+          SUM(heap_used_bytes) AS heap_used_bytes,
+          SUM(heap_total_bytes) AS heap_total_bytes,
+          AVG(load_1) AS load_1,
+          COUNT(*) AS active_instances,
+          SUM(request_count) * 60 / ? AS requests_per_minute,
+          CASE WHEN SUM(latency_count) > 0 THEN SUM(latency_sum_ms) / SUM(latency_count) ELSE NULL END AS response_average_ms,
+          MAX(response_p50_ms) AS response_p50_ms,
+          MAX(response_p95_ms) AS response_p95_ms,
+          MAX(response_max_ms) AS response_max_ms,
+          SUM(client_error_count) * 60 / ? AS client_errors_per_minute,
+          SUM(server_error_count) * 60 / ? AS server_errors_per_minute,
+          CASE WHEN SUM(request_count) > 0 THEN SUM(server_error_count) * 100 / SUM(request_count) ELSE NULL END AS server_error_rate_pct
+        FROM (
+          SELECT instance_id, FLOOR(UNIX_TIMESTAMP(sampled_at) / ?) * ? AS bucket_epoch,
+            AVG(cpu_percent) AS cpu_percent,
+            AVG(memory_rss_bytes) AS memory_rss_bytes,
+            AVG(heap_used_bytes) AS heap_used_bytes,
+            AVG(heap_total_bytes) AS heap_total_bytes,
+            AVG(load_1) AS load_1,
+            SUM(http_request_count) AS request_count,
+            SUM(http_client_error_count) AS client_error_count,
+            SUM(http_server_error_count) AS server_error_count,
+            SUM(http_latency_count) AS latency_count,
+            SUM(http_latency_sum_ms) AS latency_sum_ms,
+            MAX(http_latency_p50_ms) AS response_p50_ms,
+            MAX(http_latency_p95_ms) AS response_p95_ms,
+            MAX(http_latency_max_ms) AS response_max_ms
+          FROM application_monitor_samples
+          WHERE sampled_at >= ? AND sampled_at <= UTC_TIMESTAMP(3)
+          GROUP BY instance_id, bucket_epoch
+        ) AS per_instance
+        GROUP BY bucket_epoch ORDER BY bucket_epoch`, [bucket, bucket, bucket, bucket, bucket, since]);
+      const value = (row, key) => numberOrNull(row[key]);
+      return rows.map((row) => ({
+        at: new Date(Number(row.bucket_epoch) * 1000).toISOString(),
+        cpuPercent: value(row, 'cpu_percent'),
+        memoryRssBytes: value(row, 'memory_rss_bytes'),
+        heapUsedBytes: value(row, 'heap_used_bytes'),
+        heapTotalBytes: value(row, 'heap_total_bytes'),
+        load1: value(row, 'load_1'),
+        activeInstances: value(row, 'active_instances'),
+        requestsPerMinute: value(row, 'requests_per_minute'),
+        responseAverageMs: value(row, 'response_average_ms'),
+        responseP50Ms: value(row, 'response_p50_ms'),
+        responseP95Ms: value(row, 'response_p95_ms'),
+        responseMaxMs: value(row, 'response_max_ms'),
+        clientErrorsPerMinute: value(row, 'client_errors_per_minute'),
+        serverErrorsPerMinute: value(row, 'server_errors_per_minute'),
+        serverErrorRatePct: value(row, 'server_error_rate_pct'),
+      }));
+    },
+  };
+
   // Merged into the main `db` object by db.js.
-  return { catalog, uploads, audit, youtubeImports, adminUsers, messages, stats, monitoring };
+  return { catalog, uploads, audit, youtubeImports, adminUsers, messages, stats, monitoring, applicationMonitoring };
 }

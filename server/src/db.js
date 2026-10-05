@@ -321,6 +321,6 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
   // Merge in the other data-access modules. They share the pool, transaction helper and `self`.
   Object.assign(self, extraDb({ q, tx, self, iso }));         // reset/verify tokens, ratings, comments, push, analytics…
   Object.assign(self, billingDb({ q, tx, self, iso }));      // coupons, invoices, refunds
-  Object.assign(self, adminDb({ q, tx, self, iso }));        // catalog, audit log, admin user/message queries, dashboard numbers
+  Object.assign(self, adminDb({ q, tx, self, iso }));        // catalog, audit log, admin user/message queries, dashboard numbers, and monitoring history
   return self;
 }

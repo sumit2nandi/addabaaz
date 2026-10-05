@@ -11,7 +11,7 @@ const NAV = [
   ['Content', [['catalog', 'Content overview', 'dashboard'], ['shows', 'Shows & seasons', 'film'], ['videos', 'Videos & reels', 'tv'], ['upcoming', 'Coming soon', 'clock'], ['top', 'Top 10', 'crown'], ['studio', 'Studio & team', 'building']]],
   ['Customers', [['users', 'Users', 'users'], ['payments', 'Payments & refunds', 'card'], ['refunds', 'Refund requests', 'refund'], ['coupons', 'Coupons', 'ticket'], ['support', 'Support', 'chat'], ['messages', 'Messages', 'inbox'], ['comments', 'Comments', 'chat']]],
   ['Growth', [['analytics', 'Analytics', 'chart'], ['promos', 'Promotions', 'gift'], ['notifications', 'Broadcast', 'bell']]],
-  ['System', [['cache', 'Client cache', 'refresh'], ['database', 'Database', 'database'], ['maintenance', 'Maintenance', 'power'], ['errors', 'Errors', 'bug'], ['audit', 'Audit log', 'log']]],
+  ['System', [['cache', 'Client cache', 'refresh'], ['database', 'Database', 'database'], ['application', 'Application', 'chart'], ['maintenance', 'Maintenance', 'power'], ['errors', 'Errors', 'bug'], ['audit', 'Audit log', 'log']]],
 ];
 // URL pattern -> page module. Each module's default export is `render(root, params, ctx)`.
 const ROUTES = [
@@ -33,6 +33,7 @@ const ROUTES = [
   [/^promos$/, () => import('./views/promos.js')],
   [/^cache$/, () => import('./views/cache.js')],
   [/^database$/, () => import('./views/database.js')],
+  [/^application$/, () => import('./views/application.js')],
   [/^maintenance$/, () => import('./views/maintenance.js')],
   [/^errors$/, () => import('./views/errors.js')],
 ];

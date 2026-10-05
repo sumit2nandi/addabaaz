@@ -4,8 +4,13 @@
  */
 // `db`, `catalog`, `push` and `campaigns` are passed in (dependency injection) so tests can supply fakes.
 // Returns counts of notifications sent.
-export async function runScheduledJobs({ db, catalog, push, campaigns = null, promos = null, log = console }) {
+export async function runScheduledJobs({ db, catalog, push, campaigns = null, promos = null, applicationMonitor = null, log = console }) {
   const out = { episodes: 0, launches: 0 };
+  // Save per-process application metrics before housekeeping work affects this sample window.
+  if (applicationMonitor?.takeSnapshot && db.applicationMonitoring?.record) {
+    try { await db.applicationMonitoring.record(applicationMonitor.takeSnapshot()); }
+    catch (e) { log.error?.(`[jobs] application monitor: ${e.message}`); }
+  }
   // Save one low-cardinality database sample every minute for Admin → System → Database history.
   // Keep it independent of notification/cleanup failures so a bad job does not leave gaps in the charts.
   if (db.monitoring?.collect) {

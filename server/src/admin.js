@@ -17,7 +17,9 @@ import { smsHealthCheck } from './sms.js';
 
 const YOUTUBE_VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const DATABASE_MONITOR_RETENTION_DAYS = [1, 3, 7, 14, 30];
+const APPLICATION_MONITOR_RETENTION_DAYS = DATABASE_MONITOR_RETENTION_DAYS;
 const DATABASE_MONITOR_RANGES = { '1h': 3_600, '6h': 21_600, '24h': 86_400, '3d': 259_200, '7d': 604_800, '14d': 1_209_600, '30d': 2_592_000 };
+const APPLICATION_MONITOR_RANGES = DATABASE_MONITOR_RANGES;
 // UTC half-open bounds for the current calendar day in Asia/Kolkata (MySQL timestamps are stored in UTC).
 const istDayBounds = (now = new Date()) => {
   const ist = new Date(now.getTime() + 330 * 60_000);
@@ -39,7 +41,7 @@ const page = (req, dflt = 25, max = 100) => ({ limit: Math.min(Math.max(Number(r
  */
 // Every route below runs after the authentication middleware, so `req.admin` is always set.
 // Write actions call `log(...)` so the audit log records who did what.
-export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2, payments, mailer, push = null, campaigns = null, unsubscribeUrlFor = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', sms = null, promos = null, maintenance = null, siteUrl = '', env = process.env }) {
+export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2, payments, mailer, push = null, campaigns = null, unsubscribeUrlFor = null, social, adminToken, secret, sessionHours = 12, uploadDir, mediaDir, rate = true, publicApiUrl = '', sms = null, promos = null, maintenance = null, applicationMonitor = null, siteUrl = '', env = process.env }) {
   // The shared ADMIN_TOKEN (for scripts) only counts when it is long enough to be unguessable.
   const tokenOn = adminToken.length >= 24;
   if (adminToken && !tokenOn) console.warn('[admin] ADMIN_TOKEN is shorter than 24 characters — the token is ignored (admin accounts still work).');
@@ -91,6 +93,36 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   /* ---------- dashboard & setup checklist ---------- */
   // Dashboard numbers (users, subscribers, revenue, signups).
   router.get('/stats', wrap(async (_req, res) => res.json(await db.stats.overview())));
+  // Process runtime and aggregate API telemetry, with a compact historical series across app instances.
+  router.get('/application/monitor', wrap(async (req, res) => {
+    if (!applicationMonitor?.current || !db.applicationMonitoring?.history || !db.applicationMonitoring?.retentionDays) {
+      throw new HttpError(503, 'application_monitor_unavailable', 'Application monitoring is not available on this server.');
+    }
+    const [current, retentionDays] = await Promise.all([applicationMonitor.current(), db.applicationMonitoring.retentionDays()]);
+    const maxSeconds = retentionDays * 86_400;
+    const requestedValue = typeof req.query.range === 'string' ? req.query.range : '';
+    const requested = Object.hasOwn(APPLICATION_MONITOR_RANGES, requestedValue) ? requestedValue : '7d';
+    let range = requested;
+    if (APPLICATION_MONITOR_RANGES[range] > maxSeconds) {
+      range = Object.keys(APPLICATION_MONITOR_RANGES).filter((key) => APPLICATION_MONITOR_RANGES[key] <= maxSeconds).at(-1) || '1h';
+    }
+    const rangeSeconds = Math.min(APPLICATION_MONITOR_RANGES[range], maxSeconds);
+    const since = new Date(Date.now() - rangeSeconds * 1000);
+    const bucketSeconds = Math.max(60, Math.ceil(rangeSeconds / 600 / 60) * 60);
+    const history = await db.applicationMonitoring.history({ since, bucketSeconds });
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ current, history, range, rangeSeconds, retentionDays, sampleIntervalSeconds: 60 });
+  }));
+  router.patch('/application/monitor/settings', wrap(async (req, res) => {
+    if (!db.applicationMonitoring?.setRetentionDays) throw new HttpError(503, 'application_monitor_unavailable', 'Application monitoring settings are not available on this server.');
+    const days = Number(req.body?.retentionDays);
+    if (!APPLICATION_MONITOR_RETENTION_DAYS.includes(days)) throw bad('Choose a supported application history retention period.');
+    await db.applicationMonitoring.setRetentionDays(days);
+    await log(req, 'application_monitor.retention_updated', null, { retentionDays: days });
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ retentionDays: days });
+  }));
+
   // Current database metrics plus a compact historical series for the Grafana-like charts.
   router.get('/database/monitor', wrap(async (req, res) => {
     if (!db.monitoring?.snapshot || !db.monitoring?.history || !db.monitoring?.retentionDays) {
