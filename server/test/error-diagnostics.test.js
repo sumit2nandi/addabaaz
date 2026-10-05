@@ -14,6 +14,9 @@ import { fakeDeps } from './helpers/app-fakes.js';
 
 const read = (path) => fs.readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
+/** Decode a MySQL single-quoted string body the way the server does: '' is one literal quote. */
+const decodeSqlStringLiteral = (body) => body.replace(/''/g, "'");
+
 test('credit-ledger migrations recheck amount_paise safely, including after an older repair was recorded', () => {
   for (const file of ['021_repair_credit_ledger_amount.sql', '022_verify_credit_ledger_amount.sql', '024_repair_credit_ledger_amount_again.sql']) {
     const migration = read(`server/migrations/${file}`);
@@ -68,6 +71,34 @@ test('error-context migration stores severity, runtime and request diagnostics i
   assert.match(migration, /MODIFY COLUMN user_agent VARCHAR\(512\)/);
   assert.match(migration, /ix_errors_request_id/);
   assert.match(migration, /'SELECT 1'/, 'partial schema changes can safely be rerun');
+});
+
+test('error-context dynamic DDL stays a single-quoted string under ANSI_QUOTES', () => {
+  const migration = read('server/migrations/029_error_context.sql');
+  // Prose comments may use double quotes; only the executable SQL has to survive ANSI_QUOTES,
+  // where MySQL reads a double-quoted token as an identifier instead of a string.
+  const executable = migration.replace(/^\s*--.*$/gm, '');
+  assert.equal(executable.includes('"'), false,
+    'dynamic DDL cannot be double-quoted: ANSI_QUOTES turns it into a column reference and the statement fails with "Unknown column ... in field list"');
+
+  // Every prepared DDL literal must parse as a MySQL string literal, with inner quotes doubled.
+  const assignments = executable.match(/SET @\w+_ddl = \(/g) || [];
+  const guarded = [...executable.matchAll(/SET (@\w+_ddl) = \(\s*SELECT IF\(COUNT\(\*\) = 0,\s*'((?:[^']|'')*?)',\s*'SELECT 1'\)/g)];
+  assert.ok(assignments.length >= 10, 'the error-context migration prepares its DDL dynamically');
+  assert.equal(guarded.length, assignments.length,
+    'each dynamic DDL assignment is a single-quoted literal whose inner quotes are doubled, so no assignment silently degrades to an identifier');
+  for (const [, variable, literal] of guarded) {
+    const ddl = decodeSqlStringLiteral(literal);
+    assert.ok(/^(ALTER TABLE|SELECT 1)\b/.test(ddl), `${variable} decodes to runnable SQL, got: ${ddl}`);
+  }
+
+  const severity = decodeSqlStringLiteral(
+    executable.match(/SET @error_severity_ddl = \(\s*SELECT IF\(COUNT\(\*\) = 0,\s*'((?:[^']|'')*?)',\s*'SELECT 1'\)/)[1]);
+  assert.equal(severity,
+    "ALTER TABLE error_log ADD COLUMN severity ENUM('warning','error','fatal') NOT NULL DEFAULT 'error' AFTER source",
+    'doubled inner quotes decode back to the ENUM values and default, not to stray text');
+  assert.match(executable, /PREPARE error_severity_stmt FROM @error_severity_ddl;/,
+    'the prepared statement is built from the string variable, never from an identifier');
 });
 
 test('credit-ledger admin statistics aggregate from user_credit', async () => {
