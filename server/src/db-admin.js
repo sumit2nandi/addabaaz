@@ -466,6 +466,109 @@ export function adminDb({ q, tx, self, iso }) {
     },
   };
 
+  // ---- Database monitoring (Admin → System → Database) ----
+  // TABLE_ROWS / DATA_LENGTH / INDEX_LENGTH are MySQL's table statistics. For InnoDB they are estimates,
+  // so this deliberately reports schema storage as an estimated footprint rather than claiming to measure
+  // the MySQL process's RAM. The buffer-pool and server counters below are instance-wide, not per schema.
+  const monitoring = {
+    async snapshot() {
+      const [metaRows, tableRows, statusRows, variableRows] = await Promise.all([
+        q('SELECT DATABASE() AS schema_name, VERSION() AS server_version'),
+        q(`SELECT TABLE_NAME, ENGINE, TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH, INDEX_LENGTH, AUTO_INCREMENT
+          FROM information_schema.TABLES
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'`),
+        // SHOW GLOBAL STATUS / VARIABLES are supported by MySQL and MariaDB. Some managed DB users
+        // restrict global status; those metrics are optional and should not hide the schema statistics.
+        q(`SHOW GLOBAL STATUS WHERE Variable_name IN (
+          'Uptime', 'Threads_connected', 'Threads_running', 'Max_used_connections', 'Connections',
+          'Queries', 'Slow_queries', 'Created_tmp_tables', 'Created_tmp_disk_tables',
+          'Innodb_buffer_pool_pages_data', 'Innodb_buffer_pool_pages_free', 'Innodb_buffer_pool_pages_total',
+          'Innodb_buffer_pool_pages_dirty', 'Innodb_buffer_pool_read_requests', 'Innodb_buffer_pool_reads'
+        )`).catch(() => []),
+        q(`SHOW GLOBAL VARIABLES WHERE Variable_name IN (
+          'max_connections', 'innodb_buffer_pool_size', 'innodb_page_size'
+        )`).catch(() => []),
+      ]);
+      const metric = (value) => {
+        if (value === null || value === undefined || value === '') return null;
+        const n = Number(value);
+        return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : null;
+      };
+      const asBytes = (value) => metric(value) ?? 0;
+      const nameValueMap = (rows) => new Map(rows.map((r) => [
+        String(r.Variable_name ?? r.variable_name ?? '').toLowerCase(), r.Value ?? r.value,
+      ]));
+      const status = nameValueMap(statusRows), variables = nameValueMap(variableRows);
+      const statusMetric = (name) => metric(status.get(name.toLowerCase()));
+      const variableMetric = (name) => metric(variables.get(name.toLowerCase()));
+
+      const tables = tableRows.map((r) => {
+        const dataBytes = asBytes(r.DATA_LENGTH), indexBytes = asBytes(r.INDEX_LENGTH);
+        const rows = metric(r.TABLE_ROWS);
+        return {
+          name: String(r.TABLE_NAME), engine: r.ENGINE || 'Unknown',
+          estimatedRows: rows, dataBytes, indexBytes, totalBytes: dataBytes + indexBytes,
+          averageRowBytes: metric(r.AVG_ROW_LENGTH), autoIncrement: metric(r.AUTO_INCREMENT),
+        };
+      });
+      tables.sort((a, b) => b.totalBytes - a.totalBytes || a.name.localeCompare(b.name));
+      const dataBytes = tables.reduce((n, table) => n + table.dataBytes, 0);
+      const indexBytes = tables.reduce((n, table) => n + table.indexBytes, 0);
+      const totalBytes = dataBytes + indexBytes;
+      const rowEstimateTables = tables.filter((table) => table.estimatedRows !== null).length;
+      const estimatedRows = tables.reduce((n, table) => n + (table.estimatedRows ?? 0), 0);
+      for (const table of tables) table.sharePct = totalBytes ? Math.round(table.totalBytes / totalBytes * 10_000) / 100 : 0;
+
+      const pageSize = variableMetric('innodb_page_size') || 16_384;
+      const poolPages = statusMetric('Innodb_buffer_pool_pages_total');
+      const freePages = statusMetric('Innodb_buffer_pool_pages_free');
+      const dataPages = statusMetric('Innodb_buffer_pool_pages_data');
+      const dirtyPages = statusMetric('Innodb_buffer_pool_pages_dirty');
+      const readRequests = statusMetric('Innodb_buffer_pool_read_requests');
+      const diskReads = statusMetric('Innodb_buffer_pool_reads');
+      const bufferPoolSize = variableMetric('innodb_buffer_pool_size');
+      const bufferPoolCapacity = bufferPoolSize ?? (poolPages === null ? null : poolPages * pageSize);
+      const bufferPoolUsed = poolPages !== null && freePages !== null
+        ? Math.max(0, poolPages - freePages) * pageSize
+        : dataPages === null ? null : dataPages * pageSize;
+      const bufferPool = bufferPoolCapacity === null && dataPages === null && poolPages === null ? null : {
+        capacityBytes: bufferPoolCapacity,
+        usedBytes: bufferPoolUsed,
+        freeBytes: freePages === null ? null : freePages * pageSize,
+        dataBytes: dataPages === null ? null : dataPages * pageSize,
+        dirtyBytes: dirtyPages === null ? null : dirtyPages * pageSize,
+        usagePct: bufferPoolCapacity && bufferPoolUsed !== null
+          ? Math.round(bufferPoolUsed / bufferPoolCapacity * 10_000) / 100 : null,
+        hitRatePct: readRequests > 0 && diskReads !== null
+          ? Math.round(Math.max(0, 1 - diskReads / readRequests) * 100_000) / 1_000 : null,
+        pageSizeBytes: pageSize,
+      };
+      const maxConnections = variableMetric('max_connections');
+      const connected = statusMetric('Threads_connected');
+      return {
+        schemaName: metaRows[0]?.schema_name || null,
+        serverVersion: metaRows[0]?.server_version || null,
+        sampledAt: new Date().toISOString(),
+        storage: { tableCount: tables.length, dataBytes, indexBytes, totalBytes, estimatedRows, rowEstimateTables },
+        tables,
+        instance: {
+          statusAvailable: statusRows.length > 0,
+          connections: {
+            connected, running: statusMetric('Threads_running'),
+            peak: statusMetric('Max_used_connections'), max: maxConnections,
+            usagePct: maxConnections > 0 && connected !== null ? Math.round(connected / maxConnections * 10_000) / 100 : null,
+          },
+          activity: {
+            uptimeSeconds: statusMetric('Uptime'), connectionsSinceStart: statusMetric('Connections'),
+            queriesSinceStart: statusMetric('Queries'), slowQueries: statusMetric('Slow_queries'),
+            temporaryTables: statusMetric('Created_tmp_tables'), diskTemporaryTables: statusMetric('Created_tmp_disk_tables'),
+          },
+          bufferPool,
+        },
+      };
+    },
+  };
+
   // Merged into the main `db` object by db.js.
-  return { catalog, uploads, audit, youtubeImports, adminUsers, messages, stats };
+  return { catalog, uploads, audit, youtubeImports, adminUsers, messages, stats, monitoring };
 }

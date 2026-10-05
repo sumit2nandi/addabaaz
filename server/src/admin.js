@@ -89,6 +89,12 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   /* ---------- dashboard & setup checklist ---------- */
   // Dashboard numbers (users, subscribers, revenue, signups).
   router.get('/stats', wrap(async (_req, res) => res.json(await db.stats.overview())));
+  // Database storage and MySQL instance diagnostics. The latter are clearly marked as server-wide by the page.
+  router.get('/database/monitor', wrap(async (_req, res) => {
+    if (!db.monitoring?.snapshot) throw new HttpError(503, 'database_monitor_unavailable', 'Database monitoring is not available on this server.');
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await db.monitoring.snapshot());
+  }));
   // Setup checklist: reports which optional services (payments, mail, R2, social logins ...) are configured. Never reveals secret values.
   router.get('/health', wrap(async (_req, res) => {
     const dbUp = await db.ping().then(() => true, () => false);
