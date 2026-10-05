@@ -61,12 +61,13 @@ test('page asks the player to start automatically on all devices', async () => {
   assert.equal(opts.autoplay, true, 'watch page requests autoplay and lets the player attempt the preferred sound mode first');
 });
 
-test('public watch metadata does not show the catalog view count', async () => {
+test('public watch metadata does not show catalog view count or content runtime', async () => {
   const { ctx } = await mount('v1');
   const meta = ctx.root.querySelector('.meta-line');
   assert.ok(meta);
   assert.doesNotMatch(meta.textContent, /views?/i);
   assert.doesNotMatch(meta.textContent, /\b1\s+views?\b/i, 'the fixture has one catalog view, which is no longer exposed');
+  assert.doesNotMatch(meta.textContent, /\b1:40\b/, 'watch metadata omits this episode’s 100-second runtime');
 });
 
 test('watch actions are source-specific for YouTube and R2 videos', async () => {

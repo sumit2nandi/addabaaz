@@ -30,11 +30,6 @@ export function clip(text, max) {
   return (sp > max * 0.6 ? cut.slice(0, sp) : cut).replace(/[\s,;:|–—-]+$/, '') + '…';
 }
 export const absUrl = (origin, p) => (!p ? '' : /^(https?:)?\/\//.test(p) ? p : `${origin}/${String(p).replace(/^\/+/, '')}`);
-/** Seconds → ISO 8601 duration (PT1H2M3S), as schema.org wants. */
-export function isoDuration(sec) {
-  const s = Math.max(0, Math.round(Number(sec) || 0)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
-  return 'PT' + (h ? h + 'H' : '') + (m ? m + 'M' : '') + (r || (!h && !m) ? r + 'S' : '');
-}
 /** First candidate title that fits in ~65 characters (search results cut longer ones), else the last one shortened. */
 // Titles longer than ~65 characters get cut off in search results, so pick the first candidate that fits.
 const fit = (options, max = 65) => options.find((t) => t.length <= max) || clip(options.at(-1), max);
@@ -72,7 +67,7 @@ const itemList = (origin, items) => ({ '@type': 'ItemList', numberOfItems: items
 const video = (origin, v, cat, show, { url, full = true } = {}) => ({
   '@type': 'VideoObject', name: full ? clip(`${cat.displayTitle(v)}${show && !cat.displayTitle(v).includes(showName(show)) ? ` — ${showName(show)}` : ''}`, 110) : cat.displayTitle(v),
   description: videoDescription(v, show, cat), thumbnailUrl: [absUrl(origin, cat.thumb(v, 'hqdefault'))].filter(Boolean),
-  uploadDate: v.publishedAt, ...(v.duration > 0 ? { duration: isoDuration(v.duration) } : {}), inLanguage: 'bn', isFamilyFriendly: true,
+  uploadDate: v.publishedAt, inLanguage: 'bn', isFamilyFriendly: true,
   ...(url ? { url } : {}),
   ...(v.source?.type === 'youtube' ? { embedUrl: `https://www.youtube.com/embed/${v.source.id}` } : {}),
   ...(cat.isPremium(v) ? { isAccessibleForFree: false } : { isAccessibleForFree: true }),

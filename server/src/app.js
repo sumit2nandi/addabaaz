@@ -31,6 +31,7 @@ import { HttpError, bad, wrap, rateLimit, safeErrorUrl } from './http.js';
 import { createCatalogStore } from './catalog.js';
 import { createYouTubeFeed } from './youtube-feed.js';
 import { installSecurityMiddleware } from './middleware/security.js';
+import { createApplicationMonitor } from './application-monitor.js';
 import { createAdminRouter } from './admin.js';
 import { createSessionResolver, sessionForRequest } from './sessions.js';
 import { registerSystemRoutes } from './routes/system.js';
@@ -107,6 +108,8 @@ export function createApp({
   const app = express();
   app.disable('x-powered-by');
   const seoCfg = installSecurityMiddleware(app, { corsOrigins, production, seo });
+  const applicationMonitor = createApplicationMonitor();
+  app.use(applicationMonitor.middleware);
   // All JSON endpoints hang off this router, mounted at /api/v1 near the bottom.
   const api = express.Router();
   api.use(express.json({ limit: '50kb', verify: (req, _res, buf) => { req.rawBody = buf; } }));   // rawBody: payment webhooks are signed over the exact bytes
@@ -155,7 +158,7 @@ export function createApp({
   registerPaymentWebhook(api, { db, billing, payments });
   /* ---------- admin console API (admin accounts, or ADMIN_TOKEN for scripts) — see server/src/admin.js ---------- */
   // Mount the admin console API. It does its own authentication (admin role or ADMIN_TOKEN).
-  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, campaigns, unsubscribeUrlFor, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate, sms, promos, maintenance, siteUrl: billing.config.siteUrl || '' }));
+  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, campaigns, unsubscribeUrlFor, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate, sms, promos, maintenance, applicationMonitor, siteUrl: billing.config.siteUrl || '' }));
 
   /* ---------- authenticated ---------- */
   // AUTH MIDDLEWARE: every route registered after this line requires a valid session token whose session version still matches.
@@ -217,5 +220,6 @@ export function createApp({
   app.locals.supportEmails = supportEmails;
   app.locals.promos = promos;            // background jobs (expiry sweep) and tests
   app.locals.maintenance = maintenance;  // the Admin → Maintenance switch (tests and web.js)
+  app.locals.applicationMonitor = applicationMonitor; // runtime samples for Admin → System → Application and the minute collector
   return app;
 }

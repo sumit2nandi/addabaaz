@@ -3,7 +3,7 @@ import path from 'node:path';
 import { Catalog } from '../../app/js/data/catalog.js';
 import { matchRoute } from '../../app/js/routes.js';
 import { pageMeta, absUrl, clip, showFullName, videoIndexable, videoDescription, SITE, TYPE_LABEL } from '../../app/js/seo/meta.js';
-import { esc, fmtDuration } from '../../app/js/util.js';
+import { esc } from '../../app/js/util.js';
 import { legalDoc, LEGAL_PAGES, LEGAL_UPDATED } from '../../app/js/legal-text.js';
 
 /**
@@ -37,7 +37,7 @@ export function bodyHtml(m, { view, params }, cat, studio, plans) {
   const intro = (t, d = m.description) => `${h1(t)}<p>${esc(d)}</p>`;
   const nav = `<nav aria-label="Site">${[['/', 'Home'], ['/shows', 'All shows'], ['/reels', 'Reels'], ['/upcoming', 'Coming soon'], ['/plans', 'Plans'], ['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact'], ['/privacy', 'Privacy Policy'], ['/terms', 'Terms of Use'], ['/refunds', 'Refund Policy']].map(([h, t]) => A(h, t)).join(' · ')}</nav>`;
   const showList = (list) => `<ul>${list.map((s) => li(`/show/${s.id}`, showFullName(s), s.tagline)).join('')}</ul>`;
-  const epList = (list) => `<ul>${list.map((v) => li(`/watch/${v.id}`, `${v.kind === 'episode' && v.episode ? `EP ${v.episode}: ` : ''}${cat.displayTitle(v)}`, fmtDuration(v.duration))).join('')}</ul>`;
+  const epList = (list) => `<ul>${list.map((v) => li(`/watch/${v.id}`, `${v.kind === 'episode' && v.episode ? `EP ${v.episode}: ` : ''}${cat.displayTitle(v)}`)).join('')}</ul>`;
   let b = '';
   // Choose the content by which page (view) was requested.
   switch (view) {
@@ -194,7 +194,7 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
       if (!videoIndexable(v)) continue;
       const show = cat.show(v.showId), meta = pageMeta({ path: `/watch/${v.id}`, cat, origin });
       const thumb = absUrl(origin, cat.thumb(v));
-      const vid = thumb ? `<video:video><video:thumbnail_loc>${esc(thumb)}</video:thumbnail_loc><video:title>${esc(clip(cat.displayTitle(v) + (show ? ` — ${showName(show)}` : ''), 100))}</video:title><video:description>${esc(clip(meta.description, 2000))}</video:description>${v.source?.type === 'youtube' ? `<video:player_loc>${esc(`https://www.youtube.com/embed/${v.source.id}`)}</video:player_loc>` : ''}${v.duration > 0 ? `<video:duration>${Math.round(v.duration)}</video:duration>` : ''}<video:publication_date>${esc(v.publishedAt)}</video:publication_date>${(v.access === 'premium' || show?.access === 'premium') ? '<video:requires_subscription>yes</video:requires_subscription>' : ''}</video:video>` : '';
+      const vid = thumb ? `<video:video><video:thumbnail_loc>${esc(thumb)}</video:thumbnail_loc><video:title>${esc(clip(cat.displayTitle(v) + (show ? ` — ${showName(show)}` : ''), 100))}</video:title><video:description>${esc(clip(meta.description, 2000))}</video:description>${v.source?.type === 'youtube' ? `<video:player_loc>${esc(`https://www.youtube.com/embed/${v.source.id}`)}</video:player_loc>` : ''}<video:publication_date>${esc(v.publishedAt)}</video:publication_date>${(v.access === 'premium' || show?.access === 'premium') ? '<video:requires_subscription>yes</video:requires_subscription>' : ''}</video:video>` : '';
       out.push(url(`/watch/${v.id}`, { lastmod: v.publishedAt, extra: vid }));
     }
     return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">\n${out.join('\n')}\n</urlset>\n`;

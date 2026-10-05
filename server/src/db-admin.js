@@ -466,6 +466,341 @@ export function adminDb({ q, tx, self, iso }) {
     },
   };
 
+  // ---- Database monitoring (Admin → System → Database) ----
+  // TABLE_ROWS / DATA_LENGTH / INDEX_LENGTH are MySQL's table statistics. For InnoDB they are estimates,
+  // so this deliberately reports schema storage as an estimated footprint rather than claiming to measure
+  // the MySQL process's RAM. The buffer-pool and server counters below are instance-wide, not per schema.
+  const MONITOR_RETENTION_KEY = 'database_monitor_retention_days';
+  const MONITOR_RETENTION_DAYS = [1, 3, 7, 14, 30];
+  const numberOrNull = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const valueNumber = Number(value);
+    return Number.isFinite(valueNumber) && valueNumber >= 0 ? valueNumber : null;
+  };
+  const wholeOrNull = (value) => {
+    const n = numberOrNull(value);
+    return n === null ? null : Math.trunc(n);
+  };
+  const counterDelta = (current, previous) => {
+    const now = wholeOrNull(current), before = wholeOrNull(previous);
+    // A counter that reset after a MySQL restart starts a new series at its current value.
+    return now === null || before === null ? null : now >= before ? now - before : now;
+  };
+  const pruneMonitorHistory = async (days) => {
+    await q('DELETE FROM database_monitor_samples WHERE sampled_at < UTC_TIMESTAMP(3) - INTERVAL ? DAY', [days]);
+  };
+  const getRetentionDays = async () => {
+    const configured = Number(await self.settings.get(MONITOR_RETENTION_KEY, '7'));
+    return MONITOR_RETENTION_DAYS.includes(configured) ? configured : 7;
+  };
+
+  const monitoring = {
+    async retentionDays() { return getRetentionDays(); },
+    async setRetentionDays(days) {
+      const value = Number(days);
+      if (!MONITOR_RETENTION_DAYS.includes(value)) throw new TypeError('Unsupported database-monitor history retention.');
+      await self.settings.set(MONITOR_RETENTION_KEY, value);
+      await pruneMonitorHistory(value);
+      return value;
+    },
+    /** Save one minute bucket. The primary key makes collection safe across multiple app instances. */
+    async record(snapshot) {
+      const sampledMs = Date.parse(snapshot?.sampledAt || '');
+      if (!Number.isFinite(sampledMs)) throw new TypeError('A valid sampledAt timestamp is required to store a database-monitor sample.');
+      const sampledAt = new Date(Math.floor(sampledMs / 60_000) * 60_000);
+      const previous = (await q(`SELECT sampled_at, queries_since_restart, slow_queries_since_restart, disk_tmp_tables_since_restart
+        FROM database_monitor_samples WHERE sampled_at < ? ORDER BY sampled_at DESC LIMIT 1`, [sampledAt]))[0] || null;
+      const instance = snapshot.instance || {};
+      const storage = snapshot.storage || {};
+      const connections = instance.connections || {};
+      const activity = instance.activity || {};
+      const pool = instance.bufferPool || {};
+      const estimatedRows = Number(storage.rowEstimateTables) > 0 ? wholeOrNull(storage.estimatedRows) : null;
+      const intervalSeconds = previous
+        ? Math.max(1, Math.round((sampledAt.getTime() - new Date(previous.sampled_at).getTime()) / 1000))
+        : 0;
+      const values = [
+        sampledAt,
+        wholeOrNull(storage.totalBytes) ?? 0,
+        wholeOrNull(storage.dataBytes) ?? 0,
+        wholeOrNull(storage.indexBytes) ?? 0,
+        estimatedRows,
+        wholeOrNull(storage.tableCount) ?? 0,
+        wholeOrNull(pool.capacityBytes),
+        wholeOrNull(pool.usedBytes),
+        numberOrNull(pool.hitRatePct),
+        wholeOrNull(connections.connected),
+        wholeOrNull(connections.running),
+        wholeOrNull(connections.max),
+        wholeOrNull(activity.queriesSinceStart),
+        wholeOrNull(activity.slowQueries),
+        wholeOrNull(activity.diskTemporaryTables),
+        counterDelta(activity.queriesSinceStart, previous?.queries_since_restart),
+        counterDelta(activity.slowQueries, previous?.slow_queries_since_restart),
+        counterDelta(activity.diskTemporaryTables, previous?.disk_tmp_tables_since_restart),
+        intervalSeconds,
+      ];
+      const result = await q(`INSERT IGNORE INTO database_monitor_samples (
+        sampled_at, total_storage_bytes, data_bytes, index_bytes, estimated_rows, table_count,
+        buffer_pool_capacity_bytes, buffer_pool_used_bytes, buffer_pool_hit_rate_pct,
+        connections_current, connections_running, connections_max,
+        queries_since_restart, slow_queries_since_restart, disk_tmp_tables_since_restart,
+        queries_delta, slow_queries_delta, disk_tmp_tables_delta, sample_interval_seconds
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, values);
+      return Number(result?.affectedRows || 0) === 1;
+    },
+    /** Return a compact, time-bucketed series suitable for an admin chart (at most about 600 points). */
+    async history({ since, bucketSeconds = 60 } = {}) {
+      const bucket = Math.max(60, Math.min(2_592_000, Math.ceil(Number(bucketSeconds) / 60) * 60 || 60));
+      const rows = await q(`SELECT FLOOR(UNIX_TIMESTAMP(sampled_at) / ?) * ? AS bucket_epoch,
+          AVG(total_storage_bytes) AS total_storage_bytes,
+          AVG(data_bytes) AS data_bytes,
+          AVG(index_bytes) AS index_bytes,
+          AVG(estimated_rows) AS estimated_rows,
+          AVG(buffer_pool_capacity_bytes) AS buffer_pool_capacity_bytes,
+          AVG(buffer_pool_used_bytes) AS buffer_pool_used_bytes,
+          AVG(buffer_pool_hit_rate_pct) AS buffer_pool_hit_rate_pct,
+          AVG(connections_current) AS connections_current,
+          AVG(connections_running) AS connections_running,
+          AVG(connections_max) AS connections_max,
+          CASE WHEN SUM(CASE WHEN queries_delta IS NOT NULL THEN sample_interval_seconds ELSE 0 END) > 0
+            THEN SUM(queries_delta) * 60 / SUM(CASE WHEN queries_delta IS NOT NULL THEN sample_interval_seconds ELSE 0 END) ELSE NULL END AS queries_per_minute,
+          CASE WHEN SUM(CASE WHEN slow_queries_delta IS NOT NULL THEN sample_interval_seconds ELSE 0 END) > 0
+            THEN SUM(slow_queries_delta) * 60 / SUM(CASE WHEN slow_queries_delta IS NOT NULL THEN sample_interval_seconds ELSE 0 END) ELSE NULL END AS slow_queries_per_minute,
+          CASE WHEN SUM(CASE WHEN disk_tmp_tables_delta IS NOT NULL THEN sample_interval_seconds ELSE 0 END) > 0
+            THEN SUM(disk_tmp_tables_delta) * 60 / SUM(CASE WHEN disk_tmp_tables_delta IS NOT NULL THEN sample_interval_seconds ELSE 0 END) ELSE NULL END AS disk_tmp_tables_per_minute
+        FROM database_monitor_samples
+        WHERE sampled_at >= ? AND sampled_at <= UTC_TIMESTAMP(3)
+        GROUP BY bucket_epoch ORDER BY bucket_epoch`, [bucket, bucket, since, bucket]);
+      const value = (row, key) => numberOrNull(row[key]);
+      return rows.map((row) => ({
+        at: new Date(Number(row.bucket_epoch) * 1000).toISOString(),
+        totalStorageBytes: value(row, 'total_storage_bytes'),
+        dataBytes: value(row, 'data_bytes'),
+        indexBytes: value(row, 'index_bytes'),
+        estimatedRows: value(row, 'estimated_rows'),
+        bufferPoolCapacityBytes: value(row, 'buffer_pool_capacity_bytes'),
+        bufferPoolUsedBytes: value(row, 'buffer_pool_used_bytes'),
+        bufferPoolHitRatePct: value(row, 'buffer_pool_hit_rate_pct'),
+        connectionsCurrent: value(row, 'connections_current'),
+        connectionsRunning: value(row, 'connections_running'),
+        connectionsMax: value(row, 'connections_max'),
+        queriesPerMinute: value(row, 'queries_per_minute'),
+        slowQueriesPerMinute: value(row, 'slow_queries_per_minute'),
+        diskTempTablesPerMinute: value(row, 'disk_tmp_tables_per_minute'),
+      }));
+    },
+    async collect() {
+      const snapshot = await this.snapshot();
+      const stored = await this.record(snapshot);
+      await pruneMonitorHistory(await getRetentionDays());
+      return { sampledAt: snapshot.sampledAt, stored };
+    },
+    async snapshot() {
+      const [metaRows, tableRows, statusRows, variableRows] = await Promise.all([
+        q('SELECT DATABASE() AS schema_name, VERSION() AS server_version'),
+        q(`SELECT TABLE_NAME, ENGINE, TABLE_ROWS, AVG_ROW_LENGTH, DATA_LENGTH, INDEX_LENGTH, AUTO_INCREMENT
+          FROM information_schema.TABLES
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'`),
+        // SHOW GLOBAL STATUS / VARIABLES are supported by MySQL and MariaDB. Some managed DB users
+        // restrict global status; those metrics are optional and should not hide the schema statistics.
+        q(`SHOW GLOBAL STATUS WHERE Variable_name IN (
+          'Uptime', 'Threads_connected', 'Threads_running', 'Max_used_connections', 'Connections',
+          'Queries', 'Slow_queries', 'Created_tmp_tables', 'Created_tmp_disk_tables',
+          'Innodb_buffer_pool_pages_data', 'Innodb_buffer_pool_pages_free', 'Innodb_buffer_pool_pages_total',
+          'Innodb_buffer_pool_pages_dirty', 'Innodb_buffer_pool_read_requests', 'Innodb_buffer_pool_reads'
+        )`).catch(() => []),
+        q(`SHOW GLOBAL VARIABLES WHERE Variable_name IN (
+          'max_connections', 'innodb_buffer_pool_size', 'innodb_page_size'
+        )`).catch(() => []),
+      ]);
+      const metric = (value) => {
+        if (value === null || value === undefined || value === '') return null;
+        const n = Number(value);
+        return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : null;
+      };
+      const asBytes = (value) => metric(value) ?? 0;
+      const nameValueMap = (rows) => new Map(rows.map((r) => [
+        String(r.Variable_name ?? r.variable_name ?? '').toLowerCase(), r.Value ?? r.value,
+      ]));
+      const status = nameValueMap(statusRows), variables = nameValueMap(variableRows);
+      const statusMetric = (name) => metric(status.get(name.toLowerCase()));
+      const variableMetric = (name) => metric(variables.get(name.toLowerCase()));
+
+      const tables = tableRows.map((r) => {
+        const dataBytes = asBytes(r.DATA_LENGTH), indexBytes = asBytes(r.INDEX_LENGTH);
+        const rows = metric(r.TABLE_ROWS);
+        return {
+          name: String(r.TABLE_NAME), engine: r.ENGINE || 'Unknown',
+          estimatedRows: rows, dataBytes, indexBytes, totalBytes: dataBytes + indexBytes,
+          averageRowBytes: metric(r.AVG_ROW_LENGTH), autoIncrement: metric(r.AUTO_INCREMENT),
+        };
+      });
+      tables.sort((a, b) => b.totalBytes - a.totalBytes || a.name.localeCompare(b.name));
+      const dataBytes = tables.reduce((n, table) => n + table.dataBytes, 0);
+      const indexBytes = tables.reduce((n, table) => n + table.indexBytes, 0);
+      const totalBytes = dataBytes + indexBytes;
+      const rowEstimateTables = tables.filter((table) => table.estimatedRows !== null).length;
+      const estimatedRows = tables.reduce((n, table) => n + (table.estimatedRows ?? 0), 0);
+      for (const table of tables) table.sharePct = totalBytes ? Math.round(table.totalBytes / totalBytes * 10_000) / 100 : 0;
+
+      const pageSize = variableMetric('innodb_page_size') || 16_384;
+      const poolPages = statusMetric('Innodb_buffer_pool_pages_total');
+      const freePages = statusMetric('Innodb_buffer_pool_pages_free');
+      const dataPages = statusMetric('Innodb_buffer_pool_pages_data');
+      const dirtyPages = statusMetric('Innodb_buffer_pool_pages_dirty');
+      const readRequests = statusMetric('Innodb_buffer_pool_read_requests');
+      const diskReads = statusMetric('Innodb_buffer_pool_reads');
+      const bufferPoolSize = variableMetric('innodb_buffer_pool_size');
+      const bufferPoolCapacity = bufferPoolSize ?? (poolPages === null ? null : poolPages * pageSize);
+      const bufferPoolUsed = poolPages !== null && freePages !== null
+        ? Math.max(0, poolPages - freePages) * pageSize
+        : dataPages === null ? null : dataPages * pageSize;
+      const bufferPool = bufferPoolCapacity === null && dataPages === null && poolPages === null ? null : {
+        capacityBytes: bufferPoolCapacity,
+        usedBytes: bufferPoolUsed,
+        freeBytes: freePages === null ? null : freePages * pageSize,
+        dataBytes: dataPages === null ? null : dataPages * pageSize,
+        dirtyBytes: dirtyPages === null ? null : dirtyPages * pageSize,
+        usagePct: bufferPoolCapacity && bufferPoolUsed !== null
+          ? Math.round(bufferPoolUsed / bufferPoolCapacity * 10_000) / 100 : null,
+        hitRatePct: readRequests > 0 && diskReads !== null
+          ? Math.round(Math.max(0, 1 - diskReads / readRequests) * 100_000) / 1_000 : null,
+        pageSizeBytes: pageSize,
+      };
+      const maxConnections = variableMetric('max_connections');
+      const connected = statusMetric('Threads_connected');
+      return {
+        schemaName: metaRows[0]?.schema_name || null,
+        serverVersion: metaRows[0]?.server_version || null,
+        sampledAt: new Date().toISOString(),
+        storage: { tableCount: tables.length, dataBytes, indexBytes, totalBytes, estimatedRows, rowEstimateTables },
+        tables,
+        instance: {
+          statusAvailable: statusRows.length > 0,
+          connections: {
+            connected, running: statusMetric('Threads_running'),
+            peak: statusMetric('Max_used_connections'), max: maxConnections,
+            usagePct: maxConnections > 0 && connected !== null ? Math.round(connected / maxConnections * 10_000) / 100 : null,
+          },
+          activity: {
+            uptimeSeconds: statusMetric('Uptime'), connectionsSinceStart: statusMetric('Connections'),
+            queriesSinceStart: statusMetric('Queries'), slowQueries: statusMetric('Slow_queries'),
+            temporaryTables: statusMetric('Created_tmp_tables'), diskTemporaryTables: statusMetric('Created_tmp_disk_tables'),
+          },
+          bufferPool,
+        },
+      };
+    },
+  };
+
+  // ---- Application monitoring (Admin → System → Application) ----
+  const APP_MONITOR_RETENTION_KEY = 'application_monitor_retention_days';
+  const APP_MONITOR_RETENTION_DAYS = [1, 3, 7, 14, 30];
+  const pruneApplicationHistory = async (days) => {
+    await q('DELETE FROM application_monitor_samples WHERE sampled_at < UTC_TIMESTAMP(3) - INTERVAL ? DAY', [days]);
+  };
+  const getApplicationRetention = async () => {
+    const configured = Number(await self.settings.get(APP_MONITOR_RETENTION_KEY, '7'));
+    return APP_MONITOR_RETENTION_DAYS.includes(configured) ? configured : 7;
+  };
+  const applicationMonitoring = {
+    async retentionDays() { return getApplicationRetention(); },
+    async setRetentionDays(days) {
+      const value = Number(days);
+      if (!APP_MONITOR_RETENTION_DAYS.includes(value)) throw new TypeError('Unsupported application-monitor history retention.');
+      await self.settings.set(APP_MONITOR_RETENTION_KEY, value);
+      await pruneApplicationHistory(value);
+      return value;
+    },
+    /** Persist one per-process minute sample; the UUID key prevents app instances from overwriting each other. */
+    async record(snapshot) {
+      const sampledMs = Date.parse(snapshot?.sampledAt || '');
+      if (!Number.isFinite(sampledMs) || typeof snapshot.instanceId !== 'string') {
+        throw new TypeError('A valid application-monitor sample is required.');
+      }
+      const sampledAt = new Date(Math.floor(sampledMs / 60_000) * 60_000);
+      const memory = snapshot.memory || {};
+      const system = snapshot.system || {};
+      const http = snapshot.http || {};
+      const result = await q(`INSERT IGNORE INTO application_monitor_samples (
+        instance_id, sampled_at, cpu_percent, processor_count,
+        memory_rss_bytes, heap_used_bytes, heap_total_bytes, external_bytes, array_buffers_bytes,
+        load_1, load_5, load_15, sample_interval_seconds,
+        http_request_count, http_client_error_count, http_server_error_count,
+        http_latency_count, http_latency_sum_ms, http_latency_p50_ms, http_latency_p95_ms, http_latency_max_ms
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+        snapshot.instanceId, sampledAt, numberOrNull(snapshot.cpuPercent), wholeOrNull(snapshot.processors) ?? 1,
+        wholeOrNull(memory.rssBytes) ?? 0, wholeOrNull(memory.heapUsedBytes) ?? 0,
+        wholeOrNull(memory.heapTotalBytes) ?? 0, wholeOrNull(memory.externalBytes) ?? 0,
+        wholeOrNull(memory.arrayBuffersBytes), numberOrNull(system.load1), numberOrNull(system.load5), numberOrNull(system.load15),
+        wholeOrNull(snapshot.intervalSeconds) ?? 0, wholeOrNull(http.requests) ?? 0,
+        wholeOrNull(http.clientErrors) ?? 0, wholeOrNull(http.serverErrors) ?? 0,
+        wholeOrNull(http.requests) ?? 0, numberOrNull(http.latencySumMs) ?? 0,
+        numberOrNull(http.p50ResponseMs), numberOrNull(http.p95ResponseMs), numberOrNull(http.maxResponseMs),
+      ]);
+      await pruneApplicationHistory(await getApplicationRetention());
+      return Number(result?.affectedRows || 0) === 1;
+    },
+    /** Aggregate per-process gauge means, fleet totals, and request-weighted latency into about 600 buckets. */
+    async history({ since, bucketSeconds = 60 } = {}) {
+      const bucket = Math.max(60, Math.min(2_592_000, Math.ceil(Number(bucketSeconds) / 60) * 60 || 60));
+      const rows = await q(`SELECT bucket_epoch,
+          AVG(cpu_percent) AS cpu_percent,
+          SUM(memory_rss_bytes) AS memory_rss_bytes,
+          SUM(heap_used_bytes) AS heap_used_bytes,
+          SUM(heap_total_bytes) AS heap_total_bytes,
+          AVG(load_1) AS load_1,
+          COUNT(*) AS active_instances,
+          SUM(request_count) * 60 / ? AS requests_per_minute,
+          CASE WHEN SUM(latency_count) > 0 THEN SUM(latency_sum_ms) / SUM(latency_count) ELSE NULL END AS response_average_ms,
+          MAX(response_p50_ms) AS response_p50_ms,
+          MAX(response_p95_ms) AS response_p95_ms,
+          MAX(response_max_ms) AS response_max_ms,
+          SUM(client_error_count) * 60 / ? AS client_errors_per_minute,
+          SUM(server_error_count) * 60 / ? AS server_errors_per_minute,
+          CASE WHEN SUM(request_count) > 0 THEN SUM(server_error_count) * 100 / SUM(request_count) ELSE NULL END AS server_error_rate_pct
+        FROM (
+          SELECT instance_id, FLOOR(UNIX_TIMESTAMP(sampled_at) / ?) * ? AS bucket_epoch,
+            AVG(cpu_percent) AS cpu_percent,
+            AVG(memory_rss_bytes) AS memory_rss_bytes,
+            AVG(heap_used_bytes) AS heap_used_bytes,
+            AVG(heap_total_bytes) AS heap_total_bytes,
+            AVG(load_1) AS load_1,
+            SUM(http_request_count) AS request_count,
+            SUM(http_client_error_count) AS client_error_count,
+            SUM(http_server_error_count) AS server_error_count,
+            SUM(http_latency_count) AS latency_count,
+            SUM(http_latency_sum_ms) AS latency_sum_ms,
+            MAX(http_latency_p50_ms) AS response_p50_ms,
+            MAX(http_latency_p95_ms) AS response_p95_ms,
+            MAX(http_latency_max_ms) AS response_max_ms
+          FROM application_monitor_samples
+          WHERE sampled_at >= ? AND sampled_at <= UTC_TIMESTAMP(3)
+          GROUP BY instance_id, bucket_epoch
+        ) AS per_instance
+        GROUP BY bucket_epoch ORDER BY bucket_epoch`, [bucket, bucket, bucket, bucket, bucket, since]);
+      const value = (row, key) => numberOrNull(row[key]);
+      return rows.map((row) => ({
+        at: new Date(Number(row.bucket_epoch) * 1000).toISOString(),
+        cpuPercent: value(row, 'cpu_percent'),
+        memoryRssBytes: value(row, 'memory_rss_bytes'),
+        heapUsedBytes: value(row, 'heap_used_bytes'),
+        heapTotalBytes: value(row, 'heap_total_bytes'),
+        load1: value(row, 'load_1'),
+        activeInstances: value(row, 'active_instances'),
+        requestsPerMinute: value(row, 'requests_per_minute'),
+        responseAverageMs: value(row, 'response_average_ms'),
+        responseP50Ms: value(row, 'response_p50_ms'),
+        responseP95Ms: value(row, 'response_p95_ms'),
+        responseMaxMs: value(row, 'response_max_ms'),
+        clientErrorsPerMinute: value(row, 'client_errors_per_minute'),
+        serverErrorsPerMinute: value(row, 'server_errors_per_minute'),
+        serverErrorRatePct: value(row, 'server_error_rate_pct'),
+      }));
+    },
+  };
+
   // Merged into the main `db` object by db.js.
-  return { catalog, uploads, audit, youtubeImports, adminUsers, messages, stats };
+  return { catalog, uploads, audit, youtubeImports, adminUsers, messages, stats, monitoring, applicationMonitoring };
 }

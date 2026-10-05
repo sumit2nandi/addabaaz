@@ -29,17 +29,7 @@ export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 export function debounce(fn, ms = 200) {
   let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
 }
-// Number formatters: 75 -> "1:15" (player clock), runtimes like "1h 5m", view counts like "1.2K", dates, and "3 days ago".
-export function fmtDuration(sec) {
-  sec = Math.max(0, Math.round(sec || 0));
-  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
-  return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
-}
-export function fmtRuntime(sec) {
-  const m = Math.round((sec || 0) / 60);
-  if (m < 1) return `${Math.max(1, Math.round(sec || 0))}s`;
-  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
-}
+// Date helpers and other user-facing formatters. Player controls format their live time locally.
 export function fmtViews(n) {
   n = Number(n) || 0;
   if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';

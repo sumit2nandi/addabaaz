@@ -266,6 +266,34 @@ paths:
   /refund-requests: { get: { tags: [billing], summary: 'My refund requests and the refund window in days.', responses: { '200': { description: '{ requests, windowDays }' } } } }
   /admin/inbox: { get: { security: [ { admin: [] } ], tags: [admin], summary: 'Counts for the console badges { comments, refunds, errors }.', responses: { '200': { description: counts } } } }
   /admin/analytics: { get: { security: [ { admin: [] } ], tags: [admin], summary: 'Plays and watch time (?days=7|30|90) plus revenue.', responses: { '200': { description: '{ days, totals, daily, shows, videos, business }' } } } }
+  /admin/database/monitor:
+    get:
+      security: [ { admin: [] } ]
+      tags: [admin]
+      summary: 'Current MySQL/schema metrics and downsampled history for the Admin database charts; defaults to the last 7 days. Retained metrics are sampled once a minute.'
+      parameters: [ { name: range, in: query, schema: { type: string, enum: [1h, 6h, 24h, 3d, 7d, 14d, 30d], default: 7d } } ]
+      responses: { '200': { description: '{ schemaName, sampledAt, storage, tables, instance, history, range, rangeSeconds, retentionDays, sampleIntervalSeconds }' }, '401': { description: unauthorized }, '403': { description: not an administrator } }
+  /admin/database/monitor/settings:
+    patch:
+      security: [ { admin: [] } ]
+      tags: [admin]
+      summary: 'Set database history retention; decreasing it permanently prunes older samples.'
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [retentionDays], properties: { retentionDays: { type: integer, enum: [1, 3, 7, 14, 30] } } } } } }
+      responses: { '200': { description: '{ retentionDays }' }, '400': { description: invalid retention }, '401': { description: unauthorized }, '403': { description: not an administrator } }
+  /admin/application/monitor:
+    get:
+      security: [ { admin: [] } ]
+      tags: [admin]
+      summary: 'Current-process Node.js health and downsampled API performance history across app instances; defaults to seven days. Request paths and user data are not recorded.'
+      parameters: [ { name: range, in: query, schema: { type: string, enum: [1h, 6h, 24h, 3d, 7d, 14d, 30d], default: 7d } } ]
+      responses: { '200': { description: '{ current: { instanceId, sampledAt, uptimeSeconds, processors, cpuPercent, memory, system, http }, history: [{ at, cpuPercent, memoryRssBytes, heapUsedBytes, heapTotalBytes, load1, activeInstances, requestsPerMinute, responseAverageMs, responseP50Ms, responseP95Ms, responseMaxMs, clientErrorsPerMinute, serverErrorsPerMinute, serverErrorRatePct }], range, rangeSeconds, retentionDays, sampleIntervalSeconds }' }, '401': { description: unauthorized }, '403': { description: not an administrator } }
+  /admin/application/monitor/settings:
+    patch:
+      security: [ { admin: [] } ]
+      tags: [admin]
+      summary: 'Set application history retention; decreasing it permanently prunes older samples.'
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [retentionDays], properties: { retentionDays: { type: integer, enum: [1, 3, 7, 14, 30] } } } } } }
+      responses: { '200': { description: '{ retentionDays }' }, '400': { description: invalid retention }, '401': { description: unauthorized }, '403': { description: not an administrator } }
   /admin/comments: { get: { security: [ { admin: [] } ], tags: [admin], summary: 'Moderation list (?filter=review|hidden|all&q=&limit=&offset=).', responses: { '200': { description: '{ total, comments }' } } } }
   /admin/comments/{id}/approve: { post: { security: [ { admin: [] } ], tags: [admin], summary: 'Restore a hidden comment.', parameters: [ { name: id, in: path, required: true, schema: { type: string } } ], responses: { '204': { $ref: '#/components/responses/NoContent' } } } }
   /admin/comments/{id}/hide: { post: { security: [ { admin: [] } ], tags: [admin], summary: 'Hide a comment.', parameters: [ { name: id, in: path, required: true, schema: { type: string } } ], responses: { '204': { $ref: '#/components/responses/NoContent' } } } }

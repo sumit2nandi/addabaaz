@@ -1,6 +1,6 @@
 // Reusable UI pieces (cards, rails, buttons, toasts) returned as safe HTML strings. Pages compose these instead of repeating markup.
 import { app } from '../app.js';
-import { html, raw, esc, fmtDuration, timeAgo, fmtRuntime } from '../util.js';
+import { html, raw, esc, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { avatarColor } from '../data/user.js';
 import { confirmDialog } from './dialog.js';
@@ -65,8 +65,8 @@ export function showCard(s, { cls = '' } = {}) {
     <div class="card-quick">${listBtn('show', s.id, { cls: 'icon-btn', iconOnly: true })}</div>
   </a>`;
 }
-// Thumbnail card for an episode/clip: optional duration, a resume progress bar, Premium mark and optional rank number.
-export function videoCard(v, { progress = true, rank = 0, showName = true, showDuration = true, cls = '' } = {}) {
+// Thumbnail card for an episode/clip: a resume progress bar, Premium mark and optional rank number.
+export function videoCard(v, { progress = true, rank = 0, showName = true, cls = '' } = {}) {
   const cat = app.catalog; const show = cat.show(v.showId);
   const frac = progress ? app.user?.fraction(v.id, v.duration) || 0 : 0;
   const rankEl = rank ? html`<span class="rank" aria-hidden="true">${rank}</span>` : '';
@@ -77,7 +77,6 @@ export function videoCard(v, { progress = true, rank = 0, showName = true, showD
       ${ytImg(v, cat.displayTitle(v))}
       <span class="chip chip-label ${premium ? 'chip-after-mark' : ''}">${cat.label(v)}</span>
       ${premium ? premiumMark() : ''}
-      ${showDuration && v.duration > 0 ? html`<span class="chip chip-dur">${fmtDuration(v.duration)}</span>` : ''}
       <span class="play-overlay">${icon('play', { size: 22 })}</span>
       ${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}
     </div>
@@ -87,12 +86,11 @@ export function videoCard(v, { progress = true, rank = 0, showName = true, showD
     </div>
   </a>`;
 }
-// Small vertical card for a reel; duration can be hidden on dense rails like the home page.
-export function reelCard(v, { showDuration = true } = {}) {
+// Small vertical card for a reel; public content cards never expose a runtime label.
+export function reelCard(v) {
   const cat = app.catalog; const show = cat.show(v.showId);
   return html`<a class="card card-reel" href="#/reels/${v.id}" aria-label="${cat.displayTitle(v)}">
-    <div class="thumb">${ytImg(v, cat.displayTitle(v))}${cat.isPremium(v) ? premiumMark() : ''}<span class="play-overlay">${icon('play', { size: 20 })}</span>
-    ${showDuration ? html`<span class="chip chip-dur">${fmtDuration(v.duration)}</span>` : ''}</div>
+    <div class="thumb">${ytImg(v, cat.displayTitle(v))}${cat.isPremium(v) ? premiumMark() : ''}<span class="play-overlay">${icon('play', { size: 20 })}</span></div>
     <div class="card-body"><div class="card-title">${cat.displayTitle(v)}</div>${show ? html`<div class="card-meta"><span>${show.titleEn || show.title}</span></div>` : ''}</div>
   </a>`;
 }
@@ -187,8 +185,6 @@ export function emptyState({ iconName = 'film', title, text = '', action = '' })
 export function sectionHeader({ tag = '', title, subtitle = '' }) {
   return html`<header class="page-head">${tag ? html`<div class="eyebrow">${tag}</div>` : ''}<h1>${title}</h1>${subtitle ? html`<p>${subtitle}</p>` : ''}</header>`;
 }
-export function runtimeOf(v) { return fmtRuntime(v.duration); }
-
 /* ---------- toast ---------- */
 // A toast is the small message bar at the bottom of the screen; showing a new one replaces the old one.
 let toastTimer;

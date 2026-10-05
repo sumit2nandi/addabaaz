@@ -1,0 +1,26 @@
+-- Aggregate, process-local runtime samples. A process UUID distinguishes app instances; no URLs or user data are stored.
+CREATE TABLE IF NOT EXISTS application_monitor_samples (
+  instance_id                 CHAR(36)       NOT NULL,
+  sampled_at                  DATETIME(3)    NOT NULL,
+  cpu_percent                 DECIMAL(9,3)   NULL,
+  processor_count             SMALLINT UNSIGNED NOT NULL,
+  memory_rss_bytes            BIGINT UNSIGNED NOT NULL,
+  heap_used_bytes             BIGINT UNSIGNED NOT NULL,
+  heap_total_bytes            BIGINT UNSIGNED NOT NULL,
+  external_bytes              BIGINT UNSIGNED NOT NULL,
+  array_buffers_bytes         BIGINT UNSIGNED NULL,
+  load_1                      DECIMAL(10,3)  NULL,
+  load_5                      DECIMAL(10,3)  NULL,
+  load_15                     DECIMAL(10,3)  NULL,
+  sample_interval_seconds     INT UNSIGNED   NOT NULL DEFAULT 0,
+  http_request_count          BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  http_client_error_count     BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  http_server_error_count     BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  http_latency_count          BIGINT UNSIGNED NOT NULL DEFAULT 0,
+  http_latency_sum_ms         DECIMAL(22,3)  NOT NULL DEFAULT 0,
+  http_latency_p50_ms         DECIMAL(12,3)  NULL,
+  http_latency_p95_ms         DECIMAL(12,3)  NULL,
+  http_latency_max_ms         DECIMAL(12,3)  NULL,
+  PRIMARY KEY (instance_id, sampled_at),
+  KEY ix_application_monitor_sampled_at (sampled_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
