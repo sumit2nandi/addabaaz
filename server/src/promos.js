@@ -122,7 +122,8 @@ export function createPromos({ db, config = promosConfigFromEnv(), mailer = null
   async function settings() {
     if (cache && Date.now() - cacheAt < TTL) return cache;
     let stored = {};
-    try { stored = (await db.settings.all()) || {}; } catch { stored = {}; }
+    try { stored = (await db.settings.all()) || {}; }
+    catch (error) { log.warn?.('[promos] could not read promotion settings; using environment defaults:', error); }
     const merged = { ...config };
     for (const [key, field] of Object.entries(PROMO_SETTING_KEYS)) {
       if (stored[key] === undefined || stored[key] === null || stored[key] === '') continue;
@@ -184,7 +185,7 @@ export function createPromos({ db, config = promosConfigFromEnv(), mailer = null
         user.referralCode = code;
         return code;
       } catch (e) {
-        if (e?.code !== 'ER_DUP_ENTRY') { log.warn?.('[promos] could not store a referral code:', e.message); return code; }
+        if (e?.code !== 'ER_DUP_ENTRY') { log.warn?.('[promos] could not store a referral code:', e); return code; }
       }
     }
     return '';
@@ -218,7 +219,7 @@ export function createPromos({ db, config = promosConfigFromEnv(), mailer = null
       // inviter's own stats (and the hold rule can be turned on later).
       if (wanted) out.referralId = await applyReferral({ user, code: wanted, settings: s, out });
     } catch (e) {
-      log.error?.('[promos] signup bonus failed:', e?.message || e);
+      log.error?.('[promos] signup bonus failed:', e);
     }
     if (out.welcomePaise || out.inviteePaise) await notifyCredit(user, { welcomePaise: out.welcomePaise, inviteePaise: out.inviteePaise, inviter: out.inviter, settings: s });
     return out;
@@ -321,7 +322,7 @@ export function createPromos({ db, config = promosConfigFromEnv(), mailer = null
       // Rows the account holds itself (e.g. an administrator put a bonus on hold).
       releasedPaise += await db.credits.releasePending(user.id);
     } catch (e) {
-      log.error?.('[promos] releasing a referral failed:', e?.message || e);
+      log.error?.('[promos] releasing a referral failed:', e);
     }
     return { releasedPaise, completed };
   }
@@ -431,17 +432,17 @@ export function createPromos({ db, config = promosConfigFromEnv(), mailer = null
 
   const send = (to, built, note) => {
     if (!to || !mailer || mailer.provider !== 'smtp' || !built) return Promise.resolve();
-    return Promise.resolve(mailer.send({ to, ...built })).catch((e) => log.warn?.(`[promos] ${note} e-mail failed: ${e.message}`));
+    return Promise.resolve(mailer.send({ to, ...built })).catch((e) => log.warn?.(`[promos] ${note} e-mail failed:`, e));
   };
   async function notifyCredit(user, { welcomePaise, inviteePaise, referral = false }) {
     const amount = (welcomePaise || 0) + (inviteePaise || 0);
     if (!amount || !user?.email || /@phone\.addabaaz\.in$/i.test(user.email)) return;
-    const balances = await db.credits.summary(user.id).catch(() => ({ availablePaise: 0 }));
+    const balances = await db.credits.summary(user.id).catch((e) => { log.warn?.('[promos] credit balance lookup before e-mail failed:', e); return { availablePaise: 0 }; });
     await send(user.email, creditEmail({ name: user.name, amountPaise: amount, balancePaise: balances.availablePaise, referral, siteUrl, supportEmail: '' }), 'credit');
   }
   async function notifyReferral(inviter, invitee, { amountPaise, pending, completed = false }) {
     if (!inviter?.email || /@phone\.addabaaz\.in$/i.test(inviter.email)) return;
-    const balances = await db.credits.summary(inviter.id).catch(() => ({ availablePaise: 0 }));
+    const balances = await db.credits.summary(inviter.id).catch((e) => { log.warn?.('[promos] referrer balance lookup before e-mail failed:', e); return { availablePaise: 0 }; });
     await send(inviter.email, referralEmail({ name: inviter.name, friendName: firstName(invitee.name), amountPaise, pending, completed, balancePaise: balances.availablePaise, siteUrl }), 'referral');
   }
 

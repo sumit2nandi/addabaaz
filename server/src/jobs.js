@@ -9,13 +9,13 @@ export async function runScheduledJobs({ db, catalog, push, campaigns = null, pr
   // Save per-process application metrics before housekeeping work affects this sample window.
   if (applicationMonitor?.takeSnapshot && db.applicationMonitoring?.record) {
     try { await db.applicationMonitoring.record(applicationMonitor.takeSnapshot()); }
-    catch (e) { log.error?.(`[jobs] application monitor: ${e.message}`); }
+    catch (e) { log.error?.('[jobs] application monitor failed:', e); }
   }
   // Save one low-cardinality database sample every minute for Admin → System → Database history.
   // Keep it independent of notification/cleanup failures so a bad job does not leave gaps in the charts.
   if (db.monitoring?.collect) {
     try { await db.monitoring.collect(); }
-    catch (e) { log.error?.(`[jobs] database monitor: ${e.message}`); }
+    catch (e) { log.error?.('[jobs] database monitor failed:', e); }
   }
   try {
     const snap = await catalog.get();   // the public snapshot: scheduled items appear once due
@@ -26,8 +26,8 @@ export async function runScheduledJobs({ db, catalog, push, campaigns = null, pr
     // Continue broadcasts a deploy or crash interrupted.
     out.campaigns = await (campaigns?.resume({ resolveAudience: audienceResolver(snap.catalog) }) ?? 0);
     // Promotions: expire credit whose time ran out and hand back credit held by abandoned orders.
-    if (promos) out.promos = await promos.runMaintenance().catch((e) => { log.error?.(`[jobs] promo maintenance: ${e.message}`); return null; });
-  } catch (e) { log.error?.(`[jobs] ${e.message}`); }
+    if (promos) out.promos = await promos.runMaintenance().catch((e) => { log.error?.('[jobs] promo maintenance failed:', e); return null; });
+  } catch (e) { log.error?.('[jobs] scheduled work failed:', e); }
   return out;
 }
 

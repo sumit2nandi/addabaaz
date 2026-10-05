@@ -32,6 +32,7 @@ import { createCatalogStore } from './catalog.js';
 import { createYouTubeFeed } from './youtube-feed.js';
 import { installSecurityMiddleware } from './middleware/security.js';
 import { createApplicationMonitor } from './application-monitor.js';
+import { createErrorLogger } from './error-reporting.js';
 import { createAdminRouter } from './admin.js';
 import { createSessionResolver, sessionForRequest } from './sessions.js';
 import { registerSystemRoutes } from './routes/system.js';
@@ -52,7 +53,8 @@ import { mountWebsite } from './web.js';
 // Repository root (two folders above server/src).
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 // App version, taken from package.json and reported by /health.
-const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+export const APP_VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+const VERSION = APP_VERSION;
 // Each account may create up to 5 profiles; PALETTE is the number of avatar colours.
 const MAX_PROFILES = 5, PALETTE = 8;
 
@@ -65,9 +67,9 @@ export function createApp({
   jwtSecret = process.env.JWT_SECRET,
   corsOrigins = process.env.CORS_ORIGINS || '*',
   serveStatic = true,
-  payments = paymentsFromEnv(),                               // { provider: 'razorpay' | 'mock' | 'none' }
-  sms = smsFromEnv(),                                         // phone sign-in (MSG91); 'console' in development, 'none' in production without keys
-  mailer = mailerFromEnv(),                                   // SMTP (receipts, refunds, reminders); no-op without SMTP_URL
+  payments: paymentsOption = null,                            // { provider: 'razorpay' | 'mock' | 'none' }
+  sms: smsOption = null,                                      // phone sign-in (MSG91); 'console' in development, 'none' in production without keys
+  mailer: mailerOption = null,                                // SMTP (receipts, refunds, reminders); no-op without SMTP_URL
   billing: billingOption = null,                              // defaults to createBilling() below (promos need the db first)
   promos: promosOption = null,                                // promotional credit + referrals (server/src/promos.js)
   adminToken = process.env.ADMIN_TOKEN || '',                 // optional shared secret for scripts (≥24 chars); admin ACCOUNTS (users.is_admin) need no token
@@ -77,36 +79,52 @@ export function createApp({
   youtubeFeed = createYouTubeFeed(),                         // fetched only after an administrator explicitly previews uploads
   rate = true,
   release = '',                                               // deployment commit SHA, exposed by public health checks (never a secret)
+  errorLogger: suppliedErrorLogger = null,                   // shared database reporter (created here in tests/embedded use)
   catalogPath = path.join(ROOT, 'data/catalog.json'),
   studioPath = path.join(path.dirname(catalogPath), 'studio.json'),
   r2 = createR2(),                                            // Cloudflare R2 (private storage for video files)
   social = socialFromEnv(),                                   // { config, verifiers: { google?, facebook? } }
   publicApiUrl = process.env.PUBLIC_API_URL || '',            // absolute base for HLS URLs when behind a proxy
   streamTtl = Number(process.env.STREAM_URL_TTL) || 6 * 3600, // seconds a signed video URL stays valid
-  push = pushFromEnv(db, process.env, { fcm: fcmFromEnv() }), // Web Push (VAPID) + native app push (FCM); tests inject a fake sender
+  push: pushOption = null,                                   // Web Push (VAPID) + native app push (FCM); tests inject a fake sender
   features: featureOptions = {},                              // limits: { streamLimit, refundWindowDays, reportsToHide … } (env defaults)
   seo = {},                                                    // search-engine options: { siteUrl, indexable, compress, googleVerification, bingVerification } (env defaults below)
 } = {}) {
   // Fail fast on a bad setup.
   if (!db) throw new Error('createApp: a database (createDb()) is required');
+  // One reporter handles HTTP exceptions and failures caught by background/service code. It is created
+  // before the services so their existing error/warning logs are also written to the same error table.
+  const errorLogger = suppliedErrorLogger || createErrorLogger({ db, appVersion: VERSION, release });
+  const logger = errorLogger.logger;
+  const payments = paymentsOption || paymentsFromEnv();
+  const sms = smsOption || smsFromEnv(process.env, { log: logger });
+  const mailer = mailerOption || mailerFromEnv(process.env, { log: logger });
+  const push = pushOption || pushFromEnv(db, process.env, { fcm: fcmFromEnv(process.env, { log: logger }), log: logger });
   // Promotions are created first: billing spends the credit they hand out.
-  const promos = promosOption || createPromos({ db, config: promosConfigFromEnv(), mailer, siteUrl: process.env.PUBLIC_SITE_URL || '' });
-  const billing = billingOption || createBilling({ db, payments, mailer, config: billingConfigFromEnv(), promos });   // coupons, GST invoices, refunds
+  const promos = promosOption || createPromos({ db, config: promosConfigFromEnv(), mailer, siteUrl: process.env.PUBLIC_SITE_URL || '', log: logger });
+  const billing = billingOption || createBilling({ db, payments, mailer, config: billingConfigFromEnv(), promos, log: logger });   // coupons, GST invoices, refunds
   promos.siteUrl = promos.siteUrl || billing.config.siteUrl || '';    // share links and e-mails use the public URL
   // In production require a strong, non-example session key; development may use the warning-only fallback.
   const production = process.env.NODE_ENV === 'production';
   if (production) assertProductionSecret(jwtSecret);
-  if (!jwtSecret) console.warn('[auth] JWT_SECRET not set — using an insecure development secret. Set JWT_SECRET before deploying.');
+  if (!jwtSecret) logger.warn('[auth] JWT_SECRET not set — using an insecure development secret. Set JWT_SECRET before deploying.');
   const secret = jwtSecret || 'insecure-development-secret';
   // The catalog store reads shows/videos from MySQL (seeded once from data/catalog.json) with a small in-memory cache.
-  const catalog = createCatalogStore({ db, catalogPath, studioPath });     // MySQL-backed (seeded once from the JSON files), edited in /admin
+  const catalog = createCatalogStore({ db, catalogPath, studioPath, log: logger });     // MySQL-backed (seeded once from the JSON files), edited in /admin
   // True if a catalog item of that type/id exists (used to validate My List and progress writes).
   const exists = (type, id) => catalog.exists(type, id);
   const userFromRequest = createSessionResolver({ db, secret });
 
-  // Now build the Express app itself.
+  // Now build the Express app itself. A server-generated request id is returned to the caller and saved
+  // with failures, so a browser report and the host's request logs can be correlated without logging tokens.
   const app = express();
   app.disable('x-powered-by');
+  app.use((req, res, next) => {
+    const supplied = String(req.get('x-request-id') || '');
+    req.requestId = /^[A-Za-z0-9._-]{1,64}$/.test(supplied) ? supplied : crypto.randomUUID();
+    res.setHeader('X-Request-ID', req.requestId);
+    next();
+  });
   const seoCfg = installSecurityMiddleware(app, { corsOrigins, production, seo });
   const applicationMonitor = createApplicationMonitor();
   app.use(applicationMonitor.middleware);
@@ -116,7 +134,7 @@ export function createApp({
 
   // Maintenance mode is consulted before every viewer route (and by web.js for pages). It always exists, so
   // an unconfigured server simply reports "not in maintenance" (docs/MAINTENANCE.md).
-  const maintenance = createMaintenance({ db });
+  const maintenance = createMaintenance({ db, log: logger });
   // Before every other route on this router: the guard must see viewer calls first. Only /health, /status,
   // /admin, /auth, payment webhooks and unsubscribe links pass while the switch is on (maintenance.js).
   api.use(maintenance.guard());
@@ -130,7 +148,7 @@ export function createApp({
   // Blocks accounts an admin has disabled.
   const notDisabled = (u) => { if (u.disabledAt) throw new HttpError(403, 'account_disabled', 'This account has been disabled. Please contact support.'); return u; };
   // Optional engagement/security features (password reset, PIN, ratings, comments, push, ...) live in features.js.
-  const features = createFeatures({ db, secret, mailer, push, catalog, siteUrl: billing.config.siteUrl, rate, publicUser, notDisabled, userFromRequest, plans: PLANS, promos, options: { supportEmail: billing.config.supportEmail, ...featureOptions } });
+  const features = createFeatures({ db, secret, mailer, push, catalog, siteUrl: billing.config.siteUrl, rate, publicUser, notDisabled, userFromRequest, plans: PLANS, promos, reportError: errorLogger.capture, logger, options: { supportEmail: billing.config.supportEmail, ...featureOptions } });
 
   /* ---------- broadcast campaigns (Admin → Notifications: push / e-mail) — see server/src/campaigns.js ---------- */
   // Signed one-click unsubscribe link put in the footer of every campaign e-mail; the audience queries skip
@@ -138,27 +156,27 @@ export function createApp({
   const siteUrl = billing.config.siteUrl || '';
   const unsubSig = (userId) => crypto.createHmac('sha256', secret).update(`unsub:${userId}`).digest('base64url').slice(0, 32);
   const unsubscribeUrlFor = (u) => (siteUrl ? `${siteUrl}/api/v1/notifications/unsubscribe?u=${encodeURIComponent(u.id)}&t=${unsubSig(u.id)}` : '');
-  const campaigns = createCampaigns({ db, push, mailer, email: campaignEmail, log: console });
+  const campaigns = createCampaigns({ db, push, mailer, email: campaignEmail, log: logger });
 
-  registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled, sms, promos });
+  registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled, sms, promos, logger });
   // Phone sign-in (SMS OTP). With no MSG91 keys the routes answer 503 and the sign-in page keeps offering
   // email + password — the site never breaks because payments/SMS are missing.
-  registerOtpRoutes(api, { db, sms, secret, publicUser, notDisabled, authLimit, promos });
+  registerOtpRoutes(api, { db, sms, secret, publicUser, notDisabled, authLimit, promos, logger });
   features.public(api);           // password reset, email verification, analytics, public ratings/comments
   // Support tickets (the Support page). Guests can write in too; signing in links the ticket to the account.
-  registerSupportRoutes(api, { db, userFromRequest, mailer, email: supportEmails, supportEmail: billing.config.supportEmail, siteUrl: billing.config.siteUrl || '', rate, log: console });
+  registerSupportRoutes(api, { db, userFromRequest, mailer, email: supportEmails, supportEmail: billing.config.supportEmail, siteUrl: billing.config.siteUrl || '', rate, log: logger });
   // Promotional credit & referrals: the public offer, the viewer's balance/ledger and invite codes. The
   // routes decide for themselves what needs a session, so they sit before the auth middleware.
-  registerPromoRoutes(api, { db, promos, userFromRequest, rate });
+  registerPromoRoutes(api, { db, promos, userFromRequest, rate, logger });
 
-  registerUnsubscribeRoute(api, { db, unsubscribeSignature: unsubSig });
+  registerUnsubscribeRoute(api, { db, unsubscribeSignature: unsubSig, logger });
   /* ---------- Cloudflare R2 video streaming ---------- */
-  registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, r2, catalog, features, userFromRequest });
-  registerContactRoutes(api, { db, rate, contactWebhook });
-  registerPaymentWebhook(api, { db, billing, payments });
+  registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, r2, catalog, features, userFromRequest, logger });
+  registerContactRoutes(api, { db, rate, contactWebhook, logger });
+  registerPaymentWebhook(api, { db, billing, payments, logger });
   /* ---------- admin console API (admin accounts, or ADMIN_TOKEN for scripts) — see server/src/admin.js ---------- */
   // Mount the admin console API. It does its own authentication (admin role or ADMIN_TOKEN).
-  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, campaigns, unsubscribeUrlFor, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate, sms, promos, maintenance, applicationMonitor, siteUrl: billing.config.siteUrl || '' }));
+  api.use('/admin', createAdminRouter({ db, billing, catalog, youtubeFeed, r2, payments, mailer, push, campaigns, unsubscribeUrlFor, social, adminToken, secret, sessionHours, uploadDir, mediaDir: path.join(ROOT, 'media'), rate, sms, promos, maintenance, applicationMonitor, siteUrl: billing.config.siteUrl || '', logger }));
 
   /* ---------- authenticated ---------- */
   // AUTH MIDDLEWARE: every route registered after this line requires a valid session token whose session version still matches.
@@ -175,42 +193,41 @@ export function createApp({
   api.use((_req, _res, next) => next(new HttpError(404, 'not_found', 'Unknown endpoint.')));
   app.use('/api/v1', api);
 
-  mountWebsite(app, { serveStatic, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg, maintenance });
-  // FINAL ERROR HANDLER: turns any thrown error into `{ error: { code, message } }`. Unexpected (500) errors are logged and hidden from the client.
-  // Only errors that were *authored* for the client are ever shown — HttpError, PaymentError, BillingError
-  // (integer status + string code). Library/driver messages and everything else are replaced with a plain,
-  // user-appropriate sentence; the technical detail stays in the server log / error report.
-  app.use((err, req, res, _next) => {
+  mountWebsite(app, { serveStatic, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg, maintenance, logger });
+  // FINAL ERROR HANDLER: turn route/parser failures into the stable JSON contract. Expected,
+  // deliberately-authored 4xx responses are not application faults; every 5xx (including provider
+  // HttpErrors) and every unexpected exception is persisted with request/runtime/error diagnostics.
+  app.use((err, req, res, next) => {
     if (err.type === 'entity.parse.failed') err = bad('Invalid JSON body.', 'invalid_json');
     if (err.type === 'entity.too.large') err = new HttpError(413, 'too_large', 'Request too large.');
-    const status = err.status || 500;
-    if (status >= 500 && !(err instanceof HttpError)) {
-      console.error(err);
-      try { app.locals.captureError?.(err, req); } catch { /* monitoring must never break error handling */ }
-      const userId = req.user?.id || req.admin?.id || null;
-      const diagnostic = [
-        `HTTP ${status} ${req.method} ${safeErrorUrl(req.path)}`,
-        `userId=${userId || 'anonymous'}`,
-        ...(req.admin ? [`adminId=${req.admin.id || 'ADMIN_TOKEN'}`] : []),
-        `errorCode=${err.code || 'unknown'}`,
-        ...(err.errno ? [`errno=${err.errno}`] : []),
-        ...(err.sqlState ? [`sqlState=${err.sqlState}`] : []),
-        ...(err.sqlParamCount != null ? [`sqlParamCount=${err.sqlParamCount} (bound values omitted)`] : []),
-      ].join('\n');
-      db.errors.add({
-        source: 'server', message: `${req.method} ${safeErrorUrl(req.path)} [${status}${err.code ? ` ${err.code}` : ''}]: ${err.message}`,
-        stack: `Request diagnostics:\n${diagnostic}\n\n${err.stack || 'No stack trace.'}`,
-        sqlQuery: err.sqlTemplate || null, sqlParamCount: err.sqlParamCount ?? null, sqlException: err.sqlException || null,
-        url: safeErrorUrl(req.originalUrl), userAgent: req.get('user-agent'), userId,
-      }).catch(() => {});
-    }   // expected 5xx (provider down, storage off) are not logged as crashes
+    if (res.headersSent) return next(err);
+    const status = Number.isInteger(err.status) && err.status >= 400 && err.status <= 599 ? err.status : 500;
     const authored = err instanceof HttpError || (Number.isInteger(err?.status) && typeof err?.code === 'string');
+    const expectedClientError = err instanceof HttpError && status < 500 && !err.cause;
+    if (!expectedClientError && err.code !== 'maintenance') {
+      try { app.locals.captureError?.(err, req); } catch { /* optional monitoring must never break error handling */ }
+      const userId = req.user?.id || req.admin?.id || null;
+      errorLogger.capture(err, {
+        source: 'server', severity: 'error', kind: 'http-request', status, method: req.method,
+        requestId: req.requestId, url: req.originalUrl, userAgent: req.get('user-agent'), userId,
+        details: {
+          route: req.route?.path || null,
+          basePath: req.baseUrl || null,
+          adminId: req.admin?.id || (req.admin?.via === 'token' ? 'ADMIN_TOKEN' : null),
+          adminAuth: req.admin?.via || null,
+          protocol: req.protocol || null,
+          httpVersion: req.httpVersion || null,
+        },
+      });
+    }
     const message = authored && err.message ? err.message : (status >= 500 ? 'Something went wrong.' : 'That request couldn’t be completed.');
     const code = authored && typeof err.code === 'string' ? err.code : (status >= 500 ? 'server_error' : 'bad_request');
-    res.status(status).json({ error: { code, message } });
+    res.status(status).json({ error: { code, message }, requestId: req.requestId });
   });
   // Expose internals for tests and for index.js (background jobs).
   app.db = db;
+  app.locals.errorLogger = errorLogger;
+  app.locals.logger = logger;
   app.locals.push = push;
   app.locals.campaigns = campaigns;
   app.locals.features = features;

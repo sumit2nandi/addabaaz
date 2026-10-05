@@ -290,11 +290,15 @@ test('Android WebView HLS fragments stream through the API while browser fragmen
 test('Chromium HLS uses hls.js despite a native maybe-hint, and fatal errors reach Admin → Errors safely', async () => {
   const { document, window } = parseHTML('<!doctype html><html><head></head><body><div id="slot"></div></body></html>');
   const previous = {
-    document: globalThis.document, window: globalThis.window, location: globalThis.location, user: app.user,
-    navigator: Object.getOwnPropertyDescriptor(globalThis, 'navigator'),
+    document: globalThis.document, window: globalThis.window, location: globalThis.location, api: app.api,
+    fetch: globalThis.fetch, navigator: Object.getOwnPropertyDescriptor(globalThis, 'navigator'),
   };
   const reports = [], states = [];
-  app.user = { remote: { reportError: (error) => reports.push(error) } };
+  app.api = { base: 'https://api.test', token: '' };
+  globalThis.fetch = async (url, options = {}) => {
+    if (String(url).endsWith('/api/v1/client-errors')) reports.push(JSON.parse(options.body));
+    return { ok: true, status: 204 };
+  };
   globalThis.document = document;
   globalThis.window = window;
   globalThis.location = { pathname: '/watch/hls-test', search: '', hash: '' };
@@ -355,7 +359,8 @@ test('Chromium HLS uses hls.js despite a native maybe-hint, and fatal errors rea
   } finally {
     document.head.appendChild = append;
     document.createElement = createElement;
-    app.user = previous.user;
+    app.api = previous.api;
+    globalThis.fetch = previous.fetch;
     for (const key of ['document', 'window', 'location']) {
       if (previous[key] === undefined) delete globalThis[key]; else globalThis[key] = previous[key];
     }

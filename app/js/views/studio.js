@@ -5,12 +5,21 @@ import { html, $, esc } from '../util.js';
 import { icon } from '../icons.js';
 import { img, sectionHeader } from '../ui/components.js';
 import { rebaseUploads } from '../data/catalog.js';
+import { reportClientError } from '../errors.js';
 
 // Load the studio profile (API first, bundled JSON as fallback).
 export async function studioData() {
   if (!app.studio) {
     // Editable from the admin console when an API is present; the bundled file is the offline / static-hosting fallback.
-    if (app.api) { try { const r = await fetch(`${app.api.base}/api/v1/studio`, { cache: 'no-cache' }); if (r.ok) app.studio = rebaseUploads(await r.json(), app.api.base); } catch { /* fall back */ } }
+    if (app.api) {
+      try {
+        const r = await fetch(`${app.api.base}/api/v1/studio`, { cache: 'no-cache' });
+        if (!r.ok) throw Object.assign(new Error('The studio profile request failed.'), { status: r.status, code: 'studio_data' });
+        app.studio = rebaseUploads(await r.json(), app.api.base);
+      } catch (error) {
+        reportClientError(error, { where: 'studio-data' });
+      }
+    }
     if (!app.studio) { const r = await fetch('data/studio.json'); if (!r.ok) throw new Error('Could not load studio info'); app.studio = await r.json(); }
   }
   return app.studio;

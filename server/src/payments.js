@@ -17,7 +17,7 @@ const hmacHex = (secret, data) => crypto.createHmac('sha256', secret).update(dat
 const safeEqualHex = (a, b) => { const x = Buffer.from(String(a || ''), 'utf8'), y = Buffer.from(String(b || ''), 'utf8'); return x.length === y.length && crypto.timingSafeEqual(x, y); };
 
 // Error for provider problems (503 unreachable, 502 provider rejected the request).
-export class PaymentError extends Error { constructor(status, code, message) { super(message); this.status = status; this.code = code; } }
+export class PaymentError extends Error { constructor(status, code, message, options = {}) { super(message, options); this.name = new.target.name; this.status = status; this.code = code; } }
 
 // Razorpay client (plain HTTPS calls, no SDK). `fetchImpl` is injectable so tests can simulate Razorpay without network access.
 export function createRazorpay({ keyId, keySecret, webhookSecret = '', fetchImpl = fetch }) {
@@ -29,21 +29,24 @@ export function createRazorpay({ keyId, keySecret, webhookSecret = '', fetchImpl
     async createOrder({ amountPaise, receipt, notes }) {
       let r;
       try { r = await fetchImpl('https://api.razorpay.com/v1/orders', { method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: amountPaise, currency: 'INR', receipt, notes }) }); }
-      catch { throw new PaymentError(503, 'provider_unavailable', 'Could not reach the payment provider. Please try again.'); }
+      catch (cause) { throw new PaymentError(503, 'provider_unavailable', 'Could not reach the payment provider. Please try again.', { cause }); }
       const body = await r.json().catch(() => ({}));
-      if (!r.ok || !body.id) { console.error('[razorpay] order failed', r.status, body?.error?.description); throw new PaymentError(r.status >= 500 ? 503 : 502, 'provider_error', 'The payment provider rejected the request.'); }
+      if (!r.ok || !body.id) {
+        const cause = Object.assign(new Error(`Razorpay order request failed (HTTP ${r.status}): ${body?.error?.description || 'no provider detail'}`), { statusCode: r.status });
+        throw new PaymentError(r.status >= 500 ? 503 : 502, 'provider_error', 'The payment provider rejected the request.', { cause });
+      }
       return { orderId: body.id, amountPaise: body.amount, currency: body.currency };
     },
     /** Refunds (part of) a captured payment. Razorpay answers { id: 'rfnd_…', status: 'pending' | 'processed' | 'failed' }; the final state also arrives by webhook. */
     async createRefund({ paymentId, amountPaise, notes, receipt }) {
       let r;
       try { r = await fetchImpl(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/refund`, { method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: amountPaise, speed: 'normal', notes, receipt }) }); }
-      catch { throw new PaymentError(503, 'provider_unavailable', 'Could not reach the payment provider. Please try again.'); }
+      catch (cause) { throw new PaymentError(503, 'provider_unavailable', 'Could not reach the payment provider. Please try again.', { cause }); }
       const body = await r.json().catch(() => ({}));
       if (!r.ok || !body.id) {
         const why = body?.error?.description || `HTTP ${r.status}`;
-        console.error('[razorpay] refund failed', r.status, why);
-        throw new PaymentError(r.status >= 500 ? 503 : 502, 'provider_error', `The payment provider rejected the refund: ${why}`);
+        const cause = Object.assign(new Error(`Razorpay refund request failed (HTTP ${r.status}): ${why}`), { statusCode: r.status });
+        throw new PaymentError(r.status >= 500 ? 503 : 502, 'provider_error', `The payment provider rejected the refund: ${why}`, { cause });
       }
       return { refundId: body.id, amountPaise: body.amount, status: body.status === 'processed' ? 'processed' : body.status === 'failed' ? 'failed' : 'pending' };
     },

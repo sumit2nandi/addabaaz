@@ -15,6 +15,7 @@ import { html, $ } from './util.js';
 import { icon } from './icons.js';
 import { isNative } from './platform.js';
 import { CONFIG } from './config.js';
+import { reportClientError } from './errors.js';
 
 // Loads a third-party SDK script once; rejects if it cannot load (ad blockers, offline).
 const loaded = {};
@@ -243,7 +244,11 @@ export function mountSocialButtons(box, providers, { signup = false, onCredentia
       if (e?.cancelled) return;
       // Only the server's or our own flagged messages are shown; SDK/provider internals (for example
       // Google's "activity is cancelled by the user") go to the console, never into the UI.
-      if (e?.friendly || e?.status !== undefined) { onError(String(e.message || 'Sign-in failed. Please try again.')); return; }
+      if (e?.friendly || e?.status !== undefined) {
+        if (e?.friendly && e?.status === undefined) reportClientError(e, { where: `social-signin-${provider}` });
+        onError(String(e.message || 'Sign-in failed. Please try again.')); return;
+      }
+      reportClientError(e, { where: `social-signin-${provider}` });
       console.error('[social]', provider, e);
       onError(provider === 'facebook' ? 'Couldn’t sign you in with Facebook. Please try again or use your email.'
         : provider === 'apple' ? 'Couldn’t sign you in with Apple. Please try again or use your email.'

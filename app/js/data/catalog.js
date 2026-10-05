@@ -1,4 +1,5 @@
 import { norm } from '../util.js';
+import { reportClientError } from '../errors.js';
 
 // Words that make a poor display title (channel/brand names); they are skipped when deriving a title from a long YouTube title.
 const GENERIC = /^(laugh\s*bite|lught\s*bite|addabaaz|addabazz|আড্ডাবাজ.*|fake podcast|ফালতু কথা|faltu kotha|ep[-\s]?\d+|reels?[-\s]?\d*|part[-\s]?\d+|stand\s?up\s?comedy|standupcomedy|shahid|শহীদ|promo|trailer|ytshorts|new web series|comedy series|ckb|.*addabaaz reels.*|পর্ব\s*-?\s*[\d০-৯]+)$/i;
@@ -202,13 +203,14 @@ export function rebaseUploads(data, base) {
 export async function loadCatalog(url, fallbackUrl = 'data/catalog.json', { mediaBase = '' } = {}) {
   try {
     const r = await fetch(url, { cache: 'no-store' });
-    if (!r.ok) throw Object.assign(new Error('Couldn’t load the catalogue — please try again.'), { friendly: true });
+    if (!r.ok) throw Object.assign(new Error('Couldn’t load the catalogue — please try again.'), { friendly: true, status: r.status, code: 'catalog_api' });
     return new Catalog(rebaseUploads(await r.json(), mediaBase));
   } catch (e) {
     if (url === fallbackUrl) throw e;
     console.warn('[catalog] falling back to bundled catalog', e);
+    reportClientError(e, { where: 'catalog-api-fallback' });
     const r = await fetch(fallbackUrl, { cache: 'no-store' });
-    if (!r.ok) throw Object.assign(new Error('Couldn’t load the catalogue — please try again.'), { friendly: true });
+    if (!r.ok) throw Object.assign(new Error('Couldn’t load the catalogue — please try again.'), { friendly: true, status: r.status, code: 'catalog_api' });
     return new Catalog(await r.json());
   }
 }

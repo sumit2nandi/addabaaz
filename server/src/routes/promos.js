@@ -11,10 +11,10 @@
 // docs/PROMOS.md) — it is never cash and is never paid out.
 import { HttpError, wrap, rateLimit } from '../http.js';
 
-export function registerPromoRoutes(api, { db, promos, userFromRequest, rate = true }) {
+export function registerPromoRoutes(api, { db, promos, userFromRequest, rate = true, logger = console }) {
   // A code can only be redeemed once per account, but the endpoint is cheap to hammer — keep it modest.
   const promoLimit = rate ? rateLimit('promo', 20, 60_000) : (_q, _s, n) => n();
-  const me = async (req) => (userFromRequest ? await userFromRequest(req).catch(() => null) : null);
+  const me = async (req) => (userFromRequest ? await userFromRequest(req).catch((e) => { logger.warn('[promos] could not resolve the optional viewer session:', e); return null; }) : null);
   // The viewer's own code is generated on first read, so `req.user` may not carry it yet.
   const withCode = async (user) => (user.referralCode ? user : { ...user, referralCode: await promos.ensureCode(user) });
 

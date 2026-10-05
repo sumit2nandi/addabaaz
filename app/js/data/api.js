@@ -11,7 +11,14 @@ export const deviceLabel = () => {
 
 // Error thrown for failed API calls: `status` (0 = offline), user-readable `message`, and the API's `code`.
 export class ApiError extends Error {
-  constructor(status, message, code) { super(message); this.status = status; this.code = code; }
+  constructor(status, message, code, options = {}) { super(message); this.name = new.target.name; if (options.cause !== undefined) this.cause = options.cause; this.status = status; this.code = code; }
+}
+
+function reportApiFailure(error, { where = 'api-response', force = false } = {}) {
+  if (!error || error.code === 'maintenance' || (!force && error.status > 0 && error.status < 500)) return;
+  import('../errors.js').then(({ reportClientError }) => reportClientError(error, {
+    where, status: error.status, code: error.code || null,
+  })).catch(() => {});
 }
 
 // Plain-language text for an HTTP status when the server sent no message of its own (proxy error
@@ -40,7 +47,11 @@ export class ApiClient {
         headers: { 'X-Device-Id': deviceId(), 'X-Device-Label': deviceLabel(), ...(body ? { 'Content-Type': 'application/json' } : {}), ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}), ...headers },
         body: body ? JSON.stringify(body) : undefined,
       });
-    } catch (e) { throw new ApiError(0, 'You appear to be offline.', 'network'); }
+    } catch (e) {
+      const error = new ApiError(0, 'You appear to be offline.', 'network', { cause: e });
+      if (e?.name !== 'AbortError') reportApiFailure(error);
+      throw error;
+    }
     if (res.status === 204) return null;
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -48,7 +59,9 @@ export class ApiClient {
       // Maintenance mode (docs/MAINTENANCE.md): tell the shell so it can show the maintenance screen instead
       // of a scatter of failed calls. app/js/maintenance.js listens for this.
       if (res.status === 503 && data.error?.code === 'maintenance') window.dispatchEvent(new CustomEvent('ab:maintenance', { detail: { message: data.error.message, until: data.error.until || null, base: this.base } }));
-      throw new ApiError(res.status, data.error?.message || data.message || httpMessage(res.status), data.error?.code);
+      const error = new ApiError(res.status, data.error?.message || data.message || httpMessage(res.status), data.error?.code);
+      reportApiFailure(error);
+      throw error;
     }
     return data;
   }
@@ -57,11 +70,17 @@ export class ApiClient {
   async blob(path) {
     let res;
     try { res = await fetch(`${this.base}/api/v1${path}`, { headers: this.token ? { Authorization: `Bearer ${this.token}` } : {} }); }
-    catch { throw new ApiError(0, 'You appear to be offline.', 'network'); }
+    catch (cause) {
+      const error = new ApiError(0, 'You appear to be offline.', 'network', { cause });
+      if (cause?.name !== 'AbortError') reportApiFailure(error);
+      throw error;
+    }
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
       if (res.status === 503 && d.error?.code === 'maintenance') window.dispatchEvent(new CustomEvent('ab:maintenance', { detail: { message: d.error.message, until: d.error.until || null, base: this.base } }));
-      throw new ApiError(res.status, d.error?.message || httpMessage(res.status), d.error?.code);
+      const error = new ApiError(res.status, d.error?.message || httpMessage(res.status), d.error?.code);
+      reportApiFailure(error);
+      throw error;
     }
     return res.blob();
   }
@@ -85,8 +104,24 @@ export async function detectApi(base) {
   const t = setTimeout(() => ctl.abort(), 2500);
   try {
     const r = await fetch(`${base}/api/v1/health`, { signal: ctl.signal, cache: 'no-store' });
-    if (!r.ok) return false;
-    const j = await r.json();
-    return j && j.service === 'addabaaz';
-  } catch { return false; } finally { clearTimeout(t); }
+    if (!r.ok) {
+      reportApiFailure(new ApiError(r.status, 'The application API health check failed.', 'api_health'), { where: 'api-health-check', force: true });
+      return false;
+    }
+    let j;
+    try { j = await r.json(); }
+    catch (cause) {
+      reportApiFailure(new ApiError(r.status, 'The application API returned an invalid health response.', 'api_health', { cause }), { where: 'api-health-check', force: true });
+      return false;
+    }
+    if (j?.service !== 'addabaaz') {
+      reportApiFailure(new ApiError(r.status, 'The application API returned an incompatible health response.', 'incompatible_api'), { where: 'api-health-check', force: true });
+      return false;
+    }
+    return true;
+  } catch (cause) {
+    const error = new ApiError(0, ctl.signal.aborted ? 'The application API health check timed out.' : 'The application API health check failed.', 'api_health', { cause });
+    reportApiFailure(error, { where: 'api-health-check', force: true });
+    return false;
+  } finally { clearTimeout(t); }
 }

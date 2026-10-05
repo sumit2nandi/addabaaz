@@ -16,7 +16,7 @@ import { renderShell, renderProfileMenu, markActive } from './ui/shell.js';
 import { syncButtons, scrollRail, toast } from './ui/components.js';
 import { initPlatform } from './platform.js';
 import { initConsent, trackPage } from './consent.js';
-import { initErrorReporting, friendly } from './errors.js';
+import { initErrorReporting, reportClientError, friendly } from './errors.js';
 import { initPush } from './push.js';
 import { initClientVersionWatch } from './client-version.js';
 import { initMaintenanceWatch } from './maintenance.js';
@@ -24,8 +24,9 @@ import { initNotifyPrompt } from './notify-prompt.js';
 import { initPullToRefresh } from './ui/ptr.js';
 import { initFullscreenRotation } from './orientation.js';
 
-// Native-shell hooks must run before anything else.
+// Native-shell hooks and diagnostics must run before boot: initial API/catalog/session failures are still reports.
 initPlatform();
+initErrorReporting();
 
 // Start-up sequence. Any failure ends in the friendly error box at the bottom of this file.
 async function boot() {
@@ -63,7 +64,7 @@ async function boot() {
   networkStatus();
   initPullToRefresh();   // the custom pull gesture reloads the current page so the latest server catalog is fetched
   initFullscreenRotation();   // the app is portrait-only; the screen turns only in video fullscreen
-  initConsent(); initErrorReporting(); initPush();
+  initConsent(); initPush();
   // Maintenance mode: an open tab or a resumed app shows the maintenance screen the moment the API says so.
   initMaintenanceWatch({ apiBase: base === 'off' ? '' : base });
   // The admin console can invalidate every client's cache; when that reaches us, offer a restart.
@@ -163,11 +164,16 @@ function registerServiceWorker() {
   if (!('serviceWorker' in navigator) || window.Capacitor || !/^https?:$/.test(location.protocol)) return;
   // updateViaCache: 'none' — update checks always go straight to the network, so a version bump
   // (sw.js VERSION) reaches users behind proxies/CDNs that ignore Cache-Control.
-  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch((e) => console.warn('[sw]', e));
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch((e) => {
+    console.warn('[sw]', e);
+    reportClientError(e, { where: 'service-worker-register' });
+  });
 }
 
 // Last resort: show a message instead of a blank page (details stay in the console; the panel gets plain text).
 boot().catch((err) => {
   console.error(err);
-  $('#boot').innerHTML = `<div class="empty"><h2>ADDABAAZ couldn’t start</h2><p>${friendly(err, 'Check your connection and try again.')}</p><button class="btn btn-primary" data-reload>Try again</button></div>`;
+  reportClientError(err, { where: 'boot' });
+  const boot = $('#boot');
+  if (boot) boot.innerHTML = `<div class="empty"><h2>ADDABAAZ couldn’t start</h2><p>${friendly(err, 'Check your connection and try again.')}</p><button class="btn btn-primary" data-reload>Try again</button></div>`;
 });

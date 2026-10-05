@@ -640,28 +640,76 @@ export function extraDb({ q, tx, iso }) {
   };
 
   // ---- Client/server error reports shown in the admin "Errors" page ----
-  const parseSqlException = (value) => {
+  const parseErrorJson = (value) => {
     if (!value) return null;
-    try { return typeof value === 'string' ? JSON.parse(value) : value; }
+    if (typeof value === 'object') return value;
+    try { return JSON.parse(String(value)); }
     catch { return { message: String(value).slice(0, 2000) }; }
   };
   const errors = {
     async add(e) {
       const sqlQuery = e.sqlQuery ? String(e.sqlQuery).slice(0, 8000) : null;
       const sqlParamCount = Number.isSafeInteger(e.sqlParamCount) && e.sqlParamCount >= 0 ? e.sqlParamCount : null;
-      let sqlException = null;
+      const severity = ['warning', 'error', 'fatal'].includes(e.severity) ? e.severity : 'error';
+      const errorName = e.errorName ? String(e.errorName).slice(0, 128) : null;
+      const errorCode = e.errorCode || e.code ? String(e.errorCode || e.code).slice(0, 128) : null;
+      const httpStatus = Number.isInteger(e.status ?? e.httpStatus) ? Number(e.status ?? e.httpStatus) : null;
+      const httpMethod = e.method || e.httpMethod ? String(e.method || e.httpMethod).slice(0, 12) : null;
+      const requestId = e.requestId ? String(e.requestId).slice(0, 64) : null;
+      const releaseId = e.release || e.releaseId ? String(e.release || e.releaseId).slice(0, 64) : null;
+      const environment = e.environment ? String(e.environment).slice(0, 32) : null;
+      const instanceId = e.instanceId ? String(e.instanceId).slice(0, 36) : null;
+      let details = null, sqlException = null;
+      try { details = e.details ? JSON.stringify(e.details) : null; } catch { /* malformed details never block the report */ }
       try { sqlException = e.sqlException ? JSON.stringify(e.sqlException).slice(0, 8000) : null; } catch { /* never let malformed diagnostics block the report */ }
-      await q(`INSERT INTO error_log (source, message, stack, sql_query, sql_param_count, sql_exception, url, user_agent, user_id)
-        VALUES (?,?,?,?,?,?,?,?,?)`, [e.source, String(e.message || '').slice(0, 500), e.stack ? String(e.stack).slice(0, 4000) : null,
-        sqlQuery, sqlParamCount, sqlException, String(e.url || '').slice(0, 300), String(e.userAgent || '').slice(0, 200), e.userId || null]);
+      await q(`INSERT INTO error_log
+        (source, severity, message, error_name, error_code, http_status, http_method, request_id, release_id, environment, instance_id, details,
+         stack, sql_query, sql_param_count, sql_exception, url, user_agent, user_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [e.source === 'client' ? 'client' : 'server', severity,
+        String(e.message || 'Unknown error').slice(0, 500), errorName, errorCode, httpStatus, httpMethod, requestId, releaseId, environment, instanceId,
+        details, e.stack ? String(e.stack).slice(0, 48_000) : null, sqlQuery, sqlParamCount, sqlException,
+        String(e.url || '').slice(0, 300), String(e.userAgent || '').slice(0, 512), e.userId || null]);
     },
-    async list({ limit = 100 } = {}) {
-      const [groups, recent] = await Promise.all([
-        q('SELECT source, message, COUNT(*) AS n, MAX(created_at) AS last_at, MIN(created_at) AS first_at, MAX(url) AS url FROM error_log WHERE created_at > UTC_TIMESTAMP(3) - INTERVAL 7 DAY GROUP BY source, message ORDER BY last_at DESC LIMIT ?', [limit]),
-        q(`SELECT e.id, e.source, e.message, e.stack, e.sql_query, e.sql_param_count, e.sql_exception, e.url, e.user_agent, e.user_id, u.name AS account_name, u.email AS account_email, e.created_at
-           FROM error_log e LEFT JOIN users u ON u.id = e.user_id ORDER BY e.id DESC LIMIT 20`),
+    async list({ limit = 50, offset = 0, source = '', search = '' } = {}) {
+      const pageLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
+      const pageOffset = Math.max(Number(offset) || 0, 0);
+      const selectedSource = ['server', 'client'].includes(source) ? source : '';
+      const text = String(search || '').trim().slice(0, 120);
+      const where = [];
+      const params = [];
+      if (selectedSource) { where.push('e.source = ?'); params.push(selectedSource); }
+      if (text) {
+        const pattern = `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+        where.push('(e.message LIKE ? OR e.error_name LIKE ? OR e.error_code LIKE ? OR e.url LIKE ? OR e.request_id LIKE ?)');
+        params.push(pattern, pattern, pattern, pattern, pattern);
+      }
+      const recentFilter = where.length ? ` AND ${where.join(' AND ')}` : '';
+      const groupFilter = recentFilter.replaceAll('e.', '');
+      const [groups, recent, [{ n: total }]] = await Promise.all([
+        q(`SELECT source, severity, error_name, error_code, http_status, message, COUNT(*) AS n, MAX(created_at) AS last_at, MIN(created_at) AS first_at, MAX(url) AS url
+           FROM error_log WHERE created_at > UTC_TIMESTAMP(3) - INTERVAL 7 DAY${groupFilter}
+           GROUP BY source, severity, error_name, error_code, http_status, message ORDER BY last_at DESC LIMIT 100`, params),
+        q(`SELECT e.id, e.source, e.severity, e.message, e.error_name, e.error_code, e.http_status, e.http_method, e.request_id,
+                  e.release_id, e.environment, e.instance_id, e.details, e.stack, e.sql_query, e.sql_param_count, e.sql_exception,
+                  e.url, e.user_agent, e.user_id, u.name AS account_name, u.email AS account_email, e.created_at
+           FROM error_log e LEFT JOIN users u ON u.id = e.user_id
+           WHERE e.created_at > UTC_TIMESTAMP(3) - INTERVAL 30 DAY${recentFilter}
+           ORDER BY e.created_at DESC, e.id DESC LIMIT ? OFFSET ?`, [...params, pageLimit, pageOffset]),
+        q(`SELECT COUNT(*) AS n FROM error_log e WHERE e.created_at > UTC_TIMESTAMP(3) - INTERVAL 30 DAY${recentFilter}`, params),
       ]);
-      return { groups: groups.map((r) => ({ source: r.source, message: r.message, count: Number(r.n), lastAt: iso(r.last_at), firstAt: iso(r.first_at), url: r.url })), recent: recent.map((r) => ({ id: r.id, source: r.source, message: r.message, stack: r.stack, sqlQuery: r.sql_query || null, sqlParamCount: r.sql_param_count == null ? null : Number(r.sql_param_count), sqlException: parseSqlException(r.sql_exception), url: r.url, userAgent: r.user_agent, userId: r.user_id || null, accountName: r.account_name || null, accountEmail: r.account_email || null, at: iso(r.created_at) })) };
+      return {
+        groups: groups.map((r) => ({ source: r.source, severity: r.severity || 'error', errorName: r.error_name || null, errorCode: r.error_code || null, status: r.http_status == null ? null : Number(r.http_status), message: r.message, count: Number(r.n), lastAt: iso(r.last_at), firstAt: iso(r.first_at), url: r.url })),
+        recent: recent.map((r) => ({
+          id: r.id, source: r.source, severity: r.severity || 'error', message: r.message, errorName: r.error_name || null,
+          errorCode: r.error_code || null, status: r.http_status == null ? null : Number(r.http_status), method: r.http_method || null,
+          requestId: r.request_id || null, release: r.release_id || null, environment: r.environment || null, instanceId: r.instance_id || null,
+          details: parseErrorJson(r.details), stack: r.stack, sqlQuery: r.sql_query || null,
+          sqlParamCount: r.sql_param_count == null ? null : Number(r.sql_param_count), sqlException: parseErrorJson(r.sql_exception),
+          url: r.url, userAgent: r.user_agent, userId: r.user_id || null, accountName: r.account_name || null,
+          accountEmail: r.account_email || null, at: iso(r.created_at),
+        })),
+        total: Number(total || 0), limit: pageLimit, offset: pageOffset, source: selectedSource, search: text,
+      };
     },
     async clear() { await q('DELETE FROM error_log'); },
     async prune() { await q('DELETE FROM error_log WHERE created_at < UTC_TIMESTAMP(3) - INTERVAL 30 DAY'); },

@@ -17,8 +17,10 @@ export function appleJwks(fetchImpl = fetch) {
   let keys = null, at = 0;
   return async (kid) => {
     if (!keys || Date.now() - at > 3_600_000 || (kid && !keys.some((k) => k.kid === kid) && Date.now() - at > 10_000)) {
-      const r = await fetchImpl(APPLE_KEYS).catch(() => null);
-      if (!r?.ok) throw new SocialError('provider_unavailable', 'Could not reach Apple to verify your sign-in.');
+      let r;
+      try { r = await fetchImpl(APPLE_KEYS); }
+      catch (cause) { throw new SocialError('provider_unavailable', 'Could not reach Apple to verify your sign-in.', { cause }); }
+      if (!r?.ok) throw new SocialError('provider_unavailable', 'Could not reach Apple to verify your sign-in.', { cause: new Error(`Apple JWKS returned HTTP ${r?.status || 'unknown'}.`) });
       keys = (await r.json()).keys || []; at = Date.now();
     }
     return keys.find((k) => k.kid === kid) || null;

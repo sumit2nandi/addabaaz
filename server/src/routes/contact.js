@@ -2,7 +2,7 @@
 import crypto from 'node:crypto';
 import { bad, wrap, rateLimit } from '../http.js';
 
-export function registerContactRoutes(api, { db, rate, contactWebhook = '' }) {
+export function registerContactRoutes(api, { db, rate, contactWebhook = '', logger = console }) {
   const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   // Public contact form: rate limited (5 per 10 min), with a hidden `website` field as a spam trap (bots fill it in).
   api.post('/contact', rate ? rateLimit('contact', 5, 10 * 60_000) : (_q, _s, n) => n(), wrap(async (req, res) => {
@@ -12,7 +12,7 @@ export function registerContactRoutes(api, { db, rate, contactWebhook = '' }) {
     if (String(message).length > 5000 || String(name).length > 100 || String(phone).length > 40 || String(email).length > 254) throw bad('One of the fields is too long.');
     const entry = { id: crypto.randomUUID(), name: String(name).trim(), email: String(email).trim(), phone: String(phone).trim(), message: String(message).trim(), at: new Date().toISOString() };
     await db.contacts.add(entry);
-    if (contactWebhook) fetch(contactWebhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch((e) => console.warn('[contact] webhook failed', e.message));
+    if (contactWebhook) fetch(contactWebhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch((e) => logger.warn('[contact] webhook failed:', e));
     res.status(202).json({ ok: true });
   }));
 

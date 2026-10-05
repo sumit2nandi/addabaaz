@@ -1,7 +1,8 @@
 // Process entry point (`npm start`): connects to MySQL, applies pending migrations, creates the app and starts listening.
 // Also schedules the background jobs and shuts down cleanly on SIGINT / SIGTERM.
 // All settings come from environment variables - see .env.example and SETUP.md.
-import { createApp } from './app.js';
+import { createApp, APP_VERSION } from './app.js';
+import { createErrorLogger, installProcessErrorHandlers } from './error-reporting.js';
 import { createDb } from './db.js';
 import { dbConfigFromEnv } from './config.js';
 import { migrate } from './migrate.js';
@@ -38,23 +39,26 @@ if (process.env.DB_MIGRATE !== 'false') {                       // set DB_MIGRAT
 } else {
   console.warn('[migrate] DB_MIGRATE=false — migrations and schema-drift checks are skipped at startup; run `npm run db:migrate` as a deploy step.');
 }
+// Once migrations have ensured the error table exists, use one process-wide reporter for startup checks,
+// the HTTP app, background work and fatal process events.
+const errorLogger = createErrorLogger({ db, appVersion: APP_VERSION, release: releaseSha });
 // One address = one account: rewrite stored addresses in the normalized form (migration 012 could only
 // lower-case and trim them in SQL). Rows that collide are flagged for Admin → Users → merge.
 try {
   const n = await db.adminUsers.renormalizeEmails();
   if (n.updated || n.flagged) console.log(`[users] email normalization: ${n.updated} updated, ${n.flagged} duplicate row(s) flagged for merging`);
-} catch (e) { console.error('[users] email normalization failed:', e.message); }
+} catch (e) { errorLogger.logger.error('[users] email normalization failed:', e); }
 // DISABLE_RATE_LIMIT=true is for load tests on a staging copy only — it is ignored in production.
 const noRate = /^(1|true)$/i.test(process.env.DISABLE_RATE_LIMIT || '') && process.env.NODE_ENV !== 'production';
-if (noRate) console.warn('⚠ Rate limiting is OFF (DISABLE_RATE_LIMIT) — never expose this instance publicly.');
+if (noRate) errorLogger.logger.warn('⚠ Rate limiting is OFF (DISABLE_RATE_LIMIT) — never expose this instance publicly.');
 // Build the HTTP app.
 // Minify the front-end first: production serves .build/ (same URLs, no readable source comments).
 // Only for the public site; tests and API-only runs keep serving the original files.
 if (process.env.MINIFY !== 'false') {
   try { const m = await prepareWebAssets(); console.log(`[web] front-end minified (${m.files} files, −${(m.saved / 1024).toFixed(0)} KB)`); }
-  catch (e) { console.warn('[web] front-end minification skipped — serving sources as-is:', e.message); }
+  catch (e) { errorLogger.logger.warn('[web] front-end minification skipped — serving sources as-is:', e); }
 }
-const app = createApp({ db, rate: !noRate, release: releaseSha });
+const app = createApp({ db, rate: !noRate, release: releaseSha, errorLogger });
 // Optional Sentry: `npm i @sentry/node` and set SENTRY_DSN. Not installed by default; the built-in Errors page in /admin works without it.
 if (process.env.SENTRY_DSN) {
   try {
@@ -62,28 +66,38 @@ if (process.env.SENTRY_DSN) {
     Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV || 'development', tracesSampleRate: 0 });
     app.locals.captureError = (err, req) => Sentry.captureException(err, { extra: { method: req?.method, path: safeErrorUrl(req?.path) } });
     console.log('[sentry] error reporting enabled');
-  } catch (e) { console.warn('[sentry] SENTRY_DSN is set but @sentry/node could not be loaded (npm i @sentry/node):', e.message); }
+  } catch (e) { errorLogger.logger.warn('[sentry] SENTRY_DSN is set but @sentry/node could not be loaded (npm i @sentry/node):', e); }
 }
 // Start serving on all interfaces (required inside Docker / behind a reverse proxy).
 const server = app.listen(port, '0.0.0.0', () => console.log(`ADDABAAZ running on http://localhost:${port}  (site + API at /api/v1, MySQL connected)`));
 // Renewal reminders: hourly, once per expiry date (the claim is atomic, so running several instances is fine).
 const billing = app.locals.billing;
-const remind = () => billing.sendExpiryReminders().catch((e) => console.error('[billing] reminder run failed:', e.message));
+const remind = () => billing.sendExpiryReminders().catch((e) => app.locals.logger.error('[billing] reminder run failed:', e));
 setTimeout(remind, 30_000).unref();
 setInterval(remind, 3600_000).unref();
 // Every minute: announce newly published episodes / launches (Web Push), and purge expired tokens, idle playback seats, old errors.
-const jobs = () => runScheduledJobs({ db, catalog: app.locals.catalog, push: app.locals.push, campaigns: app.locals.campaigns, promos: app.locals.promos, applicationMonitor: app.locals.applicationMonitor, log: console });
+const jobs = () => runScheduledJobs({ db, catalog: app.locals.catalog, push: app.locals.push, campaigns: app.locals.campaigns, promos: app.locals.promos, applicationMonitor: app.locals.applicationMonitor, log: app.locals.logger });
 setTimeout(jobs, 10_000).unref();
 setInterval(jobs, 60_000).unref();
 if (process.env.NODE_ENV === 'production') {
-  if (!process.env.SMTP_URL) console.warn('[mail] SMTP_URL is not set — verification, password-reset, receipt, refund and reminder emails will NOT be sent.');
-  if (process.env.RAZORPAY_KEY_ID && !billing.config.gstEnabled) console.warn('[billing] GSTIN is not set — invoices are issued as plain receipts without GST.');
+  if (!process.env.SMTP_URL) errorLogger.logger.warn('[mail] SMTP_URL is not set — verification, password-reset, receipt, refund and reminder emails will NOT be sent.');
+  if (process.env.RAZORPAY_KEY_ID && !billing.config.gstEnabled) errorLogger.logger.warn('[billing] GSTIN is not set — invoices are issued as plain receipts without GST.');
 }
-// Graceful shutdown: stop accepting connections, wait for in-flight e-mails, close the database, then exit (force-exit after 5 s).
+// Graceful shutdown: stop accepting connections, wait for in-flight e-mails, close MySQL, then exit.
+// Fatal errors are flushed to the error table first, then take this same shutdown path with a failure code.
 let stopping = false;
-const stop = () => {
-  if (stopping) return; stopping = true;
-  server.close(async () => { await billing.idle().catch(() => {}); await db.close().catch(() => {}); process.exit(0); });
-  setTimeout(() => process.exit(0), 5000).unref();
+const stop = (requestedExitCode = 0) => {
+  const exitCode = Number.isInteger(requestedExitCode) ? requestedExitCode : 0;
+  if (stopping) return; stopping = true; process.exitCode = exitCode;
+  const force = setTimeout(() => process.exit(exitCode), 5000); force.unref();
+  server.close(async () => {
+    await billing.idle().catch(() => {});
+    await errorLogger.flush();
+    await db.close().catch(() => {});
+    clearTimeout(force);
+    process.exit(exitCode);
+  });
 };
-process.on('SIGINT', stop); process.on('SIGTERM', stop);
+installProcessErrorHandlers({ errorLogger, onFatal: () => stop(1) });
+process.on('SIGINT', () => stop(0));
+process.on('SIGTERM', () => stop(0));

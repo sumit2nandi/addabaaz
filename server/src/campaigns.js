@@ -46,7 +46,7 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
   }
   async function recordPushDelivery(campaignId, delivery) {
     try { await recordDelivery(campaignId, 'push', delivery); }
-    catch (e) { log.error?.(`[campaigns] could not save push recipient result for ${campaignId}: ${e.message}`); }
+    catch (e) { log.error?.(`[campaigns] could not save push recipient result for ${campaignId}:`, e); }
   }
   const deliveryError = (e) => String(e?.response || e?.message || e?.code || 'Delivery failed').replace(/\s+/g, ' ').slice(0, 480);
 
@@ -74,7 +74,7 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
       await finish(r.failed && !r.sent ? 'failed' : (r.failed ? 'partial' : 'sent'));
     } catch (e) {
       if (e.code !== 'campaign_lease_lost') {
-        log.error?.(`[campaigns] push ${campaign.id} failed: ${e.message}`);
+        log.error?.(`[campaigns] push ${campaign.id} failed:`, e);
         await finish('failed', e.message);
       }
     }
@@ -113,7 +113,7 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
           } catch (e) {
             if (e.code === 'campaign_lease_lost') throw e;
             failed++; outcome = { status: 'failed', error: deliveryError(e) };
-            log.warn?.(`[campaigns] email to ${u.email} failed: ${e.message}`);
+            log.warn?.(`[campaigns] email to ${u.email} failed:`, e);
           }
           await recordDelivery(campaign.id, 'email', { ...recipient, ...outcome });
         }
@@ -128,7 +128,7 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
       await finish(done.failed && !done.sent ? 'failed' : (done.failed ? 'partial' : 'sent'));
     } catch (e) {
       if (e.code !== 'campaign_lease_lost') {
-        log.error?.(`[campaigns] email ${campaign.id} failed: ${e.message}`);
+        log.error?.(`[campaigns] email ${campaign.id} failed:`, e);
         await finish('failed', e.message);
       }
     }
@@ -146,7 +146,7 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
         return db.campaigns.get(campaign.id);
       }
       const id = campaign.id;
-      setImmediate(() => svc.run(id, opts).catch((e) => log.error?.(`[campaigns] ${id}: ${e.message}`)));
+      setImmediate(() => svc.run(id, opts).catch((e) => log.error?.(`[campaigns] ${id} failed:`, e)));
       return db.campaigns.get(id);
     },
     /** Runs (or continues) a campaign now. A database lease prevents parallel runs across instances. */
@@ -170,7 +170,7 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
         } catch (e) {
           leaseLostAlready = true;
           if (e.code === 'campaign_lease_lost') throw e;
-          log.warn?.(`[campaigns] lease renewal ${id} failed: ${e.message}`);
+          log.warn?.(`[campaigns] lease renewal ${id} failed:`, e);
           throw leaseLost();
         }
       };
@@ -181,7 +181,7 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
           if (!(await db.campaigns.renew(id, claimToken, LEASE_SECONDS))) leaseLostAlready = true;
         } catch (e) {
           leaseLostAlready = true;
-          log.warn?.(`[campaigns] lease renewal ${id} failed: ${e.message}`);
+          log.warn?.(`[campaigns] lease renewal ${id} failed:`, e);
         } finally { renewing = false; }
       }, HEARTBEAT_MS);
       heartbeat.unref?.();
@@ -205,10 +205,10 @@ export function createCampaigns({ db, push = null, mailer = null, email = null, 
     },
     /** At boot: continue campaigns a deploy or crash interrupted; claim() arbitrates multi-instance races. */
     async resume(opts = {}) {
-      const left = await db.campaigns.unfinished().catch(() => []);
+      const left = await db.campaigns.unfinished().catch((e) => { log.warn?.('[campaigns] could not find unfinished campaigns to resume:', e); return []; });
       if (!left.length) return 0;
       log.log?.(`[campaigns] resuming ${left.length} unfinished campaign(s)`);
-      for (const c of left) setImmediate(() => svc.run(c.id, opts).catch((e) => log.error?.(`[campaigns] ${c.id}: ${e.message}`)));
+      for (const c of left) setImmediate(() => svc.run(c.id, opts).catch((e) => log.error?.(`[campaigns] ${c.id} failed:`, e)));
       return left.length;
     },
     /** Progress row for the console's poller. */

@@ -33,7 +33,7 @@ const MAX_ATTEMPTS = 5;                  // wrong tries before the code is burnt
  * @param {Function} o.notDisabled
  * @param {Function} o.authLimit  per-IP rate limiter for authentication endpoints
  */
-export function registerOtpRoutes(api, { db, sms, secret, publicUser, notDisabled, authLimit, promos = null }) {
+export function registerOtpRoutes(api, { db, sms, secret, publicUser, notDisabled, authLimit, promos = null, logger = console }) {
   // Feature switch the sign-in page reads: without a configured provider no OTP tab is offered.
   const otpEnabled = () => !!sms?.configured && sms.provider !== 'none';
   // The answer is always the same whether or not the number belongs to an account: phone numbers must not
@@ -99,7 +99,7 @@ export function registerOtpRoutes(api, { db, sms, secret, publicUser, notDisable
     // the request. Existing accounts that already got their bonus are untouched (`onSignup` is idempotent).
     const bonus = isNew && promos ? await promos.onSignup({ user: await db.users.byId(user.id) || user, code: req.body?.ref }) : { welcomePaise: 0 };
     // A verified phone counts as a verified identity, so commenting/buying are not blocked for phone accounts.
-    if (!user.emailVerifiedAt) await db.accounts.markVerified(user.id).catch(() => {});
+    if (!user.emailVerifiedAt) await db.accounts.markVerified(user.id).catch((e) => logger.warn('[otp] could not mark the phone account as verified:', e));
     res.json({
       token: signToken(user.id, secret, undefined, user.sessionVersion),
       user: publicUser({ ...user, emailVerifiedAt: user.emailVerifiedAt || new Date(), phoneVerifiedAt: user.phoneVerifiedAt || new Date() }),

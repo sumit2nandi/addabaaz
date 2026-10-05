@@ -9,7 +9,7 @@ import { FREE_KINDS } from '../catalog-schema.js';
 const CAPACITOR_ORIGIN = 'https://app.addabaaz.in';
 const isNativeWebView = (req) => req.get('origin') === CAPACITOR_ORIGIN || /\bwv\b/i.test(req.get('user-agent') || '');
 
-export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, r2, catalog, features, userFromRequest }) {
+export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, r2, catalog, features, userFromRequest, logger = console }) {
   // Small helpers: catalog lookup, the public base URL for links we hand out, and mp4-vs-HLS detection.
   const findVideo = (id) => catalog.video(id);
   const isPremiumVideo = async (v) => {
@@ -40,10 +40,10 @@ export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, 
     // Public viewer messages stay non-technical; detailed storage diagnostics are only shown in the Admin console.
     if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'This video isn’t available right now — please try again later.');
     if (typeof r2.head === 'function') {
-      const h = await r2.head(v.source.key).catch((e) => ({ status: 0, error: e?.message }));
+      const h = await r2.head(v.source.key).catch((cause) => ({ status: 0, cause }));
       if (h.status === 404) throw new HttpError(404, 'video_file_missing', 'This video isn’t available right now — please try again later.');
       if (h.status === 403) throw new HttpError(502, 'storage_access_denied', 'This video isn’t available right now — please try again later.');
-      if (h.status === 0) throw new HttpError(502, 'storage_unreachable', 'This video isn’t available right now — please try again later.');
+      if (h.status === 0) throw new HttpError(502, 'storage_unreachable', 'This video isn’t available right now — please try again later.', { cause: h.cause });
       if (h.status !== 200) throw new HttpError(502, 'storage_error', 'This video isn’t available right now — please try again later.');
     }
     const format = r2Format(v.source), expiresAt = new Date(Date.now() + streamTtl * 1000).toISOString();
@@ -85,7 +85,11 @@ export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, 
       }
       if (!upstream.body) return res.end();
       try { await pipeline(Readable.fromWeb(upstream.body), res); }
-      catch (e) { if (!res.headersSent) throw e; res.destroy(e); }
+      catch (e) {
+        if (!res.headersSent) throw e;
+        logger.error('[media] native video stream failed after headers were sent:', e);
+        res.destroy(e);
+      }
       return;
     }
     res.set('Cache-Control', 'no-store').redirect(302, r2.presignGet(target, { ttl: 900 }));
