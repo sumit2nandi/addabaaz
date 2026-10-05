@@ -8,7 +8,7 @@
  * POST /api/v1/admin/cache/purge): this worker checks GET /api/v1/client-version on activation and on every
  * message, and throws away its caches when the number it stored is stale.
  * Bump VERSION (or run `npm run build:www`, which stamps it) to force a refresh. */
-const VERSION = 'v2.14.0';   // notice text wraps as one column (no more overlap on phones); the Free card reads ₹0/forever; announcements on by default
+const VERSION = 'v2.15.0';   // the home hero actions sit in one stationary dock that follows the active banner; banners track the finger while swiping; phones get a lower-only poster fade
 // One cache per kind of content, all tagged with the version so old caches are deleted when the version changes.
 const SHELL = `ab-shell-${VERSION}`, DATA = `ab-data-${VERSION}`, MEDIA = `ab-media-${VERSION}`, THUMBS = `ab-thumbs-${VERSION}`;
 // Files downloaded at install so the app shell opens offline. A missing file is skipped rather than failing the install.
