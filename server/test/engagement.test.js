@@ -294,6 +294,9 @@ test('analytics events are aggregated, validated and capped', async () => {
 });
 
 test('client error reports are stored and grouped; server errors are logged', async () => {
+  // Earlier cases intentionally exercise expected failures; drain and clear those diagnostics so this test only asserts its own reports.
+  await theApp.locals.errorLogger.flush();
+  await db.errors.clear();
   assert.equal((await call('POST', '/client-errors', { message: 'TypeError: x is undefined', stack: 'at a.js:1', url: '/show/x' })).status, 204);
   await call('POST', '/client-errors', { message: 'TypeError: x is undefined', url: '/watch/y' }); await call('POST', '/client-errors', { url: 'no message' });
   const identified = await signup();
