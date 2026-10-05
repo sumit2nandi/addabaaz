@@ -47,7 +47,7 @@ function attachSwipe(surface, slides, getIndex, onSwipe, { ignoreTarget = () => 
     || Number(window.innerWidth) || 1;
   const clearStyles = () => {
     clearTimeout(settleTimer); settleTimer = null;
-    slides.forEach((slide) => { slide.style.transform = ''; slide.style.transition = ''; });
+    slides.forEach((slide) => { slide.style.transform = ''; slide.style.transition = ''; slide.style.visibility = ''; });
     surface.classList.remove('is-dragging');
   };
   const setDrag = (start, dx) => {
@@ -55,12 +55,15 @@ function attachSwipe(surface, slides, getIndex, onSwipe, { ignoreTarget = () => 
     const current = getIndex();
     const incoming = slides[(current + direction + slides.length) % slides.length];
     if (start.incoming && start.incoming !== incoming) {
-      start.incoming.style.transform = ''; start.incoming.style.transition = '';
+      start.incoming.style.transform = ''; start.incoming.style.transition = ''; start.incoming.style.visibility = '';
     }
     const outgoing = slides[current], width = widthOf();
     outgoing.style.transition = 'none'; incoming.style.transition = 'none';
     outgoing.style.transform = `translate3d(${dx}px, 0, 0)`;
     incoming.style.transform = `translate3d(${dx + direction * width}px, 0, 0)`;
+    // Inactive slides are normally visibility:hidden; reveal this neighbor so it follows the current
+    // banner into the frame instead of leaving an empty strip during the drag.
+    incoming.style.visibility = 'visible';
     surface.classList.add('is-dragging');
     start.direction = direction; start.incoming = incoming;
     start.drag = { outgoing, incoming, dx, width, direction };

@@ -90,6 +90,7 @@ test('release posters follow the finger and a swipe never opens the poster link'
     carousel.dispatchEvent(down); carousel.dispatchEvent(move);
     assert.match(slides[0].style.transform, /translate3d\(-80px/, 'the current release moves under the finger');
     assert.match(slides[1].style.transform, /translate3d\(320px/, 'the next release tracks in from the side');
+    assert.equal(slides[1].style.visibility, 'visible', 'the incoming release is visible while being dragged in');
     carousel.dispatchEvent(up);
     assert.equal(slides[1].classList.contains('active'), true, 'a left swipe advances to the next release');
     assert.equal(slides[0].classList.contains('before'), true, 'the previous artwork moves left');

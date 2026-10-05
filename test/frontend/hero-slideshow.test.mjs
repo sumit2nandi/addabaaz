@@ -115,6 +115,7 @@ test('hero artwork follows a touch drag while its button dock stays anchored and
     const incoming = [...root.querySelectorAll('.hero-slide')].find((slide) => slide !== outgoing);
     assert.match(outgoing.style.transform, /translate3d\(-90px/, 'the current banner moves with the finger');
     assert.match(incoming.style.transform, /translate3d\(310px/, 'the next banner enters from the edge as the finger drags');
+    assert.equal(incoming.style.visibility, 'visible', 'the incoming banner is revealed during the drag');
     assert.equal(actions.style.transform, '', 'the action dock does not move with either banner');
 
     const up = new window.Event('pointerup', { bubbles: true }); up.clientX = 120; up.clientY = 106;
@@ -128,6 +129,15 @@ test('hero artwork follows a touch drag while its button dock stays anchored and
     list.dispatchEvent(press);
     const click = new window.Event('click', { bubbles: true, cancelable: true }); list.dispatchEvent(click);
     assert.equal(click.defaultPrevented, false, 'the anchored action remains tappable immediately after a swipe');
+
+    const backDown = new window.Event('pointerdown', { bubbles: true }); backDown.clientX = 120; backDown.clientY = 100;
+    const backMove = new window.Event('pointermove', { bubbles: true }); backMove.clientX = 200; backMove.clientY = 108;
+    hero.dispatchEvent(backDown); hero.dispatchEvent(backMove);
+    const previous = outgoing;
+    assert.match(active.style.transform, /translate3d\(80px/, 'the active banner follows a rightward drag');
+    assert.match(previous.style.transform, /translate3d\(-320px/, 'the previous banner moves in from the left');
+    assert.equal(previous.style.visibility, 'visible', 'the previous banner is revealed during the reverse drag');
+    hero.dispatchEvent(new window.Event('pointercancel', { bubbles: true }));
   });
 });
 
