@@ -664,7 +664,10 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 
 /* ---------- accounts, legal, consent, engagement (v2.6) ---------- */
 .linklike { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; opacity: .85; } .linklike:hover { opacity: 1; }
-.forgot-link { justify-self: end; margin-top: -6px; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; } .forgot-link:hover { color: #fff; }
+/* "Forgot password?" tucks up under the password field (the negative top margin) and then needs air before the
+   primary button — with only the form's 16px row gap the link and "Sign in" read as one block. 10px of its own
+   margin, plus that gap, gives the button a clear break. */
+.forgot-link { justify-self: end; margin: -6px 0 10px; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; } .forgot-link:hover { color: #fff; }
 .fine { font-size: 12.5px; color: var(--muted); text-align: center; line-height: 1.5; } .fine a { color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; }
 .stack-sm { display: grid; gap: 10px; } .btn.block { width: 100%; justify-content: center; }
 .pin-input { text-align: center; letter-spacing: .5em; font-size: 22px; }
