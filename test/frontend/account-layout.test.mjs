@@ -49,8 +49,10 @@ test('unsubscribed website viewers get a Subscribe banner above the settings gri
     'the banner links to the plans page');
   assert.match(account, /<\/section>\s*\$\{u\.supportsAuth && !u\.isPremium/,
     'the banner sits between the profile card and the settings grid');
-  assert.match(account, /<em class="pill\$\{u\.isPremium \? ' ok' : ''\}">\$\{u\.isPremium \? 'Plus' : 'Free'\}<\/em>/,
-    'the profile name carries a Free/Plus badge');
+  assert.match(account, /u\.isPremium \? html`<em class="pill"><span class="premium-word">premium<\/span><\/em>` : html`<em class="pill">Free<\/em>`/,
+    'the profile name carries a Free/premium badge');
+  assert.match(account, /<h2>Subscribe to ADDABAAZ <em class="premium-word">premium<\/em><\/h2>/,
+    'the banner brands it ADDABAAZ premium in glittery gold');
   assert.match(css, /\.subscribe-banner \{[^}]*display: flex/,
     'the banner lays out text and button side by side');
 });

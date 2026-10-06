@@ -1,6 +1,6 @@
 # Payments on the website (Razorpay)
 
-ADDABAAZ Plus is sold **on the website only**. The Android and iOS apps never show a price, a checkout or a
+ADDABAAZ Premium is sold **on the website only**. The Android and iOS apps never show a price, a checkout or a
 link to one — that is a store-policy requirement (Google Play Payments and App Store guideline 3.1.1) and it
 is enforced in code, not just in copy:
 
@@ -74,7 +74,7 @@ the same payment id can arrive twice without granting two plans.
 
 ## 5. What the customer sees
 
-* **Plans** (`/plans`): one ADDABAAZ Plus card with Monthly/Yearly duration tiles (per-month hint on
+* **Plans** (`/plans`): one ADDABAAZ Premium card with Monthly/Yearly duration tiles (per-month hint on
   yearly), prices in INR incl. GST, and a single Pay button (*Pay ₹X*, *Extend ₹X* or *Switch to ₹X*
   depending on the account). An Apply Coupon link under the button opens the coupon popup (the button
   then shows the struck-through price); GST billing details are only asked when the server has GST

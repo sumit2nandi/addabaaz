@@ -13,8 +13,8 @@ const emptyLib = () => ({ list: [], progress: {}, reminders: [] });
 // Plans shown when there is no API (static mode). Keep in sync with server/src/plans.js; in API mode the server's list is used instead.
 export const PLANS_FALLBACK = [
   { id: 'free', name: 'Free', priceINR: 0, interval: 'forever', features: ['All free episodes & reels', 'Watch on any device', 'My List & Continue Watching'] },
-  { id: 'plus-monthly', name: 'ADDABAAZ Plus', priceINR: 99, interval: 'month', features: ['Everything in Free', 'Premium originals & early access', 'Ad-free viewing', 'Up to 5 profiles'] },
-  { id: 'plus-yearly', name: 'ADDABAAZ Plus (Yearly)', priceINR: 799, interval: 'year', features: ['Everything in Plus', '2 months free'] },
+  { id: 'plus-monthly', name: 'ADDABAAZ Premium', priceINR: 99, interval: 'month', features: ['Everything in Free', 'Premium originals & early access', 'Ad-free viewing', 'Up to 5 profiles'] },
+  { id: 'plus-yearly', name: 'ADDABAAZ Premium (Yearly)', priceINR: 799, interval: 'year', features: ['Everything in Premium', '2 months free'] },
 ];
 
 // Billing capabilities in local mode: none.

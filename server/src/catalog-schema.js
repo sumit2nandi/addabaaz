@@ -14,7 +14,7 @@ const RATINGS = ['U', '7+', '13+', '16+', '18+'];   // U = suitable for everyone
 const SUB = /^(?:(?:media|uploads)\/[\w\-./]+\.vtt|https:\/\/[^\s"'<>?#]+\.vtt(?:\?[^\s"'<>]*)?)$/i;
 const KINDS = ['episode', 'trailer', 'reel', 'clip'], STATUSES = ['ongoing', 'completed', 'paused'];
 // Trailers, clips and reels are the marketing for a title: they stream for everyone,
-// even when the video itself is flagged premium or the parent show is Plus-only.
+// even when the video itself is flagged premium or the parent show is Premium-only.
 export const FREE_KINDS = ['trailer', 'reel', 'clip'];
 
 // A small validation toolkit for one JSON object.

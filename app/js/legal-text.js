@@ -96,7 +96,7 @@ export function legalDoc(slug, { studio = {}, refundDays = 7 } = {}) {
     },
     refunds: {
       title: 'Refund & Cancellation Policy',
-      intro: `We want you to be happy with ${name} Plus. This policy explains when and how you can get your money back.`,
+      intro: `We want you to be happy with ${name} Premium. This policy explains when and how you can get your money back.`,
       sections: [
         ['Cancelling', [
           'Plans are prepaid and never renew automatically, so there is nothing to cancel and you will not be charged again unless you buy another plan. Your access continues until the end of the period you paid for.',

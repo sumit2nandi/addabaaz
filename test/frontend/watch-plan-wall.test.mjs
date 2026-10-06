@@ -45,7 +45,7 @@ test('the native lock wall offers the subscribe path, not just "Back to home"', 
   await new Promise((r) => setTimeout(r, 20));
   const wall = root.querySelector('#playerMsg');
   assert.ok(wall, 'the lock wall is shown');
-  assert.match(wall.textContent, /ADDABAAZ Plus exclusive/);
+  assert.match(wall.textContent, /ADDABAAZ premium exclusive/);
   const cta = wall.querySelector('a[href^="#/plans"]');
   assert.ok(cta, 'a See plans button exists in the app');
   assert.match(cta.textContent, /See plans/);

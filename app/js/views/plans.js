@@ -78,7 +78,7 @@ function celebrate() {
   const bits = Array.from({ length: 28 }, (_, i) => `<i style="left:${(i * 37) % 100}%;background:${colors[i % colors.length]};animation-delay:${((i % 12) * 0.12).toFixed(2)}s"></i>`).join('');
   const d = document.createElement('div');
   d.className = 'celebrate';
-  d.innerHTML = html`<div class="confetti">${raw(bits)}</div><div class="cel-box"><div class="cel-check">${icon('check', { size: 46 })}</div><h2>You’re in!</h2><p>Premium unlocked — enjoy ADDABAAZ Plus.</p><button class="btn btn-light" data-cel>Start watching</button></div>`.s;
+  d.innerHTML = html`<div class="confetti">${raw(bits)}</div><div class="cel-box"><div class="cel-check">${icon('check', { size: 46 })}</div><h2>You’re in!</h2><p>Premium unlocked — enjoy ADDABAAZ <em class="premium-word">premium</em>.</p><button class="btn btn-light" data-cel>Start watching</button></div>`.s;
   document.body.appendChild(d);
   document.body.classList.add('no-scroll');
   const done = () => { d.remove(); document.body.classList.remove('no-scroll'); };
@@ -144,7 +144,7 @@ export default async function plans(ctx) {
     const pr = sp ? priceOf(sp) : null;
     // Duration tiles + one pay button (website with payments only — canBuy already implies !isNative).
     const plusCard = html`<div class="plus-card">
-      <h2>ADDABAAZ Plus</h2>
+      <h2>ADDABAAZ <em class="premium-word">premium</em></h2>
       <p class="muted small">Premium originals, early access &amp; ad-free viewing.</p>
       <ul class="perks">${perks.map((f) => html`<li>${icon('check', { size: 15 })} ${f}</li>`)}</ul>
       <div class="durs" role="radiogroup" aria-label="Billing period">${paid.map((p) => html`<button class="dur ${p.id === sel ? 'is-sel' : ''} ${p.id === cur ? 'is-current' : ''}" data-sel="${p.id}" role="radio" aria-checked="${p.id === sel}">${p.id === 'plus-yearly' ? html`<span class="dur-tag">Best Value</span>` : ''}${p.id === cur ? html`<span class="dur-tag cur">Current</span>` : ''}<b>₹${p.priceINR}</b><small>${p.interval === 'year' ? 'Year' : 'Month'}</small>${p.interval === 'year' ? html`<em>Just ₹${Math.round(p.priceINR / 12)}/month</em>` : ''}</button>`)}</div>
@@ -165,8 +165,8 @@ export default async function plans(ctx) {
       </article>`)}</div>`;
     ctx.root.innerHTML = html`<div class="page">
       ${sectionHeader(isNative
-        ? { tag: 'ADDABAAZ Plus', title: 'Your access', subtitle: 'View the access currently linked to your ADDABAAZ account.' }
-        : { tag: 'ADDABAAZ Plus', title: 'Choose your plan', subtitle: 'Pay once for the period — no auto-renewal, nothing to cancel.' })}
+        ? { tag: html`ADDABAAZ <em class="premium-word">premium</em>`, title: 'Your access', subtitle: 'View the access currently linked to your ADDABAAZ account.' }
+        : { tag: html`ADDABAAZ <em class="premium-word">premium</em>`, title: 'Choose your plan', subtitle: 'Pay once for the period — no auto-renewal, nothing to cancel.' })}
       ${status}${why}
       ${!isNative && creditPaise > 0 ? html`<div class="notice ok">${icon('gift', { size: 18 })}<span>You have <b>${inr(creditPaise)}</b> of ADDABAAZ credit${offer?.expiryDays ? html` — it expires ${offer.expiryDays} days after it was added` : ''}. Tick “use my credit” at checkout and it comes straight off the price.</span></div>` : ''}
       ${canBuy ? plusCard : legacyCards}

@@ -556,7 +556,7 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .auth-close:hover { background: var(--accent); border-color: var(--accent); color: #fff; transform: rotate(90deg); }
 .plans { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); margin-top: 20px; max-width: 680px; } .plan { position: relative; background: var(--panel); border: 1px solid var(--border-2); border-radius: 20px; padding: 24px 22px; display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; align-items: center; align-content: start; } .plan h2 { font-size: 20px; letter-spacing: .02em; text-transform: uppercase; } .plan.best { background: linear-gradient(135deg, #4a0e2e 0%, #8f0000 55%, #b80000 100%); border-color: transparent; box-shadow: 0 8px 28px rgba(0,0,0,.45); } .plan.current { box-shadow: 0 0 0 2px var(--accent); } .plan.best.current { box-shadow: 0 8px 28px rgba(0,0,0,.45), 0 0 0 2px var(--gold); } .plan.free { opacity: .88; }
 .badge.cur { background: var(--ok); color: #04120a; }
-/* Plans checkout card: one Plus card with duration tiles + a single pay button (Zee-style). */
+/* Plans checkout card: one Premium card with duration tiles + a single pay button (Zee-style). */
 .plus-card { background: var(--panel); border: 1px solid var(--border-2); border-radius: 20px; padding: 22px 20px; margin-top: 20px; max-width: 680px; }
 .plus-card h2 { font-size: 21px; }
 .perks { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2px 14px; margin: 12px 0 16px; }
@@ -720,6 +720,10 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .bill-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; } .bill-head b { font-size: 17px; } .bill-amt { font-size: 20px; font-weight: 800; }
 .bill-docs { display: flex; flex-wrap: wrap; gap: 8px; } .bill-docs .btn { padding: 8px 12px; font-size: 13px; }
 .pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 700; background: #2a2200; color: var(--gold); } .pill.ok { background: #0f2415; color: #7be495; }
+/* The "premium" brand word: italic, bold, glittery gold with a slow shine sweep. The transform/spacing resets keep it lowercase even inside uppercase eyebrows. */
+.premium-word { font-style: italic; font-weight: 800; text-transform: none; letter-spacing: normal; background: linear-gradient(100deg, #7a5200 0%, #d4a017 22%, #ffe9a3 40%, #fffbe8 50%, #ffe9a3 60%, #d4a017 78%, #7a5200 100%); background-size: 220% auto; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 7px rgba(255,200,60,.35)); animation: premium-shine 3.4s linear infinite; }
+@keyframes premium-shine { to { background-position: 220% center; } }
+@media (prefers-reduced-motion: reduce) { .premium-word { animation: none; } }
 
 /* ---------- accounts, legal, consent, engagement (v2.6) ---------- */
 .linklike { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; opacity: .85; } .linklike:hover { opacity: 1; }

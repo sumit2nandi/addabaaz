@@ -5,7 +5,7 @@ import { html, $, $$, icon, badge, empty, pager, pageHead, openModal, guard, toa
 const LIMIT = 25;
 // Quick filters for the list.
 const FILTERS = [['all', 'All users'], ['paid', 'Paid plan'], ['expiring', 'Expiring in 7 days'], ['expired', 'Expired plan'], ['free', 'Free'], ['admin', 'Admins'], ['disabled', 'Disabled']];
-export const planBadge = (u) => u.planId === 'free' ? badge('free') : html`${badge(u.planId.includes('year') ? 'plus · yearly' : 'plus', 'gold')}${u.planSource === 'admin' ? html` ${badge('complimentary')}` : ''}`;
+export const planBadge = (u) => u.planId === 'free' ? badge('free') : html`${badge(u.planId.includes('year') ? 'premium · yearly' : 'premium', 'gold')}${u.planSource === 'admin' ? html` ${badge('complimentary')}` : ''}`;
 
 export default async function users(root, _p, ctx) {
   const st = { q: ctx.query.get('q') || '', filter: ctx.query.get('filter') || 'all', offset: 0 };

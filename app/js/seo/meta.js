@@ -155,10 +155,10 @@ export function pageMeta({ path, query = {}, cat, studio = null, origin, plans =
     return Object.assign(out, { redirect: '/', status: 301, robots: 'noindex,nofollow' });
   // Pricing page: describes the paid plans as schema.org offers.
   } else if (view === 'plans') {
-    out.title = `Plans & Pricing — ${SITE} Plus | ${SITE}`; out.canonical = '/plans';
-    out.description = `Watch free episodes and reels on ${SITE}, or go Plus from ₹99 a month for premium originals, early access and ad-free viewing on any device.`;
+    out.title = `Plans & Pricing — ${SITE} Premium | ${SITE}`; out.canonical = '/plans';
+    out.description = `Watch free episodes and reels on ${SITE}, or go Premium from ₹99 a month for premium originals, early access and ad-free viewing on any device.`;
     const paid = (plans || []).filter((p) => p.priceINR > 0);
-    out.jsonld = [...(paid.length ? [{ '@type': 'Product', name: `${SITE} Plus`, description: 'Premium originals, early access and ad-free viewing.', brand: { '@type': 'Brand', name: SITE }, url: `${origin}/plans`,
+    out.jsonld = [...(paid.length ? [{ '@type': 'Product', name: `${SITE} Premium`, description: 'Premium originals, early access and ad-free viewing.', brand: { '@type': 'Brand', name: SITE }, url: `${origin}/plans`,
       offers: paid.map((p) => ({ '@type': 'Offer', name: p.name, price: String(p.priceINR), priceCurrency: 'INR', availability: 'https://schema.org/InStock', url: `${origin}/plans` })) }] : []), crumbs(origin, [home, ['Plans', '/plans']])];
   // About / Services / Contact pages.
   } else if (view === 'studio') {

@@ -2,7 +2,7 @@
 import { api } from '../api.js';
 import { html, $, $$, icon, badge, empty, pager, pageHead, formModal, guard, toast, errMsg, fmtDT, inr, debounce } from '../ui.js';
 
-const PLAN = { 'plus-monthly': 'Plus · monthly', 'plus-yearly': 'Plus · yearly' };
+const PLAN = { 'plus-monthly': 'Premium · monthly', 'plus-yearly': 'Premium · yearly' };
 const LIMIT = 30;
 // Only paid Razorpay payments with something left to refund can be refunded from here.
 const canRefund = (p) => p.status === 'paid' && p.provider === 'razorpay' && p.amountPaise > 0 && p.refundedPaise < p.amountPaise;

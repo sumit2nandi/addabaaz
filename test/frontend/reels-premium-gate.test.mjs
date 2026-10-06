@@ -1,6 +1,6 @@
 // Trailers, clips and reels are NEVER locked and never carry the crown: even flagged premium
-// themselves, or belonging to a Plus-only show, the gate says 'ok', the Reels feed plays them like
-// any other reel and no premium badge is drawn - the preview is free, only the show is Plus.
+// themselves, or belonging to a Premium-only show, the gate says 'ok', the Reels feed plays them like
+// any other reel and no premium badge is drawn - the preview is free, only the show is Premium.
 // Run:  node --test test/frontend/reels-premium-gate.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -49,7 +49,7 @@ const { User } = await import('../../app/js/data/user.js');
 const { LocalAdapter } = await import('../../app/js/data/adapters.js');
 
 app.catalog = new Catalog({
-  shows: [{ id: 'premium-series', title: 'Premium series', description: 'A plus-only show.', poster: 'media/shows/p.webp', access: 'premium' }],
+  shows: [{ id: 'premium-series', title: 'Premium series', description: 'A premium-only show.', poster: 'media/shows/p.webp', access: 'premium' }],
   videos: [
     { id: 'newer-reel', showId: 'premium-series', kind: 'reel', title: 'Newest reel', source: { type: 'youtube', id: 'lmnopqrstuv' }, duration: 30, publishedAt: '2026-02-01' },
     { id: 'premium-reel', showId: 'premium-series', kind: 'reel', title: 'A reel', source: { type: 'youtube', id: 'abcdefghijk' }, duration: 30, publishedAt: '2026-01-01', access: 'premium' },

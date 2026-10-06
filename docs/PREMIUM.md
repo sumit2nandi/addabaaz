@@ -83,7 +83,7 @@ Add (or change) a video in `data/catalog.json`; `access: "premium"` is what requ
 |---|---|
 | Free title (any source) | Plays for everyone |
 | Premium, signed out | `401 login_required` → "Sign in to watch" |
-| Premium, signed in (email, Google or Facebook), no plan or plan expired | `402 subscription_required` → "ADDABAAZ Plus exclusive" → Plans page (`#/plans?next=/watch/<id>`) |
+| Premium, signed in (email, Google or Facebook), no plan or plan expired | `402 subscription_required` → "ADDABAAZ premium exclusive" → Plans page (`#/plans?next=/watch/<id>`) |
 | Premium, signed in **and** an active paid plan | Plays |
 | R2 source, but `R2_*` not configured | `503 storage_not_configured` |
 | Static-only hosting (no auth API) | Premium playback is unavailable because sign-in and plan checks need the server |

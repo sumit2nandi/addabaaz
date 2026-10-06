@@ -30,7 +30,7 @@ export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, 
     if (await isPremiumVideo(v)) {
       const user = await userFromRequest(req);
       if (!user) throw new HttpError(401, 'login_required', 'Please sign in to watch premium videos.');
-      if ((await db.subscriptions.get(user.id)).planId === 'free') throw new HttpError(402, 'subscription_required', 'Subscribe to ADDABAAZ Plus to watch this video.');   // premium = signed in AND paid
+      if ((await db.subscriptions.get(user.id)).planId === 'free') throw new HttpError(402, 'subscription_required', 'Subscribe to ADDABAAZ Premium to watch this video.');   // premium = signed in AND paid
       const dev = features.deviceOf(req);                                  // screens-at-once limit (premium playback only)
       const seat = await db.playback.touch(user.id, dev.id, dev.label, v.id, { limit: features.cfg.streamLimit, windowSec: features.cfg.heartbeatWindowSec });
       if (!seat.ok) throw new HttpError(429, 'stream_limit', `Your plan allows ${features.cfg.streamLimit} screens at once. Stop playback on another device to continue.`);

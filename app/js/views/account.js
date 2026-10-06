@@ -24,11 +24,11 @@ export default async function account(ctx) {
     ${extras.banner}
     <section class="card-panel who">
       ${p ? avatar(p, { size: 64 }) : ''}
-      <div><h2>${u.account ? u.account.name : p ? p.name : 'Guest'} <em class="pill${u.isPremium ? ' ok' : ''}">${u.isPremium ? 'Plus' : 'Free'}</em></h2>
+      <div><h2>${u.account ? u.account.name : p ? p.name : 'Guest'} ${u.isPremium ? html`<em class="pill"><span class="premium-word">premium</span></em>` : html`<em class="pill">Free</em>`}</h2>
         <p class="muted">${u.account ? u.account.email + (u.account.providers?.length ? ' · ' + u.account.providers.map((x) => ({ google: 'Google', facebook: 'Facebook', apple: 'Apple' }[x] || x)).join(' & ') + ' sign-in' : '') : u.supportsAuth ? 'Browsing as a guest — sign in to sync across devices.' : 'Your list and progress are saved on this device.'}</p></div>
       ${u.supportsAuth && !u.account ? html`<div class="who-actions"><a class="btn btn-primary" href="#/signin">Sign in</a><a class="btn btn-ghost" href="#/signup">Create account</a></div>` : ''}
     </section>
-    ${u.supportsAuth && !u.isPremium && !isNative ? html`<section class="card-panel subscribe-banner"><div><h2>Subscribe to <span>ADDABAAZ Plus</span></h2><p>Premium originals, early access</p></div><a class="btn btn-light" href="#/plans">Subscribe</a></section>` : ''}
+    ${u.supportsAuth && !u.isPremium && !isNative ? html`<section class="card-panel subscribe-banner"><div><h2>Subscribe to ADDABAAZ <em class="premium-word">premium</em></h2><p>Premium originals, early access</p></div><a class="btn btn-light" href="#/plans">Subscribe</a></section>` : ''}
     <div class="account-grid">
       ${extras.sections}
 
@@ -40,7 +40,7 @@ export default async function account(ctx) {
         </div>
       </section>
 
-      ${u.supportsAuth ? html`<section class="account-section"><h2 class="sub-h">Access</h2><div class="card-panel list">${link('#/plans', 'crown', plan === 'free' ? 'Free access' : 'ADDABAAZ Plus', plan === 'free' ? (isNative ? 'View your account access' : 'Subscribe to watch premium originals') : (u.subscription.expiresAt ? `Active until ${fmtDate(u.subscription.expiresAt)}` : (isNative ? 'View your access' : 'Manage your plan')))}${u.account ? link('#/billing', 'download', 'Billing & invoices', 'GST invoices, credit notes and refunds') : ''}</div></section>` : ''}
+      ${u.supportsAuth ? html`<section class="account-section"><h2 class="sub-h">Access</h2><div class="card-panel list">${link('#/plans', 'crown', plan === 'free' ? 'Free access' : html`ADDABAAZ <em class="premium-word">premium</em>`, plan === 'free' ? (isNative ? 'View your account access' : 'Subscribe to watch premium originals') : (u.subscription.expiresAt ? `Active until ${fmtDate(u.subscription.expiresAt)}` : (isNative ? 'View your access' : 'Manage your plan')))}${u.account ? link('#/billing', 'download', 'Billing & invoices', 'GST invoices, credit notes and refunds') : ''}</div></section>` : ''}
 
       <section class="account-section">
         <h2 class="sub-h">App</h2>

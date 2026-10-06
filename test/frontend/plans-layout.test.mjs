@@ -54,6 +54,20 @@ test('buying skips straight to payment: coupon popup, cancel screen, celebration
     'confetti falls');
 });
 
+test('the Premium brand word is italic, bold and glittery gold', () => {
+  const plans = read('app/js/views/plans.js');
+  const css = read('app/css/styles.css');
+
+  assert.match(plans, /<h2>ADDABAAZ <em class="premium-word">premium<\/em><\/h2>/,
+    'the purchase card titles it ADDABAAZ premium');
+  assert.match(plans, /tag: html`ADDABAAZ <em class="premium-word">premium<\/em>`/,
+    'the page eyebrow carries the same lockup');
+  assert.match(css, /\.premium-word \{[^}]*font-style: italic; font-weight: 800;[^}]*background-clip: text/,
+    'the brand word is italic bold gold gradient text');
+  assert.match(css, /@keyframes premium-shine/,
+    '...with a slow shine sweep');
+});
+
 test('read-only plan cards stay for native apps and payment-less servers', () => {
   const plans = read('app/js/views/plans.js');
 
