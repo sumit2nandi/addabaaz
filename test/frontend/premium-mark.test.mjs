@@ -21,8 +21,10 @@ test('the premium word sits in the top-left corner everywhere it is used (never 
   }
   assert.match(block('.premium-mark'), /position:\s*absolute/);
   assert.match(block('.premium-mark'), /top:\s*8px/);
-  assert.doesNotMatch(block('.premium-mark'), /background|border|padding/, 'the badge is bare text — no capsule behind it');
-  assert.doesNotMatch(css, /\.premium-mark \.premium-word \{[^}]*animation: none/, 'the artwork word keeps its glitter shine');
+  assert.match(block('.premium-mark'), /border-radius: 999px/, 'the word sits in its dark capsule');
+  assert.match(block('.premium-mark'), /background: rgba\(10,8,4,\.62\)/, '...frosted dark so the gold reads on any artwork');
+  assert.match(css, /@keyframes premium-shine \{ from \{ background-position: 0% center; \} to \{ background-position: -200% center; \} \}/,
+    'the shine sweeps exactly one tile — a seamless left-to-right loop with no jump');
 });
 
 test('the premium word is hidden while a video plays: watch page (.is-playing) and the active, un-paused reel', () => {
@@ -36,7 +38,7 @@ test('the premium word is hidden while a video plays: watch page (.is-playing) a
 });
 
 test('things that share the top-left corner make room for the premium word', () => {
-  assert.match(block('.chip-label.chip-after-mark'), /left:\s*6\d+px/, 'the EP / Reel label chip moves beside the bare word badge');
+  assert.match(block('.chip-label.chip-after-mark'), /left:\s*9\d+px/, 'the EP / Reel label chip moves beside the capsule badge');
   assert.match(block('.player-box.has-premium .unmute-pill'), /left:\s*\d+px/, '"Tap to play" does not sit under the badge');
   assert.match(block('.reel-frame.has-premium .unmute-pill'), /left:\s*\d+px/);
 });
