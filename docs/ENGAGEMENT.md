@@ -6,7 +6,8 @@ Everything here degrades gracefully: the static site (no API) simply doesn't sho
 | Feature | How it works |
 |---|---|
 | **Forgot / reset password** | `/forgot` → email with a single-use link `…/reset?token=…` (valid 1 h, stored hashed). Resetting signs out every other session and logs the person in. The answer never reveals whether an address has an account; one email per address per minute. Social-only accounts can use the same flow to **add** a password. |
-| **Email confirmation** | Signup emails `…/verify?token=…` (valid 3 days). Social sign-ins arrive verified. **Only when SMTP is configured** are checkout and comments blocked for unverified addresses (403 `email_unverified`) — otherwise nobody could ever confirm. |
+| **Email confirmation** | Signup emails `…/verify?token=…` (valid 3 days). Social sign-ins arrive verified. **Only when SMTP is configured** is checkout blocked for unverified addresses (403 `email_unverified`) — otherwise nobody could ever confirm. |
+| **Delete account** | Account → Delete account removes the login and linked service data. Payment and tax documents are retained detached from the account; see `docs/COMPLIANCE.md` for the exact retention and external request process. |
 | **Sign out everywhere** | Account → Security. Bumps a per-user session version; every older token stops working immediately. Changing/resetting the password does the same. |
 | **Sign in with Apple** | See `docs/AUTH.md`. |
 
@@ -15,11 +16,10 @@ Everything here degrades gracefully: the static site (no API) simply doesn't sho
 |---|---|
 | **Subtitles** | Content studio → Videos & reels → *Subtitles*: upload `.srt`/`.vtt` (SRT is converted to WebVTT, validated, stored under `/uploads`) or paste an https `.vtt` URL. The player attaches them as `<track>`s (fetched by the app and used as same-origin blobs, so no CORS setup is needed on the video host). The viewer's last choice is remembered. Free YouTube videos use YouTube's own captions. |
 | **Cast** | A *Cast* button appears in browsers that support the Remote Playback API (Chrome/Edge/Android) or AirPlay (Safari). Works for R2/MP4/HLS titles; YouTube embeds use YouTube's own cast. |
-| **Kids profiles + parental PIN** | Mark a profile "Kids": only shows/videos rated **U** or **7+** are visible (unrated titles are hidden — set ratings in the admin), no comments. A 4–6 digit PIN (Account → Kids & parental controls) is required to leave a Kids profile and, on the server, to create/edit/delete profiles (`X-Parental-Pin`; 5 wrong tries lock for 15 min). **The kids filter itself runs in the app** — it is a family-friendly filter, not a security boundary: the raw `/catalog` JSON still lists everything. |
+| **Kids profiles + parental PIN** | Mark a profile "Kids": only shows/videos rated **U** or **7+** are visible (unrated titles are hidden — set ratings in the admin). A 4–6 digit PIN (Account → Kids & parental controls) is required to leave a Kids profile and, on the server, to create/edit/delete profiles (`X-Parental-Pin`; 5 wrong tries lock for 15 min). **The kids filter itself runs in the app** — it is a family-friendly filter, not a security boundary: the raw `/catalog` JSON still lists everything. |
 | **Screens at once** | Each plan allows `STREAM_LIMIT` (default 2) premium streams at the same time. Devices identify themselves with `X-Device-Id`, send a heartbeat every 30 s while playing, and a seat expires 90 s after the last beat. Over the limit → 429 `stream_limit`; the player offers *Try again* and *Manage devices*. Free videos are never limited. |
 | **Resume anywhere** | Progress is stored per profile on the server (already the case); covered by a two-device test. |
 | **Ratings** | 👍/👎 on shows and videos, one per profile, public counts. Feeds *Because you watched …* on the home page (computed on the device from history, list and thumbs: same-genre shows you haven't started, minus ones you disliked). |
-| **Comments** | On videos, moderated: 1–1000 chars, at most one link, 5 per 10 minutes per account, report button; **3 reports auto-hide** a comment until an admin restores or deletes it (Admin → Comments). Deleting an account deletes its comments. |
 
 ## Notifications & Broadcasts
 Everything is sent from **Admin → Broadcast** (`#/notifications`): pick a channel (app push or e-mail), an
@@ -52,8 +52,8 @@ copy-pasted look-alike cannot create a second account.
 
 Rows that already collided are listed in **Admin → Users** with the offending characters marked
 (`rupa⟨U+00A0⟩@example.com`, `rupa⟨space⟩@example.com`) and can be **merged** — the extra account's profiles,
-watch history, devices, subscriptions, payments, invoices, refund requests, comments and push subscriptions
-move to the account you keep, then the extra account is deleted (audited as `user.merge`). A database
+watch history, devices, subscriptions, payments, invoices, refund requests, support tickets, delivery history
+and push subscriptions move to the account you keep, then the extra account is deleted (audited as `user.merge`). A database
 created before the unique e-mail index existed may hold two rows with an *identical* address; the console
 says so in the card and the same merge applies. Take a backup (`npm run backup`) before merging a lot of
 accounts.

@@ -17,9 +17,9 @@ export function registerAccountRoutes(api, { db, publicUser, features, exists, m
     const n = req.body?.name; if (typeof n !== 'string' || !n.trim() || n.length > 60) throw bad('Please enter your name.');
     await db.users.rename(req.user.id, n.trim()); res.json({ user: publicUser({ ...req.user, name: n.trim() }) });
   }));
-  // Self-service account deletion.
+  // Self-service account deletion; the database removes linked service data and detaches only records retained by law.
   api.delete('/me', wrap(async (req, res) => {           // required by Apple App Store guideline 5.1.1(v) & Google Play policy
-    await db.users.remove(req.user.id);                   // FK cascades remove profiles, library and subscription
+    await db.users.remove(req.user.id);
     res.sendStatus(204);
   }));
 

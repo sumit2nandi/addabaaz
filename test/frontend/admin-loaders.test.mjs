@@ -41,7 +41,6 @@ test('pages that paint their frame before fetching show placeholders inside it',
   const users = read('admin/js/views/users.js');
   assert.match(users, /<div id="list">\$\{loadingTable\(8, 4\)\}<\/div>/, 'Users: rows until the first page arrives');
   assert.match(read('admin/js/views/audit.js'), /<div id="list">\$\{loadingTable\(10, 3\)\}<\/div>/, 'Audit log too');
-  assert.match(read('admin/js/views/comments.js'), /<div id="list">\$\{loadingLines\(4\)\}<\/div>/, 'Comments: shimmering cards');
   // The content overview already had a hand-written spinner; it now uses the shared one.
   const overview = read('admin/js/views/content-overview.js');
   assert.match(overview, /root\.innerHTML = loadingPage\('the content overview'\)\.s;/);

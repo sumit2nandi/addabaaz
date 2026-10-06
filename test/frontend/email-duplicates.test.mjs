@@ -67,7 +67,7 @@ test('the admin console reports look-alike duplicates and merges them into one a
   assert.match(dbAdmin, /async mergeUsers\(keepId, removeId\)/, 'the merge itself');
   assert.match(dbAdmin, /if \(a !== b\) throw new HttpError\(409, 'not_duplicates'/, 'only real duplicates can be merged');
   // Everything that belongs to a person moves; the extra account is deleted last.
-  for (const table of ['profiles', 'auth_identities', 'payments', 'invoices', 'refund_requests', 'comments', 'push_subscriptions', 'push_devices', 'error_log']) {
+  for (const table of ['profiles', 'auth_identities', 'payments', 'invoices', 'refund_requests', 'support_tickets', 'campaign_deliveries', 'push_subscriptions', 'push_devices', 'error_log']) {
     assert.ok(dbAdmin.includes(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`), `${table} moves over`);
   }
   assert.match(dbAdmin, /DELETE FROM users WHERE id = \?', \[removeId\]/, 'the duplicate account is removed');

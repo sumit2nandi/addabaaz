@@ -121,7 +121,12 @@ export class User extends Emitter {
     if (this.profiles.length === 1) await this.selectProfile(this.profiles[0].id, { silent: true });
     this.emit('account'); this.emit('profile'); this.emit('library'); this.emit('subscription');
   }
-  async deleteAccount() { await this.remote.deleteAccount(); await this.signOut(); }
+  async deleteAccount() {
+    // Opt this installation out first so native push cannot be re-registered as a guest after account removal.
+    try { await (await import('../push.js')).disablePush(); } catch { /* the server-side deletion still removes linked tokens */ }
+    await this.remote.deleteAccount();
+    await this.signOut();
+  }
   #localSnapshot() {
     // Carry a device-only guest library into a brand-new account so nothing is lost on sign-up.
     const id = this.account ? null : (this.activeId || storage('ab.profiles', [])[0]?.id);

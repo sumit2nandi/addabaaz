@@ -14,6 +14,6 @@ export default async function legal(ctx) {
     ${sectionHeader({ tag: 'Legal', title: d.title, subtitle: `Last updated ${fmtDate(LEGAL_UPDATED)}` })}
     <p class="lead">${d.intro}</p>
     ${d.sections.map(([h, ps]) => html`<section><h2>${h}</h2>${ps.map((t) => html`<p>${t}</p>`)}</section>`)}
-    <p class="muted legal-links"><a href="#/privacy">Privacy</a> · <a href="#/terms">Terms</a> · <a href="#/refunds">Refunds</a> · <a href="#/contact">Contact</a></p>
+    <p class="muted legal-links"><a href="#/privacy">Privacy</a> · <a href="#/terms">Terms</a> · <a href="#/refunds">Refunds</a> · <a href="#/delete-account">Delete account</a> · <a href="#/contact">Contact</a></p>
   </article>`.s;
 }

@@ -20,21 +20,19 @@ const noop = (_q, _s, n) => n();
 
 /**
  * Account safety (password reset, email verification, change password, sign-out-everywhere, parental PIN),
- * viewing (ratings, comments, playback sessions / device limit, analytics), push subscriptions, refund requests and
+ * viewing (ratings, playback sessions / device limit, analytics), push subscriptions, refund requests and
  * the client error log. `public(api)` registers routes that need no sign-in; `authed(api)` those behind the session check.
  */
 // Returns helper functions plus two route registrars, `public(api)` and `authed(api)`, which app.js calls
 // (before and after the authentication middleware respectively). Behaviour limits come from `options` or environment variables.
 export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rate = true, publicUser, notDisabled, userFromRequest, plans = [], promos = null, reportError = null, logger = console, options = {} }) {
-  // Tunable limits: screens at once, refund window, reports needed to hide a comment, comment rate, whether an e-mail must be verified before commenting/buying.
+  // Tunable limits: simultaneous streams, refund window and email verification before billing actions.
   const cfg = {
     supportEmail: options.supportEmail ?? process.env.SUPPORT_EMAIL ?? '',
     streamLimit: options.streamLimit ?? (Number(process.env.STREAM_LIMIT) || 2),
     heartbeatWindowSec: options.heartbeatWindowSec ?? 90,
     refundWindowDays: options.refundWindowDays ?? (process.env.REFUND_WINDOW_DAYS === undefined ? 7 : Number(process.env.REFUND_WINDOW_DAYS)),
-    reportsToHide: options.reportsToHide ?? 3,
-    commentsPer10Min: options.commentsPer10Min ?? 5,
-    requireVerifiedForActions: options.requireVerified ?? mailer.provider === 'smtp',    // without SMTP nobody could ever verify
+    requireVerifiedForBilling: options.requireVerified ?? mailer.provider === 'smtp',    // without SMTP nobody could ever verify
   };
   // Builds a per-IP rate limiter (or a no-op when rate limiting is turned off).
   const limit = (name, max, ms) => (rate ? rateLimit(name, max, ms) : noop);
@@ -77,7 +75,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
   }
 
   // Throws 403 `email_unverified` when verification is required (only when SMTP is configured) and the user has not confirmed yet.
-  const requireVerified = (user) => { if (cfg.requireVerifiedForActions && !user.emailVerifiedAt) throw new HttpError(403, 'email_unverified', 'Please confirm your email address first — we sent you a link. You can resend it from Account.'); };
+  const requireVerified = (user) => { if (cfg.requireVerifiedForBilling && !user.emailVerifiedAt) throw new HttpError(403, 'email_unverified', 'Please confirm your email address first — we sent you a link. You can resend it from Account.'); };
 
   /** Server-checked parental PIN with lock-out. Used by the /me/pin endpoints and by profile changes (header X-Parental-Pin). */
   async function checkPin(user, pin) {
@@ -196,20 +194,10 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         res.sendStatus(204);
       }));
 
-      /* ratings & comments: public reads */
       // Public like/dislike totals for a show or video.
       api.get('/ratings/:type/:id', wrap(async (req, res) => {
         if (!['show', 'video'].includes(req.params.type)) throw new HttpError(404, 'not_found', 'Unknown item.');
         res.set('Cache-Control', 'public, max-age=30'); res.json(await db.ratings.counts(req.params.type, req.params.id));
-      }));
-      // Public comment list, newest first, paged with `before`. If the reader is signed in, their own comments are flagged so the UI can offer Delete.
-      api.get('/videos/:id/comments', wrap(async (req, res) => {
-        if (!(await catalog.video(req.params.id))) throw new HttpError(404, 'not_found', 'Unknown video.');
-        const before = req.query.before ? Date.parse(String(req.query.before)) : null;
-        const [items, total] = await Promise.all([db.comments.list(req.params.id, { limit: 30, before: Number.isNaN(before) ? null : before }), db.comments.count(req.params.id)]);
-        const me = await userFromRequest(req).catch((e) => { logger.warn('[comments] could not resolve the optional viewer session:', e); return null; });
-        res.set('Cache-Control', 'no-store');
-        res.json({ total, comments: items.map((c) => ({ id: c.id, author: c.author, body: c.body, createdAt: c.createdAt, ...(me && c.userId === me.id ? { mine: true } : {}) })) });
       }));
 
       /* anonymous native app push devices */
@@ -315,34 +303,6 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         await db.ratings.set(p.id, type, id, value); res.json(await db.ratings.counts(type, id));
       }));
       api.delete('/profiles/:pid/ratings/:type/:id', wrap(async (req, res) => { const p = await profileOf(req); await db.ratings.clear(p.id, req.params.type, req.params.id); res.json(await db.ratings.counts(req.params.type, req.params.id)); }));
-
-      /* --- comments (signed in; verified email when email is configured) --- */
-      // Post a comment. Sanitised (control characters removed), max 1000 chars, at most one link, and a per-user rate cap to limit spam.
-      api.post('/videos/:id/comments', limit('comment', 30, 10 * 60_000), wrap(async (req, res) => {
-        if (!(await catalog.video(req.params.id))) throw new HttpError(404, 'not_found', 'Unknown video.');
-        requireVerified(req.user);
-        const body = String(req.body?.body ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').replace(/\n{3,}/g, '\n\n').trim();
-        if (!body || body.length > 1000) throw bad('Write a comment of 1–1000 characters.', 'invalid_comment');
-        if ((body.match(/https?:\/\/|www\./gi) || []).length > 1) throw bad('Please keep links out of comments.', 'links_not_allowed');
-        if ((await db.comments.recentBy(req.user.id, 600)) >= cfg.commentsPer10Min) throw new HttpError(429, 'rate_limited', 'You’re commenting very quickly — please wait a few minutes.');
-        let author = req.user.name.split(/\s+/)[0].slice(0, 24);
-        if (req.body?.profileId) { const p = await db.profiles.get(String(req.body.profileId), req.user.id); if (p) { if (p.kids) throw new HttpError(403, 'kids_profile', 'Comments are turned off on kids profiles.'); author = p.name; } }
-        const c = { id: crypto.randomUUID(), videoId: req.params.id, userId: req.user.id, author, body };
-        await db.comments.add(c);
-        res.status(201).json({ comment: { id: c.id, author, body, createdAt: new Date().toISOString(), mine: true } });
-      }));
-      // Users can delete only their own comments.
-      api.delete('/comments/:id', wrap(async (req, res) => {
-        const c = await db.comments.byId(req.params.id);
-        if (!c || c.userId !== req.user.id) throw new HttpError(404, 'not_found', 'Comment not found.');
-        await db.comments.remove(c.id); res.sendStatus(204);
-      }));
-      // Report a comment; enough reports hide it automatically until an admin reviews it.
-      api.post('/comments/:id/report', limit('report', 20, 60_000), wrap(async (req, res) => {
-        const c = await db.comments.byId(req.params.id); if (!c || c.status !== 'visible') throw new HttpError(404, 'not_found', 'Comment not found.');
-        if (c.userId === req.user.id) throw bad('You can’t report your own comment.');
-        res.json(await db.comments.report(c.id, req.user.id, cfg.reportsToHide));
-      }));
 
       /* --- push subscriptions --- */
       // Store this browser's push subscription (only https endpoints are accepted) with the user's notification preferences.

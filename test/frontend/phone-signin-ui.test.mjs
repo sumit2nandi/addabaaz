@@ -15,6 +15,9 @@ const main = read('app/js/main.js');
 const user = read('app/js/data/user.js');
 const adapters = read('app/js/data/adapters.js');
 const css = read('app/css/styles.css');
+const account = read('app/js/views/account.js');
+const accountExtras = read('app/js/views/account-extra.js');
+const support = read('app/js/views/support.js');
 
 test('the sign-in page leads with the mobile number, and only when the server offers OTP', () => {
   assert.match(auth, /const providers = await u\.providers\(\)/, 'the page asks the server which methods exist');
@@ -42,6 +45,13 @@ test('phone sign-in talks to the OTP endpoints through the data layer', () => {
   assert.match(adapters, /auth\/otp\/verify/, 'the verify endpoint is /auth/otp/verify');
   assert.match(read('server/src/routes/otp.js'), /api\.post\('\/auth\/otp\/request'/, 'the server registers it');
   assert.match(read('server/src/routes/auth.js'), /otp: !!sms\?\.configured && sms\.provider !== 'none'/, 'and reports whether it is on');
+});
+
+test('phone-only accounts do not expose the internal placeholder as an inbox or offer email-password recovery', () => {
+  assert.match(account, /emailIsPlaceholder\s*\n\s*\? `SMS sign-in/);
+  assert.match(accountExtras, /const signInMethod = acc\.emailIsPlaceholder[\s\S]*?SMS sign-in[\s\S]*?verified mobile number and one-time code/);
+  assert.match(support, /Enter a separate e-mail address below so we can reply to your ticket/);
+  assert.doesNotMatch(support, /Replies go to your mobile number’s account/);
 });
 
 test('the notification permission is asked once, gently, and never again', () => {

@@ -181,6 +181,7 @@ test('users: search, filters, detail, rename, complimentary access, revoke, disa
   assert.equal((await call('DELETE', `/admin/users/${admin.id}`, null, TOKEN)).body.error.code, 'last_admin');
   // delete
   const gone = await signup('gone@example.com'); assert.equal((await A('DELETE', `/users/${gone.id}`)).status, 204); assert.equal((await A('GET', `/users/${gone.id}`)).status, 404);
+  const deletionAudit = await audit('user.delete'); assert.ok(deletionAudit.some((entry) => entry.target === gone.id)); assert.ok(!deletionAudit.some((entry) => entry.target === gone.user.email));
   assert.equal((await audit('user.')).length >= 6, true);
 });
 
@@ -394,7 +395,11 @@ test('one address = one account: duplicates are reported and can be merged', asy
     // What the duplicate accounts own and the surviving account must end up with.
     await db.pool.query('INSERT INTO profiles (id, user_id, name, color) VALUES (?,?,?,0)', ['dup-profile-1', nbId, 'Viewer']);
     await db.pool.query('INSERT INTO push_devices (id, user_id, platform, token_hash, token, label) VALUES (?,?,?,?,?,?)', ['dup-device-1', nbId, 'android', 'dup-hash-1', 'dup-token-'.padEnd(30, 'x'), 'Old phone']);
-    await db.pool.query("INSERT INTO comments (id, video_id, user_id, author, body, status) VALUES ('dup-comment-1', 'some-video', ?, 'Viewer', 'hello', 'visible')", [nbId]);
+    const mergeTicket = '88888888-8888-4888-8888-888888888881';
+    await db.pool.query('INSERT INTO support_tickets (id, user_id, name, email, category, subject, body) VALUES (?,?,?,?,?,?,?)', [mergeTicket, nbId, 'Viewer', nbEmail, 'account', 'Merge test', 'Support thread']);
+    const mergeCampaign = '99999999-9999-4999-8999-999999999991', mergeDelivery = '99999999-9999-4999-8999-999999999992';
+    await db.pool.query('INSERT INTO campaigns (id, channel, audience, title, body) VALUES (?,?,?,?,?)', [mergeCampaign, 'email', 'all', 'Merge test', 'Test']);
+    await db.pool.query('INSERT INTO campaign_deliveries (id, campaign_id, delivery_key, channel, transport, user_id, recipient_name, recipient_email, destination) VALUES (?,?,?,?,?,?,?,?,?)', [mergeDelivery, mergeCampaign, 'e'.repeat(64), 'email', 'email', nbId, 'Viewer', nbEmail, nbEmail]);
 
     // The report finds every row of the address and shows WHY the first two look identical.
     const rep = (await A('GET', '/users/duplicates')).body;
@@ -422,7 +427,7 @@ test('one address = one account: duplicates are reported and can be merged', asy
     const first = await A('POST', '/users/merge', { keepId: viewer.id, removeId: nbId });
     assert.equal(first.status, 200, JSON.stringify(first.body));
     assert.ok(first.body.moved.profiles >= 1); assert.ok(first.body.moved.devices >= 1);
-    assert.ok(first.body.moved.comments >= 1); assert.equal(first.body.moved.subscription, 'moved');
+    assert.ok(first.body.moved.supportTickets >= 1); assert.ok(first.body.moved.campaignDeliveries >= 1); assert.equal(first.body.moved.subscription, 'moved');
     const second = await A('POST', '/users/merge', { keepId: viewer.id, removeId: sameId });
     assert.equal(second.status, 200, JSON.stringify(second.body));
 
@@ -431,8 +436,10 @@ test('one address = one account: duplicates are reported and can be merged', asy
     const kept = (await A('GET', `/users/${viewer.id}`)).body;
     assert.ok(kept.profiles.length >= 2, 'the other account’s profile moved over');
     assert.equal(kept.subscription.planId, 'plus-monthly', 'the paid plan followed the person');
-    const [movedComment] = await db.pool.query('SELECT user_id FROM comments WHERE id = ?', ['dup-comment-1']);
-    assert.equal(movedComment[0].user_id, viewer.id, 'the comment moved');
+    const [movedTicket] = await db.pool.query('SELECT user_id FROM support_tickets WHERE id = ?', [mergeTicket]);
+    assert.equal(movedTicket[0].user_id, viewer.id, 'the support conversation moved');
+    const [movedDelivery] = await db.pool.query('SELECT user_id FROM campaign_deliveries WHERE id = ?', [mergeDelivery]);
+    assert.equal(movedDelivery[0].user_id, viewer.id, 'the delivery history follows the surviving account');
     assert.ok((await audit('user.merge')).some((e) => e.target === nbId && e.meta.keep === viewer.id));
     // The surviving row owns the normalized address again (it sits at NULL while duplicates exist).
     const [owner] = await db.pool.query('SELECT email_norm, email_dup FROM users WHERE id = ?', [viewer.id]);

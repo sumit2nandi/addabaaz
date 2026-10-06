@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Catalog } from '../../app/js/data/catalog.js';
 import { bodyHtml, createSeo } from '../src/seo.js';
+import { legalDoc } from '../../app/js/legal-text.js';
 
 const episode = {
   id: 'episode-1', kind: 'episode', episode: 1, title: 'Fixture episode', showId: 'show-1', duration: 605,
@@ -36,4 +37,23 @@ test('video sitemap entries omit per-video duration', async () => {
   const xml = await seo.sitemapXml({ protocol: 'https:', get: () => 'example.test' });
   assert.match(xml, /<video:video>/);
   assert.doesNotMatch(xml, /<video:duration>/, 'sitemap metadata must not disclose episode length');
+});
+
+test('public deletion page and privacy policy disclose retained identity, phone/SMS, and backup data', () => {
+  const html = bodyHtml({ title: 'Delete account', description: 'Account deletion' }, { view: 'deletion', params: {} }, catalog, { studio: { name: 'ADDABAAZ', email: 'office@addabaaz.in' } }, []);
+  assert.match(html, /target account email\/ID/);
+  assert.match(html, /fresh random value/);
+  assert.match(html, /R2 and hosting\/database snapshots/);
+  assert.match(html, /contact-webhook copies/);
+
+  const privacy = legalDoc('privacy', { studio: { name: 'ADDABAAZ' } });
+  const text = privacy.sections.flatMap(([, paragraphs]) => paragraphs).join(' ');
+  assert.match(text, /MSG91/);
+  assert.match(text, /internal placeholder email derived from the verified number, not a user-supplied email address/);
+  assert.doesNotMatch(text, /add a real (?:email|address).*Account/i);
+  assert.match(text, /SMS-code hashes until one day after code expiry/);
+  assert.match(text, /pre-deletion copy/);
+  assert.match(text, /optional contact webhook is configured/);
+  assert.match(text, /target account email or UUID/);
+  assert.match(text, /fresh random key/);
 });

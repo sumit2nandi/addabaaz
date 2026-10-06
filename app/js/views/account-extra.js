@@ -108,12 +108,15 @@ export function accountExtras() {
     };
   }
   const verified = acc.emailVerified !== false;
-  const banner = verified ? '' : html`<section class="card-panel notice" id="verifyBanner"><div>${icon('mail', { size: 22 })}</div><div><b>Confirm your email</b><p class="muted">We sent a link to ${acc.email}. Confirming lets you buy a plan and post comments.</p></div><button class="btn btn-primary" id="resendVerify">Resend link</button></section>`;
+  const banner = verified ? '' : html`<section class="card-panel notice" id="verifyBanner"><div>${icon('mail', { size: 22 })}</div><div><b>Confirm your email</b><p class="muted">We sent a link to ${acc.email}. Confirming your email lets you buy a plan.</p></div><button class="btn btn-primary" id="resendVerify">Resend link</button></section>`;
+  const signInMethod = acc.emailIsPlaceholder
+    ? html`<div class="row-link static">${icon('phone', { size: 22 })}<span><b>SMS sign-in</b><small>Use your verified mobile number and one-time code to sign in.</small></span></div>`
+    : row('chgPw', 'lock', acc.hasPassword === false ? 'Set a password' : 'Change password', acc.hasPassword === false ? 'You signed up with a social account — add a password too.' : 'Signs you out on your other devices.');
   const sections = html`
     <section class="account-section">
       <h2 class="sub-h">Security</h2>
       <div class="card-panel list">
-        ${row('chgPw', 'lock', acc.hasPassword === false ? 'Set a password' : 'Change password', acc.hasPassword === false ? 'You signed up with a social account — add a password too.' : 'Signs you out on your other devices.')}
+        ${signInMethod}
         ${row('signOutAll', 'logout', 'Sign out everywhere', 'Ends your session on every phone, TV and browser.')}
         ${row('supportBtn', 'chat', 'Help & support', 'Trouble signing in, payments, playback — raise a ticket.')}
         ${row('devices', 'tv', 'Your devices', 'See where you’re watching and how many screens your plan allows.')}
@@ -130,7 +133,7 @@ export function accountExtras() {
     <div id="notifySlot" class="account-section"></div>
     <section class="account-section">
       <h2 class="sub-h">Privacy</h2>
-      <div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}<a class="row-link" href="#/privacy">${icon('info', { size: 22 })}<span><b>Privacy Policy</b></span>${icon('right', { size: 18, cls: 'chev' })}</a><a class="row-link" href="#/terms">${icon('info', { size: 22 })}<span><b>Terms of Use</b></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>
+      <div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}<a class="row-link" href="#/privacy">${icon('info', { size: 22 })}<span><b>Privacy Policy</b></span>${icon('right', { size: 18, cls: 'chev' })}</a><a class="row-link" href="#/terms">${icon('info', { size: 22 })}<span><b>Terms of Use</b></span>${icon('right', { size: 18, cls: 'chev' })}</a><a class="row-link" href="#/delete-account">${icon('info', { size: 22 })}<span><b>Delete account</b><small>Delete your account or request deletion if you cannot sign in.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>
     </section>`;
 
   const wire = (root, ctx) => {

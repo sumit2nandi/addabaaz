@@ -105,7 +105,7 @@ export function startConsole({ nav, routes, name = 'Admin', title = 'ADDABAAZ Ad
     if (!badges || !$('[data-count]')) return;             // the Content studio has no badge slots
     try {
       const [m, inbox] = await Promise.all([api.get('/messages?status=open&limit=1'), api.get('/inbox')]);
-      for (const [k, n] of [['messages', m.total], ['comments', inbox.comments], ['refunds', inbox.refunds], ['errors', inbox.errors]]) { const c = $(`[data-count="${k}"]`); if (c) { c.textContent = n; c.hidden = !n; } }
+      for (const [k, n] of [['messages', m.total], ['refunds', inbox.refunds], ['errors', inbox.errors]]) { const c = $(`[data-count="${k}"]`); if (c) { c.textContent = n; c.hidden = !n; } }
     } catch { /* the badge is a nicety */ }
   }
 

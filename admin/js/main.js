@@ -9,7 +9,7 @@ import { startConsole } from './console.js';
 const NAV = [
   ['Overview', [['dashboard', 'Dashboard', 'dashboard']]],
   ['Content', [['catalog', 'Content overview', 'dashboard'], ['shows', 'Shows & seasons', 'film'], ['videos', 'Videos & reels', 'tv'], ['upcoming', 'Coming soon', 'clock'], ['top', 'Top 10', 'crown'], ['studio', 'Studio & team', 'building']]],
-  ['Customers', [['users', 'Users', 'users'], ['payments', 'Payments & refunds', 'card'], ['refunds', 'Refund requests', 'refund'], ['coupons', 'Coupons', 'ticket'], ['support', 'Support', 'chat'], ['messages', 'Messages', 'inbox'], ['comments', 'Comments', 'chat']]],
+  ['Customers', [['users', 'Users', 'users'], ['payments', 'Payments & refunds', 'card'], ['refunds', 'Refund requests', 'refund'], ['coupons', 'Coupons', 'ticket'], ['support', 'Support', 'chat'], ['messages', 'Messages', 'inbox']]],
   ['Growth', [['analytics', 'Analytics', 'chart'], ['promos', 'Promotions', 'gift'], ['notifications', 'Broadcast', 'bell']]],
   ['System', [['cache', 'Client cache', 'refresh'], ['database', 'Database', 'database'], ['application', 'Application', 'chart'], ['maintenance', 'Maintenance', 'power'], ['errors', 'Errors', 'bug'], ['audit', 'Audit log', 'log']]],
 ];
@@ -27,7 +27,6 @@ const ROUTES = [
   [/^messages$/, () => import('./views/messages.js')],
   [/^audit$/, () => import('./views/audit.js')],
   [/^analytics$/, () => import('./views/analytics.js')],
-  [/^comments$/, () => import('./views/comments.js')],
   [/^refunds$/, () => import('./views/refunds.js')],
   [/^notifications$/, () => import('./views/notifications.js')],
   [/^promos$/, () => import('./views/promos.js')],

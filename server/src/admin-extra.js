@@ -8,7 +8,7 @@ import { normalizePhone, generateOtp, maskPhone } from './sms.js';
 const asPage = (req, dflt = 50, max = 200) => ({ limit: Math.min(Math.max(Number(req.query.limit) || dflt, 1), max), offset: Math.max(Number(req.query.offset) || 0, 0) });
 
 /**
- * Admin routes for the engagement features: analytics, comment moderation, refund requests, push notifications, error log.
+ * Admin routes for analytics, refund requests, push notifications, support tickets and the error log.
  * Mounted by createAdminRouter (so they sit behind the same admin sign-in, rate limit and audit log).
  */
 export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns = null, unsubscribeUrlFor = null, log, logger = console, siteUrl, sms = null, email = mail.campaignEmail }) {
@@ -16,10 +16,10 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
   // absolute before it leaves the server, or the image will not load.
   const absoluteUrl = (v) => (/^https?:/i.test(v) ? v : `${String(siteUrl || '').replace(/\/+$/, '')}${String(v).startsWith('/') ? '' : '/'}${v}`);
   /* ---------- badges for the sidebar ---------- */
-  // Counts shown as badges in the admin sidebar: comments to review, refund requests pending, recent errors.
+  // Counts shown as badges in the admin sidebar: pending refund requests, recent errors and open support tickets.
   router.get('/inbox', wrap(async (_req, res) => {
-    const [comments, refunds, errors, tickets] = await Promise.all([db.comments.reviewCount(), db.refundRequests.pendingCount(), db.errors.count24h(), db.tickets.awaitingCount().catch((e) => { logger.warn('[admin] ticket inbox count failed:', e); return 0; })]);
-    res.json({ comments, refunds, errors, tickets });
+    const [refunds, errors, tickets] = await Promise.all([db.refundRequests.pendingCount(), db.errors.count24h(), db.tickets.awaitingCount().catch((e) => { logger.warn('[admin] ticket inbox count failed:', e); return 0; })]);
+    res.json({ refunds, errors, tickets });
   }));
 
   /* ---------- email delivery diagnostic ---------- */
@@ -77,20 +77,6 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
       note: 'Plays and watch time are counted by ADDABAAZ itself when a video is played on this site (YouTube’s own view counts are separate).',
     });
   }));
-
-  /* ---------- comments ---------- */
-  // Comment moderation queue: reported/hidden comments first, with the video each belongs to.
-  router.get('/comments', wrap(async (req, res) => {
-    const filter = ['review', 'hidden', 'all'].includes(req.query.filter) ? req.query.filter : 'review';
-    const out = await db.comments.adminList({ filter, q: typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '', ...asPage(req) });
-    const snap = await catalog.get({ all: true });
-    res.json({ total: out.total, comments: out.items.map((c) => ({ ...c, videoTitle: snap.videoById.get(c.videoId)?.title || c.videoId })) });
-  }));
-  const commentOr404 = async (id) => { const c = await db.comments.byId(String(id)); if (!c) throw new HttpError(404, 'not_found', 'Unknown comment.'); return c; };
-  // Approve = make visible again; Hide = remove from the site but keep for review; Delete = remove for good.
-  router.post('/comments/:id/approve', wrap(async (req, res) => { await commentOr404(req.params.id); await db.comments.setStatus(req.params.id, 'visible'); await log(req, 'comment.approve', req.params.id); res.sendStatus(204); }));
-  router.post('/comments/:id/hide', wrap(async (req, res) => { await commentOr404(req.params.id); await db.comments.setStatus(req.params.id, 'hidden', 'admin'); await log(req, 'comment.hide', req.params.id); res.sendStatus(204); }));
-  router.delete('/comments/:id', wrap(async (req, res) => { await commentOr404(req.params.id); await db.comments.remove(req.params.id); await log(req, 'comment.delete', req.params.id); res.sendStatus(204); }));
 
   /* ---------- refund requests ---------- */
   // Customers' refund requests, with the payment each refers to.

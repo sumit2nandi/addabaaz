@@ -36,7 +36,7 @@ flowchart LR
       system[system]
       identity[auth / identity]
       account[accounts]
-      engagement[features<br/>PIN · ratings · comments · push · devices]
+      engagement[features<br/>PIN · ratings · push · devices]
       billingRoutes[billing + payment webhook]
       mediaRoutes[media / HLS]
       adminRoutes[admin + admin-extra]

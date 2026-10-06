@@ -115,14 +115,63 @@ test('contact form: validates, honeypot ignored, stored', async () => {
   assert.equal(await db.contacts.count(), before + 1);
 });
 
-test('account deletion removes user data', async () => {
+test('account deletion removes linked personal data and anonymizes delivery history', async () => {
   const u = (await call('POST', '/auth/signup', { name: 'Del', email: 'del@example.com', password: 'password123' })).body;
+  const phone = '919876543210';
+  await db.pool.query('UPDATE users SET phone = ?, phone_verified_at = UTC_TIMESTAMP(3) WHERE id = ?', [phone, u.user.id]);
+  const payment = '88888888-8888-4888-8888-888888888881', invoice = '88888888-8888-4888-8888-888888888882', refund = '88888888-8888-4888-8888-888888888884';
+  const billing = { buyerName: 'Del', email: u.user.email, gstin: '22AAAAA0000A1Z5', state: 'West Bengal' };
+  const invoiceDoc = { buyer: billing, paymentReference: 'payment-ref-retained' };
+  await db.pool.query('INSERT INTO payments (id, user_id, plan_id, provider, provider_order_id, amount_paise, status, billing) VALUES (?,?,?,?,?,?,?,?)', [payment, u.user.id, 'plus-monthly', 'razorpay', 'order-delete-retained', 11800, 'paid', JSON.stringify(billing)]);
+  await db.pool.query('INSERT INTO refunds (id, payment_id, provider_refund_id, amount_paise, status, reason, source) VALUES (?,?,?,?,?,?,?)', [refund, payment, 'provider-refund-retained', 11800, 'processed', 'Customer request', 'admin']);
+  await db.pool.query('INSERT INTO invoices (id, number, kind, doc_key, payment_id, user_id, fy, taxable_paise, total_paise, gst_rate, doc) VALUES (?,?,?,?,?,?,?,?,?,?,?)', [invoice, 'INV-DELETE-TEST-01', 'invoice', '88888888-8888-4888-8888-888888888883', payment, u.user.id, '2627', 10000, 11800, 18, JSON.stringify(invoiceDoc)]);
+
+  const ticket = '11111111-1111-4111-8111-111111111111';
+  const guestTicket = '11111111-1111-4111-8111-111111111112';
+  const reply = '11111111-1111-4111-8111-111111111113';
+  const guestPhoneTicket = '11111111-1111-4111-8111-111111111114';
+  await db.pool.query('INSERT INTO support_tickets (id, user_id, name, email, phone, category, subject, body) VALUES (?,?,?,?,?,?,?,?)', [ticket, u.user.id, 'Del', u.user.email, phone, 'account', 'Delete me', 'Personal support message']);
+  await db.pool.query('INSERT INTO support_ticket_replies (id, ticket_id, author, author_name, author_id, body) VALUES (?,?,?,?,?,?)', [reply, ticket, 'user', 'Del', u.user.id, 'Private reply']);
+  await db.pool.query('INSERT INTO support_tickets (id, name, email, category, subject, body) VALUES (?,?,?,?,?,?)', [guestTicket, 'Del', u.user.email, 'account', 'Guest request', 'Also private']);
+  await db.pool.query('INSERT INTO support_tickets (id, name, email, phone, category, subject, body) VALUES (?,?,?,?,?,?,?)', [guestPhoneTicket, 'Del', 'other-ticket@example.com', '+91 98765 43210', 'account', 'Phone-matched request', 'Phone-linked personal message']);
+  const emailContact = '22222222-2222-4222-8222-222222222221', phoneContact = '22222222-2222-4222-8222-222222222222';
+  await db.pool.query('INSERT INTO contact_messages (id, name, email, phone, message) VALUES (?,?,?,?,?)', [emailContact, 'Del', u.user.email, phone, 'Contact message']);
+  await db.pool.query('INSERT INTO contact_messages (id, name, email, phone, message) VALUES (?,?,?,?,?)', [phoneContact, 'Del', 'other-contact@example.com', '+91 98765 43210', 'Phone-matched contact message']);
+  await db.pool.query('INSERT INTO phone_otps (id, phone, code_hash, expires_at) VALUES (?,?,?,UTC_TIMESTAMP(3) + INTERVAL 5 MINUTE)', ['33333333-3333-4333-8333-333333333331', phone, 'b'.repeat(64)]);
+  await db.pool.query('INSERT INTO notify_sent (kind, ref, user_id) VALUES (?,?,?)', ['episode', 'privacy-delete-test', u.user.id]);
+  await db.pool.query('INSERT INTO playback_sessions (user_id, device_id, device_label) VALUES (?,?,?)', [u.user.id, 'privacy-test-device', 'Test phone']);
+  await db.pool.query('INSERT INTO refund_requests (id, payment_id, user_id, reason) VALUES (?,?,?,?)', ['44444444-4444-4444-8444-444444444441', 'payment-not-present', u.user.id, 'Private refund reason']);
+  await db.pool.query('INSERT INTO error_log (source, message, user_id) VALUES (?,?,?)', ['client', 'Private account diagnostic', u.user.id]);
+  await db.pool.query('INSERT INTO push_devices (id, user_id, platform, token_hash, token, label) VALUES (?,?,?,?,?,?)', ['55555555-5555-4555-8555-555555555551', u.user.id, 'android', 'c'.repeat(64), 'fcm-test-token', 'Test phone']);
+  const browserSubscription = '55555555-5555-4555-8555-555555555552';
+  await db.pool.query('INSERT INTO push_subscriptions (id, user_id, endpoint_hash, endpoint, p256dh, auth) VALUES (?,?,?,?,?,?)', [browserSubscription, u.user.id, 'a'.repeat(64), 'https://push.example.test/subscription', 'p256dh-test', 'auth-test']);
+  const campaign = '66666666-6666-4666-8666-666666666661', delivery = '77777777-7777-4777-8777-777777777771';
+  await db.pool.query('INSERT INTO campaigns (id, channel, audience, title, body, created_by) VALUES (?,?,?,?,?,?)', [campaign, 'email', 'all', 'Test', 'Test', u.user.email]);
+  await db.pool.query('INSERT INTO campaign_deliveries (id, campaign_id, delivery_key, channel, transport, user_id, recipient_name, recipient_email, destination, status, error) VALUES (?,?,?,?,?,?,?,?,?,?,?)', [delivery, campaign, 'd'.repeat(64), 'email', 'email', u.user.id, 'Del', u.user.email, u.user.email, 'sent', `provider error for ${u.user.email}`]);
+
   assert.equal((await call('DELETE', '/me', null, u.token)).status, 204);
   assert.equal((await call('GET', '/me', null, u.token)).status, 401);
   assert.equal((await call('POST', '/auth/login', { email: 'del@example.com', password: 'password123' })).status, 401);
-  for (const t of ['profiles', 'subscriptions']) {          // FK cascade left nothing behind
-    const [[{ n }]] = await db.pool.query(`SELECT COUNT(*) AS n FROM ${t} WHERE user_id = ?`, [u.user.id]); assert.equal(n, 0);
+  for (const t of ['profiles', 'subscriptions', 'auth_tokens', 'push_subscriptions', 'push_devices', 'refund_requests', 'error_log', 'notify_sent', 'playback_sessions']) {
+    const [[{ n }]] = await db.pool.query(`SELECT COUNT(*) AS n FROM ${t} WHERE user_id = ?`, [u.user.id]); assert.equal(n, 0, `${t} was removed`);
   }
+  for (const [table, id] of [['support_tickets', ticket], ['support_tickets', guestTicket], ['support_tickets', guestPhoneTicket], ['support_ticket_replies', reply], ['contact_messages', emailContact], ['contact_messages', phoneContact]]) {
+    const [[{ n }]] = await db.pool.query(`SELECT COUNT(*) AS n FROM ${table} WHERE id = ?`, [id]); assert.equal(n, 0, `${table} ${id} was removed`);
+  }
+  const [[{ n: otpCount }]] = await db.pool.query('SELECT COUNT(*) AS n FROM phone_otps WHERE phone = ?', [phone]); assert.equal(otpCount, 0, 'phone OTP history was removed');
+  const [[deliveryRow]] = await db.pool.query('SELECT delivery_key, user_id, recipient_name, recipient_email, destination, status, error FROM campaign_deliveries WHERE id = ?', [delivery]);
+  assert.match(deliveryRow.delivery_key, /^[a-f0-9]{64}$/i); assert.notEqual(deliveryRow.delivery_key, 'd'.repeat(64), 'the account-linked digest is replaced');
+  const { delivery_key: _deliveryKey, ...deliveryHistory } = deliveryRow;
+  assert.deepEqual(deliveryHistory, { user_id: null, recipient_name: null, recipient_email: null, destination: null, status: 'sent', error: null }, 'delivery totals survive without recipient identity');
+  const [[{ created_by: campaignCreator }]] = await db.pool.query('SELECT created_by FROM campaigns WHERE id = ?', [campaign]); assert.equal(campaignCreator, null, 'the campaign audit does not keep the deleted address');
+  const [[paymentRow]] = await db.pool.query('SELECT user_id, billing FROM payments WHERE id = ?', [payment]);
+  const retainedBilling = typeof paymentRow.billing === 'string' ? JSON.parse(paymentRow.billing) : paymentRow.billing;
+  assert.equal(paymentRow.user_id, null, 'the payment record is retained but detached'); assert.equal(retainedBilling.email, u.user.email, 'the billing snapshot is retained');
+  const [[invoiceRow]] = await db.pool.query('SELECT user_id, doc FROM invoices WHERE id = ?', [invoice]);
+  const retainedInvoice = typeof invoiceRow.doc === 'string' ? JSON.parse(invoiceRow.doc) : invoiceRow.doc;
+  assert.equal(invoiceRow.user_id, null, 'the invoice record is retained but detached'); assert.equal(retainedInvoice.buyer.email, u.user.email, 'the tax document snapshot is retained');
+  const [[refundRow]] = await db.pool.query('SELECT payment_id, status, reason FROM refunds WHERE id = ?', [refund]);
+  assert.deepEqual(refundRow, { payment_id: payment, status: 'processed', reason: 'Customer request' }, 'the financial refund record remains attached to the retained payment');
 });
 
 test('errors are JSON, static site is served', async () => {
