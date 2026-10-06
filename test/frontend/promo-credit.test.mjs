@@ -130,11 +130,11 @@ test('every notice keeps its words in one column, not as separate flex items', (
     for (const m of src.match(new RegExp('class="notice[^"]*">\\$\\{icon\\([^)]*\\)\\}(?!<)', 'g')) || []) inline.push(`${f}: ${m.slice(0, 70)}`);
   }
   assert.deepEqual(inline, [], 'notice text must sit in <span>/<div> after the icon');
-  assert.match(plans, /\$\{icon\('check', \{ size: 18 \}\)\}<span>Your plan is active until <b>\$\{fmtDate\(s\.expiresAt\)\}<\/b>\. Renew any time/, 'the active-plan sentence is one column');
+  assert.match(plans, /\$\{icon\('check', \{ size: 18 \}\)\}<span>Your plan is active until <b>\$\{fmtDate\(s\.expiresAt\)\}<\/b>\.\$\{isNative[^}]*\}<\/span>/, 'the active-plan sentence is one column');
   assert.match(plans, /\$\{icon\('gift', \{ size: 18 \}\)\}<span>You have <b>/, 'so is the credit notice');
   assert.match(auth, /\$\{icon\('gift', \{ size: 18 \}\)\}<span>Invite code <b>\$\{ref\}<\/b>/, 'and the invite-code note');
 });
 
-test('the Free card no longer prints its own name twice', () => {
-  assert.match(plans, /<h2>\$\{p\.name\}<\/h2><div class="price">₹\$\{p\.priceINR\}<small>\/\$\{p\.interval\}<\/small><\/div>/, 'every card shows a price — the free plan reads ₹0/forever instead of "Free" under "Free"');
+test('plan cards show prices on web but hide them in the native app', () => {
+  assert.match(plans, /<h2>\$\{p\.name\}<\/h2>\$\{!isNative \? html`<div class="price">₹\$\{p\.priceINR\}<small>\/\$\{p\.interval\}<\/small><\/div>` : ''\}/, 'website prices appear once and are omitted from native builds');
 });
