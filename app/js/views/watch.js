@@ -176,8 +176,8 @@ export default async function watch(ctx) {
       beat = setInterval(hb, 30_000);
     }
   };
-  // The Premium crown (top-left of the video) steps aside while the video plays and returns on pause, end or error.
-  // 'buffering' keeps whatever state it was in, so a mid-play stall does not make the crown flash back in.
+  // The Premium word (top-left of the video) steps aside while the video plays and returns on pause, end or error.
+  // 'buffering' keeps whatever state it was in, so a mid-play stall does not make the badge flash back in.
   const markPlaying = (on) => $('#playerBox', ctx.root)?.classList.toggle('is-playing', on);
   const onIdle = (stop) => { flushWatch(); playedAt = 0; clearInterval(tick); tick = null; clearInterval(beat); beat = null; if (stop && premium && u.account && api) api.stopPlayback().catch(() => {}); };
 

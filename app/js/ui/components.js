@@ -42,11 +42,9 @@ export function ytImg(v, alt = '', { cls = '' } = {}) {
   const src = app.catalog.thumb(v, 'sddefault') || hq || v?.poster || show?.backdrop || show?.posterLg || show?.poster || 'media/logo.webp';
   return img(src, alt, { cls, fallback: hq && hq !== src ? hq : '' });
 }
-// Subtle crown medallion used as the Premium mark on artwork, instead of a text pill over the image. The outline crown matches the crown line icon in menus and on Plans.
+// Small golden "premium" word used as the Premium mark on artwork, instead of the old crown medallion.
 export function premiumMark({ cls = '' } = {}) {
-  return html`<span class="premium-mark ${cls}" role="img" aria-label="Premium content" title="Premium content">
-    <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false"><path d="M5.4 23.4 4 11.8l6.2 4.9L16 7.6l5.8 9.1 6.2-4.9-1.4 11.6Z" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linejoin="round"/><path d="M7 27.6h18" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>
-  </span>`;
+  return html`<span class="premium-mark ${cls}" role="img" aria-label="Premium content" title="Premium content"><em class="premium-word">premium</em></span>`;
 }
 
 /* ---------- state-aware buttons (kept in sync globally by main.js) ---------- */
@@ -94,7 +92,7 @@ export function videoCard(v, { progress = true, rank = 0, showName = true, cls =
   const cat = app.catalog; const show = cat.show(v.showId);
   const frac = progress ? app.user?.fraction(v.id, v.duration) || 0 : 0;
   const rankEl = rank ? html`<span class="rank" aria-hidden="true">${rank}</span>` : '';
-  const premium = cat.isPremium(v);   // the crown takes the top-left corner; the label chip moves beside it
+  const premium = cat.isPremium(v);   // the premium word takes the top-left corner; the label chip moves beside it
   return html`<a class="card card-video ${rank ? 'ranked' : ''} ${cls}" href="#/watch/${v.id}" aria-label="${cat.displayTitle(v)}">
     ${rankEl}
     <div class="thumb">

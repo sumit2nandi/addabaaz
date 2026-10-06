@@ -88,7 +88,7 @@ test('the Reels feed plays a premium-show reel with no lock wall and no crown', 
 
   const section = root.querySelector('.reel[data-i="1"]');
   assert.equal(section.querySelector('.reel-slot img').getAttribute('fetchpriority'), 'high', 'the directly selected reel poster gets the browser highest image priority');
-  assert.equal(section.querySelector('.premium-mark'), null, 'free previews wear no crown, even on a premium show');
+  assert.equal(section.querySelector('.premium-mark'), null, 'free previews wear no premium badge, even on a premium show');
   assert.equal(section.querySelector('.reel-frame.has-premium'), null, 'no premium framing on a free preview');
   await new Promise((r) => setTimeout(r, 20));
   assert.equal(youtubePlayerAttempts, 1, 'a directly selected /reels/:id starts without waiting for IntersectionObserver');
