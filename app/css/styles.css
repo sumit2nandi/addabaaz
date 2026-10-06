@@ -15,6 +15,15 @@
   --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
   --ease: cubic-bezier(.2,.7,.2,1);
+  /* Artwork lift: the page is near-black, which makes correctly-coloured posters read flatter (and, because
+     most of our artwork is warm-toned, warmer) than the same file does on a white page such as Facebook's.
+     One small boost on the artwork itself — never on text, UI or the full-size lightbox view — restores the
+     punch without inventing a colour cast. Measured over the real posters: +4 to +8% brightness and +11 to
+     +17% colour separation, on every file (the darkest gain the most). contrast(.99) is deliberate: a
+     contrast of 1 or more pulls the near-black artwork *down*, which is what looked dull in the first place.
+     Tune these two values to taste — they are the whole treatment. */
+  --art-pop: saturate(1.12) contrast(.99) brightness(1.05);
+  --art-pop-hero: saturate(1.15) contrast(.99) brightness(1.07);
 }
 /* ---------- reset & base elements ---------- */
 *, *::before, *::after { box-sizing: border-box; }
@@ -175,11 +184,13 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .hero-dock { position: absolute; z-index: 4; left: var(--pad); right: var(--pad); bottom: var(--hero-dock-bottom); margin: 0; pointer-events: none; }
 .hero-dock > a, .hero-dock > button { pointer-events: auto; }
 .hero-bg { position: absolute; inset: 0; z-index: -2; }
-.hero-bg img { width: 100%; height: 100%; object-fit: cover; object-position: center 25%; animation: kenburns 24s ease-out both; filter: saturate(1.05); }
+.hero-bg img { width: 100%; height: 100%; object-fit: cover; object-position: center 25%; animation: kenburns 24s ease-out both; filter: var(--art-pop-hero); }
 .hero-slide:not(.active) .hero-bg img { animation: none; }
 .hero-bg picture { display: block; width: 100%; height: 100%; }
 @keyframes kenburns { from { transform: scale(1.02); } to { transform: scale(1.12); } }
-.hero-shade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(5,5,5,.94) 0%, rgba(5,5,5,.7) 38%, rgba(5,5,5,.15) 75%), linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.5) 22%, rgba(5,5,5,0) 50%), linear-gradient(180deg, rgba(5,5,5,.8), rgba(5,5,5,0) 22%); }
+/* The banner shading: dark enough at the left that the white title always sits on a near-solid base, but
+   lighter than it used to be (.94/.70/.15) so more of the artwork's own colour reaches the eye. */
+.hero-shade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(5,5,5,.88) 0%, rgba(5,5,5,.58) 38%, rgba(5,5,5,.1) 75%), linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.44) 22%, rgba(5,5,5,0) 50%), linear-gradient(180deg, rgba(5,5,5,.72), rgba(5,5,5,0) 22%); }
 .hero-inner { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; padding: calc(var(--topbar-h) + var(--sat) + 40px) var(--pad) var(--hero-pb, 72px); }
 .hero-copy { max-width: 620px; display: grid; gap: 14px; }
 /* Uniform across every slide: same stack for all titles — Latin glyphs take the display sans, Bengali glyphs
@@ -253,7 +264,9 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .card { position: relative; display: block; border-radius: var(--radius); transition: transform .3s var(--ease), box-shadow .3s; text-align: left; background: none; border: 0; padding: 0; width: 100%; }
 .poster, .thumb { position: relative; overflow: hidden; border-radius: var(--radius); background: var(--panel-2); }
 .poster { aspect-ratio: 2/3; } .thumb { aspect-ratio: 16/9; }
-.poster img, .thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s var(--ease); }
+.poster img, .thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s var(--ease); filter: var(--art-pop); }
+/* Episode rows and the full-screen reel covers are artworks too: same lift, same rule. */
+.ep-thumb img, .reel-slot > img { filter: var(--art-pop); }
 .poster-soon img { object-fit: contain; }
 .home-coming-soon .poster-soon img { object-fit: cover; }
 .card-soon:hover .poster-soon-image { transform: none; }
@@ -283,6 +296,10 @@ img.img-failed { opacity: 0; }
 /* ---------- rails ---------- */
 .rails { position: relative; z-index: 2; margin-top: 8px; padding-bottom: 8px; }
 .rail { margin: 0 0 30px; } .rail-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 0 var(--pad); margin-bottom: 12px; }
+/* A rail that follows other content — on a details page that is "Trailers, Reels & Clips", sitting under the
+   episode frame — needs air above its heading; a rail after another rail already has the 30px below it, so it
+   is excluded. Pages that group their rails in `.rails`, or open with one, are unaffected. */
+.page > :not(.rail) + .rail { margin-top: 30px; }
 .rail-head-minimal { justify-content: flex-end; margin-bottom: 0; }
 .rail-head h2 { font-size: clamp(18px, 2.4vw, 23px); font-weight: 700; } .rail-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
 .home-release-showcase { display: block; margin: 0 var(--pad) 20px; }
@@ -349,6 +366,30 @@ img.img-failed { opacity: 0; }
 
 /* ---------- episodes ---------- */
 .ep-list { display: grid; gap: 4px; }
+/* A details page's episode list scrolls inside its own frame: a show with a hundred episodes must not turn
+   the page into an endless strip (the header, facts, description and rails stay put below/above it).
+   The frame is sized in ROWS, not in viewport percentages: 58svh showed barely four episodes on a short
+   phone, and the ask is six episodes plus a quarter of the next one. `--ep-row-h` is the row pitch the grid
+   produces at each breakpoint (thumbnail height + the row's own padding) and `min-height` on the rows makes
+   it exact, so six episodes always fit whatever the phone's height and a title of any length cannot change
+   it. Two extra parts make the height up:
+     --ep-peek    a quarter of a row — the visible top of episode 7, which keeps the list reading as scrollable
+     --ep-chrome  the frame's own 2×6px padding + 2×1px border: `max-height` is measured on the BORDER box
+                  (the site sets `box-sizing: border-box` everywhere), so without this the padding would eat
+                  14px of the peek and the sliver would come out nearer a tenth of an episode than a quarter.
+   Its own scroll is left to chain to the page at either end — deliberately NOT `overscroll-behavior:
+   contain`, which on a phone would hold the finger inside the frame and feel stuck once the list ran out.
+   `tabindex` + `role="region"` (see the markup) let a keyboard reach and scroll the frame — a scrollable
+   list is otherwise unreachable without a pointer — and name it "Episode list". */
+.ep-frame { --ep-row-h: 84px; --ep-gap: 4px; --ep-peek: calc(var(--ep-row-h) / 4); --ep-chrome: 14px; max-height: calc(6 * (var(--ep-row-h) + var(--ep-gap)) + var(--ep-peek) + var(--ep-chrome)); overflow-y: auto; padding: 6px; border: 1px solid var(--border-2); border-radius: var(--radius-lg); background: var(--panel); scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
+.ep-frame .ep-row { min-height: var(--ep-row-h); }
+.ep-frame::-webkit-scrollbar { width: 8px; } .ep-frame::-webkit-scrollbar-track { background: transparent; } .ep-frame::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 99px; }
+.ep-frame:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+/* Wider phones use the 132px thumbnail, which makes a taller row (and 720px+ the 200px one). The six-row
+   budget stands at every width — it is deliberately NOT capped to a share of the viewport, which would cut
+   the sixth row on a laptop. */
+@media (min-width: 481px) { .ep-frame { --ep-row-h: 96px; } }
+@media (min-width: 720px) { .ep-frame { --ep-row-h: 137px; } }
 .ep-row { display: grid; grid-template-columns: 34px 132px 1fr; gap: 14px; align-items: center; padding: 10px 12px; border-radius: var(--radius); transition: background .2s; }
 .ep-row:hover, .ep-row.current { background: var(--panel-2); } .ep-row.current { box-shadow: inset 3px 0 0 var(--accent); }
 .ep-num { font-size: 20px; font-weight: 700; color: var(--muted); text-align: center; } .ep-row.current .ep-num { color: var(--accent-2); }
@@ -404,6 +445,9 @@ img.player-wall-art { position: absolute; inset: 0; z-index: 1; width: 100%; hei
 .crumbs a { display: inline-flex; align-items: center; gap: 2px; color: var(--muted); font-weight: 600; font-size: 13.5px; } .crumbs a:hover { color: var(--gold); }
 .watch-title { font-size: clamp(20px, 3vw, 30px); font-weight: 700; }
 .watch-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+/* The My List / Save video + leads this row as a square icon button: it takes the same height as the
+   labelled buttons beside it, so the row reads as one line of controls. */
+.watch-actions .btn.icon-only { padding: 10px 13px; }
 .watch-desc { color: var(--text-2); max-width: 80ch; } .orig-title summary { cursor: pointer; color: var(--muted); font-size: 13px; } .orig-title p { margin-top: 8px; color: var(--text-2); font-size: 14px; }
 .switch { display: inline-flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: 600; color: var(--text-2); cursor: pointer; } .switch input { position: absolute; opacity: 0; }
 .switch .track { width: 42px; height: 24px; border-radius: 12px; background: var(--panel-3); border: 1px solid var(--border-2); position: relative; transition: .2s; flex: none; } .switch .track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: .2s; }
@@ -557,7 +601,7 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
   /* Phones: one lower-only fade, shared by the home hero and the show / Coming Soon banners. It starts
      where the title and the action dock begin and is gone by the upper third, so the poster artwork on
      top stays clear - no top-down wash and no side-to-side darkening on top of it. */
-  :root { --hero-fade-mobile: linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.92) 26%, rgba(5,5,5,.72) 46%, rgba(5,5,5,.3) 62%, rgba(5,5,5,0) 78%); }
+  :root { --hero-fade-mobile: linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.86) 26%, rgba(5,5,5,.62) 46%, rgba(5,5,5,.22) 62%, rgba(5,5,5,0) 78%); }
   .hero-shade, .detail-hero .hero-shade { background: var(--hero-fade-mobile); }
   .detail-hero { min-height: 74vh; min-height: 74svh; }
   .detail-hero .hero-inner { padding-bottom: 12px; }
@@ -568,17 +612,18 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
   .detail-hero .hero-actions > .btn-primary { flex: 0 1 auto; }
   .detail-hero .hero-actions > .btn-lg.icon-only { flex: 0 0 48px; width: 48px; padding: 0; }
 }
-/* Keep the Coming Soon reminder, list and artwork actions together on one row on phones. */
+/* Keep the Coming Soon reminder, My List, artwork and share actions together on one row on phones:
+   the reminder keeps its words, the three icon buttons are equal compact squares beside it. */
 @media (max-width: 759px) {
   .soon-hero-copy { width: 100%; }
-  .soon-hero-actions { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) 48px; gap: 8px; }
-  .soon-hero-actions > .remind-btn, .soon-hero-actions > .list-btn { width: 100%; min-width: 0; gap: 6px; padding: 11px 8px; }
-  .soon-hero-actions > #artBtn { width: 48px; height: 48px; padding: 0; }
+  .soon-hero-actions { display: grid; grid-template-columns: minmax(0,1fr) 48px 48px 48px; gap: 8px; }
+  .soon-hero-actions > .remind-btn { width: 100%; min-width: 0; gap: 6px; padding: 11px 8px; }
+  .soon-hero-actions > #artBtn, .soon-hero-actions > .list-btn, .soon-hero-actions > #shareBtn { width: 48px; height: 48px; padding: 0; }
 }
 @media (max-width: 359px) {
-  .soon-hero-actions { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 48px; gap: 6px; }
-  .soon-hero-actions > .remind-btn, .soon-hero-actions > .list-btn { gap: 5px; padding: 10px 5px; font-size: 13px; }
-  .soon-hero-actions > #artBtn { width: 48px; height: 48px; }
+  .soon-hero-actions { grid-template-columns: minmax(0,1fr) 44px 44px 44px; gap: 6px; }
+  .soon-hero-actions > .remind-btn { gap: 5px; padding: 10px 5px; font-size: 13px; }
+  .soon-hero-actions > #artBtn, .soon-hero-actions > .list-btn, .soon-hero-actions > #shareBtn { width: 44px; height: 44px; }
   .detail-hero .hero-actions { gap: 6px; }
   .detail-hero .hero-actions > .btn-lg { padding: 10px 6px; font-size: 13px; }
   .detail-hero .hero-actions > .btn-lg.icon-only { flex-basis: 44px; width: 44px; }
@@ -626,7 +671,21 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 
 /* ---------- accounts, legal, consent, engagement (v2.6) ---------- */
 .linklike { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; opacity: .85; } .linklike:hover { opacity: 1; }
-.forgot-link { justify-self: end; margin-top: -6px; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; } .forgot-link:hover { color: #fff; }
+/* The e-mail and mobile panes are plain block containers in the markup, and nothing gave their children any
+   spacing at all: the two field labels sat flush against each other, and "Forgot password?" — an inline <a> —
+   had no margin box whatsoever (vertical margins do not apply to inline boxes), which is why making that
+   margin bigger changed nothing on screen. Making each pane a grid gives every row the form's own 16px
+   rhythm and turns the link into a real grid item, right-aligned by `justify-self`. */
+#af #emailPane, #af #otpPane, #af #otpPhoneStep, #af #otpCodeStep { display: grid; gap: 16px; align-content: start; }
+/* "Forgot password?" keeps the pane's 16px above it and adds 20px of its own below, so the primary button
+   sits exactly between the link and "New to ADDABAAZ? Create an account": 36px above it, and 36px below it
+   (20px on the button itself plus the same 16px row gap). The empty alert row (`#as`) used to add a *second*
+   16px gap down there, which pushed the switch line away and made the button read as glued to the link.
+   Alerts still show; empty ones take no space — which is why every submit on the card (email sign-in, send
+   code, verify code) carries the 20px itself. */
+.forgot-link { justify-self: end; margin: 0 0 20px; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; } .forgot-link:hover { color: #fff; }
+#af .form-status:empty { display: none; }
+#af #asub, #af #otpSend, #af #otpVerify { margin: 0 0 20px; }
 .fine { font-size: 12.5px; color: var(--muted); text-align: center; line-height: 1.5; } .fine a { color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; }
 .stack-sm { display: grid; gap: 10px; } .btn.block { width: 100%; justify-content: center; }
 .pin-input { text-align: center; letter-spacing: .5em; font-size: 22px; }

@@ -3,7 +3,7 @@ import { app } from '../app.js';
 import { go } from '../router.js';
 import { html, $, fmtDate, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
-import { rail, enhanceRails, showCard, videoCard, reelCard, listBtn, img, heroBg, showMeta, premiumMark, toast, fitPoster } from '../ui/components.js';
+import { rail, enhanceRails, showCard, videoCard, reelCard, listBtn, img, heroBg, showMeta, premiumMark, toast, fitPoster, bannerArtMode } from '../ui/components.js';
 import { openArtwork, tapArtwork } from '../ui/lightbox.js';
 import { shareOrCopy } from '../util.js';
 import { shareUrl } from '../platform.js';
@@ -46,7 +46,7 @@ export default async function showView(ctx) {
           <div class="hero-actions">
             ${t ? html`<a class="btn btn-primary btn-lg" href="#/watch/${t.video.id}">${icon('play', { size: 20 })} ${label}</a>` : ''}
             ${trailer ? html`<a class="btn btn-glass btn-lg icon-only" href="#/watch/${trailer.id}" aria-label="Watch trailer" title="Watch trailer">${icon('film', { size: 20 })}</a>` : ''}
-            ${listBtn('show', s.id, { cls: 'btn btn-glass btn-lg icon-only', iconOnly: true })}
+            ${listBtn('show', s.id, { cls: 'btn btn-glass btn-lg icon-only' })}
             <button type="button" class="btn btn-glass btn-lg icon-only" id="artBtn" aria-label="View the full artwork" title="View the full artwork">${icon('expand', { size: 20 })}</button>
             <button type="button" class="btn btn-glass btn-lg icon-only" id="shareBtn" aria-label="Share">${icon('share', { size: 20 })}</button>
           </div>
@@ -64,7 +64,7 @@ export default async function showView(ctx) {
       ${eps.length ? html`<section class="ep-section" aria-label="Episodes">
         <div class="section-bar"><h2>Episodes <span class="count">${eps.length}</span></h2>
           <button type="button" class="btn btn-ghost btn-sm" id="sortEps" data-order="asc">${icon('list', { size: 16 })} <span>Oldest first</span></button></div>
-        <div class="ep-list" id="epList">${eps.map((v) => epRow(v))}</div></section>`
+        <div class="ep-list ep-frame" id="epList" role="region" tabindex="0" aria-label="Episode list">${eps.map((v) => epRow(v))}</div></section>`
         : html`<div class="empty small">${icon('film', { size: 36 })}<h2>Episodes coming soon</h2><p>Stay tuned — new episodes land here first.</p></div>`}
       ${rail({ title: 'Trailers, Reels & Clips', items: extras.map((v) => (v.kind === 'reel' ? reelCard(v) : videoCard(v, { showName: false }))), cls: extras.some((v) => v.kind === 'reel') ? 'r-reel' : 'r-video' })}
       ${rail({ title: 'More like this', items: cat.related(s).map((x) => showCard(x)), cls: 'r-poster' })}
@@ -72,17 +72,27 @@ export default async function showView(ctx) {
 
   enhanceRails(ctx.root);
   fitPoster(ctx.root);                                   // whatever shape the artwork is, crop it only a little
-  // The full artwork popup: the poster box, the expand button, or the banner (the latest episode's still,
-  // or the poster when there are no episodes yet) — on a phone the banner is the only one of the three.
-  const art = { title: s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title, poster: s.posterLg || s.poster, backdrop: latest ? cat.thumb(latest, 'maxresdefault') : (s.posterLg || s.poster) };
+  // The full artwork popup. The poster box opens the poster (the picture it shows); the expand button and a
+  // tap on the banner open what the BANNER is showing at that moment — the still on a wide screen, the poster
+  // on a phone, where `heroBg` swaps it in and the poster box is hidden. Both resolve it on every click, so
+  // the two always agree with the artwork on screen. The other picture stays one swipe away in the popup.
+  const art = {
+    title: s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title,
+    poster: s.posterLg || s.poster,
+    backdrop: latest ? cat.thumb(latest, 'maxresdefault') : (s.posterLg || s.poster),
+    backdropFallback: latest ? cat.thumb(latest, 'hqdefault') : '',
+  };
+  const bannerMode = () => bannerArtMode(art);
   $('#detailPoster', ctx.root)?.addEventListener('click', () => openArtwork(art, 'poster'));
-  $('#artBtn', ctx.root)?.addEventListener('click', () => openArtwork(art, 'poster'));
-  tapArtwork($('#detailHero', ctx.root), art);
+  $('#artBtn', ctx.root)?.addEventListener('click', () => openArtwork(art, bannerMode()));
+  tapArtwork($('#detailHero', ctx.root), art, bannerMode);
   let order = 'asc';
   $('#sortEps', ctx.root)?.addEventListener('click', (e) => {
     order = order === 'asc' ? 'desc' : 'asc';
     const list = order === 'asc' ? eps : [...eps].reverse();
-    $('#epList', ctx.root).innerHTML = list.map((v) => epRow(v)).join('');
+    const box = $('#epList', ctx.root);
+    box.innerHTML = list.map((v) => epRow(v)).join('');
+    box.scrollTop = 0;                                   // the frame starts at the top of the new order
     e.currentTarget.querySelector('span').textContent = order === 'asc' ? 'Oldest first' : 'Newest first';
   });
   $('#shareBtn', ctx.root).addEventListener('click', async () => {

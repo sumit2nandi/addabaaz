@@ -35,17 +35,26 @@ test('the poster box, the expand button and the banner all open the full artwork
     assert.match(view, /id="detailPoster"|#detailPoster'/, `${file}: wired`);
     assert.match(view, /#detailPoster'[^\n]*openArtwork\(art, 'poster'\)/, `${file}: the poster box opens the poster`);
     assert.match(view, /<section class="detail-hero" id="detailHero">/, `${file}: the banner has an id to hang the tap handler on`);
-    assert.match(view, /tapArtwork\(.{0,40}art\);/, `${file}: and tapping the banner opens the artwork`);
     assert.match(view, /id="artBtn" aria-label="View the full artwork"/, `${file}: an expand button remains available`);
-    assert.match(view, /#artBtn'[^\n]*openArtwork\(art, 'poster'\)/, `${file}: the expand button opens the poster`);
+    // The expand button and a tap on the banner open the picture the BANNER is showing (the reported bug: on a
+    // phone they did not agree with it). The show page resolves that per tap, because heroBg swaps the poster
+    // in below 760px; Coming Soon's banner is a plain <img> of the backdrop, so it always opens the backdrop.
+    if (file.endsWith('show.js')) {
+      assert.match(view, /const bannerMode = \(\) => bannerArtMode\(art\);/, `${file}: the banner's current artwork is resolved on each tap`);
+      assert.match(view, /#artBtn'[^\n]*openArtwork\(art, bannerMode\(\)\)/, `${file}: the expand button opens what the banner shows`);
+      assert.match(view, /tapArtwork\(.{0,40}art, bannerMode\);/, `${file}: and so does a tap on the banner`);
+    } else {
+      assert.match(view, /tapArtwork\(.{0,40}art\);/, `${file}: and tapping the banner opens the artwork`);
+      assert.match(view, /#artBtn'[^\n]*openArtwork\(art, 'backdrop'\)/, `${file}: the expand button opens what the banner shows`);
+    }
   }
   // On a phone the poster box is display:none, so the banner remains another easy artwork entry point —
   // but it must never steal clicks from the buttons in the hero or fire when the viewer was selecting text.
   const lightbox = read('app/js/ui/lightbox.js');
-  assert.match(lightbox, /export function tapArtwork\(hero, art\)/, 'tapArtwork exists');
+  assert.match(lightbox, /export function tapArtwork\(hero, art, start = 'backdrop'\)/, 'tapArtwork exists and defaults to the wide still');
   assert.match(lightbox, /if \(e\.target\.closest\('a, button, input, select, textarea, label'\)\) return;/, 'buttons and links keep their own job');
   assert.match(lightbox, /window\.getSelection\?\.\(\)/, 'a text selection is not a tap');
-  assert.match(lightbox, /openArtwork\(art, 'backdrop'\)/, 'and it opens what the banner is showing');
+  assert.match(lightbox, /openArtwork\(art, typeof start === 'function' \? start\(\) : start\)/, 'and it opens what the banner is showing at that moment');
   // The popup itself: a single image has no arrows and no counter; tapping the dark background closes it.
   assert.match(lightbox, /const many = items\.length > 1;/, 'a single image has no arrows');
   assert.match(lightbox, /cap\.textContent = !showCaption \? '' : many \?/, 'gallery counters remain conditional while artwork popups can hide captions');
@@ -61,13 +70,15 @@ test('Coming Soon keeps the artwork expand button beside My List on phones', () 
   assert.ok(actions.indexOf('remindBtn(') < actions.indexOf('listBtn('), 'Remind me remains first');
   assert.ok(actions.indexOf('listBtn(') < actions.indexOf('id="artBtn"'), 'the artwork action follows My List');
   assert.match(soon, /id="shareBtn"/, 'the Share action is preserved');
+  assert.match(actions, /listBtn\('upcoming', u\.id, \{ label: 'Add to My List', cls: 'btn btn-glass btn-lg icon-only' \}\)/,
+    'the Coming Soon My List action is the plus/check icon only');
 
   const css = read('app/css/styles.css');
-  assert.match(css, /\.soon-hero-actions \{ display: grid; grid-template-columns: minmax\(0,1fr\) minmax\(0,1fr\) 48px;/,
-    'mobile Coming Soon actions use two flexible button columns and a fixed artwork-button column');
-  assert.match(css, /\.soon-hero-actions > #artBtn \{ width: 48px; height: 48px; padding: 0; \}/,
-    'the artwork control keeps its compact, fixed size beside My List');
-  assert.match(css, /@media \(max-width: 359px\) \{\n  \.soon-hero-actions \{ grid-template-columns: minmax\(0,1fr\) minmax\(0,1fr\) 48px; gap: 6px; \}/,
+  assert.match(css, /\.soon-hero-actions \{ display: grid; grid-template-columns: minmax\(0,1fr\) 48px 48px 48px;/,
+    'mobile Coming Soon actions use one flexible reminder column and three fixed icon columns');
+  assert.match(css, /\.soon-hero-actions > #artBtn, \.soon-hero-actions > \.list-btn, \.soon-hero-actions > #shareBtn \{ width: 48px; height: 48px; padding: 0; \}/,
+    'the icon controls keep one compact, fixed size beside the reminder');
+  assert.match(css, /@media \(max-width: 359px\) \{\n  \.soon-hero-actions \{ grid-template-columns: minmax\(0,1fr\) 44px 44px 44px; gap: 6px; \}/,
     'the same row adapts for especially narrow phones');
 });
 
@@ -80,7 +91,7 @@ test('show details keep all four hero controls in one row on phones', () => {
   assert.match(actions, /href="#\/watch\/\$\{trailer\.id\}" aria-label="Watch trailer" title="Watch trailer"/,
     'Trailer stays available as an accessible icon-only button');
   assert.doesNotMatch(actions, /\} Trailer<\/a>/, 'the Trailer text is removed');
-  assert.match(actions, /listBtn\('show', s\.id, \{ cls: 'btn btn-glass btn-lg icon-only', iconOnly: true \}\)/,
+  assert.match(actions, /listBtn\('show', s\.id, \{ cls: 'btn btn-glass btn-lg icon-only' \}\)/,
     'the show-page My List action is the accessible plus/check icon only');
   assert.match(show, /id="shareBtn"/, 'Share remains available outside the compact mobile row');
 
@@ -101,7 +112,10 @@ test('show details keep all four hero controls in one row on phones', () => {
   assert.ok(fade, 'the shared phone fade is defined once, as a token');
   assert.match(fade, /^linear-gradient\(0deg/, 'it is a lower-only fade, not a top-down wash');
   assert.doesNotMatch(fade, /180deg|90deg|270deg/, 'nothing darkens the poster from the top or from either side');
-  assert.match(fade, /rgba\(5,5,5,\.72\) 46%/, 'the lower half still darkens enough for the hero text and actions');
+  // The lower half still needs to be a real scrim under the text and actions — but it was lightened from .72
+  // to .62 on purpose, so pin the band rather than one number.
+  const mid = Number(fade.match(/rgba\(5,5,5,\.(\d+)\) 46%/)?.[1]);
+  assert.ok(mid >= 55 && mid <= 72, `the lower half still darkens enough for the hero text and actions (got .${mid})`);
   assert.match(fade, /rgba\(5,5,5,0\) 78%/, 'and it is gone by the upper third, so the artwork up there stays clear');
   const phones = css.slice(css.indexOf('@media (max-width: 759px)'));
   assert.ok(phones.indexOf('--hero-fade-mobile') > 0, 'the fade only applies on phones');
@@ -127,6 +141,67 @@ test('show facts sit below the banner and the tagline uses the page font', () =>
   assert.match(css, /\.detail-hero \{ min-height: 74vh; min-height: 74svh; \}/, 'the phone detail banner matches the home banner height');
   assert.match(css, /\.detail-hero \.hero-inner \{ padding-bottom: 12px; \}/, 'the hero text block sits lower to align with the home banner');
   assert.match(css, /\.page-tight\.show-details-page \{ padding-top: 0; \}/, 'mobile show facts start directly under the banner with no dead gap');
+});
+
+test('a long episode list scrolls inside its own frame instead of stretching the page', async () => {
+  // Reported from a phone with 18 episodes: the list ran the page on indefinitely. The list now has its own
+  // scroll region, so the header, facts, description and rails keep their place.
+  const show = read('app/js/views/show.js');
+  assert.match(show, /<div class="ep-list ep-frame" id="epList" role="region" tabindex="0" aria-label="Episode list">/,
+    'the list is a focusable, named scroll region');
+  assert.match(show, /const box = \$\('#epList', ctx\.root\);\n\s*box\.innerHTML = list\.map\(\(v\) => epRow\(v\)\)\.join\(''\);\n\s*box\.scrollTop = 0;/,
+    're-sorting returns the frame to the top of the new order');
+
+  const css = read('app/css/styles.css');
+  const frame = css.match(/\.ep-frame \{[^}]*\}/)?.[0] || '';
+  assert.ok(frame, 'the frame rule exists');
+  assert.match(frame, /overflow-y: auto/, 'the rest of the list scrolls inside the frame');
+  assert.doesNotMatch(frame, /overscroll-behavior: contain/,
+    'the frame does not trap the finger — its scroll chains back to the page at either end');
+  assert.match(css, /\.ep-frame:focus-visible \{ outline: 2px solid var\(--gold\); outline-offset: 2px; \}/,
+    'keyboard focus on the frame is visible');
+
+  // The height is a row budget, not a viewport share: 58svh showed barely four episodes on a short phone.
+  // It must show six full episodes plus exactly a quarter of the seventh — and `max-height` is measured on
+  // the BORDER box (the site sets box-sizing: border-box), so the frame's own padding and border have to be
+  // part of the sum or they eat most of the peek.
+  assert.match(css, /\.ep-frame \.ep-row \{ min-height: var\(--ep-row-h\); \}/,
+    'the rows carry a minimum height, so the row pitch the frame is sized against is exact');
+  assert.match(frame, /--ep-peek: calc\(var\(--ep-row-h\) \/ 4\)/, 'the peek is a quarter of a row');
+  assert.match(frame, /max-height: calc\(6 \* \(var\(--ep-row-h\) \+ var\(--ep-gap\)\) \+ var\(--ep-peek\) \+ var\(--ep-chrome\)\)/,
+    'the frame is six rows plus the peek plus its own chrome');
+
+  // Read the numbers back out and work the geometry through for every breakpoint the frame uses.
+  const rowHeights = [Number(frame.match(/--ep-row-h: (\d+)px/)?.[1])];            // the base, phones
+  for (const m of css.matchAll(/@media \(min-width: \d+px\) \{ \.ep-frame \{ --ep-row-h: (\d+)px; \} \}/g)) rowHeights.push(Number(m[1]));
+  assert.deepEqual(rowHeights, [84, 96, 137], 'one row pitch per breakpoint: phones, wide phones, desktop');
+  const gap = Number(frame.match(/--ep-gap: (\d+)px/)?.[1]);
+  const pad = Number(frame.match(/padding: (\d+)px;/)?.[1]);
+  const border = Number(frame.match(/border: (\d+)px solid/)?.[1]);
+  const chrome = Number(frame.match(/--ep-chrome: (\d+)px/)?.[1]);
+  assert.equal(chrome, 2 * (pad + border), 'the chrome budget matches the frame\u2019s real padding and border');
+  for (const row of rowHeights) {
+    const frameH = 6 * (row + gap) + 0.25 * row + chrome;    // what the formula resolves to
+    const content = frameH - chrome;                         // what the list can actually show
+    const sixEnd = 6 * row + 5 * gap;                        // where episode 6 ends
+    const sevenTop = 6 * row + 6 * gap;                      // where episode 7 begins
+    assert.ok(sixEnd <= content, `six episodes fit at a ${row}px row (${sixEnd}px <= ${content}px)`);
+    assert.equal(content - sevenTop, 0.25 * row, `episode 7 shows exactly a quarter of itself at a ${row}px row`);
+    assert.ok(content < 7 * row + 6 * gap, 'and episode 7 is not shown whole');
+  }
+  assert.match(css, /@media \(min-width: 481px\) \{ \.ep-frame \{ --ep-row-h: 96px; \} \}/,
+    'wider phones get the taller 132px-thumbnail row accounted for');
+  assert.match(css, /@media \(min-width: 720px\) \{ \.ep-frame \{ --ep-row-h: 137px; \} \}/,
+    'desktop uses the 200px-thumbnail row — with no viewport cap, which would cut the sixth episode');
+  // A rail that follows the episode frame needs air above its heading (reported: "Trailers, Reels & Clips"
+  // sat flush against the frame). A rail after another rail already has the 30px below it and is excluded.
+  assert.match(css, /\n\.page > :not\(\.rail\) \+ \.rail \{ margin-top: 30px; \}/,
+    'the first rail after other content is spaced away from it');
+  assert.doesNotMatch(css, /\.rail \{ margin: 30px 0 30px; \}/, 'rails after rails do not double the gap');
+  // The watch page's own side list is a different surface: it must keep its compact rows and its own scroller.
+  assert.match(css, /\.ep-list\.compact \.ep-row \{[^}]*grid-template-columns: 26px 104px 1fr;/, 'the compact variant is unchanged');
+  assert.match(css, /\.watch-side \{[^}]*overflow-y: auto;/, 'the desktop watch panel keeps scrolling as before');
+  assert.doesNotMatch(read('app/js/views/watch.js'), /ep-frame/, 'the watch page does not get a second scroller inside the panel');
 });
 
 test('the artwork popup shows the banner and the poster, each once', async () => {
@@ -169,6 +244,46 @@ test('a tap on the banner really opens the popup (the reported bug)', async () =
   assert.equal(lb.querySelector('figcaption').textContent, '', 'the banner popup has no visible Artwork caption or counter');
   assert.equal(lb.querySelector('figcaption').hidden, true, 'the artwork and poster labels stay hidden in this popup');
   assert.equal(lb.querySelector('.lb-close') !== null, true, 'with a close button');
+});
+
+test('a banner tap on a phone opens the poster the banner is showing, not the wide still', async () => {
+  // Reported from a phone: the expand button and the banner showed different pictures. `heroBg` swaps the
+  // poster in below 760px, so on a phone the banner IS the poster and both entry points must open the poster.
+  const { parseHTML } = await import('linkedom');
+  const { document, window } = parseHTML('<!doctype html><html><body><section id="detailHero"><div class="hero-bg"></div><p id="txt">Laugh Bite</p></section></body></html>');
+  globalThis.window = window; globalThis.document = document;
+  window.location = globalThis.location = { href: 'http://x/show/laugh-bite' };
+  globalThis.history = { pushState() {}, back() {} };
+  globalThis.Image = class { set src(_v) {} };
+  const { tapArtwork } = await import('../../app/js/ui/lightbox.js');
+  const { bannerArtMode, HERO_POSTER_MQ } = await import('../../app/js/ui/components.js');
+  const art = { title: 'Laugh Bite', poster: 'media/shows/laugh-bite-lg.webp', backdrop: 'https://i.ytimg.com/vi/x/maxresdefault.jpg' };
+  // The mode follows the same media query the banner markup uses; the test harness has no layout, so stub it.
+  const phone = () => { window.matchMedia = (q) => ({ matches: q === HERO_POSTER_MQ }); };
+  const desktop = () => { window.matchMedia = () => ({ matches: false }); };
+
+  phone();
+  assert.equal(bannerArtMode(art), 'poster', 'on a phone the banner is showing the poster');
+  tapArtwork(document.getElementById('detailHero'), art, () => bannerArtMode(art));
+  document.getElementById('txt').dispatchEvent(new window.Event('click', { bubbles: true }));
+  const lb = document.querySelector('.lightbox');
+  assert.ok(lb, 'the tap opens the popup');
+  assert.equal(lb.querySelector('img').getAttribute('src'), 'media/shows/laugh-bite-lg.webp', 'and it shows the poster the banner displays');
+  assert.equal(lb.querySelectorAll('.lb-nav').length, 2, 'the wide still is one swipe away');
+  document.querySelector('.lb-close').dispatchEvent(new window.Event('click', { bubbles: true }));
+
+  desktop();
+  assert.equal(bannerArtMode(art), 'backdrop', 'on a wide screen the banner is showing the still');
+  assert.equal(bannerArtMode({ poster: 'p.jpg', backdrop: 'p.jpg' }), 'backdrop', 'a title with one picture needs no choice');
+  assert.equal(bannerArtMode({ poster: 'p.jpg' }), 'backdrop', 'and neither does one with no still at all');
+
+  // The same art object also feeds the popup's fallback: a still without a max-resolution rendition swaps to
+  // the hqdefault YouTube publishes, instead of leaving a broken image (main.js reads data-fb on error).
+  const { artworkItems } = await import('../../app/js/ui/lightbox.js');
+  const items = artworkItems({ poster: 'p.jpg', backdrop: 'max.jpg', backdropFallback: 'hq.jpg' });
+  assert.equal(items[0].fallback, 'hq.jpg', 'the wide still carries its fallback');
+  assert.equal(items[1].fallback, undefined, 'the local poster needs none');
+  assert.equal(artworkItems({ backdrop: 'same.jpg', backdropFallback: 'same.jpg' })[0].fallback, '', 'never the same URL twice');
 });
 
 /* ---------------------------------------------------------------- the gallery */

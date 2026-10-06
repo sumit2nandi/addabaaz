@@ -66,6 +66,35 @@ test('the sign-in page styles exist for the phone-first form', () => {
   for (const cls of ['.seg-full', '.otp-phone', '.otp-cc', '.otp-links', '.auth-busy'])
     assert.ok(css.includes(cls), `${cls} is styled`);
   assert.match(css, /\.auth-busy\[hidden\] \{ display: none; \}/, 'the busy state stays hidden until it is used');
+  // The e-mail and mobile panes are plain block containers in the markup, so nothing spaced their rows: the
+  // field labels touched each other and "Forgot password?" — an inline <a> — had no margin box at all, so its
+  // margin and `justify-self` were inert however large they were made. The panes are grids now, so every row
+  // gets the form's 16px rhythm and the link is a real, right-aligned grid item.
+  const panes = css.match(/#af #emailPane[^{]*\{[^}]*\}/)?.[0] || '';
+  assert.ok(panes, 'the sign-in panes are styled');
+  assert.match(panes, /display: grid; gap: 16px;/, 'the panes lay their rows out on the form’s 16px rhythm');
+  assert.match(panes, /#af #otpPane, #af #otpPhoneStep, #af #otpCodeStep/, 'the mobile-number panes and steps are covered too');
+  // …and the grid has to actually reach the two rows whose spacing is asserted below: both live inside the
+  // pane. (When "Forgot password?" was an inline box in a block pane, no margin could ever move the button.)
+  const pane = auth.slice(auth.indexOf('id="emailPane"'), auth.indexOf('</div>', auth.indexOf('id="asub"')));
+  assert.match(pane, /class="forgot-link"/, 'the forgot link is a child of the e-mail pane, so the grid spaces it');
+  assert.match(pane, /id="asub"/, 'and so is the submit button');
+  const forgot = css.match(/\.forgot-link \{[^}]*\}/)?.[0] || '';
+  assert.ok(forgot, 'the forgot link is styled');
+  assert.match(forgot, /justify-self: end;/, 'and right-aligned as a grid item — the same declaration an inline box ignores');
+  assert.match(forgot, /margin: 0 0 20px;/, 'with air below it, on top of the pane’s own row gap');
+  assert.match(css, /#af \.form-status:empty \{ display: none; \}/, 'an empty alert row takes no space, so it cannot double the lower gap');
+  const asub = css.match(/#af #asub[^{]*\{[^}]*\}/)?.[0] || '';
+  assert.ok(asub, 'the submit buttons carry the matching break of their own');
+  assert.match(asub, /#af #otpSend, #af #otpVerify/, 'the mobile-number buttons get it too, so that tab does not lose the air');
+  // Read every number back out of the stylesheet and check the two gaps against each other.
+  const gap = Number(css.match(/\.form \{ display: grid; gap: (\d+)px; \}/)?.[1]);
+  const paneGap = Number(panes.match(/gap: (\d+)px/)?.[1]);
+  const above = paneGap + Number(forgot.match(/margin: 0 0 (\d+)px;/)?.[1]);
+  const below = paneGap + Number(asub.match(/margin: 0 0 (\d+)px;/)?.[1]);
+  assert.equal(gap, paneGap, 'the panes reuse the form’s own rhythm');
+  assert.ok(above >= 32, `the link-to-button gap is ${above}px`);
+  assert.equal(above, below, `the button is centred between the two lines: ${above}px above, ${below}px below`);
 });
 
 test('the sign-in loader covers the whole card, on every method', () => {

@@ -23,6 +23,9 @@ export function openLightbox(items, startId, { label = 'Image viewer', showCapti
   const show = (n) => {
     i = (n + items.length) % items.length; const g = items[i];
     im.classList.add('loading'); im.onload = () => im.classList.remove('loading');
+    // A popup image may itself have a fallback (a banner still without a max-resolution rendition): main.js's
+    // delegated error handler swaps data-fb in, so hand it a fresh, untried one for every image shown.
+    im.dataset.fb = g.fallback || ''; delete im.dataset.fbTried;
     im.src = g.imageLg || g.image; im.alt = g.caption || g.group || '';
     // One image: just its label (a poster has no "1 / 1"). Several: the group and the position.
     cap.textContent = !showCaption ? '' : many ? `${g.group || ''}${g.group && g.caption ? ' · ' : ''}${g.caption || ''}${g.caption || g.group ? ' · ' : ''}${i + 1} / ${items.length}`.trim()
@@ -49,38 +52,41 @@ export function openLightbox(items, startId, { label = 'Image viewer', showCapti
 }
 
 /**
- * The images a title's artwork popup shows, each once: the banner still and the poster. Captions provide
- * accessible image names but are kept out of the visible popup UI.
+ * The images a title's artwork popup can show, each once: the banner still and the poster. Captions provide
+ * accessible image names but are kept out of the visible popup UI. `backdropFallback` is used when the still's
+ * full-size rendition is missing (YouTube does not publish maxresdefault for every upload).
  */
-export function artworkItems({ poster = '', backdrop = '' } = {}) {
+export function artworkItems({ poster = '', backdrop = '', backdropFallback = '' } = {}) {
   const items = [];
-  if (backdrop) items.push({ id: 'backdrop', image: backdrop, imageLg: backdrop, caption: 'Artwork' });
+  if (backdrop) items.push({ id: 'backdrop', image: backdrop, imageLg: backdrop, fallback: backdropFallback && backdropFallback !== backdrop ? backdropFallback : '', caption: 'Artwork' });
   if (poster && poster !== backdrop) items.push({ id: 'poster', image: poster, imageLg: poster, caption: 'Poster' });
   return items;
 }
 
 /**
  * Show a title's artwork full-size on a dark backdrop — never cropped and never squeezed into the page's
- * own poster box. `start` is 'backdrop' (what the banner shows) or 'poster'; when there is only one image
- * the popup has no arrows. A title with no artwork at all opens nothing.
+ * own poster box. `start` is 'backdrop' (the wide still) or 'poster' (what the details banner shows on a
+ * phone — see ui/components.js `bannerArtMode`); when there is only one image the popup has no arrows. A
+ * title with no artwork at all opens nothing.
  */
-export function openArtwork({ title = '', poster = '', backdrop = '' } = {}, start = 'backdrop') {
-  const items = artworkItems({ poster, backdrop });
+export function openArtwork({ title = '', poster = '', backdrop = '', backdropFallback = '' } = {}, start = 'backdrop') {
+  const items = artworkItems({ poster, backdrop, backdropFallback });
   if (!items.length) return;
   const at = items.some((x) => x.id === start) ? start : items[0].id;
   openLightbox(items, at, { label: title ? `${title} — artwork` : 'Artwork', showCaption: false });
 }
 
 /**
- * The details page's banner is a tap target for the same popup. On a phone the poster box is hidden, so the
- * still the page is showing IS the poster the viewer wants to see whole; on a desktop this simply adds a
- * second, larger way in. Clicks on buttons, links and form fields belong to those controls, and a click that
- * ends a text selection is ignored.
+ * The details page's banner is a tap target for the same popup: it opens the artwork the banner is showing.
+ * Pass `start` as the id of that picture ('poster' on phones, 'backdrop' wider — ui/components.js
+ * `bannerArtMode`), either directly or as a function resolved at tap time so a rotation is honoured. The
+ * banner is the only artwork entry point on a phone, where the poster box is hidden. Clicks on buttons, links
+ * and form fields belong to those controls, and a click that ends a text selection is ignored.
  */
-export function tapArtwork(hero, art) {
+export function tapArtwork(hero, art, start = 'backdrop') {
   hero?.addEventListener('click', (e) => {
     if (e.target.closest('a, button, input, select, textarea, label')) return;
     if (String(window.getSelection?.() || '').trim()) return;
-    openArtwork(art, 'backdrop');
+    openArtwork(art, typeof start === 'function' ? start() : start);
   });
 }

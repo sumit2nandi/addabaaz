@@ -12,17 +12,35 @@ import { confirmDialog } from './dialog.js';
 export function img(src, alt = '', { cls = '', lazy = true, fallback, priority = false } = {}) {
   return html`<img class="${cls}" src="${src}" alt="${alt}" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''} ${priority ? raw('fetchpriority="high"') : ''}>`;
 }
+/** The breakpoint at which a banner swaps the poster in for the wide still. Kept here, beside the markup that
+ *  acts on it, so the artwork popup can resolve exactly the picture the banner is showing at this moment. */
+export const HERO_POSTER_MQ = '(max-width: 759px)';
 /** Hero background. Wide screens get the landscape episode thumbnail; phones (portrait, < 760px) get the portrait show poster instead,
  *  because a 16:9 picture cropped into a tall phone screen shows only a thin slice of the middle (faces cut in half). */
 export function heroBg(thumb, poster, { lazy = false, fallback } = {}) {
   const img = html`<img src="${thumb || poster}" alt="" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''}>`;
-  return poster ? html`<picture><source media="(max-width: 759px)" srcset="${poster}">${img}</picture>` : img;
+  return poster ? html`<picture><source media="${HERO_POSTER_MQ}" srcset="${poster}">${img}</picture>` : img;
 }
-/** Card thumbnail. hqdefault (480x360, letterboxed) + object-fit:cover gives a clean 16:9 *and* 9:16 crop. Falls back to video/show artwork for R2 videos without a separate thumbnail. */
+/**
+ * Which artwork a `heroBg()` banner is showing right now: 'poster' on phones (the <picture> above swaps it in),
+ * 'backdrop' on wider screens. The details page resolves this on every tap — never once at render time — so the
+ * expand button and a tap on the banner open the picture actually on screen even after a rotation or a resize.
+ * With a single picture (no still yet, or the same file serving as both) either id resolves to that picture.
+ */
+export function bannerArtMode({ poster = '', backdrop = '' } = {}) {
+  if (!backdrop || backdrop === poster) return 'backdrop';
+  return typeof window !== 'undefined' && window.matchMedia?.(HERO_POSTER_MQ)?.matches ? 'poster' : 'backdrop';
+}
+/** Card thumbnail. YouTube's default hqdefault is only 480x360 — upscaled into a card on a 2x phone that
+ *  is visibly soft, which reads as "less vibrant" than the same frame on Facebook. So cards ask for
+ *  sddefault (640x480, 78% more pixels) and data-fb drops them back to hqdefault when a video has no
+ *  sddefault (YouTube omits it for some uploads). `object-fit: cover` turns either 4:3 rendition into a
+ *  clean 16:9 or 9:16 crop. Falls back to video/show artwork for R2 videos without a separate thumbnail. */
 export function ytImg(v, alt = '', { cls = '' } = {}) {
   const show = v?.showId ? app.catalog.show(v.showId) || app.catalog.soon(v.showId) : null;
-  const src = app.catalog.thumb(v, 'hqdefault') || v?.poster || show?.backdrop || show?.posterLg || show?.poster || 'media/logo.webp';
-  return img(src, alt, { cls });
+  const hq = app.catalog.thumb(v, 'hqdefault');
+  const src = app.catalog.thumb(v, 'sddefault') || hq || v?.poster || show?.backdrop || show?.posterLg || show?.poster || 'media/logo.webp';
+  return img(src, alt, { cls, fallback: hq && hq !== src ? hq : '' });
 }
 // Subtle crown medallion used as the Premium mark on artwork, instead of a text pill over the image. The outline crown matches the crown line icon in menus and on Plans.
 export function premiumMark({ cls = '' } = {}) {
@@ -33,10 +51,14 @@ export function premiumMark({ cls = '' } = {}) {
 
 /* ---------- state-aware buttons (kept in sync globally by main.js) ---------- */
 // "My List" and "Remind me" buttons render their current state; syncButtons() refreshes every one on the page when the state changes.
-export function listBtn(type, id, { label = 'My List', cls = 'btn btn-ghost', iconOnly = false } = {}) {
+// My List is icon-only everywhere: the + becomes a ✓ in place, and the wording lives in the tooltip and the
+// accessible name. `label` is that wording for the "add" state - the watch page can tell its two buttons
+// apart ("Add show to My List" / "Save video"); it is never drawn as text on the button.
+export function listBtn(type, id, { label = 'Add to My List', cls = 'btn btn-ghost icon-only' } = {}) {
   const on = app.user?.inList(type, id);
-  return html`<button type="button" class="${cls} list-btn ${on ? 'on' : ''}" data-list="${type}:${id}" aria-pressed="${on ? 'true' : 'false'}" aria-label="${iconOnly ? (on ? 'Remove from My List' : 'Add to My List') : ''}" title="${on ? 'Remove from My List' : 'Add to My List'}">
-    <span class="ic-off">${icon('plus', { size: 18 })}</span><span class="ic-on">${icon('check', { size: 18 })}</span>${iconOnly ? '' : html`<span class="lbl">${label}</span>`}</button>`;
+  const name = on ? 'Remove from My List' : label;
+  return html`<button type="button" class="${cls} list-btn ${on ? 'on' : ''}" data-list="${type}:${id}" data-list-add="${label}" aria-pressed="${on ? 'true' : 'false'}" aria-label="${name}" title="${name}">
+    <span class="ic-off">${icon('plus', { size: 18 })}</span><span class="ic-on">${icon('check', { size: 18 })}</span></button>`;
 }
 export function remindBtn(id, { cls = 'btn btn-ghost' } = {}) {
   const on = app.user?.hasReminder(id);
@@ -48,8 +70,10 @@ export function syncButtons(root = document) {
   const u = app.user; if (!u) return;
   root.querySelectorAll('[data-list]').forEach((b) => {
     const [type, ...rest] = b.dataset.list.split(':'); const on = u.inList(type, rest.join(':'));
-    b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); b.title = on ? 'Remove from My List' : 'Add to My List';
-    if (b.hasAttribute('aria-label')) b.setAttribute('aria-label', b.title);
+    b.classList.toggle('on', on); b.setAttribute('aria-pressed', on);
+    // The wording is the button's only label, so keep it (per button) in step with the state.
+    b.title = on ? 'Remove from My List' : (b.dataset.listAdd || 'Add to My List');
+    b.setAttribute('aria-label', b.title);
   });
   root.querySelectorAll('[data-remind]').forEach((b) => {
     const on = u.hasReminder(b.dataset.remind); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on);
@@ -62,7 +86,7 @@ export function syncButtons(root = document) {
 export function showCard(s, { cls = '' } = {}) {
   return html`<a class="card card-poster ${cls}" href="#/show/${s.id}" aria-label="${s.titleEn || s.title}">
     <div class="poster">${img(s.poster, s.title)}${s.access === 'premium' ? premiumMark() : ''}</div>
-    <div class="card-quick">${listBtn('show', s.id, { cls: 'icon-btn', iconOnly: true })}</div>
+    <div class="card-quick">${listBtn('show', s.id, { cls: 'icon-btn' })}</div>
   </a>`;
 }
 // Thumbnail card for an episode/clip: a resume progress bar, Premium mark and optional rank number.

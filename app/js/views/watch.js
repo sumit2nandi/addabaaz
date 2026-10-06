@@ -57,8 +57,8 @@ export default async function watch(ctx) {
           <h1 class="watch-title">${title}</h1>
           ${metaLine([cat.label(v), fmtDate(v.publishedAt)])}
           <div class="watch-actions">
-            ${show ? listBtn('show', show.id, { label: 'Add show to My List', cls: 'btn btn-ghost' }) : ''}
-            ${!isYouTube && !isR2 ? listBtn('video', v.id, { label: 'Save video', cls: 'btn btn-ghost' }) : ''}
+            ${show ? listBtn('show', show.id, { label: 'Add show to My List', cls: 'btn btn-ghost icon-only' }) : ''}
+            ${!isYouTube && !isR2 ? listBtn('video', v.id, { label: 'Save video', cls: 'btn btn-ghost icon-only' }) : ''}
             ${next ? html`<a class="btn btn-ghost" href="#/watch/${next.id}">${icon('next', { size: 18 })} Next: ${cat.label(next)}</a>` : ''}
             ${!isR2 ? html`<button type="button" class="btn btn-ghost" id="castBtn" hidden>${icon('cast', { size: 18 })} Cast</button>` : ''}
             <button type="button" class="btn btn-ghost" id="shareBtn">${icon('share', { size: 18 })} Share</button>

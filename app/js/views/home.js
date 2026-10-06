@@ -157,7 +157,7 @@ function heroSlides() {
 function heroDockHtml(entry) {
   return html`<div class="hero-actions hero-dock" data-hero-dock role="group" aria-label="${entry.show.titleEn || entry.show.title} actions">
     <a class="btn btn-primary btn-lg" data-hero-watch href="#/watch/${entry.watch}">${icon('play', { size: 20 })} Watch Now</a>
-    ${listBtn('show', entry.show.id, { cls: 'btn btn-glass btn-lg icon-only', iconOnly: true })}
+    ${listBtn('show', entry.show.id, { cls: 'btn btn-glass btn-lg icon-only' })}
     <a class="btn btn-glass btn-lg" data-hero-info href="#/show/${entry.show.id}">${icon('info', { size: 20 })} More info</a>
   </div>`;
 }
