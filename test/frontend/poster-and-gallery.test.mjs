@@ -103,7 +103,10 @@ test('show details keep all four hero controls in one row on phones', () => {
   assert.ok(fade, 'the shared phone fade is defined once, as a token');
   assert.match(fade, /^linear-gradient\(0deg/, 'it is a lower-only fade, not a top-down wash');
   assert.doesNotMatch(fade, /180deg|90deg|270deg/, 'nothing darkens the poster from the top or from either side');
-  assert.match(fade, /rgba\(5,5,5,\.72\) 46%/, 'the lower half still darkens enough for the hero text and actions');
+  // The lower half still needs to be a real scrim under the text and actions — but it was lightened from .72
+  // to .62 on purpose, so pin the band rather than one number.
+  const mid = Number(fade.match(/rgba\(5,5,5,\.(\d+)\) 46%/)?.[1]);
+  assert.ok(mid >= 55 && mid <= 72, `the lower half still darkens enough for the hero text and actions (got .${mid})`);
   assert.match(fade, /rgba\(5,5,5,0\) 78%/, 'and it is gone by the upper third, so the artwork up there stays clear');
   const phones = css.slice(css.indexOf('@media (max-width: 759px)'));
   assert.ok(phones.indexOf('--hero-fade-mobile') > 0, 'the fade only applies on phones');

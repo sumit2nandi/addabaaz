@@ -18,6 +18,17 @@ let muteHinted = false; // one-time toast when a browser forces autoplay muted
 const KEEP_BEFORE = 2;   // mounted sections above the current one (swipe back is instant)
 const KEEP_AFTER = 3;    // mounted sections ahead (their cover images are decoded by the time a swipe lands)
 
+/* The cover fills the whole screen, so it should not be the 480x360 default YouTube thumbnail stretched over
+ * a 1080px-wide phone. Ask for the largest rendition YouTube publishes (maxresdefault, 1280x720) and keep the
+ * default as the fallback for uploads that do not have it (main.js swaps in data-fb when a source 404s). */
+function reelCover(cat, v) {
+  const max = cat.thumb(v, 'maxresdefault'), hq = cat.thumb(v, 'hqdefault');
+  const show = cat.show(v.showId) || cat.soon(v.showId);
+  const src = max || hq || v.poster || show?.posterLg || show?.poster || 'media/logo.webp';
+  const fb = [hq, v.poster, show?.posterLg || show?.poster].find((u) => u && u !== src) || '';
+  return { src, fallback: fb };
+}
+
 export default async function reels(ctx) {
   const cat = app.catalog;
   let list = cat.reels();
@@ -44,9 +55,9 @@ export default async function reels(ctx) {
 
   // The per-reel content (cover, tap layer, caption, action buttons) — injected only while the section is near
   // the current one, removed again when it scrolls out of the keep-window.
-  const contentHtml = (v, i) => { const show = cat.show(v.showId) || cat.soon(v.showId); return html`
+  const contentHtml = (v, i) => { const show = cat.show(v.showId) || cat.soon(v.showId); const cover = reelCover(cat, v); return html`
     <div class="reel-frame ${cat.isPremium(v) ? 'has-premium' : ''}">
-      <div class="reel-slot">${img(cat.thumb(v), '', { lazy: i > 2 && i !== startIdx, priority: i === startIdx })}<div class="reel-loading"><div class="spinner"></div></div></div>
+      <div class="reel-slot">${img(cover.src, '', { fallback: cover.fallback, lazy: i > 2 && i !== startIdx, priority: i === startIdx })}<div class="reel-loading"><div class="spinner"></div></div></div>
       ${cat.isPremium(v) ? premiumMark() : ''}
       <button type="button" class="reel-tap" data-reel-tap aria-label="Play or pause"><span class="reel-pp">${icon('play', { size: 34 })}</span></button>
       <div class="reel-caption"><strong>${cat.displayTitle(v)}</strong>${show ? html`<a href="#/${cat.show(v.showId) ? 'show' : 'soon'}/${show.id}">${show.titleEn || show.title}</a>` : html`<span>ADDABAAZ</span>`}</div>
