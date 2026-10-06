@@ -605,9 +605,10 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .btn-light { background: #fff; color: #8f0000; border: 0; border-radius: 999px; padding: 9px 22px; font-size: 14px; font-weight: 800; white-space: nowrap; margin-left: auto; }
 .btn-light:hover { background: #ffe9e9; }
 .who h2 .pill { margin-left: 8px; vertical-align: middle; }
-/* Sign out stays in the profile card (tests and signed-in users need it there) but visually quiet. */
-.account-page #signout { background: transparent; background-image: none; border: 1px solid var(--border-2); box-shadow: none; color: var(--muted); padding: 8px 14px; font-size: 13.5px; font-weight: 600; }
-.account-page #signout:hover { color: var(--text); border-color: var(--muted); }
+/* Sign out lives alone at the bottom of the page: quiet, centered, impossible to tap by accident. */
+.signout-wrap { margin: 26px 0 4px; text-align: center; }
+.signout-wrap .btn-ghost { background: transparent; background-image: none; border: 1px solid var(--border-2); box-shadow: none; color: var(--muted); padding: 10px 22px; font-size: 14px; font-weight: 600; }
+.signout-wrap .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
 /* Inline notice ("Your plan is active until…"): the icon stays with the first line and never shrinks,
  * and the sentence is ONE text column. That column is the whole point: as bare flex children the words
  * before a <b>, the <b> itself and the words after it become three separate flex items, and flex items

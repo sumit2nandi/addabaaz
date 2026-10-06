@@ -17,8 +17,10 @@ test('Account keeps its single-column mobile layout and widens to two columns on
     'profile actions, including Sign out, align to the right');
   assert.match(css, /\.account-section:empty \{ display: none; \}/,
     'empty asynchronous sections do not leave gaps in the desktop grid');
-  assert.match(account, /<section class="card-panel who">[\s\S]*?<div class="who-actions">[\s\S]*?id="signout"/,
-    'Sign out remains inside the profile card');
+  assert.doesNotMatch(account.match(/<section class="card-panel who">[\s\S]*?<\/section>/)[0], /id="signout"/,
+    'Sign out no longer crowds the profile card');
+  assert.match(account, /<p class="signout-wrap"><button class="btn btn-ghost" id="signout">/,
+    'Sign out lives as a quiet row at the bottom of the page');
   assert.match(account, /<div class="account-grid">[\s\S]*?<section class="account-section">\s*<h2 class="sub-h">Playback<\/h2>/,
     'static Account settings are grouped as responsive grid sections');
   assert.doesNotMatch(account, /sectionHeader/,
