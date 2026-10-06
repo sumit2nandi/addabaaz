@@ -26,6 +26,9 @@ const section = (path) => {
     about: 'studio', services: 'studio', contact: 'studio', support: 'studio', search: 'search', account: 'account', profiles: 'account', plans: 'account', billing: 'account', signin: 'account', signup: 'account' }[seg] || '';
 };
 
+// Light haptic tick on menu taps. Only vibrate-capable devices (mostly Android) respond — everywhere else this is a silent no-op.
+const tick = () => { try { if (typeof navigator !== 'undefined') navigator.vibrate?.(12); } catch { /* haptics unavailable */ } };
+
 // Draw the frame and hook up menus and the search box.
 export function renderShell() {
   $('#topbar').innerHTML = html`
@@ -97,6 +100,7 @@ export function renderProfileMenu() {
 function wireMenus() {
   const closeAll = () => $$('.menu').forEach((m) => { m.hidden = true; m.parentElement.querySelector('[aria-expanded]')?.setAttribute('aria-expanded', 'false'); });
   document.addEventListener('click', (e) => {
+    if (e.target.closest('#tabbar a, #topbar a, #topbar button')) tick();
     const btn = e.target.closest('#profileBtn, .nav-drop-btn');
     if (btn) {
       const menu = btn.parentElement.querySelector('.menu'); const open = menu.hidden;
