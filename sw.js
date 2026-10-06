@@ -8,7 +8,7 @@
  * POST /api/v1/admin/cache/purge): this worker checks GET /api/v1/client-version on activation and on every
  * message, and throws away its caches when the number it stored is stale.
  * Bump VERSION (or run `npm run build:www`, which stamps it) to force a refresh. */
-const VERSION = 'v2.16.2';   // the details page's episode list scrolls inside its own frame instead of stretching the page
+const VERSION = 'v2.16.3';   // the episode frame is sized in rows (six visible) instead of a share of the viewport, and the first rail after content gets breathing room
 // One cache per kind of content, all tagged with the version so old caches are deleted when the version changes.
 const SHELL = `ab-shell-${VERSION}`, DATA = `ab-data-${VERSION}`, MEDIA = `ab-media-${VERSION}`, THUMBS = `ab-thumbs-${VERSION}`;
 // Files downloaded at install so the app shell opens offline. A missing file is skipped rather than failing the install.

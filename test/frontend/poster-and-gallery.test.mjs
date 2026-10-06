@@ -155,13 +155,37 @@ test('a long episode list scrolls inside its own frame instead of stretching the
   const css = read('app/css/styles.css');
   const frame = css.match(/\.ep-frame \{[^}]*\}/)?.[0] || '';
   assert.ok(frame, 'the frame rule exists');
-  assert.match(frame, /max-height: clamp\(280px, 58vh, 620px\)/, 'the list is capped to a share of the viewport');
-  assert.match(frame, /max-height: clamp\(280px, 58svh, 620px\)/, 'and to the small viewport height on phones (iOS URL bar)');
   assert.match(frame, /overflow-y: auto/, 'the rest of the list scrolls inside the frame');
   assert.doesNotMatch(frame, /overscroll-behavior: contain/,
     'the frame does not trap the finger — its scroll chains back to the page at either end');
   assert.match(css, /\.ep-frame:focus-visible \{ outline: 2px solid var\(--gold\); outline-offset: 2px; \}/,
     'keyboard focus on the frame is visible');
+
+  // The height is a row budget, not a viewport share: 58svh showed barely four episodes on a short phone.
+  // Six full rows must fit with room for the seventh to peek (the "there is more" hint), and the eighth must
+  // not — otherwise the frame is taller than the ask for no reason.
+  assert.match(css, /\.ep-frame \.ep-row \{ min-height: var\(--ep-row-h\); \}/,
+    'the rows carry a minimum height, so the row pitch the frame is sized against is exact');
+  assert.match(frame, /max-height: calc\(6 \* \(var\(--ep-row-h\) \+ var\(--ep-gap\)\) \+ var\(--ep-peek\)\)/,
+    'the frame is sized in six rows plus a peek');
+  const num = (name) => Number(css.match(new RegExp(`${name}: (\\d+)px`))?.[1]);
+  for (const [label, row, gap, peek] of [['phones', num('--ep-row-h'), num('--ep-gap'), num('--ep-peek')]]) {
+    assert.ok(row > 0 && gap >= 0 && peek > 0, `${label}: the row budget is declared`);
+    const frameH = 6 * (row + gap) + peek;
+    const sixRows = 6 * row + 5 * gap;            // six rows and the gaps between them (frame padding is ~one gap)
+    const sevenRows = 7 * row + 6 * gap;
+    assert.ok(frameH >= sixRows, `${label}: six episodes fit inside the frame (${frameH}px >= ${sixRows}px)`);
+    assert.ok(frameH < sevenRows, `${label}: but not a seventh (${frameH}px < ${sevenRows}px)`);
+  }
+  assert.match(css, /@media \(min-width: 481px\) \{ \.ep-frame \{ --ep-row-h: 96px; \} \}/,
+    'wider phones get the taller 132px-thumbnail row accounted for');
+  assert.match(css, /@media \(min-width: 720px\) \{ \.ep-frame \{ --ep-row-h: 137px; max-height: min\(calc\(6 \* \(var\(--ep-row-h\) \+ var\(--ep-gap\)\) \+ var\(--ep-peek\)\), 72svh\); \} \}/,
+    'desktop keeps six rows but never lets the pane swallow the window');
+  // A rail that follows the episode frame needs air above its heading (reported: "Trailers, Reels & Clips"
+  // sat flush against the frame). A rail after another rail already has the 30px below it and is excluded.
+  assert.match(css, /\n\.page > :not\(\.rail\) \+ \.rail \{ margin-top: 30px; \}/,
+    'the first rail after other content is spaced away from it');
+  assert.doesNotMatch(css, /\.rail \{ margin: 30px 0 30px; \}/, 'rails after rails do not double the gap');
   // The watch page's own side list is a different surface: it must keep its compact rows and its own scroller.
   assert.match(css, /\.ep-list\.compact \.ep-row \{[^}]*grid-template-columns: 26px 104px 1fr;/, 'the compact variant is unchanged');
   assert.match(css, /\.watch-side \{[^}]*overflow-y: auto;/, 'the desktop watch panel keeps scrolling as before');

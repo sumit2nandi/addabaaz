@@ -296,6 +296,10 @@ img.img-failed { opacity: 0; }
 /* ---------- rails ---------- */
 .rails { position: relative; z-index: 2; margin-top: 8px; padding-bottom: 8px; }
 .rail { margin: 0 0 30px; } .rail-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 0 var(--pad); margin-bottom: 12px; }
+/* A rail that follows other content — on a details page that is "Trailers, Reels & Clips", sitting under the
+   episode frame — needs air above its heading; a rail after another rail already has the 30px below it, so it
+   is excluded. Pages that group their rails in `.rails`, or open with one, are unaffected. */
+.page > :not(.rail) + .rail { margin-top: 30px; }
 .rail-head-minimal { justify-content: flex-end; margin-bottom: 0; }
 .rail-head h2 { font-size: clamp(18px, 2.4vw, 23px); font-weight: 700; } .rail-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
 .home-release-showcase { display: block; margin: 0 var(--pad) 20px; }
@@ -363,15 +367,22 @@ img.img-failed { opacity: 0; }
 /* ---------- episodes ---------- */
 .ep-list { display: grid; gap: 4px; }
 /* A details page's episode list scrolls inside its own frame: a show with a hundred episodes must not turn
-   the page into an endless strip (the header, facts, description and other rails stay put below/above it).
-   The frame stops the list at a comfortable height and scrolls the rest. Its own scroll is left to chain to
-   the page at either end — deliberately NOT `overscroll-behavior: contain`, which on a phone would hold the
-   finger inside the frame and feel stuck once the list ran out. `tabindex` + `role="region"` (see the
-   markup) let a keyboard reach and scroll the frame — a scrollable list is otherwise unreachable without a
-   pointer — and give it the accessible name "Episode list". */
-.ep-frame { max-height: clamp(280px, 58vh, 620px); max-height: clamp(280px, 58svh, 620px); overflow-y: auto; padding: 6px; border: 1px solid var(--border-2); border-radius: var(--radius-lg); background: var(--panel); scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
+   the page into an endless strip (the header, facts, description and rails stay put below/above it).
+   The frame is sized in ROWS, not in viewport percentages: 58svh showed barely four episodes on a short
+   phone, and the ask is at least six. `--ep-row-h` is the row pitch the grid produces at each breakpoint
+   (thumbnail height + the row's own padding) and `min-height` on the rows makes it exact, so six episodes
+   always fit whatever the phone's height. `--ep-peek` lets the next episode show, so the list still reads
+   as scrollable. Its own scroll is left to chain to the page at either end — deliberately NOT
+   `overscroll-behavior: contain`, which on a phone would hold the finger inside the frame and feel stuck
+   once the list ran out. `tabindex` + `role="region"` (see the markup) let a keyboard reach and scroll the
+   frame — a scrollable list is otherwise unreachable without a pointer — and name it "Episode list". */
+.ep-frame { --ep-row-h: 84px; --ep-gap: 4px; --ep-peek: 24px; max-height: calc(6 * (var(--ep-row-h) + var(--ep-gap)) + var(--ep-peek)); overflow-y: auto; padding: 6px; border: 1px solid var(--border-2); border-radius: var(--radius-lg); background: var(--panel); scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
+.ep-frame .ep-row { min-height: var(--ep-row-h); }
 .ep-frame::-webkit-scrollbar { width: 8px; } .ep-frame::-webkit-scrollbar-track { background: transparent; } .ep-frame::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 99px; }
 .ep-frame:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+/* Wider phones use the 132px thumbnail, which makes a taller row (and 720px+ the 200px one). */
+@media (min-width: 481px) { .ep-frame { --ep-row-h: 96px; } }
+@media (min-width: 720px) { .ep-frame { --ep-row-h: 137px; max-height: min(calc(6 * (var(--ep-row-h) + var(--ep-gap)) + var(--ep-peek)), 72svh); } }
 .ep-row { display: grid; grid-template-columns: 34px 132px 1fr; gap: 14px; align-items: center; padding: 10px 12px; border-radius: var(--radius); transition: background .2s; }
 .ep-row:hover, .ep-row.current { background: var(--panel-2); } .ep-row.current { box-shadow: inset 3px 0 0 var(--accent); }
 .ep-num { font-size: 20px; font-weight: 700; color: var(--muted); text-align: center; } .ep-row.current .ep-num { color: var(--accent-2); }
