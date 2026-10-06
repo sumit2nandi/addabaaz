@@ -369,20 +369,27 @@ img.img-failed { opacity: 0; }
 /* A details page's episode list scrolls inside its own frame: a show with a hundred episodes must not turn
    the page into an endless strip (the header, facts, description and rails stay put below/above it).
    The frame is sized in ROWS, not in viewport percentages: 58svh showed barely four episodes on a short
-   phone, and the ask is at least six. `--ep-row-h` is the row pitch the grid produces at each breakpoint
-   (thumbnail height + the row's own padding) and `min-height` on the rows makes it exact, so six episodes
-   always fit whatever the phone's height. `--ep-peek` lets the next episode show, so the list still reads
-   as scrollable. Its own scroll is left to chain to the page at either end — deliberately NOT
-   `overscroll-behavior: contain`, which on a phone would hold the finger inside the frame and feel stuck
-   once the list ran out. `tabindex` + `role="region"` (see the markup) let a keyboard reach and scroll the
-   frame — a scrollable list is otherwise unreachable without a pointer — and name it "Episode list". */
-.ep-frame { --ep-row-h: 84px; --ep-gap: 4px; --ep-peek: 24px; max-height: calc(6 * (var(--ep-row-h) + var(--ep-gap)) + var(--ep-peek)); overflow-y: auto; padding: 6px; border: 1px solid var(--border-2); border-radius: var(--radius-lg); background: var(--panel); scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
+   phone, and the ask is six episodes plus a quarter of the next one. `--ep-row-h` is the row pitch the grid
+   produces at each breakpoint (thumbnail height + the row's own padding) and `min-height` on the rows makes
+   it exact, so six episodes always fit whatever the phone's height and a title of any length cannot change
+   it. Two extra parts make the height up:
+     --ep-peek    a quarter of a row — the visible top of episode 7, which keeps the list reading as scrollable
+     --ep-chrome  the frame's own 2×6px padding + 2×1px border: `max-height` is measured on the BORDER box
+                  (the site sets `box-sizing: border-box` everywhere), so without this the padding would eat
+                  14px of the peek and the sliver would come out nearer a tenth of an episode than a quarter.
+   Its own scroll is left to chain to the page at either end — deliberately NOT `overscroll-behavior:
+   contain`, which on a phone would hold the finger inside the frame and feel stuck once the list ran out.
+   `tabindex` + `role="region"` (see the markup) let a keyboard reach and scroll the frame — a scrollable
+   list is otherwise unreachable without a pointer — and name it "Episode list". */
+.ep-frame { --ep-row-h: 84px; --ep-gap: 4px; --ep-peek: calc(var(--ep-row-h) / 4); --ep-chrome: 14px; max-height: calc(6 * (var(--ep-row-h) + var(--ep-gap)) + var(--ep-peek) + var(--ep-chrome)); overflow-y: auto; padding: 6px; border: 1px solid var(--border-2); border-radius: var(--radius-lg); background: var(--panel); scrollbar-width: thin; scrollbar-color: var(--border-2) transparent; }
 .ep-frame .ep-row { min-height: var(--ep-row-h); }
 .ep-frame::-webkit-scrollbar { width: 8px; } .ep-frame::-webkit-scrollbar-track { background: transparent; } .ep-frame::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 99px; }
 .ep-frame:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-/* Wider phones use the 132px thumbnail, which makes a taller row (and 720px+ the 200px one). */
+/* Wider phones use the 132px thumbnail, which makes a taller row (and 720px+ the 200px one). The six-row
+   budget stands at every width — it is deliberately NOT capped to a share of the viewport, which would cut
+   the sixth row on a laptop. */
 @media (min-width: 481px) { .ep-frame { --ep-row-h: 96px; } }
-@media (min-width: 720px) { .ep-frame { --ep-row-h: 137px; max-height: min(calc(6 * (var(--ep-row-h) + var(--ep-gap)) + var(--ep-peek)), 72svh); } }
+@media (min-width: 720px) { .ep-frame { --ep-row-h: 137px; } }
 .ep-row { display: grid; grid-template-columns: 34px 132px 1fr; gap: 14px; align-items: center; padding: 10px 12px; border-radius: var(--radius); transition: background .2s; }
 .ep-row:hover, .ep-row.current { background: var(--panel-2); } .ep-row.current { box-shadow: inset 3px 0 0 var(--accent); }
 .ep-num { font-size: 20px; font-weight: 700; color: var(--muted); text-align: center; } .ep-row.current .ep-num { color: var(--accent-2); }

@@ -162,25 +162,37 @@ test('a long episode list scrolls inside its own frame instead of stretching the
     'keyboard focus on the frame is visible');
 
   // The height is a row budget, not a viewport share: 58svh showed barely four episodes on a short phone.
-  // Six full rows must fit with room for the seventh to peek (the "there is more" hint), and the eighth must
-  // not — otherwise the frame is taller than the ask for no reason.
+  // It must show six full episodes plus exactly a quarter of the seventh — and `max-height` is measured on
+  // the BORDER box (the site sets box-sizing: border-box), so the frame's own padding and border have to be
+  // part of the sum or they eat most of the peek.
   assert.match(css, /\.ep-frame \.ep-row \{ min-height: var\(--ep-row-h\); \}/,
     'the rows carry a minimum height, so the row pitch the frame is sized against is exact');
-  assert.match(frame, /max-height: calc\(6 \* \(var\(--ep-row-h\) \+ var\(--ep-gap\)\) \+ var\(--ep-peek\)\)/,
-    'the frame is sized in six rows plus a peek');
-  const num = (name) => Number(css.match(new RegExp(`${name}: (\\d+)px`))?.[1]);
-  for (const [label, row, gap, peek] of [['phones', num('--ep-row-h'), num('--ep-gap'), num('--ep-peek')]]) {
-    assert.ok(row > 0 && gap >= 0 && peek > 0, `${label}: the row budget is declared`);
-    const frameH = 6 * (row + gap) + peek;
-    const sixRows = 6 * row + 5 * gap;            // six rows and the gaps between them (frame padding is ~one gap)
-    const sevenRows = 7 * row + 6 * gap;
-    assert.ok(frameH >= sixRows, `${label}: six episodes fit inside the frame (${frameH}px >= ${sixRows}px)`);
-    assert.ok(frameH < sevenRows, `${label}: but not a seventh (${frameH}px < ${sevenRows}px)`);
+  assert.match(frame, /--ep-peek: calc\(var\(--ep-row-h\) \/ 4\)/, 'the peek is a quarter of a row');
+  assert.match(frame, /max-height: calc\(6 \* \(var\(--ep-row-h\) \+ var\(--ep-gap\)\) \+ var\(--ep-peek\) \+ var\(--ep-chrome\)\)/,
+    'the frame is six rows plus the peek plus its own chrome');
+
+  // Read the numbers back out and work the geometry through for every breakpoint the frame uses.
+  const rowHeights = [Number(frame.match(/--ep-row-h: (\d+)px/)?.[1])];            // the base, phones
+  for (const m of css.matchAll(/@media \(min-width: \d+px\) \{ \.ep-frame \{ --ep-row-h: (\d+)px; \} \}/g)) rowHeights.push(Number(m[1]));
+  assert.deepEqual(rowHeights, [84, 96, 137], 'one row pitch per breakpoint: phones, wide phones, desktop');
+  const gap = Number(frame.match(/--ep-gap: (\d+)px/)?.[1]);
+  const pad = Number(frame.match(/padding: (\d+)px;/)?.[1]);
+  const border = Number(frame.match(/border: (\d+)px solid/)?.[1]);
+  const chrome = Number(frame.match(/--ep-chrome: (\d+)px/)?.[1]);
+  assert.equal(chrome, 2 * (pad + border), 'the chrome budget matches the frame\u2019s real padding and border');
+  for (const row of rowHeights) {
+    const frameH = 6 * (row + gap) + 0.25 * row + chrome;    // what the formula resolves to
+    const content = frameH - chrome;                         // what the list can actually show
+    const sixEnd = 6 * row + 5 * gap;                        // where episode 6 ends
+    const sevenTop = 6 * row + 6 * gap;                      // where episode 7 begins
+    assert.ok(sixEnd <= content, `six episodes fit at a ${row}px row (${sixEnd}px <= ${content}px)`);
+    assert.equal(content - sevenTop, 0.25 * row, `episode 7 shows exactly a quarter of itself at a ${row}px row`);
+    assert.ok(content < 7 * row + 6 * gap, 'and episode 7 is not shown whole');
   }
   assert.match(css, /@media \(min-width: 481px\) \{ \.ep-frame \{ --ep-row-h: 96px; \} \}/,
     'wider phones get the taller 132px-thumbnail row accounted for');
-  assert.match(css, /@media \(min-width: 720px\) \{ \.ep-frame \{ --ep-row-h: 137px; max-height: min\(calc\(6 \* \(var\(--ep-row-h\) \+ var\(--ep-gap\)\) \+ var\(--ep-peek\)\), 72svh\); \} \}/,
-    'desktop keeps six rows but never lets the pane swallow the window');
+  assert.match(css, /@media \(min-width: 720px\) \{ \.ep-frame \{ --ep-row-h: 137px; \} \}/,
+    'desktop uses the 200px-thumbnail row — with no viewport cap, which would cut the sixth episode');
   // A rail that follows the episode frame needs air above its heading (reported: "Trailers, Reels & Clips"
   // sat flush against the frame). A rail after another rail already has the 30px below it and is excluded.
   assert.match(css, /\n\.page > :not\(\.rail\) \+ \.rail \{ margin-top: 30px; \}/,
