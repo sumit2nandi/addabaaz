@@ -19,8 +19,16 @@ test('Account keeps its single-column mobile layout and widens to two columns on
     'empty asynchronous sections do not leave gaps in the desktop grid');
   assert.match(account, /<section class="card-panel who">[\s\S]*?<div class="who-actions">[\s\S]*?id="signout"/,
     'Sign out remains inside the profile card');
-  assert.match(account, /<div class="account-grid">[\s\S]*?<section class="account-section">\s*<h2 class="sub-h">Profiles<\/h2>/,
+  assert.match(account, /<div class="account-grid">[\s\S]*?<section class="account-section">\s*<h2 class="sub-h">Playback<\/h2>/,
     'static Account settings are grouped as responsive grid sections');
+  assert.doesNotMatch(account, /sectionHeader/,
+    'the page opens directly on the profile card, with no header above it');
+  assert.doesNotMatch(account, /Who’s watching\?/,
+    'profile switching lives in the profile menu, not on this page');
+  assert.doesNotMatch(account, /Manage profiles/,
+    'profile management lives in the profile menu, not on this page');
+  assert.doesNotMatch(account, /<h2 class="sub-h">Explore<\/h2>/,
+    'the Explore link list is gone (Studio pages stay in the Studio menu)');
   assert.match(extras, /<section class="account-section">\s*<h2 class="sub-h">Security<\/h2>/,
     'security settings participate in the desktop grid');
   assert.match(extras, /<div id="referSlot" class="account-section"><\/div>/,

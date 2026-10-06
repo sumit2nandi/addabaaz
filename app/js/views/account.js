@@ -3,7 +3,7 @@ import { app } from '../app.js';
 import { CONFIG } from '../config.js';
 import { html, $, fmtDate } from '../util.js';
 import { icon } from '../icons.js';
-import { avatar, toast, sectionHeader, confirmSignOut } from '../ui/components.js';
+import { avatar, toast, confirmSignOut } from '../ui/components.js';
 import { confirmDialog } from '../ui/dialog.js';
 import { go } from '../router.js';
 import { isNative, platform } from '../platform.js';
@@ -20,7 +20,6 @@ export default async function account(ctx) {
 
   const extras = accountExtras();
   ctx.root.innerHTML = html`<div class="page page-narrow account-page">
-    ${sectionHeader({ tag: 'You', title: u.supportsAuth ? 'Account & settings' : 'Profile & settings' })}
     ${!u.supportsAuth ? html`<section class="card-panel notice" role="status"><div>${icon('info', { size: 22 })}</div><div><b>Local-only mode</b><p class="muted">This app isn’t connected to ADDABAAZ cloud. Profiles and settings stay on this phone; sign-in, sync, and push notifications need a cloud connection.</p></div></section>` : ''}
     ${extras.banner}
     <section class="card-panel who">
@@ -34,11 +33,6 @@ export default async function account(ctx) {
       ${extras.sections}
 
       <section class="account-section">
-        <h2 class="sub-h">Profiles</h2>
-        <div class="card-panel list">${link('#/profiles', 'user', 'Who’s watching?', `${u.profiles.length} profile${u.profiles.length > 1 ? 's' : ''} · switch profile`)}${link('#/profiles?manage=1', 'edit', 'Manage profiles')}</div>
-      </section>
-
-      <section class="account-section">
         <h2 class="sub-h">Playback</h2>
         <div class="card-panel list">
           <label class="row-switch"><span><b>Autoplay next episode</b><small>Keep watching without lifting a finger.</small></span><span class="switch"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span></span></label>
@@ -47,14 +41,6 @@ export default async function account(ctx) {
       </section>
 
       ${u.supportsAuth ? html`<section class="account-section"><h2 class="sub-h">Access</h2><div class="card-panel list">${link('#/plans', 'crown', plan === 'free' ? 'Free access' : 'ADDABAAZ Plus', plan === 'free' ? (isNative ? 'View your account access' : 'Subscribe to watch premium originals') : (u.subscription.expiresAt ? `Active until ${fmtDate(u.subscription.expiresAt)}` : (isNative ? 'View your access' : 'Manage your plan')))}${u.account ? link('#/billing', 'download', 'Billing & invoices', 'GST invoices, credit notes and refunds') : ''}</div></section>` : ''}
-
-      <section class="account-section">
-        <h2 class="sub-h">Explore</h2>
-        <div class="card-panel list">
-          ${link('#/list', 'list', 'My List')}${link('#/upcoming', 'clock', 'Coming Soon')}
-          ${link('#/about', 'info', 'About ADDABAAZ')}${link('#/services', 'film', 'Services')}${link('#/contact', 'mail', 'Contact us')}${link('#/support', 'chat', 'Help & support', 'Raise a ticket and follow our replies')}
-        </div>
-      </section>
 
       <section class="account-section">
         <h2 class="sub-h">App</h2>
