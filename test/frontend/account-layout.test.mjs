@@ -28,3 +28,19 @@ test('Account keeps its single-column mobile layout and widens to two columns on
   assert.match(extras, /<div id="notifySlot" class="account-section"><\/div>/,
     'the asynchronous notification slot participates in the grid');
 });
+
+test('unsubscribed website viewers get a Subscribe banner above the settings grid', () => {
+  const css = read('app/css/styles.css');
+  const account = read('app/js/views/account.js');
+
+  assert.match(account, /u\.supportsAuth && !u\.isPremium && !isNative \? html`<section class="card-panel subscribe-banner">/,
+    'the banner shows only for unsubscribed viewers, on the website (never in native apps, never in local mode)');
+  assert.match(account, /<a class="btn btn-light" href="#\/plans">Subscribe<\/a>/,
+    'the banner links to the plans page');
+  assert.match(account, /<\/section>\s*\$\{u\.supportsAuth && !u\.isPremium/,
+    'the banner sits between the profile card and the settings grid');
+  assert.match(account, /<em class="pill\$\{u\.isPremium \? ' ok' : ''\}">\$\{u\.isPremium \? 'Plus' : 'Free'\}<\/em>/,
+    'the profile name carries a Free/Plus badge');
+  assert.match(css, /\.subscribe-banner \{[^}]*display: flex/,
+    'the banner lays out text and button side by side');
+});
