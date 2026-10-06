@@ -42,6 +42,8 @@ test('buying skips straight to payment: coupon popup, cancel screen, celebration
     'cancelling shows the retry/view-plans screen');
   assert.match(plans, /d\.className = 'celebrate'/,
     'success shows a full-screen celebration');
+  assert.match(plans, /<div class="confetti">\$\{raw\(bits\)\}<\/div>/,
+    'confetti markup is injected unescaped (plain interpolation would print as text)');
   assert.match(plans, /data-cel>Start watching<\//,
     '...with a way forward');
   assert.match(plans, /name="usec" data-usec/,

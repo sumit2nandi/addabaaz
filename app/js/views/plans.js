@@ -1,6 +1,6 @@
 // Plans and checkout page (#/plans).
 import { app } from '../app.js';
-import { html, fmtDate } from '../util.js';
+import { html, fmtDate, raw } from '../util.js';
 import { icon } from '../icons.js';
 import { sectionHeader, toast } from '../ui/components.js';
 import { confirmDialog } from '../ui/dialog.js';
@@ -75,10 +75,10 @@ function failPopup() {
 /** Full-screen success celebration: confetti + check, dismisses itself or on tap. */
 function celebrate() {
   const colors = ['#f5c518', '#b80000', '#2ecc71', '#ffffff', '#7cb0ff'];
-  const bits = Array.from({ length: 28 }, (_, i) => `<i style="left:${(i * 37) % 100}%;background:${colors[i % colors.length]};animation-delay:${(i % 12) * 0.12}s"></i>`).join('');
+  const bits = Array.from({ length: 28 }, (_, i) => `<i style="left:${(i * 37) % 100}%;background:${colors[i % colors.length]};animation-delay:${((i % 12) * 0.12).toFixed(2)}s"></i>`).join('');
   const d = document.createElement('div');
   d.className = 'celebrate';
-  d.innerHTML = html`<div class="confetti">${bits}</div><div class="cel-box"><div class="cel-check">${icon('check', { size: 46 })}</div><h2>You’re in!</h2><p>Premium unlocked — enjoy ADDABAAZ Plus.</p><button class="btn btn-light" data-cel>Start watching</button></div>`.s;
+  d.innerHTML = html`<div class="confetti">${raw(bits)}</div><div class="cel-box"><div class="cel-check">${icon('check', { size: 46 })}</div><h2>You’re in!</h2><p>Premium unlocked — enjoy ADDABAAZ Plus.</p><button class="btn btn-light" data-cel>Start watching</button></div>`.s;
   document.body.appendChild(d);
   document.body.classList.add('no-scroll');
   const done = () => { d.remove(); document.body.classList.remove('no-scroll'); };
