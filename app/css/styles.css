@@ -404,6 +404,9 @@ img.player-wall-art { position: absolute; inset: 0; z-index: 1; width: 100%; hei
 .crumbs a { display: inline-flex; align-items: center; gap: 2px; color: var(--muted); font-weight: 600; font-size: 13.5px; } .crumbs a:hover { color: var(--gold); }
 .watch-title { font-size: clamp(20px, 3vw, 30px); font-weight: 700; }
 .watch-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+/* The My List / Save video + leads this row as a square icon button: it takes the same height as the
+   labelled buttons beside it, so the row reads as one line of controls. */
+.watch-actions .btn.icon-only { padding: 10px 13px; }
 .watch-desc { color: var(--text-2); max-width: 80ch; } .orig-title summary { cursor: pointer; color: var(--muted); font-size: 13px; } .orig-title p { margin-top: 8px; color: var(--text-2); font-size: 14px; }
 .switch { display: inline-flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: 600; color: var(--text-2); cursor: pointer; } .switch input { position: absolute; opacity: 0; }
 .switch .track { width: 42px; height: 24px; border-radius: 12px; background: var(--panel-3); border: 1px solid var(--border-2); position: relative; transition: .2s; flex: none; } .switch .track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: .2s; }
@@ -568,17 +571,18 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
   .detail-hero .hero-actions > .btn-primary { flex: 0 1 auto; }
   .detail-hero .hero-actions > .btn-lg.icon-only { flex: 0 0 48px; width: 48px; padding: 0; }
 }
-/* Keep the Coming Soon reminder, list and artwork actions together on one row on phones. */
+/* Keep the Coming Soon reminder, My List, artwork and share actions together on one row on phones:
+   the reminder keeps its words, the three icon buttons are equal compact squares beside it. */
 @media (max-width: 759px) {
   .soon-hero-copy { width: 100%; }
-  .soon-hero-actions { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) 48px; gap: 8px; }
-  .soon-hero-actions > .remind-btn, .soon-hero-actions > .list-btn { width: 100%; min-width: 0; gap: 6px; padding: 11px 8px; }
-  .soon-hero-actions > #artBtn { width: 48px; height: 48px; padding: 0; }
+  .soon-hero-actions { display: grid; grid-template-columns: minmax(0,1fr) 48px 48px 48px; gap: 8px; }
+  .soon-hero-actions > .remind-btn { width: 100%; min-width: 0; gap: 6px; padding: 11px 8px; }
+  .soon-hero-actions > #artBtn, .soon-hero-actions > .list-btn, .soon-hero-actions > #shareBtn { width: 48px; height: 48px; padding: 0; }
 }
 @media (max-width: 359px) {
-  .soon-hero-actions { grid-template-columns: minmax(0,1fr) minmax(0,1fr) 48px; gap: 6px; }
-  .soon-hero-actions > .remind-btn, .soon-hero-actions > .list-btn { gap: 5px; padding: 10px 5px; font-size: 13px; }
-  .soon-hero-actions > #artBtn { width: 48px; height: 48px; }
+  .soon-hero-actions { grid-template-columns: minmax(0,1fr) 44px 44px 44px; gap: 6px; }
+  .soon-hero-actions > .remind-btn { gap: 5px; padding: 10px 5px; font-size: 13px; }
+  .soon-hero-actions > #artBtn, .soon-hero-actions > .list-btn, .soon-hero-actions > #shareBtn { width: 44px; height: 44px; }
   .detail-hero .hero-actions { gap: 6px; }
   .detail-hero .hero-actions > .btn-lg { padding: 10px 6px; font-size: 13px; }
   .detail-hero .hero-actions > .btn-lg.icon-only { flex-basis: 44px; width: 44px; }

@@ -33,10 +33,14 @@ export function premiumMark({ cls = '' } = {}) {
 
 /* ---------- state-aware buttons (kept in sync globally by main.js) ---------- */
 // "My List" and "Remind me" buttons render their current state; syncButtons() refreshes every one on the page when the state changes.
-export function listBtn(type, id, { label = 'My List', cls = 'btn btn-ghost', iconOnly = false } = {}) {
+// My List is icon-only everywhere: the + becomes a ✓ in place, and the wording lives in the tooltip and the
+// accessible name. `label` is that wording for the "add" state - the watch page can tell its two buttons
+// apart ("Add show to My List" / "Save video"); it is never drawn as text on the button.
+export function listBtn(type, id, { label = 'Add to My List', cls = 'btn btn-ghost icon-only' } = {}) {
   const on = app.user?.inList(type, id);
-  return html`<button type="button" class="${cls} list-btn ${on ? 'on' : ''}" data-list="${type}:${id}" aria-pressed="${on ? 'true' : 'false'}" aria-label="${iconOnly ? (on ? 'Remove from My List' : 'Add to My List') : ''}" title="${on ? 'Remove from My List' : 'Add to My List'}">
-    <span class="ic-off">${icon('plus', { size: 18 })}</span><span class="ic-on">${icon('check', { size: 18 })}</span>${iconOnly ? '' : html`<span class="lbl">${label}</span>`}</button>`;
+  const name = on ? 'Remove from My List' : label;
+  return html`<button type="button" class="${cls} list-btn ${on ? 'on' : ''}" data-list="${type}:${id}" data-list-add="${label}" aria-pressed="${on ? 'true' : 'false'}" aria-label="${name}" title="${name}">
+    <span class="ic-off">${icon('plus', { size: 18 })}</span><span class="ic-on">${icon('check', { size: 18 })}</span></button>`;
 }
 export function remindBtn(id, { cls = 'btn btn-ghost' } = {}) {
   const on = app.user?.hasReminder(id);
@@ -48,8 +52,10 @@ export function syncButtons(root = document) {
   const u = app.user; if (!u) return;
   root.querySelectorAll('[data-list]').forEach((b) => {
     const [type, ...rest] = b.dataset.list.split(':'); const on = u.inList(type, rest.join(':'));
-    b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); b.title = on ? 'Remove from My List' : 'Add to My List';
-    if (b.hasAttribute('aria-label')) b.setAttribute('aria-label', b.title);
+    b.classList.toggle('on', on); b.setAttribute('aria-pressed', on);
+    // The wording is the button's only label, so keep it (per button) in step with the state.
+    b.title = on ? 'Remove from My List' : (b.dataset.listAdd || 'Add to My List');
+    b.setAttribute('aria-label', b.title);
   });
   root.querySelectorAll('[data-remind]').forEach((b) => {
     const on = u.hasReminder(b.dataset.remind); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on);
@@ -62,7 +68,7 @@ export function syncButtons(root = document) {
 export function showCard(s, { cls = '' } = {}) {
   return html`<a class="card card-poster ${cls}" href="#/show/${s.id}" aria-label="${s.titleEn || s.title}">
     <div class="poster">${img(s.poster, s.title)}${s.access === 'premium' ? premiumMark() : ''}</div>
-    <div class="card-quick">${listBtn('show', s.id, { cls: 'icon-btn', iconOnly: true })}</div>
+    <div class="card-quick">${listBtn('show', s.id, { cls: 'icon-btn' })}</div>
   </a>`;
 }
 // Thumbnail card for an episode/clip: a resume progress bar, Premium mark and optional rank number.

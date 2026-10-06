@@ -61,13 +61,15 @@ test('Coming Soon keeps the artwork expand button beside My List on phones', () 
   assert.ok(actions.indexOf('remindBtn(') < actions.indexOf('listBtn('), 'Remind me remains first');
   assert.ok(actions.indexOf('listBtn(') < actions.indexOf('id="artBtn"'), 'the artwork action follows My List');
   assert.match(soon, /id="shareBtn"/, 'the Share action is preserved');
+  assert.match(actions, /listBtn\('upcoming', u\.id, \{ label: 'Add to My List', cls: 'btn btn-glass btn-lg icon-only' \}\)/,
+    'the Coming Soon My List action is the plus/check icon only');
 
   const css = read('app/css/styles.css');
-  assert.match(css, /\.soon-hero-actions \{ display: grid; grid-template-columns: minmax\(0,1fr\) minmax\(0,1fr\) 48px;/,
-    'mobile Coming Soon actions use two flexible button columns and a fixed artwork-button column');
-  assert.match(css, /\.soon-hero-actions > #artBtn \{ width: 48px; height: 48px; padding: 0; \}/,
-    'the artwork control keeps its compact, fixed size beside My List');
-  assert.match(css, /@media \(max-width: 359px\) \{\n  \.soon-hero-actions \{ grid-template-columns: minmax\(0,1fr\) minmax\(0,1fr\) 48px; gap: 6px; \}/,
+  assert.match(css, /\.soon-hero-actions \{ display: grid; grid-template-columns: minmax\(0,1fr\) 48px 48px 48px;/,
+    'mobile Coming Soon actions use one flexible reminder column and three fixed icon columns');
+  assert.match(css, /\.soon-hero-actions > #artBtn, \.soon-hero-actions > \.list-btn, \.soon-hero-actions > #shareBtn \{ width: 48px; height: 48px; padding: 0; \}/,
+    'the icon controls keep one compact, fixed size beside the reminder');
+  assert.match(css, /@media \(max-width: 359px\) \{\n  \.soon-hero-actions \{ grid-template-columns: minmax\(0,1fr\) 44px 44px 44px; gap: 6px; \}/,
     'the same row adapts for especially narrow phones');
 });
 
@@ -80,7 +82,7 @@ test('show details keep all four hero controls in one row on phones', () => {
   assert.match(actions, /href="#\/watch\/\$\{trailer\.id\}" aria-label="Watch trailer" title="Watch trailer"/,
     'Trailer stays available as an accessible icon-only button');
   assert.doesNotMatch(actions, /\} Trailer<\/a>/, 'the Trailer text is removed');
-  assert.match(actions, /listBtn\('show', s\.id, \{ cls: 'btn btn-glass btn-lg icon-only', iconOnly: true \}\)/,
+  assert.match(actions, /listBtn\('show', s\.id, \{ cls: 'btn btn-glass btn-lg icon-only' \}\)/,
     'the show-page My List action is the accessible plus/check icon only');
   assert.match(show, /id="shareBtn"/, 'Share remains available outside the compact mobile row');
 

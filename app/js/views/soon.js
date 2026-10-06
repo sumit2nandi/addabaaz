@@ -25,7 +25,7 @@ export default async function soon(ctx) {
           <p class="hero-desc">${u.note || 'An upcoming ADDABAAZ original. Release date to be announced.'}</p>
           <div class="hero-actions soon-hero-actions">
             ${remindBtn(u.id, { cls: 'btn btn-primary btn-lg' })}
-            ${listBtn('upcoming', u.id, { cls: 'btn btn-glass btn-lg' })}
+            ${listBtn('upcoming', u.id, { label: 'Add to My List', cls: 'btn btn-glass btn-lg icon-only' })}
             <button type="button" class="btn btn-glass btn-lg icon-only" id="artBtn" aria-label="View the full artwork" title="View the full artwork">${icon('expand', { size: 20 })}</button>
             <button type="button" class="btn btn-glass btn-lg icon-only" id="shareBtn" aria-label="Share">${icon('share', { size: 20 })}</button>
           </div>

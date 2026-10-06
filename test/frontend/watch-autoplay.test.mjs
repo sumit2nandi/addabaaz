@@ -86,7 +86,11 @@ test('watch actions are source-specific for YouTube and R2 videos', async () => 
   assert.equal(r2Actions.querySelector('#castBtn'), null, 'R2 has no Cast action');
   assert.equal(r2Actions.querySelector('[data-list="video:vp"]'), null, 'R2 no longer saves just the episode');
   assert.equal(r2Actions.querySelectorAll('[data-list="show:s1"]').length, 1, 'R2 offers one show-level My List action');
-  assert.match(r2Actions.querySelector('[data-list="show:s1"]').textContent, /Add show to My List/);
+  // No visible wording: the +/✓ icon is the button, and the wording is its accessible name/tooltip.
+  const r2List = r2Actions.querySelector('[data-list="show:s1"]');
+  assert.equal(r2List.textContent.trim(), '', 'the list action carries no text label');
+  assert.equal(r2List.getAttribute('aria-label'), 'Add show to My List', 'the plus button still announces what it saves');
+  assert.equal(r2List.title, 'Add show to My List', 'and shows the same wording as a tooltip');
 
   streamUrlRequests = 0;
   const { ctx: standalone } = await mount('r2-standalone');
