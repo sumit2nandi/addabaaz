@@ -16,7 +16,7 @@ export default async function account(ctx) {
   ctx.setTitle('Account');
   const p = u.profile;
   const plan = u.subscription?.planId || 'free';
-  const link = (href, ic, label, sub = '') => html`<a class="row-link" href="${href}">${typeof ic === 'string' ? icon(ic, { size: 22 }) : ic}<span><b>${label}</b>${sub ? html`<small>${sub}</small>` : ''}</span>${icon('right', { size: 18, cls: 'chev' })}</a>`;
+  const link = (href, ic, label, sub = '') => html`<a class="row-link" href="${href}">${icon(ic, { size: 22 })}<span><b>${label}</b>${sub ? html`<small>${sub}</small>` : ''}</span>${icon('right', { size: 18, cls: 'chev' })}</a>`;
 
   const extras = accountExtras();
   ctx.root.innerHTML = html`<div class="page page-narrow account-page">
@@ -40,7 +40,7 @@ export default async function account(ctx) {
         </div>
       </section>
 
-      ${u.supportsAuth ? html`<section class="account-section"><h2 class="sub-h">Access</h2><div class="card-panel list">${link('#/plans', html`<em class="premium-word">premium</em>`, plan === 'free' ? 'Free access' : html`ADDABAAZ <em class="premium-word">premium</em>`, plan === 'free' ? (isNative ? 'View your account access' : 'Subscribe to watch premium originals') : (u.subscription.expiresAt ? `Active until ${fmtDate(u.subscription.expiresAt)}` : (isNative ? 'View your access' : 'Manage your plan')))}${u.account ? link('#/billing', 'download', 'Billing & invoices', 'GST invoices, credit notes and refunds') : ''}</div></section>` : ''}
+      ${u.supportsAuth ? html`<section class="account-section"><h2 class="sub-h">Access</h2><div class="card-panel list">${link('#/plans', 'crown', plan === 'free' ? 'Free access' : html`ADDABAAZ <em class="premium-word">premium</em>`, plan === 'free' ? (isNative ? 'View your account access' : 'Subscribe to watch premium originals') : (u.subscription.expiresAt ? `Active until ${fmtDate(u.subscription.expiresAt)}` : (isNative ? 'View your access' : 'Manage your plan')))}${u.account ? link('#/billing', 'download', 'Billing & invoices', 'GST invoices, credit notes and refunds') : ''}</div></section>` : ''}
 
       <section class="account-section">
         <h2 class="sub-h">App</h2>

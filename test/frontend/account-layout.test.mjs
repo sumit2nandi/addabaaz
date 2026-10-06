@@ -57,6 +57,4 @@ test('unsubscribed website viewers get a Subscribe banner above the settings gri
     'the banner hugs the top of the page with breathing room above the profile card');
   assert.match(css, /\.pill\.free \{[^}]*color: #fff/,
     'the Free badge is bold white');
-  assert.match(account, /link\('#\/plans', html`<em class="premium-word">premium<\/em>`,/,
-    'the Access row icon is the golden premium word, not a crown');
 });
