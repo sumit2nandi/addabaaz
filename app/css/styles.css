@@ -719,7 +719,7 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .bill { display: grid; gap: 14px; } .bill-item { background: var(--panel); border: 1px solid var(--border-2); border-radius: 16px; padding: 18px 20px; display: grid; gap: 12px; }
 .bill-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; } .bill-head b { font-size: 17px; } .bill-amt { font-size: 20px; font-weight: 800; }
 .bill-docs { display: flex; flex-wrap: wrap; gap: 8px; } .bill-docs .btn { padding: 8px 12px; font-size: 13px; }
-.pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 700; background: #2a2200; color: var(--gold); } .pill.ok { background: #0f2415; color: #7be495; }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 700; background: #2a2200; color: var(--gold); } .pill.ok { background: #0f2415; color: #7be495; } .pill.free { color: #fff; }
 /* The "premium" brand word: italic, bold, glittery gold with a slow shine sweep. The transform/spacing resets keep it lowercase even inside uppercase eyebrows. */
 .premium-word { font-style: italic; font-weight: 800; text-transform: none; letter-spacing: normal; background: linear-gradient(100deg, #7a5200 0%, #d4a017 22%, #ffe9a3 40%, #fffbe8 50%, #ffe9a3 60%, #d4a017 78%, #7a5200 100%); background-size: 220% auto; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 7px rgba(255,200,60,.35)); animation: premium-shine 3.4s linear infinite; }
 @keyframes premium-shine { to { background-position: 220% center; } }
