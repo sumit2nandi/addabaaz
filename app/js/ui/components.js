@@ -12,11 +12,24 @@ import { confirmDialog } from './dialog.js';
 export function img(src, alt = '', { cls = '', lazy = true, fallback, priority = false } = {}) {
   return html`<img class="${cls}" src="${src}" alt="${alt}" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''} ${priority ? raw('fetchpriority="high"') : ''}>`;
 }
+/** The breakpoint at which a banner swaps the poster in for the wide still. Kept here, beside the markup that
+ *  acts on it, so the artwork popup can resolve exactly the picture the banner is showing at this moment. */
+export const HERO_POSTER_MQ = '(max-width: 759px)';
 /** Hero background. Wide screens get the landscape episode thumbnail; phones (portrait, < 760px) get the portrait show poster instead,
  *  because a 16:9 picture cropped into a tall phone screen shows only a thin slice of the middle (faces cut in half). */
 export function heroBg(thumb, poster, { lazy = false, fallback } = {}) {
   const img = html`<img src="${thumb || poster}" alt="" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''}>`;
-  return poster ? html`<picture><source media="(max-width: 759px)" srcset="${poster}">${img}</picture>` : img;
+  return poster ? html`<picture><source media="${HERO_POSTER_MQ}" srcset="${poster}">${img}</picture>` : img;
+}
+/**
+ * Which artwork a `heroBg()` banner is showing right now: 'poster' on phones (the <picture> above swaps it in),
+ * 'backdrop' on wider screens. The details page resolves this on every tap — never once at render time — so the
+ * expand button and a tap on the banner open the picture actually on screen even after a rotation or a resize.
+ * With a single picture (no still yet, or the same file serving as both) either id resolves to that picture.
+ */
+export function bannerArtMode({ poster = '', backdrop = '' } = {}) {
+  if (!backdrop || backdrop === poster) return 'backdrop';
+  return typeof window !== 'undefined' && window.matchMedia?.(HERO_POSTER_MQ)?.matches ? 'poster' : 'backdrop';
 }
 /** Card thumbnail. YouTube's default hqdefault is only 480x360 — upscaled into a card on a 2x phone that
  *  is visibly soft, which reads as "less vibrant" than the same frame on Facebook. So cards ask for

@@ -38,11 +38,14 @@ export default async function soon(ctx) {
     </div>`.s;
   enhanceRails(ctx.root);
   fitPoster(ctx.root);                                   // the poster keeps its own shape (tiny crop at most)
-  // The full artwork popup, from whichever surface the viewer reached for: the poster box, the expand
-  // button, or the banner itself (on a phone the poster box is hidden; the other two stay available).
+  // The full artwork popup, from whichever surface the viewer reached for: the poster box, the expand button,
+  // or the banner itself (on a phone the poster box is hidden; the other two stay available). This banner is a
+  // plain <img> of the title's backdrop — unlike the show page it never swaps in the poster on phones — so its
+  // expand button and a tap on it open exactly what the banner shows: the backdrop. The poster box above opens
+  // the poster, and the popup keeps the poster one swipe away.
   const art = { title: u.titleEn || u.title, poster: u.posterLg || u.poster, backdrop: u.backdrop || u.posterLg || u.poster };
   ctx.root.querySelector('#detailPoster')?.addEventListener('click', () => openArtwork(art, 'poster'));
-  ctx.root.querySelector('#artBtn')?.addEventListener('click', () => openArtwork(art, 'poster'));
+  ctx.root.querySelector('#artBtn')?.addEventListener('click', () => openArtwork(art, 'backdrop'));
   tapArtwork(ctx.root.querySelector('#detailHero'), art);
   ctx.root.querySelector('#shareBtn').addEventListener('click', async () => {
     const r = await shareOrCopy({ title: u.titleEn || u.title, text: 'Coming soon on ADDABAAZ', url: shareUrl('/soon/' + u.id) });

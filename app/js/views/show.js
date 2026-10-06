@@ -3,7 +3,7 @@ import { app } from '../app.js';
 import { go } from '../router.js';
 import { html, $, fmtDate, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
-import { rail, enhanceRails, showCard, videoCard, reelCard, listBtn, img, heroBg, showMeta, premiumMark, toast, fitPoster } from '../ui/components.js';
+import { rail, enhanceRails, showCard, videoCard, reelCard, listBtn, img, heroBg, showMeta, premiumMark, toast, fitPoster, bannerArtMode } from '../ui/components.js';
 import { openArtwork, tapArtwork } from '../ui/lightbox.js';
 import { shareOrCopy } from '../util.js';
 import { shareUrl } from '../platform.js';
@@ -72,12 +72,20 @@ export default async function showView(ctx) {
 
   enhanceRails(ctx.root);
   fitPoster(ctx.root);                                   // whatever shape the artwork is, crop it only a little
-  // The full artwork popup: the poster box, the expand button, or the banner (the latest episode's still,
-  // or the poster when there are no episodes yet) — on a phone the banner is the only one of the three.
-  const art = { title: s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title, poster: s.posterLg || s.poster, backdrop: latest ? cat.thumb(latest, 'maxresdefault') : (s.posterLg || s.poster) };
+  // The full artwork popup. The poster box opens the poster (the picture it shows); the expand button and a
+  // tap on the banner open what the BANNER is showing at that moment — the still on a wide screen, the poster
+  // on a phone, where `heroBg` swaps it in and the poster box is hidden. Both resolve it on every click, so
+  // the two always agree with the artwork on screen. The other picture stays one swipe away in the popup.
+  const art = {
+    title: s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title,
+    poster: s.posterLg || s.poster,
+    backdrop: latest ? cat.thumb(latest, 'maxresdefault') : (s.posterLg || s.poster),
+    backdropFallback: latest ? cat.thumb(latest, 'hqdefault') : '',
+  };
+  const bannerMode = () => bannerArtMode(art);
   $('#detailPoster', ctx.root)?.addEventListener('click', () => openArtwork(art, 'poster'));
-  $('#artBtn', ctx.root)?.addEventListener('click', () => openArtwork(art, 'poster'));
-  tapArtwork($('#detailHero', ctx.root), art);
+  $('#artBtn', ctx.root)?.addEventListener('click', () => openArtwork(art, bannerMode()));
+  tapArtwork($('#detailHero', ctx.root), art, bannerMode);
   let order = 'asc';
   $('#sortEps', ctx.root)?.addEventListener('click', (e) => {
     order = order === 'asc' ? 'desc' : 'asc';

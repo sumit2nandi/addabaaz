@@ -35,17 +35,26 @@ test('the poster box, the expand button and the banner all open the full artwork
     assert.match(view, /id="detailPoster"|#detailPoster'/, `${file}: wired`);
     assert.match(view, /#detailPoster'[^\n]*openArtwork\(art, 'poster'\)/, `${file}: the poster box opens the poster`);
     assert.match(view, /<section class="detail-hero" id="detailHero">/, `${file}: the banner has an id to hang the tap handler on`);
-    assert.match(view, /tapArtwork\(.{0,40}art\);/, `${file}: and tapping the banner opens the artwork`);
     assert.match(view, /id="artBtn" aria-label="View the full artwork"/, `${file}: an expand button remains available`);
-    assert.match(view, /#artBtn'[^\n]*openArtwork\(art, 'poster'\)/, `${file}: the expand button opens the poster`);
+    // The expand button and a tap on the banner open the picture the BANNER is showing (the reported bug: on a
+    // phone they did not agree with it). The show page resolves that per tap, because heroBg swaps the poster
+    // in below 760px; Coming Soon's banner is a plain <img> of the backdrop, so it always opens the backdrop.
+    if (file.endsWith('show.js')) {
+      assert.match(view, /const bannerMode = \(\) => bannerArtMode\(art\);/, `${file}: the banner's current artwork is resolved on each tap`);
+      assert.match(view, /#artBtn'[^\n]*openArtwork\(art, bannerMode\(\)\)/, `${file}: the expand button opens what the banner shows`);
+      assert.match(view, /tapArtwork\(.{0,40}art, bannerMode\);/, `${file}: and so does a tap on the banner`);
+    } else {
+      assert.match(view, /tapArtwork\(.{0,40}art\);/, `${file}: and tapping the banner opens the artwork`);
+      assert.match(view, /#artBtn'[^\n]*openArtwork\(art, 'backdrop'\)/, `${file}: the expand button opens what the banner shows`);
+    }
   }
   // On a phone the poster box is display:none, so the banner remains another easy artwork entry point —
   // but it must never steal clicks from the buttons in the hero or fire when the viewer was selecting text.
   const lightbox = read('app/js/ui/lightbox.js');
-  assert.match(lightbox, /export function tapArtwork\(hero, art\)/, 'tapArtwork exists');
+  assert.match(lightbox, /export function tapArtwork\(hero, art, start = 'backdrop'\)/, 'tapArtwork exists and defaults to the wide still');
   assert.match(lightbox, /if \(e\.target\.closest\('a, button, input, select, textarea, label'\)\) return;/, 'buttons and links keep their own job');
   assert.match(lightbox, /window\.getSelection\?\.\(\)/, 'a text selection is not a tap');
-  assert.match(lightbox, /openArtwork\(art, 'backdrop'\)/, 'and it opens what the banner is showing');
+  assert.match(lightbox, /openArtwork\(art, typeof start === 'function' \? start\(\) : start\)/, 'and it opens what the banner is showing at that moment');
   // The popup itself: a single image has no arrows and no counter; tapping the dark background closes it.
   assert.match(lightbox, /const many = items\.length > 1;/, 'a single image has no arrows');
   assert.match(lightbox, /cap\.textContent = !showCaption \? '' : many \?/, 'gallery counters remain conditional while artwork popups can hide captions');
@@ -174,6 +183,46 @@ test('a tap on the banner really opens the popup (the reported bug)', async () =
   assert.equal(lb.querySelector('figcaption').textContent, '', 'the banner popup has no visible Artwork caption or counter');
   assert.equal(lb.querySelector('figcaption').hidden, true, 'the artwork and poster labels stay hidden in this popup');
   assert.equal(lb.querySelector('.lb-close') !== null, true, 'with a close button');
+});
+
+test('a banner tap on a phone opens the poster the banner is showing, not the wide still', async () => {
+  // Reported from a phone: the expand button and the banner showed different pictures. `heroBg` swaps the
+  // poster in below 760px, so on a phone the banner IS the poster and both entry points must open the poster.
+  const { parseHTML } = await import('linkedom');
+  const { document, window } = parseHTML('<!doctype html><html><body><section id="detailHero"><div class="hero-bg"></div><p id="txt">Laugh Bite</p></section></body></html>');
+  globalThis.window = window; globalThis.document = document;
+  window.location = globalThis.location = { href: 'http://x/show/laugh-bite' };
+  globalThis.history = { pushState() {}, back() {} };
+  globalThis.Image = class { set src(_v) {} };
+  const { tapArtwork } = await import('../../app/js/ui/lightbox.js');
+  const { bannerArtMode, HERO_POSTER_MQ } = await import('../../app/js/ui/components.js');
+  const art = { title: 'Laugh Bite', poster: 'media/shows/laugh-bite-lg.webp', backdrop: 'https://i.ytimg.com/vi/x/maxresdefault.jpg' };
+  // The mode follows the same media query the banner markup uses; the test harness has no layout, so stub it.
+  const phone = () => { window.matchMedia = (q) => ({ matches: q === HERO_POSTER_MQ }); };
+  const desktop = () => { window.matchMedia = () => ({ matches: false }); };
+
+  phone();
+  assert.equal(bannerArtMode(art), 'poster', 'on a phone the banner is showing the poster');
+  tapArtwork(document.getElementById('detailHero'), art, () => bannerArtMode(art));
+  document.getElementById('txt').dispatchEvent(new window.Event('click', { bubbles: true }));
+  const lb = document.querySelector('.lightbox');
+  assert.ok(lb, 'the tap opens the popup');
+  assert.equal(lb.querySelector('img').getAttribute('src'), 'media/shows/laugh-bite-lg.webp', 'and it shows the poster the banner displays');
+  assert.equal(lb.querySelectorAll('.lb-nav').length, 2, 'the wide still is one swipe away');
+  document.querySelector('.lb-close').dispatchEvent(new window.Event('click', { bubbles: true }));
+
+  desktop();
+  assert.equal(bannerArtMode(art), 'backdrop', 'on a wide screen the banner is showing the still');
+  assert.equal(bannerArtMode({ poster: 'p.jpg', backdrop: 'p.jpg' }), 'backdrop', 'a title with one picture needs no choice');
+  assert.equal(bannerArtMode({ poster: 'p.jpg' }), 'backdrop', 'and neither does one with no still at all');
+
+  // The same art object also feeds the popup's fallback: a still without a max-resolution rendition swaps to
+  // the hqdefault YouTube publishes, instead of leaving a broken image (main.js reads data-fb on error).
+  const { artworkItems } = await import('../../app/js/ui/lightbox.js');
+  const items = artworkItems({ poster: 'p.jpg', backdrop: 'max.jpg', backdropFallback: 'hq.jpg' });
+  assert.equal(items[0].fallback, 'hq.jpg', 'the wide still carries its fallback');
+  assert.equal(items[1].fallback, undefined, 'the local poster needs none');
+  assert.equal(artworkItems({ backdrop: 'same.jpg', backdropFallback: 'same.jpg' })[0].fallback, '', 'never the same URL twice');
 });
 
 /* ---------------------------------------------------------------- the gallery */
