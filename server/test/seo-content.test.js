@@ -49,7 +49,9 @@ test('public deletion page and privacy policy disclose retained identity, phone/
   const privacy = legalDoc('privacy', { studio: { name: 'ADDABAAZ' } });
   const text = privacy.sections.flatMap(([, paragraphs]) => paragraphs).join(' ');
   assert.match(text, /MSG91/);
-  assert.match(text, /internal placeholder email derived from the verified number, not a user-supplied email address/);
+  assert.match(text, /SMS-only account keeps an internal placeholder email derived from the verified number until you add and confirm a contact email in Account/);
+  assert.match(text, /one-time link token; the link expires after one hour/);
+  assert.match(text, /pending row is deleted on confirmation or delivery failure/);
   assert.doesNotMatch(text, /add a real (?:email|address).*Account/i);
   assert.match(text, /SMS-code hashes until one day after code expiry/);
   assert.match(text, /pre-deletion copy/);

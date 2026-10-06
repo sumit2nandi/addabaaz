@@ -5,6 +5,7 @@ import { hashPassword, verifyPassword, signToken } from './auth.js';
 import { endpointHash } from './push.js';
 import { FREE_KINDS } from './catalog-schema.js';
 import { normalizeEmail } from './email-address.js';
+import { isPhoneEmail } from './sms.js';
 import * as mail from './emails.js';
 
 // Small shared helpers for this file.
@@ -46,6 +47,8 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
   // failed send is a 503 in every environment — swallowing it is how the site ended up lying to users.
   const MAIL_DOWN = 'We couldn’t send the email right now — please try again in a few minutes.';
   const requireMail = () => { if (process.env.NODE_ENV === 'production' && mailer.provider !== 'smtp') throw new HttpError(503, 'email_not_configured', 'Email delivery isn’t set up on this server yet, so this can’t be sent right now.'); };
+  // Adding a contact address promises a confirmation message, so unlike development-only preview flows it requires real SMTP everywhere.
+  const requireDeliverableMail = () => { if (mailer.provider !== 'smtp') throw new HttpError(503, 'email_not_configured', 'Email delivery isn’t available on this server yet, so we can’t send a confirmation link.'); };
   const sendMailStrict = async (to, built, note) => {
     devLog(note);
     let sent;
@@ -151,6 +154,19 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         if (promos) { const u = await db.users.byId(uid); if (u) promos.qualify(u, { reason: 'verified' }).catch((e) => logger.error('[promos] referral qualification after verification failed:', e)); }
         res.json({ verified: true });
       }));
+      // Redeem a phone-account contact-email link without requiring the user to sign in on the same device.
+      api.post('/auth/email-change/verify', authLimit, wrap(async (req, res) => {
+        const token = req.body?.token;
+        if (typeof token !== 'string' || token.length < 20 || token.length > 200) throw new HttpError(400, 'invalid_token', 'This email confirmation link is invalid or has expired. Sign in and request a new one from Account.');
+        try {
+          const result = await db.emailChanges.confirm(sha256(token));
+          if (!result) throw new HttpError(400, 'invalid_token', 'This email confirmation link is invalid or has expired. Sign in and request a new one from Account.');
+          res.json({ verified: true, email: result.email });
+        } catch (error) {
+          if (isDuplicate(error)) throw new HttpError(409, 'email_taken', 'That email is already connected to another account. Sign in to that account or use a different email address.');
+          throw error;
+        }
+      }));
 
       /* analytics (aggregate counters only — no personal data) */
       // Anonymous play counters for the admin analytics page. Seconds are capped so a client cannot inflate numbers.
@@ -252,6 +268,30 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         if (last && Date.now() - last.getTime() < 60_000) throw new HttpError(429, 'too_soon', 'We just sent one — please wait a minute before asking again.');
         await sendVerification(req.user, { strict: true }); res.status(202).json({ ok: true });
       }));
+      // Phone-verified accounts can add or update a contact address; the current address remains active until the new one is confirmed.
+      api.post('/me/email', authLimit, wrap(async (req, res) => {
+        if (!req.user.phoneVerifiedAt) throw new HttpError(409, 'phone_signin_required', 'Add or update a contact email after verifying a mobile number on this account.');
+        const { email, ok } = normalizeEmail(req.body?.email);
+        if (!ok) throw bad('Enter a valid email address.', 'invalid_email');
+        if (isPhoneEmail(email)) throw bad('Use an email address you can receive mail at.', 'invalid_email');
+        if (!isPhoneEmail(req.user.email) && normalizeEmail(req.user.email).email === email) throw new HttpError(409, 'email_unchanged', 'That address is already confirmed on your account.');
+        const existing = (await db.users.byEmailNorm(email)) || (await db.users.byEmail(email));
+        if (existing && existing.id !== req.user.id) throw new HttpError(409, 'email_taken', 'That email is already connected to another account. Sign in to that account or use a different email address.');
+        const last = await db.emailChanges.lastIssuedAt(req.user.id);
+        if (last && Date.now() - last.getTime() < 60_000) throw new HttpError(429, 'too_soon', 'We just sent a link — please wait a minute before asking again.');
+        requireDeliverableMail();
+        const token = newToken(), tokenHash = sha256(token);
+        const url = `${siteUrl}/verify?emailChange=1&token=${encodeURIComponent(token)}`;
+        const issued = await db.emailChanges.issue(req.user.id, { email, emailNorm: email, tokenHash, ttlMs: HOUR });
+        if (issued === false) throw new HttpError(429, 'too_soon', 'We just sent a link — please wait a minute before asking again.');
+        try {
+          await sendMailStrict(email, mail.phoneAccountEmailVerification({ name: req.user.name, url, supportEmail: cfg.supportEmail }), `phone-account email confirmation for ${req.user.id}: ${url}`);
+        } catch (error) {
+          await db.emailChanges.revoke(req.user.id, tokenHash).catch((revokeError) => logger.error('[email-change] failed to revoke undelivered token:', revokeError));
+          throw error;
+        }
+        res.status(202).json({ ok: true });
+      }));
       // Change password: needs the current one (unless the account was created via Google/Facebook and has none). All other sessions are signed out.
       api.post('/me/password', authLimit, wrap(async (req, res) => {
         const { currentPassword, newPassword } = req.body || {};
@@ -340,14 +380,14 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         if (p.refundedPaise >= p.amountPaise) throw new HttpError(409, 'already_refunded', 'This payment has already been refunded.');
         const days = (Date.now() - Date.parse(p.paidAt)) / 86_400_000;
         if (!(cfg.refundWindowDays > 0) || days > cfg.refundWindowDays) throw new HttpError(409, 'outside_window', cfg.refundWindowDays > 0 ? `Refunds can be requested within ${cfg.refundWindowDays} days of purchase. Please contact us if you need help.` : 'Refund requests are turned off. Please contact us.');
-        if (await db.refundRequests.pendingFor(p.id)) throw new HttpError(409, 'already_requested', 'You already asked for a refund on this payment — we’ll email you the outcome.');
+        if (await db.refundRequests.pendingFor(p.id)) throw new HttpError(409, 'already_requested', isPhoneEmail(req.user.email) ? 'You already asked for a refund on this payment — check Billing for updates.' : 'You already asked for a refund on this payment — we’ll email you the outcome.');
         const reason = String(req.body?.reason || '').replace(/\s+/g, ' ').trim().slice(0, 500);
         const id = crypto.randomUUID();
         await db.refundRequests.create({ id, paymentId: p.id, userId: req.user.id, reason });
         const planName = plans.find((x) => x.id === p.planId)?.name || p.planId;
         const support = cfg.supportEmail;
         if (support) sendMail(support, mail.refundRequestEmail({ email: req.user.email, amountPaise: p.amountPaise, planName, paidAt: p.paidAt, reason, siteUrl }), `refund request from ${req.user.email}`);
-        sendMail(req.user.email, mail.refundRequestReceivedEmail({ name: req.user.name, planName, amountPaise: p.amountPaise, supportEmail: support || '' }), `refund request received for ${req.user.email}`);
+        if (!isPhoneEmail(req.user.email)) sendMail(req.user.email, mail.refundRequestReceivedEmail({ name: req.user.name, planName, amountPaise: p.amountPaise, supportEmail: support || '' }), `refund request received for ${req.user.email}`);
         res.status(201).json({ request: { id, status: 'pending' } });
       }));
       api.get('/refund-requests', wrap(async (req, res) => res.json({ requests: await db.refundRequests.forUser(req.user.id), windowDays: cfg.refundWindowDays })));

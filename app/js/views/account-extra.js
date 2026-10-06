@@ -109,10 +109,24 @@ export function accountExtras() {
   }
   const verified = acc.emailVerified !== false;
   const banner = verified ? '' : html`<section class="card-panel notice" id="verifyBanner"><div>${icon('mail', { size: 22 })}</div><div><b>Confirm your email</b><p class="muted">We sent a link to ${acc.email}. Confirming your email lets you buy a plan.</p></div><button class="btn btn-primary" id="resendVerify">Resend link</button></section>`;
-  const signInMethod = acc.emailIsPlaceholder
-    ? html`<div class="row-link static">${icon('phone', { size: 22 })}<span><b>SMS sign-in</b><small>Use your verified mobile number and one-time code to sign in.</small></span></div>`
+  const signInMethod = acc.phoneVerified
+    ? html`<div class="row-link static">${icon('phone', { size: 22 })}<span><b>SMS sign-in</b><small>Use your verified mobile number and one-time code to sign in.</small></span></div>
+        ${acc.emailIsPlaceholder ? '' : row('chgPw', 'lock', acc.hasPassword === false ? 'Set a password' : 'Change password', acc.hasPassword === false ? 'Add a password to also sign in with your confirmed email.' : 'Signs you out on your other devices.')}`
     : row('chgPw', 'lock', acc.hasPassword === false ? 'Set a password' : 'Change password', acc.hasPassword === false ? 'You signed up with a social account — add a password too.' : 'Signs you out on your other devices.');
+  const contactEmail = acc.phoneVerified ? html`
+    <section class="account-section">
+      <h2 class="sub-h">${acc.emailIsPlaceholder ? 'Contact email' : 'Update contact email'}</h2>
+      <div class="card-panel">
+        <p class="muted">${acc.emailIsPlaceholder ? 'Add an email address you can access. We’ll send a one-time confirmation link. Your SMS sign-in stays the same, and this address won’t be used for billing or account emails until you confirm it.' : 'You can replace your confirmed contact email. Your current address remains active for account and billing emails until you confirm the replacement; SMS sign-in stays the same.'}</p>
+        <form class="form" id="contactEmailForm" novalidate>
+          <label>Email address<input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"></label>
+          <div class="form-status" id="contactEmailStatus" role="status" aria-live="polite"></div>
+          <button class="btn btn-primary" type="submit">${acc.emailIsPlaceholder ? 'Send confirmation link' : 'Send email-change link'}</button>
+        </form>
+      </div>
+    </section>` : '';
   const sections = html`
+    ${contactEmail}
     <section class="account-section">
       <h2 class="sub-h">Security</h2>
       <div class="card-panel list">
@@ -138,12 +152,24 @@ export function accountExtras() {
 
   const wire = (root, ctx) => {
     $('#resendVerify', root)?.addEventListener('click', async (e) => { e.target.disabled = true; try { await u.remote.resendVerification(); toast('Sent — check your inbox.'); } catch (err) { toast(friendly(err)); e.target.disabled = false; } });
+    $('#contactEmailForm', root)?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = $('input[name="email"]', e.currentTarget), status = $('#contactEmailStatus', root), button = e.currentTarget.querySelector('button[type="submit"]');
+      const email = String(input?.value || '').trim();
+      if (!email) { status.textContent = 'Enter an email address you can access.'; input?.focus(); return; }
+      button.disabled = true; status.textContent = '';
+      try {
+        await u.remote.requestAccountEmail(email);
+        status.textContent = acc.emailIsPlaceholder ? `Confirmation email sent to ${email}. Billing and account emails will use it only after you confirm the link.` : `Confirmation email sent to ${email}. Your current verified address stays active until you confirm the replacement.`;
+      } catch (err) { status.textContent = friendly(err); }
+      finally { button.disabled = false; }
+    });
     $('#consentBtn', root)?.addEventListener('click', openConsentDialog);
     $('#supportBtn', root)?.addEventListener('click', () => { location.hash = '#/support'; });
 
     $('#chgPw', root)?.addEventListener('click', () => {
       if (acc.hasPassword === false) {
-        openDialog(html`<h2>Set a password</h2><p class="muted">We’ll email <b>${acc.email}</b> a link to choose a password. You can keep using your social sign-in too.</p><div class="row end"><button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" id="sendLink">Email me the link</button></div>`, { cls: 'dialog-sm' })
+        openDialog(html`<h2>Set a password</h2><p class="muted">We’ll email <b>${acc.email}</b> a link to choose a password. ${acc.phoneVerified ? 'You can keep signing in by SMS too.' : 'You can keep using your social sign-in too.'}</p><div class="row end"><button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" id="sendLink">Email me the link</button></div>`, { cls: 'dialog-sm' })
           .el.querySelector('#sendLink').onclick = async (e) => { e.target.disabled = true; try { await u.remote.forgotPassword(acc.email); toast('Link sent — check your inbox.'); e.target.closest('dialog').close(); } catch (err) { toast(friendly(err)); e.target.disabled = false; } };
         return;
       }

@@ -2,7 +2,7 @@ import { HttpError, bad, wrap } from './http.js';
 import * as mail from './emails.js';
 import { TICKET_CATEGORIES, emailTemplates } from './routes/support.js';
 import { notificationPayload } from './push.js';
-import { normalizePhone, generateOtp, maskPhone } from './sms.js';
+import { normalizePhone, generateOtp, maskPhone, isPhoneEmail } from './sms.js';
 
 // Reads `limit` / `offset` from the query string.
 const asPage = (req, dflt = 50, max = 200) => ({ limit: Math.min(Math.max(Number(req.query.limit) || dflt, 1), max), offset: Math.max(Number(req.query.offset) || 0, 0) });
@@ -104,7 +104,7 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
     const r = await requestOr404(req.params.id), note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 300) : '';
     if (!(await db.refundRequests.decide(r.id, 'declined', req.admin.email, note))) throw new HttpError(409, 'already_decided', `This request was already ${r.status === 'pending' ? 'decided' : r.status}.`);
     const [user, pay] = await Promise.all([db.users.byId(r.userId), db.payments.byId(r.paymentId)]);
-    if (user && mailer?.provider === 'smtp') mailer.send({ to: user.email, ...mail.refundDeclinedEmail({ name: user.name, planName: pay?.planId || 'your plan', note, supportEmail: billing.config.supportEmail, siteUrl }) }).catch((e) => logger.warn('[refund] decline e-mail failed:', e));
+    if (user && !isPhoneEmail(user.email) && mailer?.provider === 'smtp') mailer.send({ to: user.email, ...mail.refundDeclinedEmail({ name: user.name, planName: pay?.planId || 'your plan', note, supportEmail: billing.config.supportEmail, siteUrl }) }).catch((e) => logger.warn('[refund] decline e-mail failed:', e));
     await log(req, 'refund_request.decline', r.id, { paymentId: r.paymentId, note });
     res.sendStatus(204);
   }));

@@ -22,7 +22,7 @@ export async function runScheduledJobs({ db, catalog, push, campaigns = null, pr
     // Send scheduled push notifications (new episodes, launches) if push is configured.
     if (push?.configured || push?.nativeConfigured) Object.assign(out, await push.runAutomatic(snap.catalog));
     // Purge expired tokens, stale playback/push records, old diagnostics and one-year-old support, contact and campaign records.
-    await Promise.all([db.authTokens.purge(), db.phoneOtps?.purge?.(), db.playback.purge(), db.errors.prune(), db.push.pruneSent(), db.devices.purge(), db.tickets?.prune?.(), db.messages?.prune?.(), db.campaigns.prune()]);
+    await Promise.all([db.authTokens.purge(), db.emailChanges?.purge?.(), db.phoneOtps?.purge?.(), db.playback.purge(), db.errors.prune(), db.push.pruneSent(), db.devices.purge(), db.tickets?.prune?.(), db.messages?.prune?.(), db.campaigns.prune()]);
     // Continue broadcasts a deploy or crash interrupted.
     out.campaigns = await (campaigns?.resume({ resolveAudience: audienceResolver(snap.catalog) }) ?? 0);
     // Promotions: expire credit whose time ran out and hand back credit held by abandoned orders.

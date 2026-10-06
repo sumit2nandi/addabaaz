@@ -19,7 +19,7 @@ export default async function account(ctx) {
   const identity = u.account
     ? u.account.emailIsPlaceholder
       ? `SMS sign-in${u.account.phone ? ` · +${u.account.phone}` : ''}`
-      : u.account.email + (u.account.providers?.length ? ' · ' + u.account.providers.map((x) => ({ google: 'Google', facebook: 'Facebook', apple: 'Apple' }[x] || x)).join(' & ') + ' sign-in' : '')
+      : [u.account.email, u.account.phoneVerified ? `SMS sign-in${u.account.phone ? ` · +${u.account.phone}` : ''}` : '', u.account.providers?.length ? u.account.providers.map((x) => ({ google: 'Google', facebook: 'Facebook', apple: 'Apple' }[x] || x)).join(' & ') + ' sign-in' : ''].filter(Boolean).join(' · ')
     : u.supportsAuth ? 'Browsing as a guest — sign in to sync across devices.' : 'Your list and progress are saved on this device.';
   const link = (href, ic, label, sub = '') => html`<a class="row-link" href="${href}">${icon(ic, { size: 22 })}<span><b>${label}</b>${sub ? html`<small>${sub}</small>` : ''}</span>${icon('right', { size: 18, cls: 'chev' })}</a>`;
 

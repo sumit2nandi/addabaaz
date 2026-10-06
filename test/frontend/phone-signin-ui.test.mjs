@@ -47,9 +47,13 @@ test('phone sign-in talks to the OTP endpoints through the data layer', () => {
   assert.match(read('server/src/routes/auth.js'), /otp: !!sms\?\.configured && sms\.provider !== 'none'/, 'and reports whether it is on');
 });
 
-test('phone-only accounts do not expose the internal placeholder as an inbox or offer email-password recovery', () => {
+test('phone accounts keep SMS sign-in and never expose the internal placeholder as an inbox', () => {
   assert.match(account, /emailIsPlaceholder\s*\n\s*\? `SMS sign-in/);
-  assert.match(accountExtras, /const signInMethod = acc\.emailIsPlaceholder[\s\S]*?SMS sign-in[\s\S]*?verified mobile number and one-time code/);
+  assert.match(accountExtras, /const signInMethod = acc\.phoneVerified[\s\S]*?SMS sign-in[\s\S]*?verified mobile number and one-time code/);
+  assert.match(accountExtras, /acc\.emailIsPlaceholder \? '' : row\('chgPw'/,
+    'email/password sign-in becomes available only after a contact email has been confirmed');
+  assert.match(accountExtras, /acc\.phoneVerified \? 'You can keep signing in by SMS too\.'/,
+    'setting a password after adding email does not imply that SMS sign-in was removed');
   assert.match(support, /Enter a separate e-mail address below so we can reply to your ticket/);
   assert.doesNotMatch(support, /Replies go to your mobile number’s account/);
 });

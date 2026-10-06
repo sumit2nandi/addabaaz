@@ -40,9 +40,7 @@ test('phone-only accounts persist their required placeholder email and normalize
   assert.match(statements[0].sql, /email_norm, name, phone, phone_verified_at/);
   assert.deepEqual(statements[0].params, [user.id, user.email, user.email, user.name, user.phone]);
   assert.doesNotMatch(statements[0].sql, /VALUES \(\?,NULL/);
-  await store.phones.setEmail(user.id, 'ram@example.com', 'ram@example.com');
-  assert.match(statements[2].sql, /email LIKE '%@phone\.addabaaz\.in'/, 'only the internal phone placeholder is replaceable');
-  assert.deepEqual(statements[2].params, ['ram@example.com', 'ram@example.com', user.id]);
+  assert.equal(store.phones.setEmail, undefined, 'phone-account addresses can change only through the confirmation-token transaction');
 });
 
 test('the masked form shown to admins hides the middle of the number', () => {

@@ -27,6 +27,54 @@ export function extraDb({ q, tx, iso }) {
     async purge() { await q('DELETE FROM auth_tokens WHERE expires_at < UTC_TIMESTAMP(3) - INTERVAL 7 DAY'); },
   };
 
+  // ---- Verified contact e-mail for phone-verified accounts; the address is promoted only after the token is redeemed ----
+  const emailChanges = {
+    /** Issues a one-hour confirmation link, invalidating an earlier pending request for this account. */
+    async issue(userId, { email, emailNorm, tokenHash, ttlMs }) {
+      return tx(async (t) => {
+        // The conditional update both serializes concurrent requests and preserves the one-minute cooldown after a token is redeemed.
+        const gate = await t.query('UPDATE users SET email_change_requested_at = UTC_TIMESTAMP(3) WHERE id = ? AND (email_change_requested_at IS NULL OR email_change_requested_at <= UTC_TIMESTAMP(3) - INTERVAL 60 SECOND)', [userId]);
+        if (gate.affectedRows !== 1) return false;
+        await t.query('DELETE FROM email_change_tokens WHERE user_id = ?', [userId]);
+        await t.query('INSERT INTO email_change_tokens (token_hash, user_id, email, email_norm, expires_at) VALUES (?,?,?,?,?)',
+          [tokenHash, userId, email, emailNorm, new Date(Date.now() + ttlMs)]);
+        return true;
+      });
+    },
+    /** Cooldown timestamp used to avoid sending multiple verification messages per minute. */
+    async lastIssuedAt(userId) { const r = (await q('SELECT email_change_requested_at AS at FROM users WHERE id = ?', [userId]))[0]; return r?.at ? new Date(r.at) : null; },
+    /** If mail delivery fails, remove the unusable request and release its cooldown if it is still the latest one. */
+    async revoke(userId, tokenHash) {
+      await tx(async (t) => {
+        await t.query('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId]);
+        const removed = await t.query('DELETE FROM email_change_tokens WHERE user_id = ? AND token_hash = ?', [userId, tokenHash]);
+        if (removed.affectedRows !== 1) return;
+        const previous = (await t.query('SELECT MAX(created_at) AS at FROM email_change_tokens WHERE user_id = ?', [userId]))[0]?.at || null;
+        await t.query('UPDATE users SET email_change_requested_at = ? WHERE id = ?', [previous, userId]);
+      });
+    },
+    /** Atomically consume a valid link and promote its address; duplicate addresses roll back and remain retryable. */
+    async confirm(tokenHash) {
+      return tx(async (t) => {
+        // Use the same lock order as issue(): user row first, then pending token, avoiding a resend/confirm deadlock.
+        const hint = (await t.query('SELECT user_id FROM email_change_tokens WHERE token_hash = ? AND expires_at > UTC_TIMESTAMP(3)', [tokenHash]))[0];
+        if (!hint || !(await t.query('SELECT id FROM users WHERE id = ? FOR UPDATE', [hint.user_id]))[0]) return null;
+        const row = (await t.query('SELECT user_id, email, email_norm FROM email_change_tokens WHERE token_hash = ? AND expires_at > UTC_TIMESTAMP(3) FOR UPDATE', [tokenHash]))[0];
+        if (!row) return null;
+        const updated = await t.query('UPDATE users SET email = ?, email_norm = ?, email_verified_at = UTC_TIMESTAMP(3) WHERE id = ? AND phone_verified_at IS NOT NULL',
+          [row.email, row.email_norm, row.user_id]);
+        // Once redeemed (or no longer applicable), remove the pending address and hash in this same transaction.
+        await t.query('DELETE FROM email_change_tokens WHERE token_hash = ?', [tokenHash]);
+        return updated.affectedRows === 1 ? { userId: row.user_id, email: row.email } : null;
+      });
+    },
+    /** Purge expired pending addresses and the request timestamp after a short cleanup grace period. */
+    async purge() {
+      await q('DELETE FROM email_change_tokens WHERE expires_at < UTC_TIMESTAMP(3) - INTERVAL 1 DAY');
+      await q('UPDATE users SET email_change_requested_at = NULL WHERE email_change_requested_at < UTC_TIMESTAMP(3) - INTERVAL 1 DAY');
+    },
+  };
+
   // ---- Account security: password changes, session invalidation, e-mail verification, parental PIN ----
   const accounts = {
     /** New password: every older session token stops working (session_version + 1); a reset link also proves the email is real. */
@@ -287,7 +335,6 @@ export function extraDb({ q, tx, iso }) {
       });
     },
     /** Persistence guard for replacing the internal placeholder if a verified email-update flow is added. */
-    async setEmail(userId, email, emailNorm) { await q("UPDATE users SET email = ?, email_norm = ? WHERE id = ? AND email LIKE '%@phone.addabaaz.in'", [email, emailNorm, userId]); },
   };
 
   // ---- Support tickets (the Support page → Admin → Support) ----
@@ -776,5 +823,5 @@ export function extraDb({ q, tx, iso }) {
     async prune() { await q("DELETE FROM campaigns WHERE finished_at IS NOT NULL AND finished_at < UTC_TIMESTAMP(3) - INTERVAL 365 DAY"); },
   };
 
-  return { authTokens, accounts, ratings, push, devices, campaigns, playback, playStats, refundRequests, tickets, phoneOtps, phones, settings, errors, credits, referrals };
+  return { authTokens, emailChanges, accounts, ratings, push, devices, campaigns, playback, playStats, refundRequests, tickets, phoneOtps, phones, settings, errors, credits, referrals };
 }
