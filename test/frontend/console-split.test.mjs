@@ -128,8 +128,11 @@ test('a broadcast can be previewed, and images go out with it', () => {
 test('the native build never offers a purchase (store policy)', () => {
   const plans = read('app/js/views/plans.js');
   assert.match(plans, /const canBuy = !isNative && payments\.provider !== 'none'/, 'buying is impossible in the apps');
-  assert.match(plans, /Plans are managed on the ADDABAAZ website\. Once you’ve subscribed with this account, premium videos unlock here automatically\./, 'the app explains where plans come from');
-  assert.match(plans, /Subscriptions are bought on the ADDABAAZ website, never inside this app/, 'and the price note says the same');
+  assert.match(plans, /This app does not offer purchases or payment links/, 'the app clearly says that purchases are unavailable');
+  assert.match(plans, /Memberships and payments are managed separately on the ADDABAAZ website/, 'the app neutrally explains where an existing membership is managed');
+  assert.match(plans, /No purchase can be started or completed in this app/, 'the native footer cannot be mistaken for an in-app checkout');
+  assert.match(plans, /!isNative \? html`<div class="price">/, 'native plan cards do not advertise prices');
+  assert.match(plans, /!isNative && creditPaise > 0/, 'native screens do not advertise checkout credit');
   assert.equal(/Razorpay<\/a>/.test(plans.replace(/\$\{isNative[\s\S]*?\}/, '')), false, 'the provider name is kept out of the native copy');
   assert.match(read('docs/PAYMENTS.md'), /store-policy|Google Play Payments and App Store guideline 3\.1\.1/, 'the reasoning is documented');
   assert.match(mobile, /startConsole/, 'the studio boots through the shared shell (no purchase UI anywhere in it)');

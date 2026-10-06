@@ -6,7 +6,7 @@ import { icon } from '../icons.js';
 import { avatar, toast, sectionHeader, confirmSignOut } from '../ui/components.js';
 import { confirmDialog } from '../ui/dialog.js';
 import { go } from '../router.js';
-import { platform } from '../platform.js';
+import { isNative, platform } from '../platform.js';
 import { accountExtras } from './account-extra.js';
 import { friendly } from '../errors.js';
 
@@ -45,7 +45,7 @@ export default async function account(ctx) {
         </div>
       </section>
 
-      ${u.supportsAuth ? html`<section class="account-section"><h2 class="sub-h">Subscription</h2><div class="card-panel list">${link('#/plans', 'crown', plan === 'free' ? 'Free plan' : 'ADDABAAZ Plus', plan === 'free' ? 'Subscribe to watch premium originals' : (u.subscription.expiresAt ? `Active until ${fmtDate(u.subscription.expiresAt)}` : 'Manage your plan'))}${u.account ? link('#/billing', 'download', 'Billing & invoices', 'GST invoices, credit notes and refunds') : ''}</div></section>` : ''}
+      ${u.supportsAuth ? html`<section class="account-section"><h2 class="sub-h">Access</h2><div class="card-panel list">${link('#/plans', 'crown', plan === 'free' ? 'Free access' : 'ADDABAAZ Plus', plan === 'free' ? (isNative ? 'View your account access' : 'Subscribe to watch premium originals') : (u.subscription.expiresAt ? `Active until ${fmtDate(u.subscription.expiresAt)}` : (isNative ? 'View your access' : 'Manage your plan')))}${u.account ? link('#/billing', 'download', 'Billing & invoices', 'GST invoices, credit notes and refunds') : ''}</div></section>` : ''}
 
       <section class="account-section">
         <h2 class="sub-h">Explore</h2>
