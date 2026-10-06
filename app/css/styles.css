@@ -692,19 +692,19 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .btn-social.btn-facebook { background: #1877f2; border-color: #1877f2; }
 .or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; letter-spacing: .6px; text-transform: uppercase; }
 .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--border-2); }
-.premium-mark { position: absolute; z-index: 6; top: 8px; left: 8px; display: inline-flex; align-items: center; padding: 3px 11px 4px; border: 1px solid rgba(245,217,147,.45); border-radius: 999px; background: rgba(10,8,4,.62); box-shadow: 0 4px 14px rgba(0,0,0,.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-size: 12.5px; line-height: 1.25; pointer-events: none; transition: opacity .25s ease, transform .25s ease, visibility 0s linear 0s; }
-/* A page can wear dozens of marks: keep the gold gradient but skip the shine sweep on each one. */
-.premium-mark .premium-word { animation: none; }
-.premium-mark-compact { top: 4px; left: 4px; padding: 2px 8px 3px; font-size: 11px; }
-.premium-mark-hero { top: calc(var(--topbar-h) + var(--sat) + 16px); left: var(--pad); padding: 4px 13px 5px; font-size: 14px; }
+.premium-mark { position: absolute; z-index: 6; top: 8px; left: 8px; font-size: 12.5px; line-height: 1.25; pointer-events: none; transition: opacity .25s ease, transform .25s ease, visibility 0s linear 0s; }
+/* Bare text over artwork: no capsule — a dark halo keeps the gold readable on bright posters, and the shine sweep stays on. */
+.premium-mark .premium-word { filter: drop-shadow(0 1px 3px rgba(0,0,0,.85)) drop-shadow(0 0 8px rgba(255,200,60,.4)); }
+.premium-mark-compact { top: 4px; left: 4px; font-size: 11px; }
+.premium-mark-hero { top: calc(var(--topbar-h) + var(--sat) + 16px); left: var(--pad); font-size: 14px; }
 .premium-mark-player { top: 12px; left: 12px; font-size: 13.5px; }
 /* The premium word marks premium video but never covers it while it plays: hidden during playback (watch page: .is-playing set from the player's
    state; Reels: the active reel that is not paused) and back whenever the video is paused, ended or failed. */
 .player-box.is-playing .premium-mark, .reel.playing:not(.paused) .premium-mark { opacity: 0; transform: scale(.85); visibility: hidden; transition: opacity .25s ease, transform .25s ease, visibility 0s linear .25s; }
 /* Other things that live in the top-left corner make room for the premium word. */
-.chip-label.chip-after-mark { left: 96px; top: 10px; }
-.player-box.has-premium .unmute-pill { left: 104px; }
-.reel-frame.has-premium .unmute-pill { left: 95px; }
+.chip-label.chip-after-mark { left: 68px; top: 6px; }
+.player-box.has-premium .unmute-pill { left: 76px; }
+.reel-frame.has-premium .unmute-pill { left: 68px; }
 .player-overlay .row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 6px; }
 
 /* ---------- checkout dialog & billing history ---------- */
