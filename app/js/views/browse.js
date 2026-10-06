@@ -2,7 +2,7 @@
 import { app } from '../app.js';
 import { replaceUrl } from '../router.js';
 import { html, $ } from '../util.js';
-import { showCard, videoCard, sectionHeader, showMeta, emptyState } from '../ui/components.js';
+import { showCard, videoCard, showMeta, emptyState } from '../ui/components.js';
 
 // How many episode cards to show per "Load more".
 const PAGE = 24;
@@ -12,7 +12,6 @@ export default async function browse(ctx) {
   ctx.setTitle('Shows & Episodes');
   ctx.root.innerHTML = html`
     <div class="page">
-      ${sectionHeader({ tag: 'Browse', title: 'Shows & Episodes', subtitle: 'Every ADDABAAZ original in one place.' })}
       <section aria-labelledby="showsHeading">
         <h2 class="sub-h" id="showsHeading">Shows</h2>
         <div class="filters" id="showFilters"></div>
