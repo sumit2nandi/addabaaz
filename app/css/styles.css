@@ -671,17 +671,19 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 
 /* ---------- accounts, legal, consent, engagement (v2.6) ---------- */
 .linklike { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; opacity: .85; } .linklike:hover { opacity: 1; }
-/* "Forgot password?" tucks up under the password field (the negative top margin) and then needs real air
-   before the primary button. Two things ate the gap that a plain 16px row would give: the link and "Sign in"
-   read as one block, and the button's red glow (`box-shadow` blur) bleeds a few pixels further up. 20px of
-   the link's own margin makes the break 36px in total, while the signup form — which has no forgot link —
-   keeps the ordinary spacing. */
-.forgot-link { justify-self: end; margin: -6px 0 20px; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; } .forgot-link:hover { color: #fff; }
-/* …and a submit button has to sit exactly between that link and "New to ADDABAAZ? Create an account": the
-   same 36px of air below it (20px of its own margin + the form's 16px row gap) as the link leaves above it.
-   The empty alert row (`#as`) used to add a *second* 16px gap down there, which pushed the switch line 32px
-   away and made the button read as glued to the link above. Alerts still show; empty ones take no space —
-   which is why every submit on the card (email sign-in, send code, verify code) carries the 20px itself. */
+/* The e-mail and mobile panes are plain block containers in the markup, and nothing gave their children any
+   spacing at all: the two field labels sat flush against each other, and "Forgot password?" — an inline <a> —
+   had no margin box whatsoever (vertical margins do not apply to inline boxes), which is why making that
+   margin bigger changed nothing on screen. Making each pane a grid gives every row the form's own 16px
+   rhythm and turns the link into a real grid item, right-aligned by `justify-self`. */
+#af #emailPane, #af #otpPane, #af #otpPhoneStep, #af #otpCodeStep { display: grid; gap: 16px; align-content: start; }
+/* "Forgot password?" keeps the pane's 16px above it and adds 20px of its own below, so the primary button
+   sits exactly between the link and "New to ADDABAAZ? Create an account": 36px above it, and 36px below it
+   (20px on the button itself plus the same 16px row gap). The empty alert row (`#as`) used to add a *second*
+   16px gap down there, which pushed the switch line away and made the button read as glued to the link.
+   Alerts still show; empty ones take no space — which is why every submit on the card (email sign-in, send
+   code, verify code) carries the 20px itself. */
+.forgot-link { justify-self: end; margin: 0 0 20px; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; } .forgot-link:hover { color: #fff; }
 #af .form-status:empty { display: none; }
 #af #asub, #af #otpSend, #af #otpVerify { margin: 0 0 20px; }
 .fine { font-size: 12.5px; color: var(--muted); text-align: center; line-height: 1.5; } .fine a { color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; }
