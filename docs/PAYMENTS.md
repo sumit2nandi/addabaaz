@@ -76,8 +76,10 @@ the same payment id can arrive twice without granting two plans.
 
 * **Plans** (`/plans`): one ADDABAAZ Plus card with Monthly/Yearly duration tiles (per-month hint on
   yearly), prices in INR incl. GST, and a single Pay button (*Pay ₹X*, *Extend ₹X* or *Switch to ₹X*
-  depending on the account). The checkout dialog adds the coupon field and the GSTIN field for business
-  invoices.
+  depending on the account). An Apply Coupon link under the button opens the coupon popup (the button
+  then shows the struck-through price); GST billing details are only asked when the server has GST
+  enabled. Cancelling the payment window shows a retry screen; a successful payment shows a
+  full-screen celebration.
 * **Billing** (`/billing`): every payment with its tax invoice / receipt PDF, credit notes for refunds, an
   “Email me the invoice” button and a self-service refund request inside `REFUND_WINDOW_DAYS`.
 * **Account**: plan status, expiry date, devices, and how to cancel (there is no auto-renewal: a plan simply

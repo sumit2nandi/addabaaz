@@ -28,6 +28,30 @@ test('website checkout is one Plus card with duration tiles and a single pay but
     'the current-plan tile gets its own color');
 });
 
+test('buying skips straight to payment: coupon popup, cancel screen, celebration', () => {
+  const plans = read('app/js/views/plans.js');
+  const css = read('app/css/styles.css');
+
+  assert.match(plans, /data-coupon>Apply Coupon<\//,
+    'a small Apply Coupon link sits under the pay button');
+  assert.match(plans, /<h2>Apply Coupon<\/h2>/,
+    '...opening a coupon popup');
+  assert.match(plans, /<s>\$\{inr\(pr\.listPaise\)\}<\/s>/,
+    'a discount strikes through the original price on the pay button');
+  assert.match(plans, /<h2>Payment Failed<\/h2>.*Retry Payment.*View Plans/,
+    'cancelling shows the retry/view-plans screen');
+  assert.match(plans, /d\.className = 'celebrate'/,
+    'success shows a full-screen celebration');
+  assert.match(plans, /data-cel>Start watching<\//,
+    '...with a way forward');
+  assert.match(plans, /name="usec" data-usec/,
+    'credit is a checkbox on the page, not in a dialog');
+  assert.match(css, /\.celebrate \{[^}]*position: fixed/,
+    'the celebration covers the screen');
+  assert.match(css, /@keyframes confFall/,
+    'confetti falls');
+});
+
 test('read-only plan cards stay for native apps and payment-less servers', () => {
   const plans = read('app/js/views/plans.js');
 

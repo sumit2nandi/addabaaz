@@ -572,6 +572,29 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .dur .dur-tag + .dur-tag { top: auto; bottom: -10px; }
 .paybar { margin-top: 16px; border-radius: 999px; }
 .free-line { margin-top: 12px; text-align: center; color: var(--muted); font-size: 13px; }
+/* Plans purchase extras: credit row, coupon link/line, cancel screen, success celebration. */
+.credit-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 14px; color: var(--text-2); cursor: pointer; }
+.credit-row input { width: 18px; height: 18px; accent-color: var(--accent-2); flex: none; }
+.coupon-link { display: block; margin: 10px auto 0; font-size: 13.5px; color: var(--gold); }
+.coupon-line { margin-top: 10px; text-align: center; font-size: 13.5px; color: var(--text-2); }
+.coupon-line b { color: var(--gold); } .coupon-line .linklike { color: var(--muted); font-size: 13px; }
+.paybar s { opacity: .65; font-weight: 500; margin-right: 6px; }
+.btn-outline { background: transparent; border: 1px solid rgba(255,255,255,.5); color: #fff; border-radius: 999px; }
+.btn-outline:hover { border-color: #fff; }
+.dlg-fail .dlg-body { text-align: center; padding: 32px 24px 28px; }
+.dlg-fail h2 { font-size: 22px; }
+.fail-x { width: 64px; height: 64px; margin: 0 auto 16px; border-radius: 50%; background: rgba(255,255,255,.14); display: grid; place-items: center; color: #fff; }
+.fail-actions { display: grid; gap: 10px; margin-top: 20px; }
+.fail-actions .btn { border-radius: 12px; padding: 14px; font-size: 16px; }
+.celebrate { position: fixed; inset: 0; z-index: 400; background: rgba(3,3,5,.94); display: grid; place-items: center; overflow: hidden; animation: fadeIn .3s var(--ease); }
+.cel-box { position: relative; z-index: 2; text-align: center; padding: 24px; animation: celPop .45s var(--ease); }
+.cel-check { width: 88px; height: 88px; margin: 0 auto 18px; border-radius: 50%; background: linear-gradient(135deg, #1d7a3f, #2ecc71); display: grid; place-items: center; color: #fff; box-shadow: 0 0 0 10px rgba(46,204,113,.15), 0 12px 40px rgba(0,0,0,.5); }
+.cel-box h2 { font-size: 30px; margin-bottom: 8px; } .cel-box p { color: var(--text-2); margin-bottom: 22px; }
+.cel-box .btn-light { font-size: 16px; padding: 13px 34px; }
+.confetti { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.confetti i { position: absolute; top: -16px; width: 8px; height: 14px; border-radius: 2px; animation: confFall 3s ease-in forwards; }
+@keyframes confFall { to { transform: translateY(110vh) rotate(720deg); } }
+@keyframes celPop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
 .plan .price { font-size: 34px; font-weight: 800; text-align: right; line-height: 1.1; } .plan .price small { display: block; font-size: 13px; color: var(--muted); font-weight: 500; } .plan.best .price small { color: rgba(255,255,255,.82); } .plan ul { grid-column: 1 / -1; margin-top: 10px; } .plan li { display: flex; gap: 8px; align-items: flex-start; color: var(--text-2); font-size: 14px; margin-bottom: 8px; } .plan li svg { color: var(--ok); margin-top: 3px; } .plan.best li { color: #fff; } .plan.best li svg { color: #7be495; } .plan .btn { grid-column: 1 / -1; margin-top: 10px; border-radius: 999px; padding: 14px 20px; font-size: 16px; }
 .badge { position: absolute; top: -12px; right: 20px; background: var(--gold); color: #000; font-size: 12px; font-weight: 800; padding: 4px 12px; border-radius: 999px; }
 /* Account subscribe banner (website only — never rendered in the native apps): compact gradient strip with a solid pill button. */
