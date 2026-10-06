@@ -92,19 +92,21 @@ export default async function plans(ctx) {
   const draw = () => {
     const s = u.subscription || {}, active = u.isPremium, cur = active ? s.planId : 'free';
     const status = active
-      ? html`<div class="notice ok">${icon('check', { size: 18 })}<span>Your plan is active until <b>${fmtDate(s.expiresAt)}</b>. Renew any time — the extra time is added to the end.</span></div>`
-      : s.status === 'expired' ? html`<div class="notice">${icon('info', { size: 18 })}<span>Your plan expired on ${fmtDate(s.expiresAt)}. Choose a plan to watch premium videos again.</span></div>` : '';
+      ? html`<div class="notice ok">${icon('check', { size: 18 })}<span>Your plan is active until <b>${fmtDate(s.expiresAt)}</b>.${isNative ? ' Access is linked to this ADDABAAZ account.' : ' Renew any time — the extra time is added to the end.'}</span></div>`
+      : s.status === 'expired' ? html`<div class="notice">${icon('info', { size: 18 })}<span>Your plan expired on ${fmtDate(s.expiresAt)}.${isNative ? '' : ' Choose a plan to watch premium videos again.'}</span></div>` : '';
     const why = isNative
-      ? html`<div class="notice">${icon('info', { size: 18 })}<span>Plans are managed on the ADDABAAZ website. Once you’ve subscribed with this account, premium videos unlock here automatically.</span></div>`
+      ? html`<div class="notice">${icon('info', { size: 18 })}<span>This app does not offer purchases or payment links. Memberships and payments are managed separately on the ADDABAAZ website. If you already have access, sign in with the same account and it will appear here automatically.</span></div>`
       : payments.provider === 'mock' ? html`<div class="notice">${icon('info', { size: 18 })}<span>Demo checkout — no real payment is taken. Add Razorpay keys on the API to go live (docs/PREMIUM.md).</span></div>`
       : payments.provider === 'none' ? html`<div class="notice">${icon('info', { size: 18 })}<span>Payments aren’t available right now. Please try again later.</span></div>` : '';
     ctx.root.innerHTML = html`<div class="page">
-      ${sectionHeader({ tag: 'ADDABAAZ Plus', title: 'Choose your plan', subtitle: 'Pay once for the period — no auto-renewal, nothing to cancel.' })}
+      ${sectionHeader(isNative
+        ? { tag: 'ADDABAAZ Plus', title: 'Your access', subtitle: 'View the access currently linked to your ADDABAAZ account.' }
+        : { tag: 'ADDABAAZ Plus', title: 'Choose your plan', subtitle: 'Pay once for the period — no auto-renewal, nothing to cancel.' })}
       ${status}${why}
-      ${creditPaise > 0 ? html`<div class="notice ok">${icon('gift', { size: 18 })}<span>You have <b>${inr(creditPaise)}</b> of ADDABAAZ credit${offer?.expiryDays ? html` — it expires ${offer.expiryDays} days after it was added` : ''}. Tick “use my credit” at checkout and it comes straight off the price.</span></div>` : ''}
-      <div class="plans">${list.map((p) => html`<article class="plan ${p.id === cur ? 'current' : ''} ${p.id === 'plus-yearly' ? 'best' : ''}">
-        ${p.id === 'plus-yearly' ? html`<span class="badge">Best value</span>` : ''}
-        <h2>${p.name}</h2><div class="price">₹${p.priceINR}<small>/${p.interval}</small></div>
+      ${!isNative && creditPaise > 0 ? html`<div class="notice ok">${icon('gift', { size: 18 })}<span>You have <b>${inr(creditPaise)}</b> of ADDABAAZ credit${offer?.expiryDays ? html` — it expires ${offer.expiryDays} days after it was added` : ''}. Tick “use my credit” at checkout and it comes straight off the price.</span></div>` : ''}
+      <div class="plans">${list.map((p) => html`<article class="plan ${p.id === cur ? 'current' : ''} ${!isNative && p.id === 'plus-yearly' ? 'best' : ''}">
+        ${!isNative && p.id === 'plus-yearly' ? html`<span class="badge">Best value</span>` : ''}
+        <h2>${p.name}</h2>${!isNative ? html`<div class="price">₹${p.priceINR}<small>/${p.interval}</small></div>` : ''}
         <ul>${p.features.map((f) => html`<li>${icon('check', { size: 16 })} ${f}</li>`)}</ul>
         ${p.id === 'free' ? html`<button class="btn btn-ghost block" disabled>${cur === 'free' ? 'Current plan' : 'Included'}</button>`
           : !canBuy ? (p.id === cur ? html`<button class="btn btn-ghost block" disabled>Current plan</button>` : '')
@@ -112,7 +114,7 @@ export default async function plans(ctx) {
       </article>`)}</div>
       ${s.demo ? html`<p class="muted" style="margin-top:18px"><button class="btn btn-ghost" data-cancel>End demo plan</button></p>` : ''}
       <p class="muted" style="margin-top:18px;font-size:13px">${isNative
-        ? html`Prices in INR, inclusive of GST. Subscriptions are bought on the ADDABAAZ website, never inside this app — your plan unlocks premium video here as soon as the payment is confirmed. ${u.account ? html`<a href="#/billing">Billing & invoices</a>` : ''}`
+        ? html`No purchase can be started or completed in this app. Existing members can view past invoices and refunds here. ${u.account ? html`<a href="#/billing">Billing & invoices</a>` : ''}`
         : html`Prices in INR, inclusive of GST. UPI, cards, netbanking and wallets via Razorpay. ${u.account ? html`<a href="#/billing">Billing & invoices</a>` : ''}`}</p>
     </div>`.s;
   };
