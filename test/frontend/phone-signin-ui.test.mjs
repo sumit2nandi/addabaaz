@@ -66,17 +66,24 @@ test('the sign-in page styles exist for the phone-first form', () => {
   for (const cls of ['.seg-full', '.otp-phone', '.otp-cc', '.otp-links', '.auth-busy'])
     assert.ok(css.includes(cls), `${cls} is styled`);
   assert.match(css, /\.auth-busy\[hidden\] \{ display: none; \}/, 'the busy state stays hidden until it is used');
-  // Reported twice from a phone: "Forgot password?" sat almost on top of the Sign in button. It tucks up under
-  // the password field and now carries its own bottom margin, which adds to the form's row gap. The primary
-  // button's red glow bleeds a few px further up, so the break has to be generous — 36px in total.
+  // Reported three times from a phone: "Forgot password?" sat almost on top of the Sign in button, and the
+  // button then hugged the link while "New to ADDABAAZ? Create an account" floated far below it. The button
+  // now sits exactly between the two lines — the same 36px of air above (the form's 16px row gap + the link's
+  // 20px margin) and below (the button's 20px margin + the form's 16px row gap, once the empty alert row stops
+  // adding a second gap of its own).
   const forgot = css.match(/\.forgot-link \{[^}]*\}/)?.[0] || '';
   assert.ok(forgot, 'the forgot link is styled');
   assert.match(forgot, /margin: -6px 0 20px;/, 'it keeps its tuck above and gains air below');
-  // Read both numbers back out of the stylesheet: the link's own margin adds to the form's row gap.
+  assert.match(css, /#af \.form-status:empty \{ display: none; \}/, 'an empty alert row takes no space, so it cannot double the lower gap');
+  const asub = css.match(/#af #asub[^{]*\{[^}]*\}/)?.[0] || '';
+  assert.ok(asub, 'the submit buttons carry the matching break of their own');
+  assert.match(asub, /#af #otpSend, #af #otpVerify/, 'the mobile-number buttons get it too, so that tab does not lose the air');
+  // Read both numbers back out of the stylesheet: the item margins add to the form's row gap.
   const gap = Number(css.match(/\.form \{ display: grid; gap: (\d+)px; \}/)?.[1]);
-  const below = Number(forgot.match(/margin: -6px 0 (\d+)px;/)?.[1]);
-  assert.ok(gap > 0 && below > 0, 'the row gap and the link margin are both declared');
-  assert.ok(gap + below >= 32, `the link-to-button gap grows from ${gap}px to ${gap + below}px`);
+  const above = gap + Number(forgot.match(/margin: -6px 0 (\d+)px;/)?.[1]);
+  const below = gap + Number(asub.match(/margin: 0 0 (\d+)px;/)?.[1]);
+  assert.ok(gap > 0 && above >= 32, `the link-to-button gap grows from ${gap}px to ${above}px`);
+  assert.equal(above, below, `the button is centred between the two lines: ${above}px above, ${below}px below`);
 });
 
 test('the sign-in loader covers the whole card, on every method', () => {

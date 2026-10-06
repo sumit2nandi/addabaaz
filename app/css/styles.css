@@ -677,6 +677,13 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
    the link's own margin makes the break 36px in total, while the signup form — which has no forgot link —
    keeps the ordinary spacing. */
 .forgot-link { justify-self: end; margin: -6px 0 20px; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; } .forgot-link:hover { color: #fff; }
+/* …and a submit button has to sit exactly between that link and "New to ADDABAAZ? Create an account": the
+   same 36px of air below it (20px of its own margin + the form's 16px row gap) as the link leaves above it.
+   The empty alert row (`#as`) used to add a *second* 16px gap down there, which pushed the switch line 32px
+   away and made the button read as glued to the link above. Alerts still show; empty ones take no space —
+   which is why every submit on the card (email sign-in, send code, verify code) carries the 20px itself. */
+#af .form-status:empty { display: none; }
+#af #asub, #af #otpSend, #af #otpVerify { margin: 0 0 20px; }
 .fine { font-size: 12.5px; color: var(--muted); text-align: center; line-height: 1.5; } .fine a { color: var(--text-2); text-decoration: underline; text-underline-offset: 2px; }
 .stack-sm { display: grid; gap: 10px; } .btn.block { width: 100%; justify-content: center; }
 .pin-input { text-align: center; letter-spacing: .5em; font-size: 22px; }
