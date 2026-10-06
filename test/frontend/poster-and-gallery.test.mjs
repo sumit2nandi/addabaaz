@@ -143,6 +143,31 @@ test('show facts sit below the banner and the tagline uses the page font', () =>
   assert.match(css, /\.page-tight\.show-details-page \{ padding-top: 0; \}/, 'mobile show facts start directly under the banner with no dead gap');
 });
 
+test('a long episode list scrolls inside its own frame instead of stretching the page', async () => {
+  // Reported from a phone with 18 episodes: the list ran the page on indefinitely. The list now has its own
+  // scroll region, so the header, facts, description and rails keep their place.
+  const show = read('app/js/views/show.js');
+  assert.match(show, /<div class="ep-list ep-frame" id="epList" role="region" tabindex="0" aria-label="Episode list">/,
+    'the list is a focusable, named scroll region');
+  assert.match(show, /const box = \$\('#epList', ctx\.root\);\n\s*box\.innerHTML = list\.map\(\(v\) => epRow\(v\)\)\.join\(''\);\n\s*box\.scrollTop = 0;/,
+    're-sorting returns the frame to the top of the new order');
+
+  const css = read('app/css/styles.css');
+  const frame = css.match(/\.ep-frame \{[^}]*\}/)?.[0] || '';
+  assert.ok(frame, 'the frame rule exists');
+  assert.match(frame, /max-height: clamp\(280px, 58vh, 620px\)/, 'the list is capped to a share of the viewport');
+  assert.match(frame, /max-height: clamp\(280px, 58svh, 620px\)/, 'and to the small viewport height on phones (iOS URL bar)');
+  assert.match(frame, /overflow-y: auto/, 'the rest of the list scrolls inside the frame');
+  assert.doesNotMatch(frame, /overscroll-behavior: contain/,
+    'the frame does not trap the finger — its scroll chains back to the page at either end');
+  assert.match(css, /\.ep-frame:focus-visible \{ outline: 2px solid var\(--gold\); outline-offset: 2px; \}/,
+    'keyboard focus on the frame is visible');
+  // The watch page's own side list is a different surface: it must keep its compact rows and its own scroller.
+  assert.match(css, /\.ep-list\.compact \.ep-row \{[^}]*grid-template-columns: 26px 104px 1fr;/, 'the compact variant is unchanged');
+  assert.match(css, /\.watch-side \{[^}]*overflow-y: auto;/, 'the desktop watch panel keeps scrolling as before');
+  assert.doesNotMatch(read('app/js/views/watch.js'), /ep-frame/, 'the watch page does not get a second scroller inside the panel');
+});
+
 test('the artwork popup shows the banner and the poster, each once', async () => {
   const { artworkItems, openArtwork } = await import('../../app/js/ui/lightbox.js');
   assert.deepEqual(artworkItems({ poster: 'p.jpg', backdrop: 'b.jpg' }).map((x) => [x.id, x.image, x.caption]),

@@ -64,7 +64,7 @@ export default async function showView(ctx) {
       ${eps.length ? html`<section class="ep-section" aria-label="Episodes">
         <div class="section-bar"><h2>Episodes <span class="count">${eps.length}</span></h2>
           <button type="button" class="btn btn-ghost btn-sm" id="sortEps" data-order="asc">${icon('list', { size: 16 })} <span>Oldest first</span></button></div>
-        <div class="ep-list" id="epList">${eps.map((v) => epRow(v))}</div></section>`
+        <div class="ep-list ep-frame" id="epList" role="region" tabindex="0" aria-label="Episode list">${eps.map((v) => epRow(v))}</div></section>`
         : html`<div class="empty small">${icon('film', { size: 36 })}<h2>Episodes coming soon</h2><p>Stay tuned — new episodes land here first.</p></div>`}
       ${rail({ title: 'Trailers, Reels & Clips', items: extras.map((v) => (v.kind === 'reel' ? reelCard(v) : videoCard(v, { showName: false }))), cls: extras.some((v) => v.kind === 'reel') ? 'r-reel' : 'r-video' })}
       ${rail({ title: 'More like this', items: cat.related(s).map((x) => showCard(x)), cls: 'r-poster' })}
@@ -90,7 +90,9 @@ export default async function showView(ctx) {
   $('#sortEps', ctx.root)?.addEventListener('click', (e) => {
     order = order === 'asc' ? 'desc' : 'asc';
     const list = order === 'asc' ? eps : [...eps].reverse();
-    $('#epList', ctx.root).innerHTML = list.map((v) => epRow(v)).join('');
+    const box = $('#epList', ctx.root);
+    box.innerHTML = list.map((v) => epRow(v)).join('');
+    box.scrollTop = 0;                                   // the frame starts at the top of the new order
     e.currentTarget.querySelector('span').textContent = order === 'asc' ? 'Oldest first' : 'Newest first';
   });
   $('#shareBtn', ctx.root).addEventListener('click', async () => {
