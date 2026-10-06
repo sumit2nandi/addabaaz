@@ -355,13 +355,14 @@ export function adminDb({ q, tx, self, iso }) {
         await run('payments', 'UPDATE payments SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
         await run('invoices', 'UPDATE invoices SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
         await run('refundRequests', 'UPDATE refund_requests SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
-        await run('comments', 'UPDATE comments SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
+        await run('supportTickets', 'UPDATE support_tickets SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
+        await run('campaignDeliveries', 'UPDATE campaign_deliveries SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
         await run('pushSubscriptions', 'UPDATE push_subscriptions SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
         await run('devices', 'UPDATE push_devices SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
         await run('errorReports', 'UPDATE error_log SET user_id = ? WHERE user_id = ?', [keepId, removeId]);
         // Tables whose key includes the user: drop the rows that would collide, then move the rest.
-        for (const [label, table] of [['playbackSessions', 'playback_sessions'], ['commentReports', 'comment_reports'], ['notifySent', 'notify_sent']]) {
-          await t.query(`DELETE r FROM ${table} r JOIN ${table} k ON k.user_id = ? AND r.user_id = ?${label === 'playbackSessions' ? ' AND k.device_id = r.device_id' : label === 'commentReports' ? ' AND k.comment_id = r.comment_id' : ' AND k.kind = r.kind AND k.ref = r.ref'}`, [keepId, removeId]);
+        for (const [label, table] of [['playbackSessions', 'playback_sessions'], ['notifySent', 'notify_sent']]) {
+          await t.query(`DELETE r FROM ${table} r JOIN ${table} k ON k.user_id = ? AND r.user_id = ?${label === 'playbackSessions' ? ' AND k.device_id = r.device_id' : ' AND k.kind = r.kind AND k.ref = r.ref'}`, [keepId, removeId]);
           await run(label, `UPDATE ${table} SET user_id = ? WHERE user_id = ?`, [keepId, removeId]);
         }
         // One-off tokens (password reset / verification links) belong to the account being removed.
@@ -431,6 +432,7 @@ export function adminDb({ q, tx, self, iso }) {
     },
     async setHandled(id, by) { return (await q('UPDATE contact_messages SET handled_at = ?, handled_by = ? WHERE id = ?', [by ? new Date() : null, by || null, id])).affectedRows === 1; },
     async remove(id) { return (await q('DELETE FROM contact_messages WHERE id = ?', [id])).affectedRows === 1; },
+    async prune() { await q('DELETE FROM contact_messages WHERE created_at < UTC_TIMESTAMP(3) - INTERVAL 365 DAY'); },
     async openCount() { return (await q('SELECT COUNT(*) AS n FROM contact_messages WHERE handled_at IS NULL'))[0].n; },
   };
 

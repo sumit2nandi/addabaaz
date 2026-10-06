@@ -5,6 +5,7 @@ import { hashPassword, verifyPassword, signToken } from './auth.js';
 import { endpointHash } from './push.js';
 import { FREE_KINDS } from './catalog-schema.js';
 import { normalizeEmail } from './email-address.js';
+import { isPhoneEmail } from './sms.js';
 import * as mail from './emails.js';
 
 // Small shared helpers for this file.
@@ -20,21 +21,19 @@ const noop = (_q, _s, n) => n();
 
 /**
  * Account safety (password reset, email verification, change password, sign-out-everywhere, parental PIN),
- * viewing (ratings, comments, playback sessions / device limit, analytics), push subscriptions, refund requests and
+ * viewing (ratings, playback sessions / device limit, analytics), push subscriptions, refund requests and
  * the client error log. `public(api)` registers routes that need no sign-in; `authed(api)` those behind the session check.
  */
 // Returns helper functions plus two route registrars, `public(api)` and `authed(api)`, which app.js calls
 // (before and after the authentication middleware respectively). Behaviour limits come from `options` or environment variables.
 export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rate = true, publicUser, notDisabled, userFromRequest, plans = [], promos = null, reportError = null, logger = console, options = {} }) {
-  // Tunable limits: screens at once, refund window, reports needed to hide a comment, comment rate, whether an e-mail must be verified before commenting/buying.
+  // Tunable limits: simultaneous streams, refund window and email verification before billing actions.
   const cfg = {
     supportEmail: options.supportEmail ?? process.env.SUPPORT_EMAIL ?? '',
     streamLimit: options.streamLimit ?? (Number(process.env.STREAM_LIMIT) || 2),
     heartbeatWindowSec: options.heartbeatWindowSec ?? 90,
     refundWindowDays: options.refundWindowDays ?? (process.env.REFUND_WINDOW_DAYS === undefined ? 7 : Number(process.env.REFUND_WINDOW_DAYS)),
-    reportsToHide: options.reportsToHide ?? 3,
-    commentsPer10Min: options.commentsPer10Min ?? 5,
-    requireVerifiedForActions: options.requireVerified ?? mailer.provider === 'smtp',    // without SMTP nobody could ever verify
+    requireVerifiedForBilling: options.requireVerified ?? mailer.provider === 'smtp',    // without SMTP nobody could ever verify
   };
   // Builds a per-IP rate limiter (or a no-op when rate limiting is turned off).
   const limit = (name, max, ms) => (rate ? rateLimit(name, max, ms) : noop);
@@ -48,6 +47,8 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
   // failed send is a 503 in every environment — swallowing it is how the site ended up lying to users.
   const MAIL_DOWN = 'We couldn’t send the email right now — please try again in a few minutes.';
   const requireMail = () => { if (process.env.NODE_ENV === 'production' && mailer.provider !== 'smtp') throw new HttpError(503, 'email_not_configured', 'Email delivery isn’t set up on this server yet, so this can’t be sent right now.'); };
+  // Adding a contact address promises a confirmation message, so unlike development-only preview flows it requires real SMTP everywhere.
+  const requireDeliverableMail = () => { if (mailer.provider !== 'smtp') throw new HttpError(503, 'email_not_configured', 'Email delivery isn’t available on this server yet, so we can’t send a confirmation link.'); };
   const sendMailStrict = async (to, built, note) => {
     devLog(note);
     let sent;
@@ -77,7 +78,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
   }
 
   // Throws 403 `email_unverified` when verification is required (only when SMTP is configured) and the user has not confirmed yet.
-  const requireVerified = (user) => { if (cfg.requireVerifiedForActions && !user.emailVerifiedAt) throw new HttpError(403, 'email_unverified', 'Please confirm your email address first — we sent you a link. You can resend it from Account.'); };
+  const requireVerified = (user) => { if (cfg.requireVerifiedForBilling && !user.emailVerifiedAt) throw new HttpError(403, 'email_unverified', 'Please confirm your email address first — we sent you a link. You can resend it from Account.'); };
 
   /** Server-checked parental PIN with lock-out. Used by the /me/pin endpoints and by profile changes (header X-Parental-Pin). */
   async function checkPin(user, pin) {
@@ -153,6 +154,19 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         if (promos) { const u = await db.users.byId(uid); if (u) promos.qualify(u, { reason: 'verified' }).catch((e) => logger.error('[promos] referral qualification after verification failed:', e)); }
         res.json({ verified: true });
       }));
+      // Redeem a phone-account contact-email link without requiring the user to sign in on the same device.
+      api.post('/auth/email-change/verify', authLimit, wrap(async (req, res) => {
+        const token = req.body?.token;
+        if (typeof token !== 'string' || token.length < 20 || token.length > 200) throw new HttpError(400, 'invalid_token', 'This email confirmation link is invalid or has expired. Sign in and request a new one from Account.');
+        try {
+          const result = await db.emailChanges.confirm(sha256(token));
+          if (!result) throw new HttpError(400, 'invalid_token', 'This email confirmation link is invalid or has expired. Sign in and request a new one from Account.');
+          res.json({ verified: true, email: result.email });
+        } catch (error) {
+          if (isDuplicate(error)) throw new HttpError(409, 'email_taken', 'That email is already connected to another account. Sign in to that account or use a different email address.');
+          throw error;
+        }
+      }));
 
       /* analytics (aggregate counters only — no personal data) */
       // Anonymous play counters for the admin analytics page. Seconds are capped so a client cannot inflate numbers.
@@ -196,20 +210,10 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         res.sendStatus(204);
       }));
 
-      /* ratings & comments: public reads */
       // Public like/dislike totals for a show or video.
       api.get('/ratings/:type/:id', wrap(async (req, res) => {
         if (!['show', 'video'].includes(req.params.type)) throw new HttpError(404, 'not_found', 'Unknown item.');
         res.set('Cache-Control', 'public, max-age=30'); res.json(await db.ratings.counts(req.params.type, req.params.id));
-      }));
-      // Public comment list, newest first, paged with `before`. If the reader is signed in, their own comments are flagged so the UI can offer Delete.
-      api.get('/videos/:id/comments', wrap(async (req, res) => {
-        if (!(await catalog.video(req.params.id))) throw new HttpError(404, 'not_found', 'Unknown video.');
-        const before = req.query.before ? Date.parse(String(req.query.before)) : null;
-        const [items, total] = await Promise.all([db.comments.list(req.params.id, { limit: 30, before: Number.isNaN(before) ? null : before }), db.comments.count(req.params.id)]);
-        const me = await userFromRequest(req).catch((e) => { logger.warn('[comments] could not resolve the optional viewer session:', e); return null; });
-        res.set('Cache-Control', 'no-store');
-        res.json({ total, comments: items.map((c) => ({ id: c.id, author: c.author, body: c.body, createdAt: c.createdAt, ...(me && c.userId === me.id ? { mine: true } : {}) })) });
       }));
 
       /* anonymous native app push devices */
@@ -264,6 +268,30 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         if (last && Date.now() - last.getTime() < 60_000) throw new HttpError(429, 'too_soon', 'We just sent one — please wait a minute before asking again.');
         await sendVerification(req.user, { strict: true }); res.status(202).json({ ok: true });
       }));
+      // Phone-verified accounts can add or update a contact address; the current address remains active until the new one is confirmed.
+      api.post('/me/email', authLimit, wrap(async (req, res) => {
+        if (!req.user.phoneVerifiedAt) throw new HttpError(409, 'phone_signin_required', 'Add or update a contact email after verifying a mobile number on this account.');
+        const { email, ok } = normalizeEmail(req.body?.email);
+        if (!ok) throw bad('Enter a valid email address.', 'invalid_email');
+        if (isPhoneEmail(email)) throw bad('Use an email address you can receive mail at.', 'invalid_email');
+        if (!isPhoneEmail(req.user.email) && normalizeEmail(req.user.email).email === email) throw new HttpError(409, 'email_unchanged', 'That address is already confirmed on your account.');
+        const existing = (await db.users.byEmailNorm(email)) || (await db.users.byEmail(email));
+        if (existing && existing.id !== req.user.id) throw new HttpError(409, 'email_taken', 'That email is already connected to another account. Sign in to that account or use a different email address.');
+        const last = await db.emailChanges.lastIssuedAt(req.user.id);
+        if (last && Date.now() - last.getTime() < 60_000) throw new HttpError(429, 'too_soon', 'We just sent a link — please wait a minute before asking again.');
+        requireDeliverableMail();
+        const token = newToken(), tokenHash = sha256(token);
+        const url = `${siteUrl}/verify?emailChange=1&token=${encodeURIComponent(token)}`;
+        const issued = await db.emailChanges.issue(req.user.id, { email, emailNorm: email, tokenHash, ttlMs: HOUR });
+        if (issued === false) throw new HttpError(429, 'too_soon', 'We just sent a link — please wait a minute before asking again.');
+        try {
+          await sendMailStrict(email, mail.phoneAccountEmailVerification({ name: req.user.name, url, supportEmail: cfg.supportEmail }), `phone-account email confirmation for ${req.user.id}: ${url}`);
+        } catch (error) {
+          await db.emailChanges.revoke(req.user.id, tokenHash).catch((revokeError) => logger.error('[email-change] failed to revoke undelivered token:', revokeError));
+          throw error;
+        }
+        res.status(202).json({ ok: true });
+      }));
       // Change password: needs the current one (unless the account was created via Google/Facebook and has none). All other sessions are signed out.
       api.post('/me/password', authLimit, wrap(async (req, res) => {
         const { currentPassword, newPassword } = req.body || {};
@@ -316,34 +344,6 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       }));
       api.delete('/profiles/:pid/ratings/:type/:id', wrap(async (req, res) => { const p = await profileOf(req); await db.ratings.clear(p.id, req.params.type, req.params.id); res.json(await db.ratings.counts(req.params.type, req.params.id)); }));
 
-      /* --- comments (signed in; verified email when email is configured) --- */
-      // Post a comment. Sanitised (control characters removed), max 1000 chars, at most one link, and a per-user rate cap to limit spam.
-      api.post('/videos/:id/comments', limit('comment', 30, 10 * 60_000), wrap(async (req, res) => {
-        if (!(await catalog.video(req.params.id))) throw new HttpError(404, 'not_found', 'Unknown video.');
-        requireVerified(req.user);
-        const body = String(req.body?.body ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').replace(/\n{3,}/g, '\n\n').trim();
-        if (!body || body.length > 1000) throw bad('Write a comment of 1–1000 characters.', 'invalid_comment');
-        if ((body.match(/https?:\/\/|www\./gi) || []).length > 1) throw bad('Please keep links out of comments.', 'links_not_allowed');
-        if ((await db.comments.recentBy(req.user.id, 600)) >= cfg.commentsPer10Min) throw new HttpError(429, 'rate_limited', 'You’re commenting very quickly — please wait a few minutes.');
-        let author = req.user.name.split(/\s+/)[0].slice(0, 24);
-        if (req.body?.profileId) { const p = await db.profiles.get(String(req.body.profileId), req.user.id); if (p) { if (p.kids) throw new HttpError(403, 'kids_profile', 'Comments are turned off on kids profiles.'); author = p.name; } }
-        const c = { id: crypto.randomUUID(), videoId: req.params.id, userId: req.user.id, author, body };
-        await db.comments.add(c);
-        res.status(201).json({ comment: { id: c.id, author, body, createdAt: new Date().toISOString(), mine: true } });
-      }));
-      // Users can delete only their own comments.
-      api.delete('/comments/:id', wrap(async (req, res) => {
-        const c = await db.comments.byId(req.params.id);
-        if (!c || c.userId !== req.user.id) throw new HttpError(404, 'not_found', 'Comment not found.');
-        await db.comments.remove(c.id); res.sendStatus(204);
-      }));
-      // Report a comment; enough reports hide it automatically until an admin reviews it.
-      api.post('/comments/:id/report', limit('report', 20, 60_000), wrap(async (req, res) => {
-        const c = await db.comments.byId(req.params.id); if (!c || c.status !== 'visible') throw new HttpError(404, 'not_found', 'Comment not found.');
-        if (c.userId === req.user.id) throw bad('You can’t report your own comment.');
-        res.json(await db.comments.report(c.id, req.user.id, cfg.reportsToHide));
-      }));
-
       /* --- push subscriptions --- */
       // Store this browser's push subscription (only https endpoints are accepted) with the user's notification preferences.
       api.post('/push/subscribe', wrap(async (req, res) => {
@@ -380,14 +380,14 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         if (p.refundedPaise >= p.amountPaise) throw new HttpError(409, 'already_refunded', 'This payment has already been refunded.');
         const days = (Date.now() - Date.parse(p.paidAt)) / 86_400_000;
         if (!(cfg.refundWindowDays > 0) || days > cfg.refundWindowDays) throw new HttpError(409, 'outside_window', cfg.refundWindowDays > 0 ? `Refunds can be requested within ${cfg.refundWindowDays} days of purchase. Please contact us if you need help.` : 'Refund requests are turned off. Please contact us.');
-        if (await db.refundRequests.pendingFor(p.id)) throw new HttpError(409, 'already_requested', 'You already asked for a refund on this payment — we’ll email you the outcome.');
+        if (await db.refundRequests.pendingFor(p.id)) throw new HttpError(409, 'already_requested', isPhoneEmail(req.user.email) ? 'You already asked for a refund on this payment — check Billing for updates.' : 'You already asked for a refund on this payment — we’ll email you the outcome.');
         const reason = String(req.body?.reason || '').replace(/\s+/g, ' ').trim().slice(0, 500);
         const id = crypto.randomUUID();
         await db.refundRequests.create({ id, paymentId: p.id, userId: req.user.id, reason });
         const planName = plans.find((x) => x.id === p.planId)?.name || p.planId;
         const support = cfg.supportEmail;
         if (support) sendMail(support, mail.refundRequestEmail({ email: req.user.email, amountPaise: p.amountPaise, planName, paidAt: p.paidAt, reason, siteUrl }), `refund request from ${req.user.email}`);
-        sendMail(req.user.email, mail.refundRequestReceivedEmail({ name: req.user.name, planName, amountPaise: p.amountPaise, supportEmail: support || '' }), `refund request received for ${req.user.email}`);
+        if (!isPhoneEmail(req.user.email)) sendMail(req.user.email, mail.refundRequestReceivedEmail({ name: req.user.name, planName, amountPaise: p.amountPaise, supportEmail: support || '' }), `refund request received for ${req.user.email}`);
         res.status(201).json({ request: { id, status: 'pending' } });
       }));
       api.get('/refund-requests', wrap(async (req, res) => res.json({ requests: await db.refundRequests.forUser(req.user.id), windowDays: cfg.refundWindowDays })));

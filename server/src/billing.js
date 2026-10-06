@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import { paidPlan, PLANS } from './plans.js';
 import { computeTax, isValidGstin, gstinState, resolveState, stateName } from './gst.js';
 import { renderInvoicePdf } from './invoice-pdf.js';
+import { isPhoneEmail } from './sms.js';
 import * as mail from './emails.js';
 
 // An error with an HTTP status and code, translated to a JSON response by the API.
@@ -119,7 +120,7 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
       if (!String(i.name || '').trim()) throw bad('business_name_required', 'Enter your business name to get an invoice with your GSTIN.');
       state = gstinState(gstin);
     } else if (config.gstEnabled && !state) throw bad('billing_state_required', 'Select your state — it decides how GST is shown on your invoice.');
-    return { name, email: user.email, state, stateName: state ? stateName(state) : null, gstin: gstin || null };
+    return { name, email: isPhoneEmail(user.email) ? null : user.email, state, stateName: state ? stateName(state) : null, gstin: gstin || null };
   }
 
   /* ---------------- invoices ---------------- */
@@ -191,7 +192,7 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
       } else {
         const r = await db.payments.settle(pay, `coupon_${id}`, plan.days);
         const sub = await db.subscriptions.get(user.id);
-        if (r.applied) track(mailer.send({ to: user.email, ...mail.accessGrantedEmail({ ...mailOpts, name: user.name, couponCode: couponRow?.code || '', planName: plan.name, validUntil: sub.expiresAt }) }));
+        if (r.applied && !isPhoneEmail(user.email)) track(mailer.send({ to: user.email, ...mail.accessGrantedEmail({ ...mailOpts, name: user.name, couponCode: couponRow?.code || '', planName: plan.name, validUntil: sub.expiresAt }) }));
       }
       const subscription = await db.subscriptions.get(user.id);
       // Credit orders spell out the split (the plans page shows it); a plain coupon order is unchanged.
@@ -217,7 +218,7 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
       // Hold the credit until the payment is confirmed; an abandoned order releases it (see jobs.js).
       if (creditPaise > 0) await promos.spendForOrder({ userId: user.id, amountPaise: creditPaise, paymentId: id });
     }
-    return { provider: 'razorpay', keyId: payments.keyId, orderId, amount, currency, plan: { id: plan.id, name: plan.name }, quote: quoteView(q, { creditPaise, payablePaise }), creditPaise, payablePaise, prefill: { name: user.name, email: user.email } };
+    return { provider: 'razorpay', keyId: payments.keyId, orderId, amount, currency, plan: { id: plan.id, name: plan.name }, quote: quoteView(q, { creditPaise, payablePaise }), creditPaise, payablePaise, prefill: { name: user.name, ...(isPhoneEmail(user.email) ? {} : { email: user.email }) } };
   }
 
   /** Marks an order paid (idempotent), issues its invoice and emails the receipt — used by /payments/verify and the webhook. */
@@ -232,7 +233,7 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
   }
   // Receipt e-mail with the invoice PDF attached.
   async function sendReceipt(payment, invoice) {
-    const user = await db.users.byId(payment.userId); if (!user) return;
+    const user = await db.users.byId(payment.userId); if (!user || isPhoneEmail(user.email)) return;
     const sub = await db.subscriptions.get(user.id);
     await mailer.send({
       to: user.email, attachments: [await pdf(invoice)],
@@ -244,8 +245,8 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
   async function onPaymentFailed(entity) {
     const p = entity?.order_id ? await db.payments.byOrder('razorpay', entity.order_id) : null;
     if (!p || !p.userId || p.status !== 'created') return;
+    const user = await db.users.byId(p.userId); if (!user || isPhoneEmail(user.email)) return;
     if (!(await db.payments.claimFailedNotice(p.id))) return;
-    const user = await db.users.byId(p.userId); if (!user) return;
     const release = () => db.payments.releaseFailedNotice(p.id).catch((releaseError) => log.error('[billing] failed-notice claim release failed:', releaseError));
     track(mailer.send({ to: user.email, ...mail.paymentFailedEmail({ ...mailOpts, name: user.name, planName: planName(p.planId), reason: String(entity.error_description || '').slice(0, 120), retryUrl: `${config.siteUrl}/#/plans` }) }).then(async (r) => {
       if (!r?.sent) await release();
@@ -261,7 +262,7 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
       try { await promos.refundOrderCredit({ userId: payment.userId, paymentId: payment.id, amountPaise: payment.creditAppliedPaise, reason: 'Credit returned — order refunded' }); }
       catch (e) { log.error('[billing] could not return credit after a refund:', e); }
     }
-    const user = await db.users.byId(payment.userId); if (!user) return;
+    const user = await db.users.byId(payment.userId); if (!user || isPhoneEmail(user.email)) return;
     const attachments = rec.creditNote ? [await pdf(rec.creditNote)] : [];
     await mailer.send({
       to: user.email, attachments,
@@ -327,6 +328,7 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
   async function invoicePdf(userId, invoiceId) { const inv = await ownedInvoice(userId, invoiceId); return { ...(await pdf(inv)), invoice: inv }; }
   async function emailInvoice(user, invoiceId) {
     const inv = await ownedInvoice(user.id, invoiceId);
+    if (isPhoneEmail(user.email)) throw new BillingError(409, 'email_not_verified', 'Add and confirm an email address in Account before sending documents by email. You can still download this document here.');
     if (mailer.provider === 'none' && process.env.NODE_ENV === 'production') throw new BillingError(503, 'email_not_configured', 'Email isn’t set up on this server.');
     await mailer.send({ to: user.email, attachments: [await pdf(inv)], subject: `${inv.doc.title === 'CREDIT NOTE' ? 'Credit note' : 'Invoice'} ${inv.number} — ADDABAAZ`, text: `Hi ${user.name.split(' ')[0]},\n\nAs requested, ${inv.number} is attached.\n\n— ADDABAAZ`, html: undefined });
     return inv;
@@ -338,6 +340,7 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
     if (!(config.reminderDays > 0)) return 0;
     let sent = 0;
     for (const s of await db.subscriptions.dueForReminder(config.reminderDays)) {
+      if (isPhoneEmail(s.email)) continue;
       if (!(await db.subscriptions.claimReminder(s.userId, s.expiresAt))) continue;
       sent++;
       const release = () => db.subscriptions.releaseReminder(s.userId, s.expiresAt).catch((releaseError) => log.error('[billing] reminder claim release failed:', releaseError));

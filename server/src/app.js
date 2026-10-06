@@ -87,7 +87,7 @@ export function createApp({
   publicApiUrl = process.env.PUBLIC_API_URL || '',            // absolute base for HLS URLs when behind a proxy
   streamTtl = Number(process.env.STREAM_URL_TTL) || 6 * 3600, // seconds a signed video URL stays valid
   push: pushOption = null,                                   // Web Push (VAPID) + native app push (FCM); tests inject a fake sender
-  features: featureOptions = {},                              // limits: { streamLimit, refundWindowDays, reportsToHide … } (env defaults)
+  features: featureOptions = {},                              // limits: { streamLimit, refundWindowDays … } (env defaults)
   seo = {},                                                    // search-engine options: { siteUrl, indexable, compress, googleVerification, bingVerification } (env defaults below)
 } = {}) {
   // Fail fast on a bad setup.
@@ -147,7 +147,7 @@ export function createApp({
   const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name, emailVerified: !!u.emailVerifiedAt, ...(u.phone ? { phone: u.phone, phoneVerified: !!u.phoneVerifiedAt } : {}), ...(isPhoneEmail(u.email) ? { emailIsPlaceholder: true } : {}), ...(u.isAdmin ? { isAdmin: true } : {}) });
   // Blocks accounts an admin has disabled.
   const notDisabled = (u) => { if (u.disabledAt) throw new HttpError(403, 'account_disabled', 'This account has been disabled. Please contact support.'); return u; };
-  // Optional engagement/security features (password reset, PIN, ratings, comments, push, ...) live in features.js.
+  // Optional engagement/security features (password reset, PIN, ratings, push, ...) live in features.js.
   const features = createFeatures({ db, secret, mailer, push, catalog, siteUrl: billing.config.siteUrl, rate, publicUser, notDisabled, userFromRequest, plans: PLANS, promos, reportError: errorLogger.capture, logger, options: { supportEmail: billing.config.supportEmail, ...featureOptions } });
 
   /* ---------- broadcast campaigns (Admin → Notifications: push / e-mail) — see server/src/campaigns.js ---------- */
@@ -162,7 +162,7 @@ export function createApp({
   // Phone sign-in (SMS OTP). With no MSG91 keys the routes answer 503 and the sign-in page keeps offering
   // email + password — the site never breaks because payments/SMS are missing.
   registerOtpRoutes(api, { db, sms, secret, publicUser, notDisabled, authLimit, promos, logger });
-  features.public(api);           // password reset, email verification, analytics, public ratings/comments
+  features.public(api);           // password reset, email verification, analytics and public rating counts
   // Support tickets (the Support page). Guests can write in too; signing in links the ticket to the account.
   registerSupportRoutes(api, { db, userFromRequest, mailer, email: supportEmails, supportEmail: billing.config.supportEmail, siteUrl: billing.config.siteUrl || '', rate, log: logger });
   // Promotional credit & referrals: the public offer, the viewer's balance/ledger and invite codes. The
@@ -186,7 +186,7 @@ export function createApp({
     notDisabled(session.user);
     req.user = session.user; next();
   }));
-  features.authed(api);           // account security, PIN, devices, ratings, comments, push, refund requests
+  features.authed(api);           // account security, PIN, devices, ratings, push and refund requests
   registerAccountRoutes(api, { db, publicUser, features, exists, maxProfiles: MAX_PROFILES, palette: PALETTE });
   registerBillingRoutes(api, { db, billing, payments, features, rate });
   // Anything under /api/v1 not handled above is a JSON 404 (not the website).

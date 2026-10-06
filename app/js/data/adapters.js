@@ -153,7 +153,9 @@ export class RemoteAdapter {
   forgotPassword(email) { return this.api.post('/auth/forgot', { email }); }
   async resetPassword(token, password) { const r = await this.api.post('/auth/reset', { token, password }); this.api.setToken(r.token); return r; }
   verifyEmail(token) { return this.api.post('/auth/verify', { token }); }
+  verifyAccountEmail(token) { return this.api.post('/auth/email-change/verify', { token }); }
   resendVerification() { return this.api.post('/me/verify/resend'); }
+  requestAccountEmail(email) { return this.api.post('/me/email', { email }); }
   async changePassword(currentPassword, newPassword) { const r = await this.api.post('/me/password', { currentPassword, newPassword }); this.api.setToken(r.token); return r; }
   async signOutEverywhere() { const r = await this.api.post('/me/sessions/revoke'); this.api.setToken(r.token); return r; }
 
@@ -166,15 +168,10 @@ export class RemoteAdapter {
   heartbeat(videoId) { return this.api.post('/playback/heartbeat', { videoId }); }
   stopPlayback() { return this.api.post('/playback/stop'); }
 
-  /* ----- ratings & comments ----- */
+  /* ----- ratings ----- */
   async myRatings(pid) { return (await this.api.get(`/profiles/${pid}/ratings`)).ratings || {}; }
   ratingCounts(type, id) { return this.api.get(`/ratings/${type}/${encodeURIComponent(id)}`); }
   rate(pid, type, id, value) { return value ? this.api.put(`/profiles/${pid}/ratings/${type}/${encodeURIComponent(id)}`, { value }) : this.api.del(`/profiles/${pid}/ratings/${type}/${encodeURIComponent(id)}`); }
-  comments(videoId, { before } = {}) { return this.api.get(`/videos/${encodeURIComponent(videoId)}/comments${before ? `?before=${encodeURIComponent(before)}` : ''}`); }
-  addComment(videoId, body, profileId) { return this.api.post(`/videos/${encodeURIComponent(videoId)}/comments`, { body, profileId }); }
-  deleteComment(id) { return this.api.del(`/comments/${id}`); }
-  reportComment(id) { return this.api.post(`/comments/${id}/report`); }
-
   /* ----- push, refunds, analytics ----- */
   pushConfig() { return this.api.get('/push/config').catch(() => ({ enabled: false })); }
   pushSubscribe(subscription, prefs) { return this.api.post('/push/subscribe', { subscription, prefs }); }

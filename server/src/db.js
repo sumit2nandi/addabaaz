@@ -3,8 +3,10 @@
 // db-extra.js, db-billing.js and db-admin.js add the rest and are merged into the same object at the bottom.
 // The rest of the server only ever calls these methods, e.g. `db.users.byEmail(...)`, never raw SQL.
 import mysql from 'mysql2/promise';
+import crypto from 'node:crypto';
 import { dbConfigFromEnv } from './config.js';
 import { normalizeEmail } from './email-address.js';
+import { normalizePhone } from './sms.js';
 import { billingDb } from './db-billing.js';
 import { adminDb } from './db-admin.js';
 import { extraDb } from './db-extra.js';
@@ -112,8 +114,50 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       async byReferralCode(code) { return userRow((await q('SELECT * FROM users WHERE referral_code = ?', [String(code || '').trim().toUpperCase()]))[0]); },
       /** Stores a code, unless it was taken meanwhile (the unique index is the real guard). Returns the stored code. */
       async setReferralCode(id, code) { await q('UPDATE users SET referral_code = ? WHERE id = ?', [String(code).toUpperCase(), id]); return String(code).toUpperCase(); },
-      /** Deleting the user cascades to profiles, list, progress, reminders and subscription. */
-      async remove(id) { await q('DELETE FROM users WHERE id = ?', [id]); },
+      /**
+       * Permanently removes the account and linked service data. Payments and tax documents deliberately
+       * survive detached from the user; their statutory billing snapshot is not deleted.
+       */
+      async remove(id) {
+        await tx(async (t) => {
+          const user = (await t.query('SELECT email, phone FROM users WHERE id = ? FOR UPDATE', [id]))[0];
+          if (!user) return;
+          const phone = user.phone || null;
+          // Tickets carry copied contact details and replies, so remove the whole thread before the FK
+          // would otherwise turn the account link into NULL. Also remove guest tickets/contact messages
+          // that use the same verified account address (or phone on a ticket).
+          await t.query('DELETE FROM support_tickets WHERE user_id = ? OR LOWER(email) = LOWER(?) OR (? IS NOT NULL AND phone = ?)', [id, user.email, phone, phone]);
+          await t.query('DELETE FROM contact_messages WHERE LOWER(email) = LOWER(?)', [user.email]);
+          const normalizedPhone = normalizePhone(phone);
+          if (normalizedPhone) {
+            // Guest tickets and contact form submissions have no reliable account FK; match common phone formatting too.
+            const ticketRows = await t.query("SELECT id, phone FROM support_tickets WHERE phone IS NOT NULL AND phone <> ''");
+            const matchingTicketIds = ticketRows.filter((row) => normalizePhone(row.phone) === normalizedPhone).map((row) => row.id);
+            if (matchingTicketIds.length) {
+              await t.query(`DELETE FROM support_tickets WHERE id IN (${matchingTicketIds.map(() => '?').join(',')})`, matchingTicketIds);
+            }
+            const contactRows = await t.query("SELECT id, phone FROM contact_messages WHERE phone <> ''");
+            const matchingContactIds = contactRows.filter((row) => normalizePhone(row.phone) === normalizedPhone).map((row) => row.id);
+            if (matchingContactIds.length) {
+              await t.query(`DELETE FROM contact_messages WHERE id IN (${matchingContactIds.map(() => '?').join(',')})`, matchingContactIds);
+            }
+          }
+          // These tables intentionally have no cascading user FK, or keep recipient snapshots for history.
+          await t.query('DELETE FROM refund_requests WHERE user_id = ?', [id]);
+          await t.query('DELETE FROM error_log WHERE user_id = ?', [id]);
+          await t.query('DELETE FROM notify_sent WHERE user_id = ?', [id]);
+          await t.query('DELETE FROM playback_sessions WHERE user_id = ?', [id]);
+          await t.query('DELETE FROM phone_otps WHERE phone = ?', [phone]);
+          await t.query('DELETE FROM push_devices WHERE user_id = ?', [id]);
+          // Keep campaign counts/status, but break the deterministic recipient digest as well as clearing direct identifiers.
+          const deliveries = await t.query('SELECT id FROM campaign_deliveries WHERE user_id = ? FOR UPDATE', [id]);
+          for (const delivery of deliveries) {
+            await t.query('UPDATE campaign_deliveries SET delivery_key = ?, user_id = NULL, recipient_name = NULL, recipient_email = NULL, destination = NULL, error = NULL WHERE id = ?', [crypto.randomBytes(32).toString('hex'), delivery.id]);
+          }
+          await t.query('UPDATE campaigns SET created_by = NULL WHERE LOWER(created_by) = LOWER(?)', [user.email]);
+          await t.query('DELETE FROM users WHERE id = ?', [id]);
+        });
+      },
     },
 
     /** Linked social accounts (Google / Facebook). */
@@ -319,7 +363,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
     },
   };
   // Merge in the other data-access modules. They share the pool, transaction helper and `self`.
-  Object.assign(self, extraDb({ q, tx, self, iso }));         // reset/verify tokens, ratings, comments, push, analytics…
+  Object.assign(self, extraDb({ q, tx, self, iso }));         // reset/verify tokens, ratings, push and analytics…
   Object.assign(self, billingDb({ q, tx, self, iso }));      // coupons, invoices, refunds
   Object.assign(self, adminDb({ q, tx, self, iso }));        // catalog, audit log, admin user/message queries, dashboard numbers, and monitoring history
   return self;

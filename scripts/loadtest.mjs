@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* Dependency-free load test.   npm run loadtest -- --url http://localhost:3000 --users 50 --seconds 20 [--scenario browse|mixed]
  *
- *   browse  anonymous visitors: /catalog, /plans, /studio, a watch-page render (SEO HTML), comments, ratings
+ *   browse  anonymous visitors: /catalog, /plans, /studio, a watch-page render (SEO HTML), ratings
  *   mixed   80% browse + 20% signed-in viewers: progress saves, heartbeats, list/ratings reads
  *
  * ⚠ Run it against a STAGING copy, never production. It creates accounts (loadtest+N@example.invalid) and the API's per-IP rate
@@ -43,7 +43,6 @@ async function anonymous() {
     else if (r < .45) await hit('GET /plans', 'GET', API + '/plans');
     else if (r < .6) await hit('GET /studio', 'GET', API + '/studio');
     else if (r < .8) await hit('GET /watch/:id (SEO HTML)', 'GET', `${BASE}/watch/${v.id}`);
-    else if (r < .9) await hit('GET comments', 'GET', `${API}/videos/${v.id}/comments`);
     else await hit('GET ratings', 'GET', `${API}/ratings/video/${v.id}`);
     await new Promise((r2) => setTimeout(r2, 20 + Math.random() * 80));       // think time
   }

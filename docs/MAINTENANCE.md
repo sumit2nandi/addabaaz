@@ -25,7 +25,7 @@ Nothing is lost, nobody is signed out, and payments already in flight still sett
 | `/api/v1/notifications/unsubscribe` | unsubscribe links in e-mails that were already sent |
 | `/app/*`, `/media/*`, `/uploads/*`, `sw.js` | the maintenance page and the consoles need their assets |
 
-Everything else under `/api/v1` — catalog, plans, credits, support, push, comments, playback — is refused.
+Everything else under `/api/v1` — catalog, plans, credits, support, push and playback — is refused.
 
 ## Turning it on
 

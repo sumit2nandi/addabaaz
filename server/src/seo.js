@@ -35,7 +35,7 @@ export function siteOrigin(req, configured) {
 export function bodyHtml(m, { view, params }, cat, studio, plans) {
   const h1 = (t) => `<h1>${esc(t)}</h1>`;
   const intro = (t, d = m.description) => `${h1(t)}<p>${esc(d)}</p>`;
-  const nav = `<nav aria-label="Site">${[['/', 'Home'], ['/shows', 'All shows'], ['/reels', 'Reels'], ['/upcoming', 'Coming soon'], ['/plans', 'Plans'], ['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact'], ['/privacy', 'Privacy Policy'], ['/terms', 'Terms of Use'], ['/refunds', 'Refund Policy']].map(([h, t]) => A(h, t)).join(' · ')}</nav>`;
+  const nav = `<nav aria-label="Site">${[['/', 'Home'], ['/shows', 'All shows'], ['/reels', 'Reels'], ['/upcoming', 'Coming soon'], ['/plans', 'Plans'], ['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact'], ['/privacy', 'Privacy Policy'], ['/terms', 'Terms of Use'], ['/refunds', 'Refund Policy'], ['/delete-account', 'Delete account']].map(([h, t]) => A(h, t)).join(' · ')}</nav>`;
   const showList = (list) => `<ul>${list.map((s) => li(`/show/${s.id}`, showFullName(s), s.tagline)).join('')}</ul>`;
   const epList = (list) => `<ul>${list.map((v) => li(`/watch/${v.id}`, `${v.kind === 'episode' && v.episode ? `EP ${v.episode}: ` : ''}${cat.displayTitle(v)}`)).join('')}</ul>`;
   let b = '';
@@ -68,6 +68,12 @@ export function bodyHtml(m, { view, params }, cat, studio, plans) {
     case 'legal': {
       const d = legalDoc(LEGAL_PAGES[m.canonical], { studio: studio?.studio });
       b = `${h1(d.title)}<p>Last updated ${esc(LEGAL_UPDATED)}.</p><p>${esc(d.intro)}</p>` + d.sections.map(([h, ps]) => `<h2>${esc(h)}</h2>${ps.map((t) => `<p>${esc(t)}</p>`).join('')}`).join(''); break;
+    }
+    case 'deletion': {
+      const st = studio?.studio || {}, name = st.name || 'ADDABAAZ', email = st.email || 'office@addabaaz.in';
+      const subject = encodeURIComponent(`${name} account deletion request`);
+      b = `${h1(`Delete your ${name} account`)}<p>Delete a signed-in account from Account → Delete account. If you cannot sign in, email ${A(`mailto:${email}?subject=${subject}`, email)} with the account’s registered email or phone number. Do not send a password or one-time code; we may ask for reasonable verification and aim to acknowledge within 7 days.</p><h2>What is deleted</h2><p>We remove account sign-in identities, profiles, ratings, library and viewing data, subscription, credits/referrals, linked push registrations, phone-code history, linked diagnostics, refund requests, and support-ticket conversations/replies linked by account ID, account email or verified phone. Contact records in our database matching the account email or verified phone number are removed.</p><h2>What may be retained</h2><p>Payment, refund and invoice/credit-note records are detached from the account but may retain the buyer name, email, GSTIN/state, amounts, provider references, tax details and credit-note reason for accounting/compliance. Broadcast history keeps counts/status while clearing recipient details and replacing the recipient key with a fresh random value; append-only administrator audit records may retain an administrator email, target account email/ID, action details and IP without an automatic expiry. Provider mail copies, Google Forms or contact-webhook copies, pre-deletion backups, and local data on your device may require separate action. The backup script rotates local backups to the newest 14 by default; remote R2 and hosting/database snapshots follow separate retention settings. Read the ${A('/privacy', 'Privacy Policy')} for details.</p>`;
+      break;
     }
     case 'plans': b = `${intro('Plans and pricing')}<ul>${(plans || []).map((p) => `<li>${esc(p.name)} — ${p.priceINR ? `₹${p.priceINR} per ${esc(p.interval)}` : 'free'}: ${esc((p.features || []).join('; '))}</li>`).join('')}</ul>`; break;
     case 'studio': {
@@ -187,7 +193,7 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
     const url = (p, { lastmod, extra = '' } = {}) => `<url><loc>${esc(origin + p)}</loc>${lastmod ? `<lastmod>${day(lastmod)}</lastmod>` : ''}${extra}</url>`;
     const newest = (list) => list.map((v) => v.publishedAt).filter(Boolean).sort().at(-1);
     const out = [url('/', { lastmod: newest(cat.videos) })];
-    for (const p of ['/shows', '/upcoming', '/plans', '/about', '/services', '/contact', '/privacy', '/terms', '/refunds']) out.push(url(p));
+    for (const p of ['/shows', '/upcoming', '/plans', '/about', '/services', '/contact', '/privacy', '/terms', '/refunds', '/delete-account']) out.push(url(p));
     for (const s of cat.shows) out.push(url(`/show/${s.id}`, { lastmod: newest(cat.videos.filter((v) => v.showId === s.id)) }));
     for (const u of cat.upcoming) out.push(url(`/soon/${u.id}`));
     for (const v of cat.videos) {

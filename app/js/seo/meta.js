@@ -173,6 +173,11 @@ export function pageMeta({ path, query = {}, cat, studio = null, origin, plans =
     const d = legalDoc(LEGAL_PAGES[path], { studio: studio?.studio });
     out.title = `${d.title} — ${SITE}`; out.description = clip(d.intro, 158); out.canonical = path;
     out.jsonld = [{ '@type': 'WebPage', name: d.title, url: `${origin}${path}`, dateModified: LEGAL_UPDATED }, crumbs(origin, [home, [d.title, path]])];
+  } else if (view === 'deletion') {
+    out.title = `Delete your ${SITE} account`;
+    out.description = `How to permanently delete your ${SITE} account in the app or request deletion if you cannot sign in, including the data that may be retained.`;
+    out.canonical = '/delete-account';
+    out.jsonld = [{ '@type': 'WebPage', name: `Delete your ${SITE} account`, url: `${origin}/delete-account` }, crumbs(origin, [home, ['Delete account', '/delete-account']])];
   // Search and sign-in pages are indexable shells; personal pages (below) are noindex.
   } else if (view === 'search') {
     out.title = `Search — ${SITE}`; out.description = `Search ${SITE} shows, episodes and reels.`; out.canonical = '/search'; out.robots = 'noindex,follow';

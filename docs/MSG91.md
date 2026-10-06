@@ -97,10 +97,11 @@ If `otp` is still `false`, the server did not read both variables — check `MSG
 * Codes are 6 digits, valid 10 minutes, and consumed on first successful use.
 * Changing the number, wrong codes and resends are all rate-limited per IP as well (`authLimit`).
 * The first successful verify **creates the account** (sign-in and sign-up are the same flow). Such an
-  account gets a reserved, non-routable address `<number>@phone.addabaaz.in` because `users.email` is
-  `NOT NULL`; nothing is ever mailed there, and the viewer can add a real address later from Account.
+  account gets an internal placeholder `<number>@phone.addabaaz.in` because `users.email` is `NOT NULL`.
+  It is not an address the viewer supplied; e-mail campaign audiences exclude it, and the Support form asks
+  for a separate reply address when needed.
 * A verified phone counts as a verified identity (the same as clicking an email confirmation link), so
-  commenting and buying a plan are not blocked for phone-only accounts.
+  buying a plan is not blocked for phone-only accounts.
 * MSG91 failures surface as `502 sms_auth_failed` (bad key) or `502 sms_send_failed` (template/number), and
   the sign-in page shows the message with the email form one tap away.
 

@@ -16,6 +16,11 @@ export default async function account(ctx) {
   ctx.setTitle('Account');
   const p = u.profile;
   const plan = u.subscription?.planId || 'free';
+  const identity = u.account
+    ? u.account.emailIsPlaceholder
+      ? `SMS sign-in${u.account.phone ? ` · +${u.account.phone}` : ''}`
+      : [u.account.email, u.account.phoneVerified ? `SMS sign-in${u.account.phone ? ` · +${u.account.phone}` : ''}` : '', u.account.providers?.length ? u.account.providers.map((x) => ({ google: 'Google', facebook: 'Facebook', apple: 'Apple' }[x] || x)).join(' & ') + ' sign-in' : ''].filter(Boolean).join(' · ')
+    : u.supportsAuth ? 'Browsing as a guest — sign in to sync across devices.' : 'Your list and progress are saved on this device.';
   const link = (href, ic, label, sub = '') => html`<a class="row-link" href="${href}">${icon(ic, { size: 22 })}<span><b>${label}</b>${sub ? html`<small>${sub}</small>` : ''}</span>${icon('right', { size: 18, cls: 'chev' })}</a>`;
 
   const extras = accountExtras();
@@ -26,7 +31,7 @@ export default async function account(ctx) {
     <section class="card-panel who">
       ${p ? avatar(p, { size: 64 }) : ''}
       <div><h2>${u.account ? u.account.name : p ? p.name : 'Guest'}</h2>
-        <p class="muted">${u.account ? u.account.email + (u.account.providers?.length ? ' · ' + u.account.providers.map((x) => ({ google: 'Google', facebook: 'Facebook', apple: 'Apple' }[x] || x)).join(' & ') + ' sign-in' : '') : u.supportsAuth ? 'Browsing as a guest — sign in to sync across devices.' : 'Your list and progress are saved on this device.'}</p></div>
+        <p class="muted">${identity}</p></div>
       <div class="who-actions">${u.supportsAuth ? (u.account ? html`<button class="btn btn-ghost" id="signout">${icon('logout', { size: 18 })} Sign out</button>` : html`<a class="btn btn-primary" href="#/signin">Sign in</a><a class="btn btn-ghost" href="#/signup">Create account</a>`) : ''}</div>
     </section>
     <div class="account-grid">
@@ -62,7 +67,7 @@ export default async function account(ctx) {
           <div class="row-link static">${icon('info', { size: 22 })}<span><b>Version ${CONFIG.version}</b><small>${platform === 'web' ? 'Web' : platform} · ${u.mode === 'remote' ? 'Connected to ADDABAAZ cloud' : 'Local mode (data stays on this device)'}</small></span></div>
         </div>
       </section>
-      ${u.account ? html`<section class="account-section"><h2 class="sub-h">Danger zone</h2><div class="card-panel list"><button class="row-link danger" id="delAcc">${icon('trash', { size: 22 })}<span><b>Delete account</b><small>Permanently removes your account, profiles, list and history.</small></span></button></div></section>` : ''}
+      ${u.account ? html`<section class="account-section"><h2 class="sub-h">Danger zone</h2><div class="card-panel list"><button class="row-link danger" id="delAcc">${icon('trash', { size: 22 })}<span><b>Delete account</b><small>Permanently deletes your account and linked data. Billing records may remain detached.</small></span></button></div></section>` : ''}
     </div>
   </div>`.s;
 
@@ -77,7 +82,7 @@ export default async function account(ctx) {
     if (await confirmDialog({ title: 'Clear watch history?', text: 'This removes Continue Watching for this profile.', confirm: 'Clear', danger: true })) { u.clearHistory(); toast('Watch history cleared'); }
   });
   $('#delAcc', ctx.root)?.addEventListener('click', async () => {
-    if (await confirmDialog({ title: 'Delete your account?', text: 'This cannot be undone. All profiles, lists and history will be erased.', confirm: 'Delete account', danger: true })) {
+    if (await confirmDialog({ title: 'Delete your account?', text: 'This cannot be undone. Your account and linked data will be deleted. Payment and invoice records may be kept detached from your account; see the Privacy Policy.', confirm: 'Delete account', danger: true })) {
       try { await u.deleteAccount(); toast('Account deleted'); go('/', { replace: true }); } catch (e) { toast(friendly(e)); }
     }
   });

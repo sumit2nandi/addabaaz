@@ -246,7 +246,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     const u = await userOr404(req.params.id);
     if (req.admin.id === u.id) throw new HttpError(409, 'cannot_lock_yourself_out', 'You can’t delete your own account here — use the site’s Account page.');
     if (u.isAdmin && !u.disabledAt && (await db.adminUsers.countAdmins()) <= 1) throw new HttpError(409, 'last_admin', 'This is the last administrator.');
-    await db.users.remove(u.id); await log(req, 'user.delete', u.email);
+    await db.users.remove(u.id); await log(req, 'user.delete', u.id);
     res.sendStatus(204);
   }));
 
@@ -625,7 +625,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     res.status(201).json({ key: k.key, format: k.format, contentType: k.contentType, uploadUrl: r2.presignPut(k.key, { ttl: 6 * 3600 }), expiresInSeconds: 6 * 3600 });
   }));
 
-  // More admin endpoints (analytics, comments moderation, refund requests, notifications, errors ...) live in admin-extra.js.
+  // More admin endpoints (analytics, refund requests, notifications, support tickets, errors ...) live in admin-extra.js.
   adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns, unsubscribeUrlFor, log, logger, siteUrl: siteUrl || billing.config.siteUrl, sms });
   // Credit & referrals (Admin → Promotions). Without a promos collaborator the section is simply absent,
   // exactly like the other optional features — the console hides it when /admin/promos answers 404.

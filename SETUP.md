@@ -31,8 +31,8 @@ Everything you need to install, configure, run, deploy and operate ADDABAAZ, in 
 | Part | What it is | Needed for |
 |---|---|---|
 | **Website (PWA)** | Plain HTML + JavaScript modules in `index.html`, `app/`, `sw.js`. No build step. | Everything |
-| **API + web server** | Node.js / Express in `server/src/`, storing data in **MySQL**. Also serves the website, the admin console and SEO pages. | Accounts, premium video, payments, admin, comments, notifications … |
-| **Admin console** | `/admin` (files in `admin/`). Users, payments and refunds, coupons, the contact inbox, support tickets, comments, analytics, broadcasts, errors, audit log, client-cache refresh. | Running the business |
+| **API + web server** | Node.js / Express in `server/src/`, storing data in **MySQL**. Also serves the website, the admin console and SEO pages. | Accounts, premium video, payments, admin, notifications … |
+| **Admin console** | `/admin` (files in `admin/`). Users, payments and refunds, coupons, the contact inbox, support tickets, analytics, broadcasts, errors, audit log, client-cache refresh. | Running the business |
 | **Content studio (CMS)** | `/content` (files in `content/`, sharing `admin/js/*`). Shows and seasons, videos and reels, the “coming soon” calendar, the homepage Top 10, studio credits. | Publishing content |
 | **Mobile apps** | A Capacitor wrapper in `mobile/` that packages the same website as Android / iOS apps. | Play Store / App Store |
 
@@ -445,7 +445,7 @@ Not included: GST e-invoice/IRN and return filing (they need a GST Suvidha Provi
 
 ### 8.8 Email (receipts, password reset, verification, refunds)
 
-Set `SMTP_URL`, `MAIL_FROM`, `SUPPORT_EMAIL` and `PUBLIC_SITE_URL` (links in emails use it). Any SMTP provider works (Amazon SES, Brevo, Mailgun, Zoho, Gmail app password…). Once SMTP is set, viewers must confirm their email before buying or commenting. Set up SPF/DKIM for your sending domain so mail doesn't land in spam. After deploy, use `/admin` → Dashboard → System status → **Send test email** to verify the actual SMTP connection and delivery. On Render Free, ports 25/465/587 are blocked: use a provider with port 2525 (`SMTP_URL=smtp://username:password@smtp-host:2525`, STARTTLS) or a paid Render instance; URL-encode special characters in the username/password.
+Set `SMTP_URL`, `MAIL_FROM`, `SUPPORT_EMAIL` and `PUBLIC_SITE_URL` (links in emails use it). Any SMTP provider works (Amazon SES, Brevo, Mailgun, Zoho, Gmail app password…). Once SMTP is set, viewers must confirm their email before buying a plan. Set up SPF/DKIM for your sending domain so mail doesn't land in spam. After deploy, use `/admin` → Dashboard → System status → **Send test email** to verify the actual SMTP connection and delivery. On Render Free, ports 25/465/587 are blocked: use a provider with port 2525 (`SMTP_URL=smtp://username:password@smtp-host:2525`, STARTTLS) or a paid Render instance; URL-encode special characters in the username/password.
 
 ### 8.9 Notifications & broadcasts (app push + e-mail)
 
@@ -773,8 +773,7 @@ Prints requests per second and p50/p95/p99 latency per endpoint. The numbers dep
 | New administrator | `npm run admin -- grant email` (Hostinger Web App: `UPDATE users SET is_admin = 1 WHERE email = '…';` in phpMyAdmin) |
 | Refund a customer | `/admin → Payments → Refund…`, or approve their request in `/admin → Refund requests` |
 | Free access for someone | `/admin → Users → user → Give free access` |
-| Delete a user's data on request | `/admin → Users → Delete` (payment/invoice records are kept — GST law) |
-| Moderate comments | `/admin → Comments` |
+| Delete an account | Account → Delete account, or the public `/delete-account` request page if the person cannot sign in. Admins can also remove an account from Users; payment/invoice records remain detached and are described in the Privacy Policy. |
 | Send an announcement | `/admin → Notifications` |
 | Change plan prices | edit `server/src/plans.js`, redeploy (prices appear on invoices — change deliberately) |
 

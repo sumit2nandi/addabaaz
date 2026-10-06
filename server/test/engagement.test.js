@@ -1,4 +1,4 @@
-// Tests for account safety (verification, password reset, PIN), Sign in with Apple, ratings, comments, device limit,
+// Tests for account safety (verification, password reset, PIN), Sign in with Apple, ratings, device limit,
 // web push, analytics, refund requests, subtitles and scheduled publishing.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,7 +28,7 @@ test.before(async () => {
   pushed = []; mails = [];
   const mailer = createMailer({ transport: { sendMail: async (m) => { mails.push(m); } } });
   const push = createPush({ db, vapid: { publicKey: 'BPUBLIC' }, sender: fakeSender });
-  const app = theApp = createApp({ db, jwtSecret: 'test-secret', rate: false, mailer, push, adminToken: ADMIN, uploadDir: tmpUploads, features: { streamLimit: 1, reportsToHide: 2, refundWindowDays: 7 } });
+  const app = theApp = createApp({ db, jwtSecret: 'test-secret', rate: false, mailer, push, adminToken: ADMIN, uploadDir: tmpUploads, features: { streamLimit: 1, refundWindowDays: 7 } });
   server = app.listen(0); await new Promise((r) => server.once('listening', r));
   root = `http://127.0.0.1:${server.address().port}`; base = `${root}/api/v1`;
 });
@@ -56,12 +56,11 @@ test('email verification: link confirms the account; tokens are single-use; rese
   const v2 = await signup(); assert.equal((await call('POST', '/me/verify/resend', null, v2.token)).status, 429, 'signup just sent one');
 });
 
-test('unverified accounts cannot buy or comment while email is configured; verified ones can comment', async () => {
-  const u = await signup(); const vid = (await call('GET', '/catalog')).body.videos.find((v) => v.kind === 'episode');
+test('unverified accounts cannot buy while email is configured; verified accounts pass the email gate', async () => {
+  const u = await signup();
   assert.equal((await call('POST', '/payments/checkout', { planId: 'plus-monthly' }, u.token)).status, 403);
-  assert.equal((await call('POST', `/videos/${vid.id}/comments`, { body: 'hi' }, u.token)).body.error.code, 'email_unverified');
   await db.accounts.markVerified(u.user.id);
-  assert.equal((await call('POST', `/videos/${vid.id}/comments`, { body: 'hi' }, u.token)).status, 201);
+  assert.notEqual((await call('POST', '/payments/checkout', { planId: 'plus-monthly' }, u.token)).status, 403);
 });
 
 test('password reset: neutral answer, one-hour single-use link, signs out other sessions, old password stops working', async () => {
@@ -211,28 +210,6 @@ test('ratings: thumbs per profile, public counts, validation', async () => {
   const other = await signup(); assert.equal((await call('PUT', `/profiles/${pid}/ratings/show/${show.id}`, { value: 1 }, other.token)).status, 404, 'not your profile');
 });
 
-test('comments: post, list, own delete, links refused, reports auto-hide, rate limit, kids profiles', async () => {
-  const u = await signup(); await db.accounts.markVerified(u.user.id); const w = await signup(); await db.accounts.markVerified(w.user.id); const x = await signup(); await db.accounts.markVerified(x.user.id);
-  const vid = (await call('GET', '/catalog')).body.videos.filter((v) => v.kind === 'episode').at(-1).id;   // (a video no other test comments on)
-  assert.equal((await call('POST', `/videos/${vid}/comments`, { body: 'hello' })).status, 401);
-  assert.equal((await call('POST', `/videos/${vid}/comments`, { body: '   ' }, u.token)).status, 400);
-  assert.equal((await call('POST', `/videos/${vid}/comments`, { body: 'see http://a.com and https://b.com' }, u.token)).body.error.code, 'links_not_allowed');
-  const c = await call('POST', `/videos/${vid}/comments`, { body: '<b>Great</b> episode!', profileId: u.profiles[0].id }, u.token); assert.equal(c.status, 201);
-  const list = await call('GET', `/videos/${vid}/comments`, null, u.token); assert.equal(list.body.total, 1); assert.equal(list.body.comments[0].mine, true); assert.equal(list.body.comments[0].body, '<b>Great</b> episode!');   // stored raw; the UI escapes
-  assert.equal((await call('GET', `/videos/${vid}/comments`)).body.comments[0].mine, undefined);
-  assert.equal((await call('POST', `/comments/${c.body.comment.id}/report`, null, u.token)).status, 400, 'own comment');
-  assert.equal((await call('POST', `/comments/${c.body.comment.id}/report`, null, w.token)).body.hidden, false);
-  assert.equal((await call('POST', `/comments/${c.body.comment.id}/report`, null, w.token)).body.reported, false, 'one report per person');
-  assert.equal((await call('POST', `/comments/${c.body.comment.id}/report`, null, x.token)).body.hidden, true, '2 reports hide it');
-  assert.equal((await call('GET', `/videos/${vid}/comments`)).body.total, 0);
-  assert.equal((await call('DELETE', `/comments/${c.body.comment.id}`, null, w.token)).status, 404, 'not yours');
-  const c2 = await call('POST', `/videos/${vid}/comments`, { body: 'second' }, u.token); assert.equal((await call('DELETE', `/comments/${c2.body.comment.id}`, null, u.token)).status, 204);
-  for (let i = 0; i < 5; i++) await call('POST', `/videos/${vid}/comments`, { body: `spam ${i}` }, w.token);
-  assert.equal((await call('POST', `/videos/${vid}/comments`, { body: 'one more' }, w.token)).status, 429);
-  const kid = (await call('POST', '/profiles', { name: 'Kiddo', kids: true }, x.token)).body.profile;
-  assert.equal((await call('POST', `/videos/${vid}/comments`, { body: 'hi', profileId: kid.id }, x.token)).body.error.code, 'kids_profile');
-});
-
 test('screens at once: a second device is refused while the first is watching; heartbeat frees the seat', async () => {
   const u = await signup(); const vid = (await call('GET', '/catalog')).body.videos.find((v) => v.kind === 'episode').id;
   const hb = (dev) => call('POST', '/playback/heartbeat', { videoId: vid }, u.token, { 'X-Device-Id': dev, 'X-Device-Label': dev });
@@ -322,22 +299,6 @@ test('refund requests: only real paid purchases inside the window, once; the cus
 
 const adm = (method, p, body, raw) => fetch(`${base}/admin${p}`, { method, headers: { Authorization: `Bearer ${ADMIN}`, ...(raw ? {} : { 'Content-Type': 'application/json' }) }, body: raw ?? (body ? JSON.stringify(body) : undefined) }).then(async (r) => { const t = await r.text(); let j = null; try { j = t ? JSON.parse(t) : null; } catch { /* text */ } return { status: r.status, body: j, text: t, headers: r.headers }; });
 
-test('admin: comment moderation queue — approve, hide, delete', async () => {
-  const u = await signup(); await db.accounts.markVerified(u.user.id); const w = await signup(); await db.accounts.markVerified(w.user.id); const x = await signup(); await db.accounts.markVerified(x.user.id);
-  const vid = (await call('GET', '/catalog')).body.videos.filter((v) => v.kind === 'episode')[1].id;
-  const c = (await call('POST', `/videos/${vid}/comments`, { body: 'borderline remark' }, u.token)).body.comment;
-  await call('POST', `/comments/${c.id}/report`, null, w.token); await call('POST', `/comments/${c.id}/report`, null, x.token);   // 2 reports hide it in this test setup
-  const q = (await adm('GET', '/comments')).body; assert.equal(q.comments.some((k) => k.id === c.id && k.status === 'hidden' && k.reports === 2), true);
-  assert.ok((await adm('GET', '/inbox')).body.comments >= 1);
-  assert.equal((await adm('POST', `/comments/${c.id}/approve`)).status, 204);
-  assert.equal((await call('GET', `/videos/${vid}/comments`)).body.comments.some((k) => k.id === c.id), true, 'visible again, reports cleared');
-  assert.equal((await adm('GET', '/comments')).body.comments.some((k) => k.id === c.id), false);
-  assert.equal((await adm('POST', `/comments/${c.id}/hide`)).status, 204); assert.equal((await call('GET', `/videos/${vid}/comments`)).body.comments.length, 0);
-  assert.equal((await adm('GET', '/comments?filter=all&q=borderline')).body.comments.length, 1);
-  assert.equal((await adm('DELETE', `/comments/${c.id}`)).status, 204); assert.equal((await adm('DELETE', `/comments/${c.id}`)).status, 404);
-  assert.equal((await call('GET', '/admin/comments', null, u.token)).status, 403);
-});
-
 // Broadcast sending happens in the background, so the tests poll the campaign row.
 const waitCampaign = async (id, at = adm) => {
   for (let i = 0; i < 200; i++) {
@@ -398,7 +359,7 @@ test('admin: app push reaches registered devices through FCM and drops dead toke
     return { sent: tokens.length - 1, failed: 0, dead, results: tokens.map((token) => ({ token, ok: token !== dead[0], dead: token === dead[0], error: token === dead[0] ? 'Device token is unregistered.' : null })) };
   } };
   const push2 = createPush({ db, vapid: { publicKey: 'x' }, sender: fakeSender, fcm });
-  const app2 = createApp({ db, jwtSecret: 'test-secret', rate: false, mailer: createMailer({ transport: { sendMail: async (m) => { mails.push(m); } } }), push: push2, adminToken: ADMIN, features: { streamLimit: 1, reportsToHide: 2, refundWindowDays: 7 } });
+  const app2 = createApp({ db, jwtSecret: 'test-secret', rate: false, mailer: createMailer({ transport: { sendMail: async (m) => { mails.push(m); } } }), push: push2, adminToken: ADMIN, features: { streamLimit: 1, refundWindowDays: 7 } });
   const server2 = app2.listen(0); await new Promise((r) => server2.once('listening', r));
   const base2 = `http://127.0.0.1:${server2.address().port}/api/v1`;
   const adm2 = (method, p, body) => fetch(`${base2}/admin${p}`, { method, headers: { Authorization: `Bearer ${ADMIN}`, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }).then(async (r) => { const t = await r.text(); let j = null; try { j = t ? JSON.parse(t) : null; } catch { /* text */ } return { status: r.status, body: j }; });

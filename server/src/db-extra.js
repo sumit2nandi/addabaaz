@@ -1,5 +1,5 @@
 /**
- * Data access for: one-time auth tokens, account security (PIN, session version), ratings, comments, web-push
+ * Data access for: one-time auth tokens, account security (PIN, session version), ratings, web-push
  * subscriptions, playback sessions, play statistics, refund requests and the error log.
  * Same conventions as db.js: parameterised queries, UTC timestamps returned as ISO strings.
  */
@@ -25,6 +25,54 @@ export function extraDb({ q, tx, iso }) {
     },
     // Housekeeping: remove long-expired tokens.
     async purge() { await q('DELETE FROM auth_tokens WHERE expires_at < UTC_TIMESTAMP(3) - INTERVAL 7 DAY'); },
+  };
+
+  // ---- Verified contact e-mail for phone-verified accounts; the address is promoted only after the token is redeemed ----
+  const emailChanges = {
+    /** Issues a one-hour confirmation link, invalidating an earlier pending request for this account. */
+    async issue(userId, { email, emailNorm, tokenHash, ttlMs }) {
+      return tx(async (t) => {
+        // The conditional update both serializes concurrent requests and preserves the one-minute cooldown after a token is redeemed.
+        const gate = await t.query('UPDATE users SET email_change_requested_at = UTC_TIMESTAMP(3) WHERE id = ? AND (email_change_requested_at IS NULL OR email_change_requested_at <= UTC_TIMESTAMP(3) - INTERVAL 60 SECOND)', [userId]);
+        if (gate.affectedRows !== 1) return false;
+        await t.query('DELETE FROM email_change_tokens WHERE user_id = ?', [userId]);
+        await t.query('INSERT INTO email_change_tokens (token_hash, user_id, email, email_norm, expires_at) VALUES (?,?,?,?,?)',
+          [tokenHash, userId, email, emailNorm, new Date(Date.now() + ttlMs)]);
+        return true;
+      });
+    },
+    /** Cooldown timestamp used to avoid sending multiple verification messages per minute. */
+    async lastIssuedAt(userId) { const r = (await q('SELECT email_change_requested_at AS at FROM users WHERE id = ?', [userId]))[0]; return r?.at ? new Date(r.at) : null; },
+    /** If mail delivery fails, remove the unusable request and release its cooldown if it is still the latest one. */
+    async revoke(userId, tokenHash) {
+      await tx(async (t) => {
+        await t.query('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId]);
+        const removed = await t.query('DELETE FROM email_change_tokens WHERE user_id = ? AND token_hash = ?', [userId, tokenHash]);
+        if (removed.affectedRows !== 1) return;
+        const previous = (await t.query('SELECT MAX(created_at) AS at FROM email_change_tokens WHERE user_id = ?', [userId]))[0]?.at || null;
+        await t.query('UPDATE users SET email_change_requested_at = ? WHERE id = ?', [previous, userId]);
+      });
+    },
+    /** Atomically consume a valid link and promote its address; duplicate addresses roll back and remain retryable. */
+    async confirm(tokenHash) {
+      return tx(async (t) => {
+        // Use the same lock order as issue(): user row first, then pending token, avoiding a resend/confirm deadlock.
+        const hint = (await t.query('SELECT user_id FROM email_change_tokens WHERE token_hash = ? AND expires_at > UTC_TIMESTAMP(3)', [tokenHash]))[0];
+        if (!hint || !(await t.query('SELECT id FROM users WHERE id = ? FOR UPDATE', [hint.user_id]))[0]) return null;
+        const row = (await t.query('SELECT user_id, email, email_norm FROM email_change_tokens WHERE token_hash = ? AND expires_at > UTC_TIMESTAMP(3) FOR UPDATE', [tokenHash]))[0];
+        if (!row) return null;
+        const updated = await t.query('UPDATE users SET email = ?, email_norm = ?, email_verified_at = UTC_TIMESTAMP(3) WHERE id = ? AND phone_verified_at IS NOT NULL',
+          [row.email, row.email_norm, row.user_id]);
+        // Once redeemed (or no longer applicable), remove the pending address and hash in this same transaction.
+        await t.query('DELETE FROM email_change_tokens WHERE token_hash = ?', [tokenHash]);
+        return updated.affectedRows === 1 ? { userId: row.user_id, email: row.email } : null;
+      });
+    },
+    /** Purge expired pending addresses and the request timestamp after a short cleanup grace period. */
+    async purge() {
+      await q('DELETE FROM email_change_tokens WHERE expires_at < UTC_TIMESTAMP(3) - INTERVAL 1 DAY');
+      await q('UPDATE users SET email_change_requested_at = NULL WHERE email_change_requested_at < UTC_TIMESTAMP(3) - INTERVAL 1 DAY');
+    },
   };
 
   // ---- Account security: password changes, session invalidation, e-mail verification, parental PIN ----
@@ -58,45 +106,6 @@ export function extraDb({ q, tx, iso }) {
     async counts(type, id) { const r = (await q('SELECT COALESCE(SUM(value = 1), 0) AS up, COALESCE(SUM(value = -1), 0) AS down FROM ratings WHERE item_type = ? AND item_id = ?', [type, id]))[0]; return { up: Number(r.up), down: Number(r.down) }; },
     /** Ids of the show/videos a profile liked (used for recommendations). */
     async liked(profileId) { return (await q('SELECT item_type, item_id FROM ratings WHERE profile_id = ? AND value = 1', [profileId])).map((r) => ({ type: r.item_type, id: r.item_id })); },
-  };
-
-  // ---- Comments on videos, with reporting and moderation ----
-  const mapComment = (r) => ({ id: r.id, videoId: r.video_id, userId: r.user_id, author: r.author, body: r.body, status: r.status, reports: r.reports, hiddenReason: r.hidden_reason, createdAt: iso(r.created_at) });
-  const comments = {
-    async list(videoId, { limit = 30, before = null } = {}) {
-      const rows = await q(`SELECT * FROM comments WHERE video_id = ? AND status = 'visible' ${before ? 'AND created_at < ?' : ''} ORDER BY created_at DESC LIMIT ?`, before ? [videoId, new Date(before), limit] : [videoId, limit]);
-      return rows.map(mapComment);
-    },
-    async count(videoId) { return Number((await q("SELECT COUNT(*) AS n FROM comments WHERE video_id = ? AND status = 'visible'", [videoId]))[0].n); },
-    async add(c) { await q('INSERT INTO comments (id, video_id, user_id, author, body) VALUES (?,?,?,?,?)', [c.id, c.videoId, c.userId, c.author, c.body]); },
-    // How many comments this user posted in the last N seconds (spam limit).
-    async recentBy(userId, seconds) { return Number((await q('SELECT COUNT(*) AS n FROM comments WHERE user_id = ? AND created_at > UTC_TIMESTAMP(3) - INTERVAL ? SECOND', [userId, seconds]))[0].n); },
-    async byId(id) { const r = (await q('SELECT * FROM comments WHERE id = ?', [id]))[0]; return r ? mapComment(r) : null; },
-    async remove(id) { return (await q('DELETE FROM comments WHERE id = ?', [id])).affectedRows === 1; },
-    /** One report per user. At `autoHideAt` reports the comment is hidden until an admin reviews it. Returns { reported, hidden }. */
-    async report(id, userId, autoHideAt) {
-      const ins = await q('INSERT IGNORE INTO comment_reports (comment_id, user_id) VALUES (?,?)', [id, userId]);
-      if (!ins.affectedRows) return { reported: false, hidden: false };
-      await q('UPDATE comments SET reports = reports + 1 WHERE id = ?', [id]);
-      const hid = await q("UPDATE comments SET status = 'hidden', hidden_reason = 'reports' WHERE id = ? AND status = 'visible' AND reports >= ?", [id, autoHideAt]);
-      return { reported: true, hidden: hid.affectedRows === 1 };
-    },
-    // Moderation: show/hide a comment; making it visible again clears its reports.
-    async setStatus(id, status, reason = null) {
-      const res = await q('UPDATE comments SET status = ?, hidden_reason = ?, reports = IF(? = \'visible\', 0, reports) WHERE id = ?', [status, status === 'hidden' ? reason || 'admin' : null, status, id]);
-      if (status === 'visible') await q('DELETE FROM comment_reports WHERE comment_id = ?', [id]);
-      return res.affectedRows === 1;
-    },
-    /** Admin queue: `review` = reported or hidden, newest first. */
-    async adminList({ filter = 'review', q: text = '', limit = 50, offset = 0 } = {}) {
-      const where = [], params = [];
-      if (filter === 'review') where.push("(status = 'hidden' OR reports > 0)"); else if (filter === 'hidden') where.push("status = 'hidden'");
-      if (text) { where.push('(body LIKE ? OR author LIKE ?)'); params.push(`%${text}%`, `%${text}%`); }
-      const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
-      const [rows, [{ n }]] = await Promise.all([q(`SELECT c.*, u.email FROM comments c JOIN users u ON u.id = c.user_id ${w.replace(/\b(status|reports|body|author)\b/g, 'c.$1')} ORDER BY c.created_at DESC LIMIT ? OFFSET ?`, [...params, limit, offset]), q(`SELECT COUNT(*) AS n FROM comments ${w}`, params)]);
-      return { total: Number(n), items: rows.map((r) => ({ ...mapComment(r), email: r.email })) };
-    },
-    async reviewCount() { return Number((await q("SELECT COUNT(*) AS n FROM comments WHERE status = 'hidden' AND hidden_reason = 'reports'"))[0].n); },
   };
 
   // ---- Web-push subscriptions (one row per browser) and send-once bookkeeping ----
@@ -318,15 +327,14 @@ export function extraDb({ q, tx, iso }) {
       const r = await q('UPDATE users SET phone = ?, phone_verified_at = UTC_TIMESTAMP(3) WHERE id = ? AND (phone IS NULL OR phone = ?)', [phone, userId, phone]);
       return r.affectedRows === 1;
     },
-    /** Creates an account whose only credential is a verified phone number (email stays NULL). */
+    /** Creates an account whose only credential is a verified phone number; email is an internal phone-derived placeholder. */
     async createWithPhone(user, profile) {
       await tx(async (t) => {
-        await t.query('INSERT INTO users (id, email, email_norm, name, phone, phone_verified_at) VALUES (?,NULL,NULL,?,?,UTC_TIMESTAMP(3))', [user.id, user.name, user.phone]);
+        await t.query('INSERT INTO users (id, email, email_norm, name, phone, phone_verified_at) VALUES (?,?,?,?,?,UTC_TIMESTAMP(3))', [user.id, user.email, user.email.toLowerCase(), user.name, user.phone]);
         await t.query('INSERT INTO profiles (id, user_id, name, color, kids) VALUES (?,?,?,?,0)', [profile.id, user.id, profile.name, profile.color ?? 0]);
       });
     },
-    /** Replaces the email of a phone-only account once the viewer shares one. */
-    async setEmail(userId, email, emailNorm) { await q('UPDATE users SET email = ?, email_norm = ? WHERE id = ? AND email IS NULL', [email, emailNorm, userId]); },
+    /** Persistence guard for replacing the internal placeholder if a verified email-update flow is added. */
   };
 
   // ---- Support tickets (the Support page → Admin → Support) ----
@@ -409,7 +417,8 @@ export function extraDb({ q, tx, iso }) {
     async openCount() { return Number((await q("SELECT COUNT(*) AS n FROM support_tickets WHERE status IN ('open','pending')"))[0].n); },
     /** Tickets whose last message was from the viewer (the admin's "needs an answer" queue). */
     async awaitingCount() { return Number((await q("SELECT COUNT(*) AS n FROM support_tickets WHERE status = 'open'"))[0].n); },
-    async prune() { await q("DELETE FROM support_tickets WHERE status = 'closed' AND updated_at < UTC_TIMESTAMP(3) - INTERVAL 365 DAY"); },
+    /** Keep support conversations for at most one year after the last activity. */
+    async prune() { await q('DELETE FROM support_tickets WHERE updated_at < UTC_TIMESTAMP(3) - INTERVAL 365 DAY'); },
   };
 
   // ---- Server-side settings (app_settings): currently the client cache version behind the console button ----
@@ -814,5 +823,5 @@ export function extraDb({ q, tx, iso }) {
     async prune() { await q("DELETE FROM campaigns WHERE finished_at IS NOT NULL AND finished_at < UTC_TIMESTAMP(3) - INTERVAL 365 DAY"); },
   };
 
-  return { authTokens, accounts, ratings, comments, push, devices, campaigns, playback, playStats, refundRequests, tickets, phoneOtps, phones, settings, errors, credits, referrals };
+  return { authTokens, emailChanges, accounts, ratings, push, devices, campaigns, playback, playStats, refundRequests, tickets, phoneOtps, phones, settings, errors, credits, referrals };
 }
