@@ -53,8 +53,8 @@ test('unsubscribed website viewers get a Subscribe banner above the settings gri
     'the profile name carries a Free/premium badge');
   assert.match(account, /<h2>Subscribe to <em class="premium-word">premium<\/em><\/h2>/,
     'the banner brands it premium in glittery gold, with no ADDABAAZ prefix');
-  assert.match(css, /\.subscribe-banner \{[^}]*display: flex/,
-    'the banner lays out text and button side by side');
+  assert.match(css, /\.subscribe-banner \{[^}]*display: flex[^}]*margin-top: 0; margin-bottom: 14px/,
+    'the banner hugs the top of the page with breathing room above the profile card');
   assert.match(css, /\.pill\.free \{[^}]*color: #fff/,
     'the Free badge is bold white');
 });
