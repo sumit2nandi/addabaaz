@@ -81,7 +81,7 @@ export function probeVideoDuration(source, { timeoutMs = 10000 } = {}) {
 }
 export const slug = (s) => String(s || '').normalize('NFKD').replace(/[^\w\s-]/g, '').trim().toLowerCase().replace(/[\s_]+/g, '-').replace(/-+/g, '-').slice(0, 50);
 export const plural = (n, w) => `${n.toLocaleString('en-IN')} ${w}${n === 1 ? '' : 's'}`;
-export const imgSrc = (p) => (!p ? '' : /^https?:/.test(p) ? p : '/' + p);
+export const imgSrc = (p) => (!p ? '' : /^https?:/.test(p) ? p : '/' + p.replace(/^\/+/, ''));
 export const ytId = (t) => { const m = String(t || '').trim().match(/(?:youtu\.be\/|v=|shorts\/|embed\/|live\/)([\w-]{11})|^([\w-]{11})$/); return m ? m[1] || m[2] : ''; };
 
 /* ---------- icons ---------- */
@@ -223,11 +223,12 @@ export function readForm(form, fields) {
 export function wireImages(root) {
   for (const box of $$('[data-image]', root)) {
     const input = $('input[type=text], input:not([type])', box), file = $('input[type=file]', box), st = $('.imgf-st', box), prev = $('.imgf-prev', box);
+    const upload = box.dataset.upload === 'r2' ? api.uploadBroadcastImage : api.uploadImage;
     const show = () => { prev.innerHTML = input.value.trim() ? `<img alt="" src="${esc(imgSrc(input.value.trim()))}">` : '<span class="muted small">No image</span>'; };
     input.addEventListener('change', show);
     file.addEventListener('change', async () => {
       const f = file.files[0]; if (!f) return; st.classList.remove('err', 'ok'); st.textContent = 'Uploading…';
-      try { const blob = await prepareImage(f, { maxWidth: Number(box.dataset.maxw) || 1600 }); const r = await api.uploadImage(blob); input.value = r.path; st.classList.add('ok'); st.textContent = `Uploaded ✓ (${Math.round(r.bytes / 1024)} KB)`; show(); }
+      try { const blob = await prepareImage(f, { maxWidth: Number(box.dataset.maxw) || 1600 }); const r = await upload(blob); input.value = r.path; const EventCtor = input.ownerDocument.defaultView?.Event || Event; input.dispatchEvent(new EventCtor('change', { bubbles: true })); st.classList.add('ok'); st.textContent = `Uploaded ✓ (${Math.round(r.bytes / 1024)} KB)`; }
       catch (e) { st.classList.add('err'); st.textContent = `✖ ${errMsg(e)}`; toast(errMsg(e), 'err'); } finally { file.value = ''; }
     });
   }

@@ -379,24 +379,25 @@ Required by the App Store if the iOS app offers Google or Facebook. Needs a paid
 2. For the website create a **Services ID** (e.g. `com.addabaaz.web`), tick Sign In with Apple → *Configure*: domain `addabaaz.in`, return URL `https://addabaaz.in` → `APPLE_SERVICE_ID=<services id>`.
 3. Restart. Check with `curl https://addabaaz.in/api/v1/auth/providers` — it lists every provider that is configured.
 
-### 8.4 Optional private video storage in Cloudflare R2
+### 8.4 Optional private media storage in Cloudflare R2
 
-Premium is an app-level access setting and is independent of source. This walkthrough configures optional private R2 storage for titles whose media files also need protection; ADDABAAZ gates Premium playback to signed-in viewers **with an active paid plan**.
+Premium is an app-level access setting and is independent of source. This configures private R2 storage for video/reel files and Broadcast photos; ADDABAAZ gates Premium playback to signed-in viewers **with an active paid plan**. Video/reel media bytes and Broadcast photo bytes live in R2, while catalog and campaign metadata stay in MySQL.
 
 1. Cloudflare → **R2 → Create bucket** (e.g. `addabaaz-premium`). Keep **public access OFF**.
-2. *R2 → Manage API tokens → Create token* with **Object Read only** for that bucket. Copy the Access Key ID and Secret, and note your Account ID.
+2. *R2 → Manage API tokens → Create token* with **Object Read & Write**, scoped to that bucket. Copy the Access Key ID and Secret to the server environment only, and note your Account ID.
 3. Set `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`. Restart.
-4. Bucket **CORS** (needed for HLS): *Bucket → Settings → CORS policy*:
+4. Bucket **CORS** (needed for HLS playback and browser-direct video/reel uploads; Broadcast photo uploads run server-side): *Bucket → Settings → CORS policy*:
    ```json
    [{ "AllowedOrigins": ["https://addabaaz.in", "http://localhost:3000"],
-      "AllowedMethods": ["GET", "HEAD"], "AllowedHeaders": ["Range"],
+      "AllowedMethods": ["GET", "HEAD", "PUT"], "AllowedHeaders": ["Range", "Content-Type"],
       "ExposeHeaders": ["Content-Length", "Content-Range"], "MaxAgeSeconds": 3600 }]
    ```
 5. **Getting a video in** — either
-   * *MP4 (simplest):* `ffmpeg -i episode.mov -c:v libx264 -crf 21 -preset slow -c:a aac -b:a 128k -movflags +faststart ep6.mp4`, then upload it in the admin (Videos → New video → *Private Cloudflare R2* → Upload — this needs a **write-capable** token, so either use a read/write token in `R2_*` or upload with another tool such as `rclone` and type the key), or
+   * *MP4 (simplest):* `ffmpeg -i episode.mov -c:v libx264 -crf 21 -preset slow -c:a aac -b:a 128k -movflags +faststart ep6.mp4`, then upload it in the admin (Videos → New video → *Private Cloudflare R2* → Upload — this uses the server's Object Read & Write token; alternatively upload with `rclone` or the R2 dashboard and type the key), or
    * *Adaptive HLS (better on mobile networks):* on your own computer, `npm run encode:hls -- episode.mov --name shahid-ep6 --upload`. It needs `ffmpeg` and a write-capable token, and prints the key to use (`premium/shahid-ep6/master.m3u8`). Try a short clip first.
-6. In the admin, create the video with *Source = Private Cloudflare R2* and that key; set *Access = Premium*.
-7. Verify: `npm run r2:check -- premium/shahid-ep6/master.m3u8`.
+6. Broadcast photos use the Broadcast composer’s **Upload** button and are saved to the bucket automatically; no browser-to-R2 CORS rule is needed for those images.
+7. In the admin, create the video with *Source = Private Cloudflare R2* and that key; set *Access = Premium*.
+8. Verify: `npm run r2:check -- premium/shahid-ep6/master.m3u8`.
 
 For Premium titles stored in R2, playback is protected by login, plan and short-lived signed links. It is **not DRM**; a determined person can still record their screen.
 

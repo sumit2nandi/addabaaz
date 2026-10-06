@@ -78,8 +78,20 @@ test('a recent broadcast opens a detail modal and Refresh preview reads the curr
     calls.push({ url, ...options });
     let data;
     if (url === '/api/v1/admin/notifications') data = meta;
-    else if (url === '/api/v1/admin/notifications/preview') data = { channel: 'push', push: { title: 'Draft title', body: 'Draft body', url: '/show/example' } };
-    else if (url === '/api/v1/admin/notifications/campaign-1') data = { ...campaign, body: 'Latest full campaign details', done: true };
+    else if (url === '/api/v1/admin/notifications/preview') {
+      const draft = JSON.parse(options.body);
+      data = draft.channel === 'email'
+        ? { channel: 'email', email: { subject: draft.title, html: `<html><body><img src="${draft.imageUrl}"></body></html>`, text: draft.body } }
+        : {
+          channel: 'push', push: { title: draft.title || 'Draft title', body: draft.body || 'Draft body', url: draft.url || '/' },
+          image: draft.imageUrl ? new URL(draft.imageUrl, 'https://addabaaz.test').href : null,
+        };
+    } else if (url === '/api/v1/admin/uploads/broadcast-image') {
+      // Make the upload slower than the preview debounce: the preview fires once before the upload is
+      // done and must be refreshed again when the uploaded path is written into the image field.
+      await new Promise((resolve) => setTimeout(resolve, 550));
+      data = { path: 'r2-assets/broadcast/dc4d24a1667f00aabbccdde1.webp', bytes: 404 * 1024 };
+    } else if (url === '/api/v1/admin/notifications/campaign-1') data = { ...campaign, body: 'Latest full campaign details', done: true };
     else if (url.startsWith('/api/v1/admin/notifications/campaign-1/deliveries?')) data = {
       total: 3, limit: 50, offset: 0, deliveries: [
         { id: 'delivery-1', userId: 'account-1', name: 'Priya Das', email: 'priya@example.com', destination: 'Browser / web app', transport: 'web_push', status: 'sent' },
@@ -116,6 +128,41 @@ test('a recent broadcast opens a detail modal and Refresh preview reads the curr
     });
     assert.equal(root.querySelector('#bcPvState').textContent, 'Nothing has been sent.');
     assert.equal(calls.some((call) => call.url.endsWith('/notifications/send')), false, 'preview never starts a broadcast');
+
+    // An upload is slower than the preview debounce, so the first preview sees no image. Once the
+    // upload returns its stable R2 path, the image field must emit change and refresh it.
+    const fileInput = form.querySelector('input[type="file"]');
+    Object.defineProperty(fileInput, 'files', { configurable: true, value: [{ type: 'image/webp', size: 100, name: 'poster.webp' }] });
+    fileInput.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const imageUrl = 'r2-assets/broadcast/dc4d24a1667f00aabbccdde1.webp';
+    const previewRequests = calls.filter((call) => call.url === '/api/v1/admin/notifications/preview');
+    assert.equal(JSON.parse(previewRequests.at(-1).body).imageUrl, imageUrl, 'the refreshed preview receives the uploaded path');
+    assert.equal(root.querySelector('#bcPvBody .push-img')?.getAttribute('src'), `https://addabaaz.test/${imageUrl}`,
+      'the push preview displays the uploaded photo');
+    assert.equal(root.querySelector('.imgf-prev img')?.getAttribute('src'), `/${imageUrl}`, 'the image field thumbnail updates too');
+
+    // Exercise the other preview branch as well: e-mail HTML (including its R2 image) renders to a string.
+    Object.defineProperty(Object.getPrototypeOf(form), 'audience', {
+      configurable: true, get() { return this.querySelector('[name="audience"]'); },
+    });
+    root.querySelector('[data-ch="email"]').dispatchEvent(new window.Event('click', { bubbles: true }));
+    const emailForm = root.querySelector('#bcf');
+    for (const name of ['title', 'body', 'url', 'button', 'imageUrl', 'imageAlt']) {
+      Object.defineProperty(emailForm, name, { configurable: true, value: emailForm.querySelector(`[name="${name}"]`) });
+    }
+    emailForm.title.value = 'Email draft';
+    emailForm.body.value = 'Email body';
+    emailForm.imageUrl.value = imageUrl;
+    emailForm.imageAlt.value = 'Release poster';
+    root.querySelector('#bc_preview').dispatchEvent(new window.Event('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const emailRequest = calls.filter((call) => call.url === '/api/v1/admin/notifications/preview').at(-1);
+    assert.equal(JSON.parse(emailRequest.body).channel, 'email');
+    assert.equal(JSON.parse(emailRequest.body).imageUrl, imageUrl);
+    assert.ok(root.querySelector('#bcPvBody .mail-mock'), 'the e-mail preview renders');
+    assert.match(root.querySelector('#bcPvBody iframe').getAttribute('srcdoc'), /r2-assets\/broadcast\//,
+      'the uploaded photo is included in the e-mail preview');
 
     assert.ok(root.querySelector('[data-campaign-open]'), 'the item title is also keyboard-accessible');
     root.querySelector('tr[data-campaign] td:nth-child(2)').dispatchEvent(new window.Event('click', { bubbles: true }));

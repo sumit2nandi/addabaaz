@@ -193,7 +193,7 @@ export function createApp({
   api.use((_req, _res, next) => next(new HttpError(404, 'not_found', 'Unknown endpoint.')));
   app.use('/api/v1', api);
 
-  mountWebsite(app, { serveStatic, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg, maintenance, logger });
+  mountWebsite(app, { serveStatic, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg, maintenance, r2, logger });
   // FINAL ERROR HANDLER: turn route/parser failures into the stable JSON contract. Expected,
   // deliberately-authored 4xx responses are not application faults; every 5xx (including provider
   // HttpErrors) and every unexpected exception is persisted with request/runtime/error diagnostics.

@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCampaigns } from '../src/campaigns.js';
 import { createMailer } from '../src/mailer.js';
+import { normalizeImage } from '../src/admin-extra.js';
+import { createR2 } from '../src/r2.js';
 
 function fixture(overrides = {}) {
   const row = {
@@ -48,6 +50,38 @@ function fixture(overrides = {}) {
 }
 
 const quietLog = { log() {}, warn() {}, error() {} };
+
+test('broadcast image URLs accept uploaded, R2, media, and https paths in canonical form', () => {
+  const uploadPath = 'uploads/dc4d24a1667f00aabbccdde1.webp';
+  const mediaPath = 'media/bts/song-bts-1-lg.webp';
+  const r2Path = 'r2-assets/broadcast/dc4d24a1667f00aabbccdde1.webp';
+  assert.equal(normalizeImage(uploadPath), `/${uploadPath}`);
+  assert.equal(normalizeImage(`/${uploadPath}`), `/${uploadPath}`);
+  assert.equal(normalizeImage(mediaPath), `/${mediaPath}`);
+  assert.equal(normalizeImage(`/${mediaPath}`), `/${mediaPath}`);
+  assert.equal(normalizeImage(r2Path), `/${r2Path}`);
+  assert.equal(normalizeImage(`/${r2Path}`), `/${r2Path}`);
+  assert.equal(normalizeImage('https://cdn.example.com/broadcast.webp'), 'https://cdn.example.com/broadcast.webp');
+  assert.equal(normalizeImage('http://cdn.example.com/broadcast.webp'), '', 'insecure remote image URLs stay rejected');
+  assert.equal(normalizeImage('uploads/broadcast.webp?download=1'), '', 'unsupported URL components stay rejected');
+  assert.equal(normalizeImage('r2-assets/private/secret.png'), '', 'only broadcast R2 objects can be shown publicly');
+});
+
+test('R2 putObject sends validated media bytes with the right object metadata', async () => {
+  const requests = [];
+  const r2 = createR2({ R2_ACCOUNT_ID: 'acct123', R2_ACCESS_KEY_ID: 'AK', R2_SECRET_ACCESS_KEY: 'SK', R2_BUCKET: 'addabaaz-media' }, {
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return { ok: true, status: 200, headers: { get: (name) => name.toLowerCase() === 'etag' ? '"etag-1"' : null } };
+    },
+  });
+  const bytes = Buffer.from('image bytes');
+  assert.deepEqual(await r2.putObject('broadcast/photo.webp', bytes, { contentType: 'image/webp', cacheControl: 'public, max-age=31536000, immutable' }), { status: 200, etag: '"etag-1"' });
+  assert.match(requests[0].url, /\/addabaaz-media\/broadcast\/photo\.webp\?/);
+  assert.equal(requests[0].init.method, 'PUT');
+  assert.equal(requests[0].init.body, bytes);
+  assert.deepEqual(requests[0].init.headers, { 'Content-Type': 'image/webp', 'Cache-Control': 'public, max-age=31536000, immutable' });
+});
 
 test('separate campaign workers cannot send the same campaign concurrently', async () => {
   const { db, row } = fixture();
