@@ -598,7 +598,7 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .plan .price { font-size: 34px; font-weight: 800; text-align: right; line-height: 1.1; } .plan .price small { display: block; font-size: 13px; color: var(--muted); font-weight: 500; } .plan.best .price small { color: rgba(255,255,255,.82); } .plan ul { grid-column: 1 / -1; margin-top: 10px; } .plan li { display: flex; gap: 8px; align-items: flex-start; color: var(--text-2); font-size: 14px; margin-bottom: 8px; } .plan li svg { color: var(--ok); margin-top: 3px; } .plan.best li { color: #fff; } .plan.best li svg { color: #7be495; } .plan .btn { grid-column: 1 / -1; margin-top: 10px; border-radius: 999px; padding: 14px 20px; font-size: 16px; }
 .badge { position: absolute; top: -12px; right: 20px; background: var(--gold); color: #000; font-size: 12px; font-weight: 800; padding: 4px 12px; border-radius: 999px; }
 /* Account subscribe banner (website only — never rendered in the native apps): compact gradient strip with a solid pill button. */
-.subscribe-banner { display: flex; align-items: center; gap: 14px; background: linear-gradient(120deg, #4a0e2e 0%, #8f0000 55%, #b80000 100%); border: 0; margin-top: 0; margin-bottom: 14px; padding: 14px 18px; }
+.subscribe-banner { display: flex; align-items: center; gap: 14px; background-color: var(--accent); background-image: var(--accent-gradient); border: 0; margin-top: 0; margin-bottom: 14px; padding: 14px 18px; }
 .subscribe-banner > div { min-width: 0; }
 .subscribe-banner h2 { font-size: 16.5px; font-weight: 600; } .subscribe-banner h2 span { color: var(--gold); font-weight: 800; }
 .subscribe-banner p { color: rgba(255,255,255,.85); font-size: 12.5px; margin-top: 2px; }

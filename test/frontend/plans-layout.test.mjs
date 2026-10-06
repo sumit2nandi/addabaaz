@@ -60,8 +60,10 @@ test('the Premium brand word is italic, bold and glittery gold', () => {
 
   assert.match(plans, /<h2>ADDABAAZ <em class="premium-word">premium<\/em><\/h2>/,
     'the purchase card titles it ADDABAAZ premium');
-  assert.match(plans, /tag: html`ADDABAAZ <em class="premium-word">premium<\/em>`/,
-    'the page eyebrow carries the same lockup');
+  assert.match(plans, /: \{ title: 'Choose your plan', subtitle: 'Pay once for the period/,
+    'the header opens directly on the title, with no brand eyebrow above it');
+  assert.doesNotMatch(plans, /tag: html`ADDABAAZ/,
+    'no ADDABAAZ premium eyebrow remains on the plans header');
   assert.match(css, /\.premium-word \{[^}]*font-style: italic; font-weight: 800;[^}]*background-clip: text/,
     'the brand word is italic bold gold gradient text');
   assert.match(css, /@keyframes premium-shine/,

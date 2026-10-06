@@ -165,8 +165,8 @@ export default async function plans(ctx) {
       </article>`)}</div>`;
     ctx.root.innerHTML = html`<div class="page">
       ${sectionHeader(isNative
-        ? { tag: html`ADDABAAZ <em class="premium-word">premium</em>`, title: 'Your access', subtitle: 'View the access currently linked to your ADDABAAZ account.' }
-        : { tag: html`ADDABAAZ <em class="premium-word">premium</em>`, title: 'Choose your plan', subtitle: 'Pay once for the period — no auto-renewal, nothing to cancel.' })}
+        ? { title: 'Your access', subtitle: 'View the access currently linked to your ADDABAAZ account.' }
+        : { title: 'Choose your plan', subtitle: 'Pay once for the period — no auto-renewal, nothing to cancel.' })}
       ${status}${why}
       ${!isNative && creditPaise > 0 ? html`<div class="notice ok">${icon('gift', { size: 18 })}<span>You have <b>${inr(creditPaise)}</b> of ADDABAAZ credit${offer?.expiryDays ? html` — it expires ${offer.expiryDays} days after it was added` : ''}. Tick “use my credit” at checkout and it comes straight off the price.</span></div>` : ''}
       ${canBuy ? plusCard : legacyCards}
