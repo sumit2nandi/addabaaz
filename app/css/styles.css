@@ -555,16 +555,36 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .auth-close { position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border-2); background: rgba(255,255,255,.06); color: var(--text-2); transition: background .2s, border-color .2s, color .2s, transform .3s var(--ease); }
 .auth-close:hover { background: var(--accent); border-color: var(--accent); color: #fff; transform: rotate(90deg); }
 .plans { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); margin-top: 20px; max-width: 680px; } .plan { position: relative; background: var(--panel); border: 1px solid var(--border-2); border-radius: 20px; padding: 24px 22px; display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; align-items: center; align-content: start; } .plan h2 { font-size: 20px; letter-spacing: .02em; text-transform: uppercase; } .plan.best { background: linear-gradient(135deg, #4a0e2e 0%, #8f0000 55%, #b80000 100%); border-color: transparent; box-shadow: 0 8px 28px rgba(0,0,0,.45); } .plan.current { box-shadow: 0 0 0 2px var(--accent); } .plan.best.current { box-shadow: 0 8px 28px rgba(0,0,0,.45), 0 0 0 2px var(--gold); } .plan.free { opacity: .88; }
+.badge.cur { background: var(--ok); color: #04120a; }
+/* Plans checkout card: one Plus card with duration tiles + a single pay button (Zee-style). */
+.plus-card { background: var(--panel); border: 1px solid var(--border-2); border-radius: 20px; padding: 22px 20px; margin-top: 20px; max-width: 680px; }
+.plus-card h2 { font-size: 21px; }
+.perks { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2px 14px; margin: 12px 0 16px; }
+.perks li { display: flex; gap: 8px; align-items: flex-start; color: var(--text-2); font-size: 13.5px; margin-bottom: 7px; }
+.perks li svg { color: var(--ok); margin-top: 3px; flex: none; }
+.durs { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.dur { position: relative; background: var(--panel-2); border: 1px solid var(--border-2); border-radius: 14px; padding: 14px 10px 12px; display: grid; gap: 1px; justify-items: center; text-align: center; transition: box-shadow .2s var(--ease), background .2s var(--ease), border-color .2s var(--ease); }
+.dur b { font-size: 24px; } .dur small { color: var(--muted); font-size: 13px; } .dur em { font-style: normal; font-size: 12px; color: var(--gold); margin-top: 2px; }
+.dur.is-sel { border-color: var(--accent-2); background: rgba(184,0,0,.12); box-shadow: 0 0 0 1px var(--accent-2), 0 4px 16px rgba(0,0,0,.35); }
+.dur.is-current { border-color: var(--gold); }
+.dur-tag { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: var(--gold); color: #000; font-size: 10.5px; font-weight: 800; padding: 2px 10px; border-radius: 999px; white-space: nowrap; }
+.dur-tag.cur { background: var(--ok); color: #04120a; }
+.dur .dur-tag + .dur-tag { top: auto; bottom: -10px; }
+.paybar { margin-top: 16px; border-radius: 999px; }
+.free-line { margin-top: 12px; text-align: center; color: var(--muted); font-size: 13px; }
 .plan .price { font-size: 34px; font-weight: 800; text-align: right; line-height: 1.1; } .plan .price small { display: block; font-size: 13px; color: var(--muted); font-weight: 500; } .plan.best .price small { color: rgba(255,255,255,.82); } .plan ul { grid-column: 1 / -1; margin-top: 10px; } .plan li { display: flex; gap: 8px; align-items: flex-start; color: var(--text-2); font-size: 14px; margin-bottom: 8px; } .plan li svg { color: var(--ok); margin-top: 3px; } .plan.best li { color: #fff; } .plan.best li svg { color: #7be495; } .plan .btn { grid-column: 1 / -1; margin-top: 10px; border-radius: 999px; padding: 14px 20px; font-size: 16px; }
 .badge { position: absolute; top: -12px; right: 20px; background: var(--gold); color: #000; font-size: 12px; font-weight: 800; padding: 4px 12px; border-radius: 999px; }
-/* Account subscribe banner (website only — never rendered in the native apps): gradient card with a light pill button. */
-.subscribe-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(120deg, #4a0e2e 0%, #8f0000 55%, #b80000 100%); border: 0; margin-top: 16px; }
-.subscribe-banner h2 { font-size: 19px; font-weight: 600; } .subscribe-banner h2 span { color: var(--gold); font-weight: 800; }
-.subscribe-banner p { color: rgba(255,255,255,.85); font-size: 13.5px; margin-top: 4px; }
-.btn-light { background: rgba(255,255,255,.18); color: #fff; border: 1px solid rgba(255,255,255,.35); border-radius: 999px; padding: 10px 26px; font-weight: 800; white-space: nowrap; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-.btn-light:hover { background: rgba(255,255,255,.28); }
-@media (max-width: 480px) { .subscribe-banner { flex-direction: column; align-items: stretch; text-align: center; } }
+/* Account subscribe banner (website only — never rendered in the native apps): compact gradient strip with a solid pill button. */
+.subscribe-banner { display: flex; align-items: center; gap: 14px; background: linear-gradient(120deg, #4a0e2e 0%, #8f0000 55%, #b80000 100%); border: 0; margin-top: 14px; padding: 14px 18px; }
+.subscribe-banner > div { min-width: 0; }
+.subscribe-banner h2 { font-size: 16.5px; font-weight: 600; } .subscribe-banner h2 span { color: var(--gold); font-weight: 800; }
+.subscribe-banner p { color: rgba(255,255,255,.85); font-size: 12.5px; margin-top: 2px; }
+.btn-light { background: #fff; color: #8f0000; border: 0; border-radius: 999px; padding: 9px 22px; font-size: 14px; font-weight: 800; white-space: nowrap; margin-left: auto; }
+.btn-light:hover { background: #ffe9e9; }
 .who h2 .pill { margin-left: 8px; vertical-align: middle; }
+/* Sign out stays in the profile card (tests and signed-in users need it there) but visually quiet. */
+.account-page #signout { background: transparent; background-image: none; border: 1px solid var(--border-2); box-shadow: none; color: var(--muted); padding: 8px 14px; font-size: 13.5px; font-weight: 600; }
+.account-page #signout:hover { color: var(--text); border-color: var(--muted); }
 /* Inline notice ("Your plan is active until…"): the icon stays with the first line and never shrinks,
  * and the sentence is ONE text column. That column is the whole point: as bare flex children the words
  * before a <b>, the <b> itself and the words after it become three separate flex items, and flex items
@@ -886,3 +906,4 @@ body.player-settings-open { overflow: hidden; }
 @keyframes abm-slide { 0% { transform: translateX(-110%) } 100% { transform: translateX(320%) } }
 .abm-note { margin: 0; color: var(--muted); font-size: 12.5px; max-width: 40ch; }
 @media (prefers-reduced-motion: reduce) { .maintenance-screen::before, .abm-glyph, .abm-bar i { animation: none } }
+fore, .abm-glyph, .abm-bar i { animation: none } }

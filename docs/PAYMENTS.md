@@ -74,8 +74,10 @@ the same payment id can arrive twice without granting two plans.
 
 ## 5. What the customer sees
 
-* **Plans** (`/plans`): monthly/yearly cards, prices in INR incl. GST, coupon field, GSTIN field for business
-  invoices. The button label switches between *Get*, *Extend* and *Switch to* depending on the account.
+* **Plans** (`/plans`): one ADDABAAZ Plus card with Monthly/Yearly duration tiles (per-month hint on
+  yearly), prices in INR incl. GST, and a single Pay button (*Pay ₹X*, *Extend ₹X* or *Switch to ₹X*
+  depending on the account). The checkout dialog adds the coupon field and the GSTIN field for business
+  invoices.
 * **Billing** (`/billing`): every payment with its tax invoice / receipt PDF, credit notes for refunds, an
   “Email me the invoice” button and a self-service refund request inside `REFUND_WINDOW_DAYS`.
 * **Account**: plan status, expiry date, devices, and how to cancel (there is no auto-renewal: a plan simply

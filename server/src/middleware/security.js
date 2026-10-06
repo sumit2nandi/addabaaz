@@ -31,9 +31,7 @@ export function installSecurityMiddleware(app, { corsOrigins = '*', production =
     "script-src 'self' https://accounts.google.com https://www.youtube.com https://checkout.razorpay.com https://connect.facebook.net https://appleid.cdn-apple.com https://cdn.jsdelivr.net https://www.googletagmanager.com",
     "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
     "connect-src 'self' https:",
-    // NOTE: api.razorpay.com must stay in frame-src — Razorpay Checkout loads the payment-form iframe from there
-    // (checkout.razorpay.com is only the script host). Without it the popup opens as a blank white screen.
-    "frame-src 'self' https://accounts.google.com https://www.youtube.com https://www.youtube-nocookie.com https://checkout.razorpay.com https://api.razorpay.com https://www.facebook.com",
+    "frame-src 'self' https://accounts.google.com https://www.youtube.com https://www.youtube-nocookie.com https://checkout.razorpay.com https://www.facebook.com",
     "worker-src 'self' blob:", "manifest-src 'self'",
   ].join('; ');
   app.use((req, res, next) => {

@@ -29,7 +29,7 @@ export default async function account(ctx) {
         <p class="muted">${u.account ? u.account.email + (u.account.providers?.length ? ' · ' + u.account.providers.map((x) => ({ google: 'Google', facebook: 'Facebook', apple: 'Apple' }[x] || x)).join(' & ') + ' sign-in' : '') : u.supportsAuth ? 'Browsing as a guest — sign in to sync across devices.' : 'Your list and progress are saved on this device.'}</p></div>
       <div class="who-actions">${u.supportsAuth ? (u.account ? html`<button class="btn btn-ghost" id="signout">${icon('logout', { size: 18 })} Sign out</button>` : html`<a class="btn btn-primary" href="#/signin">Sign in</a><a class="btn btn-ghost" href="#/signup">Create account</a>`) : ''}</div>
     </section>
-    ${u.supportsAuth && !u.isPremium && !isNative ? html`<section class="card-panel subscribe-banner"><div><h2>Subscribe to <span>ADDABAAZ Plus</span></h2><p>Premium originals, early access &amp; ad-free viewing.</p></div><a class="btn btn-light" href="#/plans">Subscribe</a></section>` : ''}
+    ${u.supportsAuth && !u.isPremium && !isNative ? html`<section class="card-panel subscribe-banner"><div><h2>Subscribe to <span>ADDABAAZ Plus</span></h2><p>Premium originals, early access</p></div><a class="btn btn-light" href="#/plans">Subscribe</a></section>` : ''}
     <div class="account-grid">
       ${extras.sections}
 

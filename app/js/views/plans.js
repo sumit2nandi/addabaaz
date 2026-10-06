@@ -83,6 +83,10 @@ export default async function plans(ctx) {
   const memo = {};
   const canBuy = !isNative && payments.provider !== 'none';
   let busy = false;
+  // Selected billing period for the duration tiles (website checkout only). Defaults to the current
+  // paid plan when subscribed, otherwise to yearly (best value); tile taps update it and repaint.
+  let sel = u.isPremium && u.subscription?.planId !== 'free' ? u.subscription.planId : 'plus-yearly';
+  if (!list.some((p) => p.id === sel)) sel = list.find((p) => p.id !== 'free')?.id || 'plus-yearly';
   // Promotional credit (welcome bonus / referrals): best effort — a failure here must never break the page.
   let creditPaise = 0, offer = null;
   if (u.account && u.supportsAuth) {
@@ -98,20 +102,36 @@ export default async function plans(ctx) {
       ? html`<div class="notice">${icon('info', { size: 18 })}<span>This app does not offer purchases or payment links. Memberships and payments are managed separately on the ADDABAAZ website. If you already have access, sign in with the same account and it will appear here automatically.</span></div>`
       : payments.provider === 'mock' ? html`<div class="notice">${icon('info', { size: 18 })}<span>Demo checkout — no real payment is taken. Add Razorpay keys on the API to go live (docs/PREMIUM.md).</span></div>`
       : payments.provider === 'none' ? html`<div class="notice">${icon('info', { size: 18 })}<span>Payments aren’t available right now. Please try again later.</span></div>` : '';
+    const paid = list.filter((p) => p.id !== 'free');
+    if (!paid.some((p) => p.id === sel)) sel = paid[0]?.id || sel;
+    const perks = (list.find((p) => p.id === 'plus-monthly') || paid[0] || { features: [] }).features;
+    const sp = paid.find((p) => p.id === sel) || paid[0];
+    // Duration tiles + one pay button (website with payments only — canBuy already implies !isNative).
+    const plusCard = html`<div class="plus-card">
+      <h2>ADDABAAZ Plus</h2>
+      <p class="muted small">Premium originals, early access &amp; ad-free viewing.</p>
+      <ul class="perks">${perks.map((f) => html`<li>${icon('check', { size: 15 })} ${f}</li>`)}</ul>
+      <div class="durs" role="radiogroup" aria-label="Billing period">${paid.map((p) => html`<button class="dur ${p.id === sel ? 'is-sel' : ''} ${p.id === cur ? 'is-current' : ''}" data-sel="${p.id}" role="radio" aria-checked="${p.id === sel}">${p.id === 'plus-yearly' ? html`<span class="dur-tag">Best Value</span>` : ''}${p.id === cur ? html`<span class="dur-tag cur">Current</span>` : ''}<b>₹${p.priceINR}</b><small>${p.interval === 'year' ? 'Year' : 'Month'}</small>${p.interval === 'year' ? html`<em>Just ₹${Math.round(p.priceINR / 12)}/month</em>` : ''}</button>`)}</div>
+      ${sp ? html`<button class="btn btn-primary btn-lg block paybar" data-pay>${sp.id === cur ? 'Extend' : active ? 'Switch to' : 'Pay'} ₹${sp.priceINR}</button>` : ''}
+      <p class="free-line">Free · ${cur === 'free' ? 'your current plan' : 'included forever'}</p>
+    </div>`;
+    // Native apps and payment-less servers: read-only cards (no prices in native builds, no purchase buttons).
+    const legacyCards = html`<div class="plans">${list.map((p) => html`<article class="plan ${p.id === cur ? 'current' : ''} ${!isNative && p.id === 'plus-yearly' ? 'best' : ''} ${p.id === 'free' ? 'free' : ''}">
+        ${!isNative && p.id === 'plus-yearly' && p.id !== cur ? html`<span class="badge">Best Value</span>` : ''}
+        ${p.id === cur && p.id !== 'free' ? html`<span class="badge cur">Current plan</span>` : ''}
+        <h2>${p.name}</h2>${!isNative ? html`<div class="price">₹${p.priceINR}<small>/${p.interval}</small></div>` : ''}
+        <ul>${p.features.map((f) => html`<li>${icon('check', { size: 16 })} ${f}</li>`)}</ul>
+        ${p.id === 'free' ? html`<button class="btn btn-ghost block" disabled>${cur === 'free' ? 'Current plan' : 'Included'}</button>`
+          : !canBuy ? (p.id === cur ? html`<button class="btn btn-ghost block" disabled>Current plan</button>` : '')
+          : html`<button class="btn btn-primary block" data-plan="${p.id}">${p.id === cur ? 'Extend' : active ? 'Switch to' : 'Get'} ${p.interval === 'year' ? 'yearly' : 'monthly'} plan</button>`}
+      </article>`)}</div>`;
     ctx.root.innerHTML = html`<div class="page">
       ${sectionHeader(isNative
         ? { tag: 'ADDABAAZ Plus', title: 'Your access', subtitle: 'View the access currently linked to your ADDABAAZ account.' }
         : { tag: 'ADDABAAZ Plus', title: 'Choose your plan', subtitle: 'Pay once for the period — no auto-renewal, nothing to cancel.' })}
       ${status}${why}
       ${!isNative && creditPaise > 0 ? html`<div class="notice ok">${icon('gift', { size: 18 })}<span>You have <b>${inr(creditPaise)}</b> of ADDABAAZ credit${offer?.expiryDays ? html` — it expires ${offer.expiryDays} days after it was added` : ''}. Tick “use my credit” at checkout and it comes straight off the price.</span></div>` : ''}
-      <div class="plans">${list.map((p) => html`<article class="plan ${p.id === cur ? 'current' : ''} ${!isNative && p.id === 'plus-yearly' ? 'best' : ''} ${p.id === 'free' ? 'free' : ''}">
-        ${!isNative && p.id === 'plus-yearly' ? html`<span class="badge">Best Value</span>` : ''}
-        <h2>${p.name}</h2>${!isNative ? html`<div class="price">₹${p.priceINR}<small>/${p.interval}</small></div>` : ''}
-        <ul>${p.features.map((f) => html`<li>${icon('check', { size: 16 })} ${f}</li>`)}</ul>
-        ${p.id === 'free' ? html`<button class="btn btn-ghost block" disabled>${cur === 'free' ? 'Current plan' : 'Included'}</button>`
-          : !canBuy ? (p.id === cur ? html`<button class="btn btn-ghost block" disabled>Current plan</button>` : '')
-          : html`<button class="btn btn-primary block" data-plan="${p.id}">${p.id === cur ? 'Extend' : active ? 'Switch to' : 'Get'} ${p.interval === 'year' ? 'yearly' : 'monthly'} plan</button>`}
-      </article>`)}</div>
+      ${canBuy ? plusCard : legacyCards}
       ${s.demo ? html`<p class="muted" style="margin-top:18px"><button class="btn btn-ghost" data-cancel>End demo plan</button></p>` : ''}
       <p class="muted" style="margin-top:18px;font-size:13px">${isNative
         ? html`No purchase can be started or completed in this app. Existing members can view past invoices and refunds here. ${u.account ? html`<a href="#/billing">Billing & invoices</a>` : ''}`
@@ -121,7 +141,10 @@ export default async function plans(ctx) {
   draw();
 
   ctx.root.addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-plan]'), c = e.target.closest('[data-cancel]');
+    const t = e.target.closest('[data-sel]');
+    if (t) { if (!busy && t.dataset.sel !== sel) { sel = t.dataset.sel; draw(); } return; }
+    const pay = e.target.closest('[data-pay]');
+    const b = pay ? { dataset: { plan: sel } } : e.target.closest('[data-plan]'), c = e.target.closest('[data-cancel]');
     if (!b && !c) return;
     if (busy) return;
     if (b && !u.account) { go('/signin?next=' + encodeURIComponent('/plans' + (next ? '?next=' + encodeURIComponent(next) : ''))); return; }
