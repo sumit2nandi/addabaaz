@@ -235,14 +235,14 @@ test('muted autostart uses the player volume control without a duplicate unmute 
 let streamUrlRequests = 0;
 app.user.streamUrl = async () => { streamUrlRequests++; return { type: 'mp4', url: 'https://r2.test/premium/x.mp4' }; };
 
-test('premium crown: top-left of the player, hidden while the video plays, back on pause / end / error', async () => {
+test('premium word: top-left of the player, hidden while the video plays, back on pause / end / error', async () => {
   streamUrlRequests = 0;
   await mount('vp');
   assert.equal(streamUrlRequests, 1, 'the R2 signing request starts during render and is reused by player startup');
   const box = document.querySelector('#playerBox');
   assert.ok(box.classList.contains('has-premium'), 'a premium video marks its player box');
   const mark = box.querySelector('.premium-mark.premium-mark-player');
-  assert.ok(mark, 'the crown is drawn inside the player box');
+  assert.ok(mark, 'the premium word is drawn inside the player box');
   assert.equal(box.classList.contains('is-playing'), false, 'visible before playback starts');
   const { opts } = { opts: globalThis.__watchOpts };
 
@@ -251,7 +251,7 @@ test('premium crown: top-left of the player, hidden while the video plays, back 
   opts.onState('playing');
   assert.equal(box.classList.contains('is-playing'), true, 'hidden (via .is-playing) while the video plays');
   opts.onState('buffering');
-  assert.equal(box.classList.contains('is-playing'), true, 'a mid-play stall does not make the crown flash back in');
+  assert.equal(box.classList.contains('is-playing'), true, 'a mid-play stall does not make the badge flash back in');
   opts.onState('paused');
   assert.equal(box.classList.contains('is-playing'), false, 'back on pause');
   opts.onState('playing');
@@ -263,7 +263,7 @@ test('premium crown: top-left of the player, hidden while the video plays, back 
   assert.equal(box.classList.contains('is-playing'), false, 'back when playback fails');
 });
 
-test('free videos get no crown and no premium markers', async () => {
+test('free videos get no premium word and no premium markers', async () => {
   await mount('v1');
   const box = document.querySelector('#playerBox');
   assert.equal(box.querySelector('.premium-mark'), null);

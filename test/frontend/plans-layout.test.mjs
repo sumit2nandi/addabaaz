@@ -66,6 +66,10 @@ test('the Premium brand word is italic, bold and glittery gold', () => {
     'the brand word is italic bold gold gradient text');
   assert.match(css, /@keyframes premium-shine/,
     '...with a slow shine sweep');
+  assert.match(plans, /<em class="premium-word">premium<\/em><h2>Plans need the ADDABAAZ server<\/h2>/,
+    'the server-less empty state wears the word, not a crown');
+  assert.match(css, /\.empty \.premium-word \{[^}]*font-size: 30px/,
+    '...at display size');
 });
 
 test('read-only plan cards stay for native apps and payment-less servers', () => {

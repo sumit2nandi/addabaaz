@@ -1,4 +1,4 @@
-// Trailers, clips and reels are NEVER locked and never carry the crown: even flagged premium
+// Trailers, clips and reels are NEVER locked and never carry the premium badge: even flagged premium
 // themselves, or belonging to a Premium-only show, the gate says 'ok', the Reels feed plays them like
 // any other reel and no premium badge is drawn - the preview is free, only the show is Premium.
 // Run:  node --test test/frontend/reels-premium-gate.test.mjs
@@ -76,7 +76,7 @@ test('gateFor: trailers, clips and reels always play; the premium episode stays 
   assert.notEqual(u.gateFor(cat.video('premium-ep'), cat), 'ok', 'the episode of the same show still requires a plan');
 });
 
-test('the Reels feed plays a premium-show reel with no lock wall and no crown', async () => {
+test('the Reels feed plays a premium-show reel with no lock wall and no premium badge', async () => {
   app.user = await guestUser();
   app.user.streamUrl = async () => { throw new Error('A YouTube reel must not request an R2 stream URL'); };
   const { default: reels } = await import('../../app/js/views/reels.js');

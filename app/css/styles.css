@@ -722,6 +722,8 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .premium-word { font-style: italic; font-weight: 800; text-transform: none; letter-spacing: normal; background: linear-gradient(100deg, #7a5200 0%, #d4a017 22%, #ffe9a3 40%, #fffbe8 50%, #ffe9a3 60%, #d4a017 78%, #7a5200 100%); background-size: 220% auto; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 7px rgba(255,200,60,.35)); animation: premium-shine 3.4s linear infinite; }
 @keyframes premium-shine { to { background-position: 220% center; } }
 @media (prefers-reduced-motion: reduce) { .premium-word { animation: none; } }
+/* Empty states (billing, plans): the word replaces a large decorative crown, so it gets display size. */
+.empty .premium-word { font-size: 30px; }
 
 /* ---------- accounts, legal, consent, engagement (v2.6) ---------- */
 .linklike { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; opacity: .85; } .linklike:hover { opacity: 1; }

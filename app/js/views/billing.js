@@ -34,7 +34,7 @@ export default async function billing(ctx) {
         ${p.creditNotes.map((c) => doc(c, 'Credit note'))}
         ${canAsk(p) ? html`<button class="btn btn-ghost" data-refund="${p.id}">${icon('info', { size: 16 })} Request a refund</button>` : ''}
         ${p.invoice ? html`<button class="btn btn-ghost" data-mail="${p.invoice.id}">${icon('mail', { size: 16 })} Email me the invoice</button>` : ''}
-      </div></article>`)}</div>` : html`<div class="empty">${icon('crown', { size: 44 })}<h2>No payments yet</h2><p>${isNative ? 'There are no website payment records linked to this account.' : html`When you subscribe to ADDABAAZ <em class="premium-word">premium</em>, your invoices will appear here.`}</p>${isNative ? '' : html`<a class="btn btn-primary" href="#/plans">See plans</a>`}</div>`}
+      </div></article>`)}</div>` : html`<div class="empty"><em class="premium-word">premium</em><h2>No payments yet</h2><p>${isNative ? 'There are no website payment records linked to this account.' : html`When you subscribe to ADDABAAZ <em class="premium-word">premium</em>, your invoices will appear here.`}</p>${isNative ? '' : html`<a class="btn btn-primary" href="#/plans">See plans</a>`}</div>`}
   </div>`.s;
 
   ctx.root.addEventListener('click', async (e) => {

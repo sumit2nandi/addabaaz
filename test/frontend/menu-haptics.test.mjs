@@ -20,6 +20,9 @@ test('menu icon taps vibrate where supported and never throw where they do not',
     activeId: 'profile',
   };
   renderShell();
+  const plansRow = document.querySelector('#profileMenu a[href="#/plans"]');
+  assert.ok(plansRow?.querySelector('.premium-word'), 'the Plans menu row wears the golden premium word instead of a crown');
+  assert.equal(plansRow?.querySelector('svg'), null, 'no crown icon remains beside Plans');
 
   const buzzes = [];
   const origNav = globalThis.navigator;

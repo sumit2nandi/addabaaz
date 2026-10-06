@@ -74,7 +74,7 @@ export function renderProfileMenu() {
         <a class="menu-item" href="#/signup">${icon('plus', { size: 18 })}<span>Create account</span></a>
         <hr>
         <a class="menu-item" href="#/list">${icon('list', { size: 18 })}<span>My List</span></a>
-        <a class="menu-item" href="#/plans">${icon('crown', { size: 18 })}<span>Plans</span></a>
+        <a class="menu-item" href="#/plans"><em class="premium-word">premium</em><span>Plans</span></a>
         <a class="menu-item" href="#/account">${icon('edit', { size: 18 })}<span>Settings &amp; privacy</span></a>
         <a class="menu-item" href="#/support">${icon('chat', { size: 18 })}<span>Help &amp; support</span></a>
       </div>`.s;
@@ -89,7 +89,7 @@ export function renderProfileMenu() {
       <a class="menu-item" href="#/list">${icon('list', { size: 18 })}<span>My List</span></a>
       <a class="menu-item" href="#/account">${icon('user', { size: 18 })}<span>Account &amp; settings</span></a>
       <a class="menu-item" href="#/support">${icon('chat', { size: 18 })}<span>Help &amp; support</span></a>
-      ${u.supportsAuth ? html`<a class="menu-item" href="#/plans">${icon('crown', { size: 18 })}<span>Plans</span></a>` : ''}
+      ${u.supportsAuth ? html`<a class="menu-item" href="#/plans"><em class="premium-word">premium</em><span>Plans</span></a>` : ''}
       ${u.supportsAuth ? (u.account
         ? html`<button type="button" class="menu-item" data-signout>${icon('logout', { size: 18 })}<span>Sign out</span></button>`
         : html`<a class="menu-item" href="#/signin">${icon('user', { size: 18 })}<span>Sign in</span></a>`) : ''}
