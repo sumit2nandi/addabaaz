@@ -3,10 +3,10 @@ import crypto from 'node:crypto';
 /**
  * Cloudflare R2 (S3-compatible) access without an SDK: AWS Signature V4 query-string presigning.
  *
- *   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET   (R2 → Manage API tokens → "Object Read only")
+ *   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET   (R2 → Manage API tokens → "Object Read & Write", scoped to the media bucket)
  *   R2_ENDPOINT   optional override (defaults to https://<account>.r2.cloudflarestorage.com; any S3-compatible store works)
  *
- * The bucket stays PRIVATE. The API hands out short-lived signed URLs only after checking the viewer's access.
+ * The bucket stays PRIVATE. Video APIs issue short-lived signatures after access checks; a narrowly scoped stable route serves only validated Broadcast image keys.
  */
 // URL encoding exactly as AWS Signature V4 requires (RFC 3986: also escapes ! ' ( ) *).
 const enc = (s) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
@@ -34,7 +34,7 @@ export function presign({ method = 'GET', host, path, accessKeyId, secretAccessK
 }
 
 // Returns `{ configured: false }` when credentials are missing, so callers can degrade gracefully.
-export function createR2(env = process.env) {
+export function createR2(env = process.env, { fetchImpl = (...args) => fetch(...args) } = {}) {
   const { R2_ACCOUNT_ID: account, R2_ACCESS_KEY_ID: accessKeyId, R2_SECRET_ACCESS_KEY: secretAccessKey, R2_BUCKET: bucket, R2_ENDPOINT: endpoint } = env;
   const configured = !!(accessKeyId && secretAccessKey && bucket && (account || endpoint));
   if (!configured) return { configured: false };
@@ -53,11 +53,21 @@ export function createR2(env = process.env) {
     presignHead(key, { ttl = 60, now } = {}) {
       return r2.presignGet(key, { ttl, now, method: 'HEAD' });
     },
-    /** Time-limited PUT URL — lets the admin console upload a video straight from the browser to the bucket (needs a read/write token + bucket CORS, see docs/ADMIN.md). */
+    /** Time-limited PUT URL — lets the admin console upload a video straight from the browser to the bucket (needs a write-capable token + bucket CORS). */
     presignPut(key, { ttl = 3600, now } = {}) {
       const path = `${base.pathname.replace(/\/$/, '')}/${enc(bucket)}/${encPath(key)}`;
       const { queryString } = presign({ method: 'PUT', host: base.host, path, accessKeyId, secretAccessKey, expires: Math.min(Math.max(ttl, 1), 86400), now });
       return `${base.origin}${path}?${queryString}`;
+    },
+    /** Uploads a small server-validated image to private R2 storage without copying its bytes into MySQL. */
+    async putObject(key, body, { contentType = 'application/octet-stream', cacheControl = '', ttl = 900 } = {}) {
+      const response = await fetchImpl(r2.presignPut(key, { ttl }), {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType, ...(cacheControl ? { 'Cache-Control': cacheControl } : {}) },
+        body,
+      });
+      if (!response.ok) throw Object.assign(new Error(`R2 upload failed (HTTP ${response.status}).`), { statusCode: response.status });
+      return { status: response.status, etag: response.headers?.get?.('etag') || null };
     },
     /** Fetches an object response server-side; used to stream HLS fragments through the API for native WebViews. */
     getObject(key, { ttl = 900, range } = {}) {

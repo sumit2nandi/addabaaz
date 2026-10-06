@@ -15,10 +15,10 @@ const done = (s) => ['sent', 'partial', 'failed', 'cancelled'].includes(s);
 // The optional image attached to a broadcast: shown inside the notification (rich push) and at the top of
 // the e-mail. The markup matches the console's other image controls, so `wireImages()` gives it upload + preview.
 const imageField = (max, help) => html`<div class="field wide"><label for="bc_img">Image <small class="muted">(optional — shown in the notification and in the e-mail)</small></label>
-  <div class="imgf" data-image="imageUrl" data-maxw="1200">
+  <div class="imgf" data-image="imageUrl" data-upload="r2" data-maxw="1200">
     <div class="imgf-prev"><span class="muted small">No image</span></div>
     <div class="imgf-in">
-      <input id="bc_img" name="imageUrl" maxlength="500" placeholder="Upload, or paste media/… or https://…">
+      <input id="bc_img" name="imageUrl" maxlength="500" placeholder="Upload to R2, or paste /media/… or https://…">
       <label class="btn sm">${icon('upload', 16)} Upload<input type="file" accept="image/*" hidden></label>
       <input name="imageAlt" maxlength="200" placeholder="Describe the image (alt text)" aria-label="Image description">
       <span class="imgf-st small muted">${help || ''}</span>
@@ -264,14 +264,14 @@ export default async function notifications(root, _p, ctx) {
           <p class="muted small">Tapping it opens <code>${n.url || '/'}</code>.</p>
           <details><summary class="small">Payload sent to devices</summary><pre class="pv-json">${JSON.stringify(n, null, 2)}</pre></details>
         </div>
-      </div>`;
+      </div>`.s;
     } else {
       const m = r.email || {};
       pvBody.innerHTML = html`<div class="mail-mock">
         <div class="mail-subj"><small class="muted">Subject</small> <b>${m.subject || '(no subject)'}</b></div>
         <iframe class="mail-frame" title="E-mail preview" sandbox referrerpolicy="no-referrer" srcdoc="${m.html || ''}"></iframe>
       </div>
-      <details><summary class="small">Plain-text version</summary><pre class="pv-json">${m.text || ''}</pre></details>`;
+      <details><summary class="small">Plain-text version</summary><pre class="pv-json">${m.text || ''}</pre></details>`.s;
     }
   }
 

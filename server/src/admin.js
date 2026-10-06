@@ -586,6 +586,24 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     await log(req, 'upload.image', saved.path, { bytes: saved.bytes });
     res.status(201).json({ path: saved.path, bytes: saved.bytes, type: saved.type });
   }));
+  // Broadcast images live in private R2, not uploaded_files/MySQL. Their stable public app URL redirects
+  // to a fresh short-lived R2 GET signature whenever a notification or e-mail client fetches the image.
+  router.post('/uploads/broadcast-image', express.raw({ type: () => true, limit: '10mb' }), wrap(async (req, res) => {
+    if (!r2?.configured || typeof r2.putObject !== 'function') {
+      throw new HttpError(503, 'storage_not_configured', 'Broadcast photo storage (R2) is not configured on this server. Configure R2 with Object Read & Write access, then try again.');
+    }
+    if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the image file as the request body.');
+    const saved = describeImage(req.body); if (!saved) throw bad('Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
+    const key = `broadcast/${saved.name}`;
+    try {
+      await r2.putObject(key, saved.data, { contentType: saved.type, cacheControl: 'public, max-age=31536000, immutable' });
+    } catch (e) {
+      throw new HttpError(502, 'r2_upload_failed', `Could not upload the broadcast photo to Cloudflare R2${e?.statusCode ? ` (HTTP ${e.statusCode})` : ''}. Check the R2 credentials and try again.`, { cause: e });
+    }
+    const publicPath = `r2-assets/${key}`;
+    await log(req, 'upload.broadcast_image', publicPath, { bytes: saved.bytes });
+    res.status(201).json({ path: publicPath, bytes: saved.bytes, type: saved.type });
+  }));
   // Subtitle upload (.vtt or .srt; converted to WebVTT).
   router.post('/uploads/subtitle', express.raw({ type: () => true, limit: '2mb' }), wrap(async (req, res) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the .vtt or .srt file as the request body.');

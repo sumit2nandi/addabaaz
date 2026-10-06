@@ -6,7 +6,7 @@ import { createSeo } from './seo.js';
 import { wrap } from './http.js';
 import { UPLOAD_NAME, uploadType, cacheUpload } from './uploads.js';
 
-export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg, maintenance = null, logger = console }) {
+export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg, maintenance = null, r2 = null, logger = console }) {
   // Maintenance mode (docs/MAINTENANCE.md): while the switch is on, viewers get the branded page with a real
   // 503 and the API refuses viewer calls — but the consoles, the API allow-list and /maintenance itself keep
   // working so the operator can finish the job and turn it back off.
@@ -22,6 +22,15 @@ export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS
     if (!req.accepts('html')) return res.status(503).type('text/plain').set({ 'Cache-Control': 'no-store', 'Retry-After': String(maintenance.retryAfter(state)) }).send(state.message);
     res.status(503).set({ 'Cache-Control': 'no-store', 'Retry-After': String(maintenance.retryAfter(state)) }).type('html').send(body);
   };
+  // Broadcast-photo URLs are stable even though the bucket is private: issue a fresh signed GET redirect
+  // on each fetch, so push notifications and old e-mails keep working beyond the signature lifetime.
+  app.get('/r2-assets/broadcast/:name', wrap(async (req, res) => {
+    const name = String(req.params.name || '');
+    if (!/^[0-9a-f]{24}\.(?:webp|png|jpg|gif)$/.test(name) || !r2?.configured || typeof r2.presignGet !== 'function') {
+      return res.status(404).type('text/plain').send('Not found');
+    }
+    return res.set('Cache-Control', 'public, max-age=60').redirect(302, r2.presignGet(`broadcast/${name}`, { ttl: 3600 }));
+  }));
   /* ---------- static site (same origin => the web app auto-detects this API) ---------- */
   // ---- Website ----
   // Static files, plus server-rendered HTML for every page so search engines see real titles and content.
