@@ -14,7 +14,7 @@ export const SITE = 'ADDABAAZ';
 export const TYPE_LABEL = { series: 'Bengali web series', standup: 'Stand-up comedy', podcast: 'Fake podcast', film: 'Bengali short film' };
 const KIND_LABEL = { episode: 'episode', trailer: 'trailer', reel: 'reel', clip: 'clip' };
 // Pages that must never be indexed (they show personal data); value = the page name used in their title.
-const PRIVATE = { mylist: 'My List', account: 'Account', profiles: 'Choose a profile', billing: 'Billing & invoices', recover: 'Account recovery' };
+const PRIVATE = { mylist: 'My List', account: 'Account', settings: 'Settings', profiles: 'Choose a profile', billing: 'Billing & invoices', recover: 'Account recovery' };
 // The robots directive for normal, indexable pages (allows large image and video previews).
 const ROBOTS_INDEX = 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1';
 

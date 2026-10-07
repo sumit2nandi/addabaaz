@@ -526,16 +526,11 @@ input, textarea, select { font: inherit; }
 /* ---------- panels, account, profiles, auth, plans ---------- */
 .card-panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px; display: grid; gap: 14px; align-content: start; } .card-panel h2, .card-panel h3 { font-size: 19px; }
 .card-panel.list { padding: 6px; gap: 0; }
-.who { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 16px; } .who > div:nth-child(2) { min-width: 0; } .who-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; } .who h2 { font-size: 22px; }
-.account-grid { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.profile-head { display: flex; align-items: center; gap: 14px; padding: 6px 4px 18px; } .profile-head .profile-id { min-width: 0; flex: 1; } .profile-head h2 { font-size: 20px; } .profile-head .muted { margin-top: 3px; font-size: 14px; } .profile-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+.group-list .row-link + .row-link { border-top: 1px solid var(--border); }
 .account-section { min-width: 0; }
 .account-section:empty { display: none; }
-@media (min-width: 900px) {
-  .page.account-page { max-width: 1320px; }
-  .who { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .who-actions { grid-column: auto; }
-  .account-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: clamp(24px, 3vw, 42px); }
-}
+.back-row { margin: 0 0 14px; } .back-link { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--muted); } .back-link:hover { color: #fff; }
 .row-link, .row-switch { display: flex; align-items: center; gap: 16px; width: 100%; padding: 14px 16px; border-radius: 12px; background: none; border: 0; text-align: left; color: #fff; } a.row-link:hover, button.row-link:hover, .row-switch:hover { background: var(--panel-2); }
 .row-link > span, .row-switch > span:first-child { flex: 1; display: grid; gap: 2px; } .row-link small, .row-switch small { color: var(--muted); font-size: 13px; font-weight: 400; } .chev { color: var(--muted); } .row-link.danger { color: #ff8a8c; } .row-link.static { cursor: default; } .row-switch { cursor: pointer; justify-content: space-between; }
 .row-link[hidden] { display: none; }
@@ -606,7 +601,7 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .subscribe-banner p { color: rgba(255,255,255,.85); font-size: 12.5px; margin-top: 2px; }
 .btn-light { background: #fff; color: #8f0000; border: 0; border-radius: 999px; padding: 9px 22px; font-size: 14px; font-weight: 800; white-space: nowrap; margin-left: auto; }
 .btn-light:hover { background: #ffe9e9; }
-.who h2 .pill { margin-left: 8px; vertical-align: middle; }
+.profile-head h2 .pill { margin-left: 8px; vertical-align: middle; }
 /* Sign out lives alone at the bottom of the page: quiet, centered, impossible to tap by accident. */
 .signout-wrap { margin: 26px 0 4px; text-align: center; }
 .signout-wrap .btn-ghost { background: transparent; background-image: none; border: 1px solid var(--border-2); box-shadow: none; color: var(--muted); padding: 10px 22px; font-size: 14px; font-weight: 600; }
