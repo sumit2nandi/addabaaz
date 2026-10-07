@@ -1,8 +1,7 @@
 // Toast redesign. The status bar at the bottom of the screen ("Watch history cleared", "Link copied"…)
 // used to be an opaque light bar with black text — the only element on the site that was not part of the
-// dark, red-accented theme. It is now a mostly TRANSPARENT frosted-glass pill with brand-red text, a red
-// hairline, a red glow and a dark text-shadow (which is what keeps the red readable when a toast lands
-// over bright artwork).
+// dark, red-accented theme. It is now a BLACK capsule with brand-red text, at exactly the size it always
+// had (same padding, font-size, weight, gap and shadow — see the size test at the bottom).
 //
 // Run: node --test test/frontend/toast-theme.test.mjs
 import { test } from 'node:test';
@@ -30,34 +29,52 @@ const token = (name) => (css.match(new RegExp(`--${name}:\\s*([^;]+);`)) || [])[
 
 /* ---------------------------------------------------------------- the look */
 
-test('the toast is transparent glass with brand-red text, not the old light bar', () => {
+test('the toast is a black capsule with brand-red text, not the old light bar', () => {
   const toast = ruleText('.toast');
-  // Transparent: a low-alpha dark fill (the blurred page shows through) plus an inner red wash.
-  const fill = toast.match(/background-color:\s*rgba\((\d+),\s*(\d+),\s*(\d+),\s*\.?(\d+)\)/);
-  assert.ok(fill, 'the fill is an rgba colour');
-  assert.ok(Number(`0.${fill[4]}`) < 0.7, `the fill stays translucent (alpha ${fill[4]})`);
-  assert.match(toast, /backdrop-filter:\s*blur\(/, 'the glass is frosted');
+  // Black, near-opaque: the blurred artwork still tints the last few percent.
+  assert.match(toast, /background:\s*rgba\(0,\s*0,\s*0,\s*\.9\)/, 'the fill is black');
+  assert.match(toast, /backdrop-filter:\s*blur\(/, 'black glass over the artwork');
   assert.match(toast, /-webkit-backdrop-filter:\s*blur\(/, 'with the WebKit twin for iOS');
-  assert.match(toast, /background-image:[^;]*radial-gradient\([^;]*rgba\(var\(--accent-rgb\)/, 'and a soft red wash from the top-left corner');
-  // Red text on the dark page.
+  assert.doesNotMatch(toast, /background-image:/, 'no coloured wash on top of the black');
+  // Red text on the black fill.
   assert.match(toast, /color:\s*var\(--accent-bright\)/, 'the message is brand red');
-  assert.match(toast, /border:\s*1px solid rgba\(var\(--accent-rgb\),\s*\.55\)/, 'a red hairline frames it');
-  assert.match(toast, /box-shadow:[^;]*rgba\(var\(--accent-rgb\)/, 'with a red glow around the pill');
-  assert.match(toast, /text-shadow:\s*0 0 12px rgba\(0,0,0,\.95\),\s*0 1px 3px rgba\(0,0,0,\.9\)/, 'and a dark halo that keeps the red legible over bright artwork');
-  assert.match(toast, /border-radius:\s*999px/, 'a pill, like the floating menu');
-  assert.match(toast, /font-weight:\s*700/, 'bold enough to read at a glance over artwork');
+  assert.match(toast, /border:\s*1px solid rgba\(var\(--accent-rgb\),\s*\.5\)/, 'a red hairline keeps the capsule visible on the black page');
+  assert.doesNotMatch(toast, /text-shadow/, 'no halo needed on a near-opaque black fill');
+  // Capsule shape, like the floating menu.
+  assert.match(toast, /border-radius:\s*999px/, 'a capsule');
   // The old opaque light bar is gone for good.
   assert.doesNotMatch(css, /#f2f2f2/, 'no opaque light toast background remains');
-  assert.doesNotMatch(ruleText('.toast'), /color:\s*#111/);
+  assert.doesNotMatch(toast, /color:\s*#111/);
+});
+
+test('the toast keeps exactly the size it had before the redesign', () => {
+  // The pre-redesign toast (git 84daf0c: app/css/styles.css) was:
+  //   display: flex; align-items: center; gap: 14px; padding: 12px 18px; font-weight: 600;
+  //   font-size: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.6);
+  // Only the fill, the text colour and the box radius may differ.
+  const toast = ruleText('.toast');
+  assert.match(toast, /display:\s*flex/);
+  assert.match(toast, /align-items:\s*center/);
+  assert.match(toast, /gap:\s*14px/);
+  assert.match(toast, /padding:\s*12px 18px/, 'the padding that set the old height and side rhythm');
+  assert.match(toast, /font-size:\s*14px/);
+  assert.match(toast, /font-weight:\s*600/, 'the old weight, not bolder (bolder text grows the line box)');
+  assert.match(toast, /box-shadow:\s*0 10px 40px rgba\(0,0,0,\.6\)/, 'the original drop shadow');
+  assert.doesNotMatch(toast, /letter-spacing/, 'no extra tracking: it would widen the capsule');
+  // The action chip stays inside the line box the plain message would use, so adding one never resizes it.
+  const button = ruleText('.toast button');
+  assert.match(button, /font-size:\s*13px/);
+  assert.match(button, /line-height:\s*1\.2/);
+  assert.match(button, /padding:\s*5px 12px/);
 });
 
 test('the optional action is a red chip, never a solid block', () => {
   const button = ruleText('.toast button');
-  assert.match(button, /background:\s*rgba\(var\(--accent-rgb\),\s*\.2\)/, 'a translucent red chip');
-  assert.match(button, /border:\s*1px solid rgba\(var\(--accent-rgb\),\s*\.55\)/);
+  assert.match(button, /background:\s*rgba\(var\(--accent-rgb\),\s*\.22\)/, 'a translucent red chip on the black capsule');
+  assert.match(button, /border:\s*1px solid rgba\(var\(--accent-rgb\),\s*\.5\)/);
   assert.match(button, /color:\s*var\(--accent-bright\)/, 'the same red as the message');
   assert.match(button, /border-radius:\s*999px/);
-  assert.match(css, /\.toast button:hover,[^}]*background: rgba\(var\(--accent-rgb\), \.38\); color: #fff;/, 'it brightens on hover/focus');
+  assert.match(css, /\.toast button:hover,[^}]*background: rgba\(var\(--accent-rgb\), \.42\); color: #fff;/, 'it brightens on hover/focus');
 });
 
 test('the red used for text is the lightened brand tint and passes contrast on the dark page', () => {
