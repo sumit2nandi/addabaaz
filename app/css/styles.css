@@ -1061,3 +1061,13 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .swatch::before { content: ''; position: absolute; width: 28px; height: 28px; left: 50%; top: 50%; transform: translate(-50%, -50%); background: var(--swatch); border: 2px solid transparent; border-radius: 50%; }
 .swatch.on { box-shadow: none; }
 .swatch.on::before { border-color: #fff; box-shadow: 0 0 0 2px var(--bg); }
+
+/* Guest account actions must not compete with identity text for a narrow flex row. */
+.profile-page .profile-head h2 .pill { white-space: nowrap; overflow-wrap: normal; }
+@media (max-width: 899px) {
+  .profile-page .profile-head { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .profile-page .profile-head .profile-id { grid-column: 2; }
+  .profile-page .profile-head .profile-id:only-child { grid-column: 1 / -1; }
+  .profile-page .profile-head .profile-actions { grid-column: 1 / -1; width: 100%; margin-left: 0; justify-content: flex-start; }
+  .profile-page .profile-head .profile-actions .btn { flex: 1 1 130px; white-space: nowrap; text-align: center; }
+}

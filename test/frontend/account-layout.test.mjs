@@ -101,3 +101,13 @@ test('deletion action follows the public details and the profile footer stays co
   assert.match(read('app/css/styles.css'), /\.profile-page \{ padding-bottom: 8px; \}/);
   assert.match(read('app/css/styles.css'), /:has\(\.profile-page\) \.footer \{ margin-top: 8px; \}/);
 });
+
+test('guest mobile identity and sign-in buttons occupy separate rows', () => {
+  const css = read('app/css/styles.css');
+  const mobile = css.slice(css.lastIndexOf('@media (max-width: 899px)'));
+  assert.match(mobile, /\.profile-page \.profile-head \{ display: grid; grid-template-columns: auto minmax\(0, 1fr\)/);
+  assert.match(mobile, /\.profile-actions \{ grid-column: 1 \/ -1; width: 100%; margin-left: 0;/);
+  assert.match(mobile, /\.profile-actions \.btn \{ flex: 1 1 130px; white-space: nowrap;/);
+  assert.match(css, /\.profile-head h2 \.pill \{ white-space: nowrap; overflow-wrap: normal; \}/);
+  assert.match(read('app/js/views/account.js'), /u.supportsAuth && !u.account \? html`<div class="profile-actions">/);
+});
