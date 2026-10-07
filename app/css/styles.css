@@ -59,8 +59,25 @@ ul { margin: 0; padding: 0; list-style: none; }
 
 /* ---------- boot / loading ---------- */
 .boot { display: grid; place-items: center; gap: 0; min-height: 70vh; align-content: center; }
+.boot-web { display: grid; place-items: center; }
+.boot-native { display: none; }
 .boot-mark { position: relative; width: 116px; height: 116px; display: grid; place-items: center; }
 .boot-mark img { position: relative; z-index: 1; width: 88px; height: 88px; border-radius: 50%; object-fit: cover; box-shadow: 0 6px 24px rgba(0,0,0,.45); }
+/* Capacitor's native splash covers OS startup; this branded HTML screen takes over as soon as the WebView can paint,
+   and stays up until the router has rendered the first route. Keep web/PWA boot compact. */
+html[data-platform="android"] #boot, html[data-platform="ios"] #boot { position: fixed; z-index: 9999; inset: 0; width: 100%; height: 100vh; height: 100dvh; min-height: 100vh; min-height: 100dvh; margin: 0; padding: calc(env(safe-area-inset-top, 0px) + 16px) calc(env(safe-area-inset-right, 0px) + 20px) calc(env(safe-area-inset-bottom, 0px) + 16px) calc(env(safe-area-inset-left, 0px) + 20px); overflow: hidden; display: grid; place-items: center; background: #b80000; color: #fff; }
+html[data-platform="android"] #boot .boot-web, html[data-platform="ios"] #boot .boot-web { display: none; }
+html[data-platform="android"] #boot .boot-native, html[data-platform="ios"] #boot .boot-native { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; text-align: center; }
+.boot-native-content { display: flex; flex-direction: column; align-items: center; transform: translateY(-2vh); }
+.boot-native-emblem { display: grid; place-items: center; width: clamp(124px, 35vw, 154px); height: clamp(124px, 35vw, 154px); margin-bottom: 24px; border-radius: 50%; background: rgba(74,0,18,.24); box-shadow: 0 12px 42px rgba(61,0,12,.18); }
+.boot-native-emblem svg { display: block; width: 64%; height: 64%; }
+.boot-native-title { color: #fff; font-size: clamp(26px, 7vw, 32px); font-weight: 800; letter-spacing: .22em; line-height: 1.1; padding-left: .22em; }
+.boot-native-tagline { margin-top: 10px; color: rgba(255,255,255,.78); font-size: 10px; font-weight: 700; letter-spacing: .22em; }
+.boot-native-progress { width: 158px; height: 8px; margin-top: 34px; overflow: hidden; border: 2px solid rgba(255,255,255,.9); border-radius: 999px; }
+.boot-native-progress span { display: block; width: 38%; height: 100%; border-radius: inherit; background: #fff; animation: native-boot-progress 1.5s ease-in-out infinite; }
+@keyframes native-boot-progress { from { transform: translateX(-110%); } to { transform: translateX(280%); } }
+@media (prefers-reduced-motion: reduce) { .boot-native-progress span { animation: none !important; transform: none; } }
+@media (max-height: 560px) { .boot-native-emblem { width: 112px; height: 112px; margin-bottom: 16px; } .boot-native-progress { margin-top: 22px; } }
 /* The ring spins exactly around the logo's edge: the mark box is 116px, the logo 88px, so an inset of
    (116 - 88) / 2 = 14px puts the circle right on the logo's rim instead of floating outside it. */
 .boot-ring { position: absolute; inset: 14px; border-radius: 50%; animation: spin 1.6s linear infinite; }

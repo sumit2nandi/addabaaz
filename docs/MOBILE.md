@@ -121,9 +121,16 @@ it down.
   `bash mobile/scripts/gen-launcher-icons.sh`). Android 8+ gets a white adaptive
   background and transparent foreground; older launchers use the same white-tile
   PNG fallback.
-- The Android 12+ system splash shows the dark logo artwork
-  (`windowSplashScreenAnimatedIcon` = the splash drawable), so launching never
-  shows white squares around the logo.
+- On Android and iOS, tapping the app icon shows a branded launch sequence:
+  a native red launch canvas with the ADDABAAZ mark, then a full-screen HTML
+  loader with the app name and an indeterminate progress bar while the first
+  route is prepared. The HTML loader remains until the router emits `ab:ready`;
+  it does not claim a fake percentage. Android's system splash uses the red
+  canvas plus centered logo artwork, and iOS assets are generated from
+  `resources/splash.png`. The existing compact boot ring remains for web/PWA.
+- Capacitor's native splash auto-hide stays disabled. `app/js/platform.js`
+  reveals the HTML loader as soon as the WebView can paint it, then restores the
+  usual dark status bar when the first route is ready.
 
 ## Stable debug signing (APK updates install over old ones)
 

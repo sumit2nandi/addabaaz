@@ -53,8 +53,25 @@
 <!-- Empty containers below are filled by app/js/ui/shell.js: top bar, footer and mobile tab bar. -->
 <header class="topbar" id="topbar"></header>
 <main id="view" tabindex="-1">
-  <!-- Splash shown until the app has loaded; replaced by the first page. -->
-  <div id="boot" class="boot"><div class="boot-mark"><img src="media/icons/icon-192.png" width="88" height="88" alt="ADDABAAZ"><span class="boot-ring" aria-hidden="true"><svg viewBox="0 0 100 100"><circle class="tr" cx="50" cy="50" r="54"></circle><circle class="arc" cx="50" cy="50" r="54"></circle></svg></span></div></div>
+  <!-- The web loader remains compact. Capacitor swaps to the full native-style launch screen until the first route is ready. -->
+  <div id="boot" class="boot">
+    <div class="boot-web" aria-hidden="true"><div class="boot-mark"><img src="media/icons/icon-192.png" width="88" height="88" alt=""><span class="boot-ring"><svg viewBox="0 0 100 100"><circle class="tr" cx="50" cy="50" r="54"></circle><circle class="arc" cx="50" cy="50" r="54"></circle></svg></span></div></div>
+    <div class="boot-native" role="status" aria-live="polite" aria-busy="true">
+      <div class="boot-native-content">
+        <div class="boot-native-emblem" aria-hidden="true">
+          <svg viewBox="0 0 100 100" focusable="false">
+            <circle cx="50" cy="50" r="49" fill="rgba(95,0,24,.35)" />
+            <rect x="19" y="24" width="62" height="44" rx="10" fill="#fff" />
+            <path d="M44 34.5a3 3 0 0 1 4.6-2.5l17 13a3 3 0 0 1 0 4.8l-17 13a3 3 0 0 1-4.6-2.4z" fill="#b80000" />
+            <rect x="39" y="74" width="22" height="5" rx="2.5" fill="#fff" />
+          </svg>
+        </div>
+        <strong class="boot-native-title">ADDABAAZ</strong>
+        <span class="boot-native-tagline">STORIES BEYOND THE SCREEN</span>
+        <div class="boot-native-progress" role="progressbar" aria-label="Loading ADDABAAZ"><span></span></div>
+      </div>
+    </div>
+  </div>
 <!--seo:body--><!--/seo:body-->
 </main>
 <footer class="footer" id="footer">

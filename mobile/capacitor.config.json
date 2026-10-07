@@ -2,17 +2,17 @@
   "appId": "in.addabaaz.app",
   "appName": "Addabaaz",
   "webDir": "../www",
-  "backgroundColor": "#050505",
+  "backgroundColor": "#b80000",
   "server": {
     "androidScheme": "https",
     "iosScheme": "https",
     "hostname": "app.addabaaz.in"
   },
   "ios": { "contentInset": "never", "allowsLinkPreview": false, "limitsNavigationsToAppBoundDomains": false },
-  "android": { "allowMixedContent": false, "backgroundColor": "#050505" },
+  "android": { "allowMixedContent": false, "backgroundColor": "#b80000" },
   "plugins": {
     "FirebaseMessaging": { "presentationOptions": ["alert", "badge", "sound"] },
-    "SplashScreen": { "launchShowDuration": 0, "launchAutoHide": false, "backgroundColor": "#050505", "showSpinner": false },
-    "StatusBar": { "style": "DARK", "backgroundColor": "#050505", "overlaysWebView": false }
+    "SplashScreen": { "launchShowDuration": 0, "launchAutoHide": false, "backgroundColor": "#b80000", "showSpinner": false },
+    "StatusBar": { "style": "LIGHT", "backgroundColor": "#b80000", "overlaysWebView": false }
   }
 }
