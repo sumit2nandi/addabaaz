@@ -94,6 +94,24 @@ test('the shared rail helper accepts heading extras and home wires the destructi
   assert.match(view, /confirmDialog\(\{ title: 'Clear watch history\?', text: 'This removes Continue Watching for this profile\.', confirm: 'Clear', danger: true \}\)/);
   assert.match(view, /u\.clearHistory\(\);\s*toast\('Watch history cleared'\)/);
   assert.match(view, /ctx\.onCleanup\(\(\) => ctx\.root\.removeEventListener\('click', onClear\)\)/);
+});
+
+test('the bin sits inline with the heading text as a plain white icon, with no border', () => {
+  // The heading extra is rendered INSIDE the title row (not as a sibling of it), so the header's
+  // space-between cannot push it to the far edge of the row: the icon lands right beside the words and
+  // is centred on them.
+  const components = read('app/js/ui/components.js');
+  assert.match(components, /<div class="rail-head-copy"><div class="rail-title"><h2>\$\{title\}<\/h2>\$\{headExtra\}<\/div>/, 'headExtra rides in the title row');
   const css = read('app/css/styles.css');
-  assert.match(css, /\.rail-clear \{[^}]*border-radius: 50%/);
+  assert.match(css, /\.rail-title \{ display: flex; align-items: center; gap: 10px; \}/, 'the title row centres the icon on the words');
+
+  // A plain white bin: no border, no background, no circle.
+  const clear = css.split('\n').find((line) => line.startsWith('.rail-clear {')) || '';
+  assert.match(clear, /border: 0/, 'no border');
+  assert.match(clear, /background: none/, 'no background');
+  assert.match(clear, /color: #fff/, 'a white glyph');
+  assert.doesNotMatch(clear, /border-radius/, 'no circle');
+  assert.match(clear, /width: 32px; height: 32px/, 'the 32px box is only the tap target');
+  assert.doesNotMatch(clear, /--gold/, 'the gold ring is gone');
+  assert.match(read('app/css/styles.css'), /\.rail-clear:hover \{ opacity: \.65; \}/);
 });

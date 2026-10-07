@@ -153,9 +153,10 @@ export function fitPoster(root) {
 // A horizontal scrolling row with a heading and a "See all" link.
 export function rail({ title, subtitle = '', items = [], href = '', linkLabel = 'See all', cls = '', id = '', hideHeading = false, headExtra = '' }) {
   if (!items.length) return html``;
+  // `headExtra` rides INSIDE the title row, so a heading action (the Continue Watching bin) sits inline
+  // with the words instead of being pushed to the far edge of the row by the header's space-between.
   return html`<section class="rail ${cls}" ${id ? raw(`id="${esc(id)}"`) : ''} aria-label="${title}">
-    ${hideHeading ? (href ? html`<div class="rail-head rail-head-minimal"><a class="see-all" href="${href}">${linkLabel} ${icon('right', { size: 16 })}</a></div>` : '') : html`<div class="rail-head"><div><h2>${title}</h2>${subtitle ? html`<p class="rail-sub">${subtitle}</p>` : ''}</div>
-      ${headExtra}
+    ${hideHeading ? (href ? html`<div class="rail-head rail-head-minimal"><a class="see-all" href="${href}">${linkLabel} ${icon('right', { size: 16 })}</a></div>` : '') : html`<div class="rail-head"><div class="rail-head-copy"><div class="rail-title"><h2>${title}</h2>${headExtra}</div>${subtitle ? html`<p class="rail-sub">${subtitle}</p>` : ''}</div>
       ${href ? html`<a class="see-all" href="${href}">${linkLabel} ${icon('right', { size: 16 })}</a>` : ''}</div>`}
     <div class="rail-wrap">
       <button type="button" class="rail-arrow left" data-rail-dir="-1" aria-label="Scroll left" disabled>${icon('left', { size: 22 })}</button>
