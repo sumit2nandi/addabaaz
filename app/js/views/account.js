@@ -30,7 +30,7 @@ export default async function account(ctx) {
     </nav>
     <footer class="profile-footer">
       ${u.account ? html`<button class="logout-link" id="signout">Log Out</button>` : ''}
-      <p class="profile-legal"><a href="#/privacy">Privacy Policy</a><span aria-hidden="true">•</span><a href="#/terms">Terms of Use</a></p>
+      <p class="profile-legal"><a href="#/privacy">Privacy Policy</a><span aria-hidden="true">•</span><a href="#/terms">Terms of Use</a><span aria-hidden="true">•</span><button class="linklike" data-consent-open>Privacy choices</button></p>
       <p class="app-version">App Version ${CONFIG.version}</p>
     </footer>
   </div>`.s;

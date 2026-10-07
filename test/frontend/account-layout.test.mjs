@@ -29,8 +29,8 @@ test('Account is a compact profile header over a settings-group list', () => {
     'the page ends in a footer, not another settings card');
   assert.match(account, /<button class="logout-link" id="signout">Log Out<\/button>/,
     'Log Out is a plain blue line, like the reference footer');
-  assert.match(account, /<a href="#\/privacy">Privacy Policy<\/a><span aria-hidden="true">•<\/span><a href="#\/terms">Terms of Use<\/a>/,
-    'the footer links the Privacy Policy and Terms of Use');
+  assert.match(account, /<a href="#\/privacy">Privacy Policy<\/a><span aria-hidden="true">•<\/span><a href="#\/terms">Terms of Use<\/a><span aria-hidden="true">•<\/span><button class="linklike" data-consent-open>Privacy choices<\/button>/,
+    'the footer links the Privacy Policy, Terms of Use and Privacy choices');
   assert.match(account, /<p class="app-version">App Version \$\{CONFIG\.version\}<\/p>/,
     'the footer shows the app version');
   assert.match(css, /\.logout-link \{[^}]*color: #4da3ff/,
@@ -59,6 +59,10 @@ test('Account is a compact profile header over a settings-group list', () => {
     'the Privacy Policy link lives in the profile footer now, not in the Privacy group');
   assert.doesNotMatch(extras, /#\/terms/,
     'same for the Terms of Use link');
+  assert.doesNotMatch(extras, /\['privacy',/,
+    'the Privacy group is gone from the menu (its choices live in the footer)');
+  assert.doesNotMatch(extras, /\['app',/,
+    'so is the App group (install stays global, the version is in the footer)');
 });
 
 test('unsubscribed website viewers get a Subscribe banner above the profile header', () => {

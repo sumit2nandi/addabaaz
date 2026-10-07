@@ -30,16 +30,14 @@ test('every settings group opens its own sub-page', () => {
     'the sub-page wires its section once it is in the DOM');
   assert.match(css, /\.back-link \{ display: inline-flex; align-items: center;/,
     'the back link is a tap-friendly row');
-  for (const id of ['playback', 'security', 'kids', 'refer', 'notify', 'privacy', 'app', 'danger']) {
+  for (const id of ['playback', 'security', 'kids', 'refer', 'notify', 'danger']) {
     assert.match(extras, new RegExp(`if \\(id === '${id}'\\) return `),
       `the ${id} group has a sub-page section`);
   }
-  for (const id of ['playback', 'security', 'kids', 'refer', 'notify', 'privacy', 'danger']) {
+  for (const id of ['playback', 'security', 'kids', 'refer', 'notify', 'danger']) {
     assert.match(extras, new RegExp(`if \\(id === '${id}'\\) return wire`),
       `the ${id} group has its wiring hooked up`);
   }
-  assert.match(extras, /if \(id === 'app'\) return;/,
-    'the App group needs no wiring (the install button is global, the version row is static)');
   assert.match(extras, /<section class="account-section">\s*<h2 class="sub-h">Security<\/h2>/,
     'the Security section keeps its heading');
   assert.match(extras, /<div id="referSlot" class="account-section"><\/div>/,

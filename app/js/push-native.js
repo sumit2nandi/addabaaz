@@ -9,6 +9,7 @@
  * Native push is enabled only in app builds whose CI job has the Firebase client config files.
  */
 import { app } from './app.js';
+import { deviceModel } from './data/api.js';
 import { resolveNativeMessagingPlugin } from './native-messaging-plugin.js';
 
 const reportClientIssue = (error, where) => {
@@ -24,7 +25,7 @@ const enabled = () => window.ADDABAAZ_ENV?.NATIVE_PUSH_ENABLED === true;
 const plugin = () => resolveNativeMessagingPlugin(window.Capacitor, enabled());
 export const nativePushSupported = () => !!plugin();
 const platformName = () => { try { return window.Capacitor?.getPlatform?.() || 'android'; } catch { return 'android'; } };
-const label = () => { try { return window.Capacitor?.getPlatform?.() === 'ios' ? 'iPhone / iPad' : 'Android app'; } catch { return 'App'; } };
+const label = () => { try { const m = deviceModel(); if (m) return `${m} · app`; return window.Capacitor?.getPlatform?.() === 'ios' ? 'iPhone / iPad' : 'Android app'; } catch { return 'App'; } };
 const knownToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } };
 const knownOwner = () => { try { return localStorage.getItem(OWNER_KEY) || ''; } catch { return ''; } };
 const rememberToken = (token) => { try { token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY); } catch { /* private mode */ } };

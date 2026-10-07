@@ -2,16 +2,14 @@
  * behind /account/<group>; the profile page itself only lists them. Visibility follows the session:
  * local mode and guests see a shorter list, signed-in accounts the full one. */
 import { app } from '../app.js';
-import { CONFIG } from '../config.js';
 import { html, $, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, emptyState } from '../ui/components.js';
 import { openDialog, confirmDialog, pinPrompt } from '../ui/dialog.js';
 import { pushState, enablePush, disablePush, setPushPrefs, pushSupported } from '../push.js';
-import { openConsentDialog } from '../consent.js';
 import { friendly } from '../errors.js';
 import { go } from '../router.js';
-import { platform, isNative } from '../platform.js';
+import { isNative } from '../platform.js';
 
 // [id, title, subtitle, icon, who sees it ('all' | 'auth' | 'account'), link override for rows that leave the page]
 const GROUPS = [
@@ -20,8 +18,6 @@ const GROUPS = [
   ['kids', 'Kids & parental controls', 'Parental PIN and Kids profiles', 'user', 'account'],
   ['refer', 'Refer & earn', 'Invite credit and rewards', 'gift', 'account'],
   ['notify', 'Notifications', 'Episode, launch and announcement alerts', 'bell', 'auth'],
-  ['privacy', 'Privacy', 'Analytics and stored data', 'info', 'auth'],
-  ['app', 'App', 'Install the app and version info', 'download', 'all'],
   ['help', 'Help & support', 'Help Centre and contact us', 'chat', 'all', '#/support'],
   ['danger', 'Delete account', 'Permanently remove your account', 'trash', 'account'],
 ];
@@ -179,26 +175,6 @@ function kidsSection() {
   </section>`;
 }
 
-// The Privacy Policy and Terms links live in the profile footer now — this group is just the live choices.
-function privacySection() {
-  if (!app.user.supportsAuth) return '';
-  return html`<section class="account-section">
-    <h2 class="sub-h">Privacy</h2>
-    <div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}</div>
-  </section>`;
-}
-
-function appSection() {
-  const u = app.user;
-  return html`<section class="account-section">
-    <h2 class="sub-h">App</h2>
-    <div class="card-panel list">
-      <button class="row-link" data-install hidden>${icon('download', { size: 22 })}<span><b>Install ADDABAAZ</b><small>Add to your home screen for a full-screen app experience.</small></span></button>
-      <div class="row-link static">${icon('info', { size: 22 })}<span><b>Version ${CONFIG.version}</b><small>${platform === 'web' ? 'Web' : platform} · ${u.mode === 'remote' ? 'Connected to ADDABAAZ cloud' : 'Local mode (data stays on this device)'}</small></span></div>
-    </div>
-  </section>`;
-}
-
 function dangerSection() {
   if (!app.user.account) return '';
   return html`<section class="account-section"><h2 class="sub-h">Danger zone</h2><div class="card-panel list"><button class="row-link danger" id="delAcc">${icon('trash', { size: 22 })}<span><b>Delete account</b><small>Permanently removes your account, profiles, list and history.</small></span></button></div></section>`;
@@ -211,8 +187,6 @@ export function settingSection(id) {
   if (id === 'kids') return kidsSection();
   if (id === 'refer') return html`<div id="referSlot" class="account-section"></div>`;
   if (id === 'notify') return html`<div id="notifySlot" class="account-section"></div>`;
-  if (id === 'privacy') return privacySection();
-  if (id === 'app') return appSection();
   if (id === 'danger') return dangerSection();
   return '';
 }
@@ -283,10 +257,6 @@ function wireKids(root) {
   });
 }
 
-function wirePrivacy(root) {
-  $('#consentBtn', root)?.addEventListener('click', openConsentDialog);
-}
-
 function wireDanger(root) {
   const u = app.user;
   $('#delAcc', root)?.addEventListener('click', async () => {
@@ -304,7 +274,5 @@ export function wireSetting(id, root, ctx) {
   if (id === 'refer') return wireReferral(root);
   if (id === 'notify' && !app.user.account) return wireNotifications(root, { guest: true, onCleanup: ctx?.onCleanup });
   if (id === 'notify') return wireNotifications(root, { onCleanup: ctx?.onCleanup });
-  if (id === 'privacy') return wirePrivacy(root);
-  if (id === 'app') return;
   if (id === 'danger') return wireDanger(root);
 }

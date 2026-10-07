@@ -6,7 +6,7 @@
   --accent: #b80000; --accent-2: #d00000; --accent-rgb: 184,0,0;
   --accent-gradient: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,0) 78%), linear-gradient(135deg, #8f0000 0%, #b80000 50%, #d00000 100%);
   --accent-gradient-hover: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0) 78%), linear-gradient(135deg, #b00000 0%, #df0000 100%);
-  --gold: #f5c518; --ok: #2ecc71; --danger: #d04a4a; --danger-rgb: 208,74,74;
+  --gold: #f5c518; --gold-gradient: linear-gradient(135deg, #8a6a14 0%, #d4a017 38%, #ffe9a3 50%, #d4a017 62%, #8a6a14 100%); --gold-panel: linear-gradient(160deg, #221a0c 0%, #4d3d17 52%, #28200e 100%); --ok: #2ecc71; --danger: #d04a4a; --danger-rgb: 208,74,74;
   --border: rgba(255,255,255,.09); --border-2: rgba(255,255,255,.16);
   --radius: 12px; --radius-sm: 8px; --radius-lg: 18px;
   --font: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans Bengali', 'Nirmala UI', 'Bangla Sangam MN', sans-serif;
@@ -549,10 +549,10 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 /* Small round × at the top-right corner of the sign-in / create-account form. */
 .auth-close { position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border-2); background: rgba(255,255,255,.06); color: var(--text-2); transition: background .2s, border-color .2s, color .2s, transform .3s var(--ease); }
 .auth-close:hover { background: var(--accent); border-color: var(--accent); color: #fff; transform: rotate(90deg); }
-.plans { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); margin-top: 20px; max-width: 680px; } .plan { position: relative; background: var(--panel); border: 1px solid var(--border-2); border-radius: 20px; padding: 24px 22px; display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; align-items: center; align-content: start; } .plan h2 { font-size: 20px; letter-spacing: .02em; text-transform: uppercase; } .plan.best { background: linear-gradient(135deg, #4a0e2e 0%, #8f0000 55%, #b80000 100%); border-color: transparent; box-shadow: 0 8px 28px rgba(0,0,0,.45); } .plan.current { box-shadow: 0 0 0 2px var(--accent); } .plan.best.current { box-shadow: 0 8px 28px rgba(0,0,0,.45), 0 0 0 2px var(--gold); } .plan.free { opacity: .88; }
+.plans { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); margin-top: 20px; max-width: 680px; } .plan { position: relative; background: var(--panel); border: 1px solid var(--border-2); border-radius: 20px; padding: 24px 22px; display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; align-items: center; align-content: start; } .plan h2 { font-size: 20px; letter-spacing: .02em; text-transform: uppercase; } .plan.best { background-color: #2c2310; background-image: var(--gold-panel); border: 1px solid rgba(245,197,24,.38); box-shadow: 0 8px 28px rgba(0,0,0,.45); } .plan.current { box-shadow: 0 0 0 2px var(--accent); } .plan.best.current { box-shadow: 0 8px 28px rgba(0,0,0,.45), 0 0 0 2px var(--gold); } .plan.free { opacity: .88; }
 .badge.cur { background: var(--ok); color: #04120a; }
 /* Plans checkout card: one Premium card with duration tiles + a single pay button (Zee-style). */
-.plus-card { background: var(--panel); border: 1px solid var(--border-2); border-radius: 20px; padding: 22px 20px; margin-top: 20px; max-width: 680px; }
+.plus-card { background-color: #2c2310; background-image: var(--gold-panel); border: 1px solid rgba(245,197,24,.38); border-radius: 20px; padding: 22px 20px; margin-top: 20px; max-width: 680px; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
 .plus-card h2 { font-size: 21px; }
 /* Billing shortcut below the plan options: same width as the cards, breathing room above. */
 .plans-bill { margin-top: 16px; max-width: 680px; }
@@ -595,10 +595,10 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .plan .price { font-size: 34px; font-weight: 800; text-align: right; line-height: 1.1; } .plan .price small { display: block; font-size: 13px; color: var(--muted); font-weight: 500; } .plan.best .price small { color: rgba(255,255,255,.82); } .plan ul { grid-column: 1 / -1; margin-top: 10px; } .plan li { display: flex; gap: 8px; align-items: flex-start; color: var(--text-2); font-size: 14px; margin-bottom: 8px; } .plan li svg { color: var(--ok); margin-top: 3px; } .plan.best li { color: #fff; } .plan.best li svg { color: #7be495; } .plan .btn { grid-column: 1 / -1; margin-top: 10px; border-radius: 999px; padding: 14px 20px; font-size: 16px; }
 .badge { position: absolute; top: -12px; right: 20px; background: var(--gold); color: #000; font-size: 12px; font-weight: 800; padding: 4px 12px; border-radius: 999px; }
 /* Account subscribe banner (website only — never rendered in the native apps): compact gradient strip with a solid pill button. */
-.subscribe-banner { display: flex; align-items: center; gap: 14px; background-color: var(--accent); background-image: var(--accent-gradient); border: 0; margin-top: 0; margin-bottom: 14px; padding: 14px 18px; }
+.subscribe-banner { display: flex; align-items: center; gap: 14px; background-color: #d4a017; background-image: var(--gold-gradient); border: 0; margin-top: 0; margin-bottom: 14px; padding: 14px 18px; }
 .subscribe-banner > div { min-width: 0; }
-.subscribe-banner h2 { font-size: 16.5px; font-weight: 600; } .subscribe-banner h2 span { color: var(--gold); font-weight: 800; }
-.subscribe-banner p { color: rgba(255,255,255,.85); font-size: 12.5px; margin-top: 2px; }
+.subscribe-banner h2 { font-size: 16.5px; font-weight: 600; color: #201503; } .subscribe-banner .premium-word { background: none; color: #5a430a; -webkit-text-fill-color: #5a430a; filter: none; animation: none; } .subscribe-banner h2 span { color: var(--gold); font-weight: 800; }
+.subscribe-banner p { color: rgba(32,21,3,.78); font-size: 12.5px; margin-top: 2px; }
 .btn-light { background: #fff; color: #8f0000; border: 0; border-radius: 999px; padding: 9px 22px; font-size: 14px; font-weight: 800; white-space: nowrap; margin-left: auto; }
 .btn-light:hover { background: #ffe9e9; }
 .profile-head h2 .pill { margin-left: 8px; vertical-align: middle; }
@@ -607,7 +607,7 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .profile-footer { display: grid; gap: 6px; justify-items: center; text-align: center; padding: 22px 0 10px; }
 .logout-link { background: none; border: 0; padding: 8px 20px; font-size: 16px; font-weight: 700; color: #4da3ff; cursor: pointer; }
 .profile-legal { display: flex; gap: 12px; align-items: center; margin: 0; font-size: 13.5px; color: var(--muted); }
-.profile-legal a { color: var(--muted); }
+.profile-legal a { color: var(--muted); } .profile-legal .linklike { text-decoration: none; }
 .app-version { margin: 0; font-size: 13px; color: var(--muted); }
 /* Inline notice ("Your plan is active until…"): the icon stays with the first line and never shrinks,
  * and the sentence is ONE text column. That column is the whole point: as bare flex children the words

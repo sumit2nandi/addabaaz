@@ -19,8 +19,8 @@ test('public and admin themes use a darker logo red with stronger button gradien
     'public primary buttons use the branded gradient');
   assert.match(appCss, /\.btn-danger \{[^}]*background-image: var\(--accent-gradient\)/,
     'public filled danger buttons use the same gradient');
-  assert.match(appCss, /\.subscribe-banner \{[^}]*background-image: var\(--accent-gradient\)/,
-    'the Subscribe banner wears the site red gradient');
+  assert.match(appCss, /\.subscribe-banner \{[^}]*background-image: var\(--gold-gradient\)/,
+    'the Subscribe banner wears the gold gradient');
   assert.match(adminCss, /\.btn\.primary \{[^}]*background-image: var\(--accent-gradient\)/,
     'admin primary buttons use the branded gradient too');
   assert.match(appCss, /\.account-page \.btn-ghost \{[^}]*background-image: var\(--accent-gradient\)/,

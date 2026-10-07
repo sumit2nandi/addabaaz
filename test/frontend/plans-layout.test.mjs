@@ -32,6 +32,10 @@ test('website checkout is one Plus card with duration tiles and a single pay but
     'the selected tile glows');
   assert.match(css, /\.dur\.is-current \{[^}]*border-color: var\(--gold\)/,
     'the current-plan tile gets its own color');
+  assert.match(css, /\.plus-card \{[^}]*background-image: var\(--gold-panel\)/,
+    'the Plus card wears the dark-gold panel');
+  assert.match(css, /\.plan\.best \{[^}]*background-image: var\(--gold-panel\)/,
+    'so does the legacy best-value card');
 });
 
 test('buying skips straight to payment: coupon popup, cancel screen, celebration', () => {

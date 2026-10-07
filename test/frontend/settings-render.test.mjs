@@ -32,7 +32,7 @@ app.user = {
 const settings = (await import('../../app/js/views/settings.js')).default;
 
 test('every settings group renders a real section with a back link', async () => {
-  for (const id of ['playback', 'security', 'kids', 'refer', 'notify', 'privacy', 'app', 'danger']) {
+  for (const id of ['playback', 'security', 'kids', 'refer', 'notify', 'danger']) {
     const root = document.createElement('div');
     const ctx = { root, params: { group: id }, query: {}, path: `/account/${id}`, title: '', setTitle(t) { ctx.title = t; }, onCleanup: () => {} };
     await settings(ctx); // must not throw (wiring runs against the freshly drawn section)
