@@ -1,3 +1,4 @@
+import { pageBack } from '../ui/page-back.js';
 // Public account-deletion instructions, also linked from Google Play and the privacy policy.
 import { app } from '../app.js';
 import { wireAccountDeletion } from './account-extra.js';
@@ -14,7 +15,9 @@ export default async function deletion(ctx) {
   const subject = encodeURIComponent(`${name} account deletion request`);
   const body = encodeURIComponent(`Hello,\n\nPlease delete my ${name} account.\n\nRegistered email or phone number:\nFull name (optional):\n\nI understand that limited billing and security records may be retained as described in the Privacy Policy.\n`);
   ctx.setTitle(`Delete your ${name} account`);
+  const backButton = pageBack(ctx);
   ctx.root.innerHTML = html`<article class="page page-narrow legal deletion-page">
+    ${backButton}
     ${sectionHeader({ tag: 'Account & privacy', title: 'Delete your account', subtitle: name })}
     <p class="lead">You can permanently delete your ADDABAAZ account and request deletion even if you can no longer sign in.</p>
 

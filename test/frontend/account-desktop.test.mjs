@@ -28,6 +28,6 @@ test('desktop layouts cover settings and support without replacing mobile naviga
   assert.match(desktop, /grid-template-columns: 250px minmax\(0, 1fr\)/);
   assert.match(desktop, /\.account-sidebar \{ display: grid;/);
   assert.match(read('app/js/views/settings.js'), /accountNav\(settingGroups\(\), meta.id\)/);
-  assert.match(read('app/js/views/settings.js'), /class="back-row"/);
+  assert.match(read('app/js/views/settings.js'), /pageBack\(ctx/);
   assert.match(read('app/js/views/support.js'), /accountNav\(settingGroups\(\), 'help'\)/);
 });

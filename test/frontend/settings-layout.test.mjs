@@ -24,7 +24,7 @@ test('every settings group opens its own sub-page', () => {
     'the tab title names the group');
   assert.match(view, /class="page page-narrow account-page"/,
     'sub-pages keep the account styling scope (red actions included)');
-  assert.match(view, /<a class="back-link" href="#\/account">/,
+  assert.match(view, /pageBack\(ctx/,
     'every sub-page offers a way back to the profile page');
   assert.match(view, /wireSetting\(meta\.id, ctx\.root, ctx\)/,
     'the sub-page wires its section once it is in the DOM');

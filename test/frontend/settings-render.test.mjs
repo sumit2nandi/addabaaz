@@ -38,7 +38,7 @@ test('every settings group renders a real section with a back link', async () =>
     await settings(ctx); // must not throw (wiring runs against the freshly drawn section)
     await new Promise((r) => setTimeout(r, 30)); // async slots (referral, notifications) settle
     assert.ok(ctx.title, `${id} sets a tab title`);
-    assert.ok(root.querySelector('.back-link[href="#/account"]'), `${id} offers a way back`);
+    assert.ok(root.querySelector('button.account-edit-back[data-page-back]'), `${id} offers a way back`);
     assert.ok(root.querySelector('.account-section'), `${id} draws a real section, not escaped markup`);
   }
 });

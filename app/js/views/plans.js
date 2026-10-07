@@ -1,10 +1,11 @@
+import { pageBack } from '../ui/page-back.js';
 // Plans and checkout page (#/plans).
 import { app } from '../app.js';
 import { html, fmtDate, raw } from '../util.js';
 import { icon } from '../icons.js';
 import { sectionHeader, toast } from '../ui/components.js';
 import { confirmDialog } from '../ui/dialog.js';
-import { go, back } from '../router.js';
+import { go } from '../router.js';
 import { isNative } from '../platform.js';
 import { openDialog } from '../ui/dialog.js';
 import { storage, store, $ } from '../util.js';
@@ -91,10 +92,7 @@ function celebrate() {
 export default async function plans(ctx) {
   const u = app.user;
   ctx.setTitle('Plans');
-  const backButton = html`<div class="back-row"><button type="button" class="account-edit-back" data-plans-back aria-label="Back to previous page">${icon('left', { size: 24 })}</button></div>`;
-  const onBack = (event) => { if (event.target.closest('[data-plans-back]')) back('/account'); };
-  ctx.root.addEventListener('click', onBack);
-  ctx.onCleanup(() => ctx.root.removeEventListener('click', onBack));
+  const backButton = pageBack(ctx, '/account');
   const next = /^\/(?!\/)/.test(ctx.query.next || '') ? ctx.query.next : '';
   if (!u.supportsAuth) {
     ctx.root.innerHTML = html`<div class="page">${backButton}<div class="empty">${icon('crown', { size: 44 })}<h2>Plans need the ADDABAAZ server</h2><p>This copy of ADDABAAZ is running without the API, so subscriptions aren’t available. Free episodes and reels work as usual.</p><a class="btn btn-primary" href="#/">Keep watching</a></div></div>`.s; return;

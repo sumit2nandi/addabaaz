@@ -36,7 +36,7 @@ test('referral/support remain links; order, back links and privacy integration m
   const extra = read('app/js/views/account-extra.js');
   assert.ok(extra.indexOf("['notify',") < extra.indexOf("['refer',"));
   assert.match(extra, /\['kids', 'Parental Control'/);
-  assert.match(read('app/js/views/support.js'), /class="back-link" href="#\/account"/);
+  assert.match(read('app/js/views/support.js'), /pageBack\(ctx/);
   assert.doesNotMatch(read('index.html'), /data-consent-open/);
   assert.match(read('app/js/views/legal.js'), /ctx.path === '\/privacy' \? privacyChoices\(\)/);
   assert.match(read('app/js/views/legal.js'), /wirePrivacyChoices\(ctx.root\)/);

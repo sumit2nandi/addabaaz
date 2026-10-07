@@ -1,3 +1,4 @@
+import { pageBack } from '../ui/page-back.js';
 // About, Services and Contact pages for the production house. Text comes from data/studio.json (or the API).
 import { app } from '../app.js';
 import { CONFIG } from '../config.js';
@@ -34,7 +35,9 @@ export default async function studio(ctx) {
 // About page.
 function about(ctx, d) {
   ctx.setTitle('About');
+  const backButton = pageBack(ctx);
   ctx.root.innerHTML = html`<div class="page">
+    ${backButton}
     ${sectionHeader({ tag: 'About the production house', title: 'ADDABAAZ', subtitle: d.studio.tagline })}
     <div class="two-col">
       <div class="card-panel"><h2>আমাদের লক্ষ্য</h2><ul class="mission bn">${d.missionBn.map((m) => html`<li>${m}</li>`)}</ul></div>
@@ -48,7 +51,9 @@ function about(ctx, d) {
 // Services page.
 function services(ctx, d) {
   ctx.setTitle('Services');
+  const backButton = pageBack(ctx);
   ctx.root.innerHTML = html`<div class="page">
+    ${backButton}
     ${sectionHeader({ tag: 'Capabilities & production', title: 'Our expertise', subtitle: 'Full-service film and commercial advertisement production based in Kolkata.' })}
     <div class="services">${d.services.map((s) => html`<article class="service"><span class="num">${s.num}</span><h3>${s.title}</h3><p>${s.text}</p></article>`)}</div>
     <section class="cta-band"><div><h2>Your vision. Our expertise.</h2><p>“Let’s make great films together.”</p></div><a class="btn btn-primary btn-lg" href="#/contact">Talk to us</a></section>
@@ -59,7 +64,9 @@ function services(ctx, d) {
 function contact(ctx, d) {
   const s = d.studio;
   ctx.setTitle('Contact');
+  const backButton = pageBack(ctx);
   ctx.root.innerHTML = html`<div class="page">
+    ${backButton}
     ${sectionHeader({ tag: 'Collaborate', title: 'Initiate a project', subtitle: 'Reach out for production inquiries, commercial briefs, press relations, or general correspondence.' })}
     <div class="two-col contact">
       <form class="card-panel form" id="cf" novalidate>
