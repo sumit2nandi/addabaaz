@@ -26,6 +26,11 @@ const section = (path) => {
     about: 'studio', services: 'studio', contact: 'studio', support: 'studio', search: 'search', account: 'account', profiles: 'account', plans: 'account', billing: 'account', signin: 'account', signup: 'account' }[seg] || '';
 };
 
+/* The floating bar has no Coming Soon item of its own, and upcoming titles are shows too — so a viewer who
+ * taps a Coming Soon banner on the home page (or browses #/upcoming) sees the Shows tab light up there,
+ * exactly as they would after tapping a released show. The top bar keeps them separate: it has both. */
+const tabSection = (path) => { const sec = section(path); return sec === 'upcoming' ? 'shows' : sec; };
+
 // Light haptic tick on menu taps. Only vibrate-capable devices (mostly Android) respond — everywhere else this is a silent no-op.
 const tick = () => { try { if (typeof navigator !== 'undefined') navigator.vibrate?.(12); } catch { /* haptics unavailable */ } };
 
@@ -62,7 +67,8 @@ export function renderTabbar() {
   const personalTab = isGuest() ? ['/signin', 'Sign in', 'user'] : ['/account', 'Profile', 'user'];
   const tabs = [...TABS, personalTab];
   bar.style.setProperty('--tabs', tabs.length);
-  bar.innerHTML = tabs.map(([p, l, ic]) => html`<a href="#${p}" data-tab="${p}">${icon(ic, { size: 24 })}<span>${l}</span></a>`).map(String).join('');
+  // 22px icons in a 54px pill: the bar stays finger-sized but reads much thinner than it did at 24px/62px.
+  bar.innerHTML = tabs.map(([p, l, ic]) => html`<a href="#${p}" data-tab="${p}">${icon(ic, { size: 22 })}<span>${l}</span></a>`).map(String).join('');
   markTabs(lastPath);
 }
 
@@ -129,7 +135,7 @@ function wireMenus() {
 }
 
 // Highlight the current section in the nav after each navigation.
-function markTabs(path) { const sec = section(path); $$('#tabbar a').forEach((a) => a.classList.toggle('active', section(a.dataset.tab) === sec)); }
+function markTabs(path) { const sec = tabSection(path); $$('#tabbar a').forEach((a) => a.classList.toggle('active', tabSection(a.dataset.tab) === sec)); }
 export function markActive({ path }) {
   lastPath = path;
   syncBrandPremium();

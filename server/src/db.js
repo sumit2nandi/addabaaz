@@ -81,6 +81,19 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
     } catch (e) { await c.rollback().catch(() => {}); throw e; } finally { c.release(); }
   }
 
+  /**
+   * Attaches invoices/credit notes and refunds to a page of payment rows.
+   * ONE batched query each, not one per payment: the Billing page waits for this read, and a per-row loop
+   * meant two extra round trips for every payment on the page (see db-billing.js forPayments).
+   */
+  async function attachDocuments(rows) {
+    if (!rows.length) return rows;
+    const ids = rows.map((p) => p.id);
+    const [invoices, refunds] = await Promise.all([self.invoices.forPayments(ids), self.refunds.forPayments(ids)]);
+    for (const p of rows) { p.invoices = invoices.get(p.id) || []; p.refunds = refunds.get(p.id) || []; }
+    return rows;
+  }
+
   // Row mappers: database column names -> API field names.
   const userRow = (r) => r && { id: r.id, email: r.email, emailNorm: r.email_norm || null, emailDup: !!r.email_dup, name: r.name, passwordHash: r.password_hash, createdAt: iso(r.created_at), isAdmin: !!r.is_admin, disabledAt: iso(r.disabled_at), emailVerifiedAt: iso(r.email_verified_at), sessionVersion: r.session_version || 0, hasPin: !!r.parental_pin_hash, phone: r.phone || null, phoneVerifiedAt: iso(r.phone_verified_at), referralCode: r.referral_code || null };
   const profileRow = (r) => ({ id: r.id, name: r.name, color: r.color, ...(r.kids ? { kids: true } : {}) });
@@ -330,8 +343,9 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       /** A user's payment history, newest first, with invoices, credit notes and refunds attached. */
       async listForUser(userId, limit = 100) {
         const rows = (await q("SELECT * FROM payments WHERE user_id = ? AND status = 'paid' ORDER BY paid_at DESC LIMIT ?", [userId, limit])).map(mapPayment);
-        for (const p of rows) { p.invoices = await self.invoices.forPayment(p.id); p.refunds = await self.refunds.forPayment(p.id); }
-        return rows;
+        // Three queries in total, not two per payment: the Billing page waits on this read, and the
+        // documents are attached from one batched lookup each (see attachDocuments above).
+        return attachDocuments(rows);
       },
       /** Payments for the admin console: filter by buyer (email or user id) and status, newest first. */
       // Optional filters are added to the WHERE clause only when supplied.
@@ -343,8 +357,7 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
         const w = where.length ? 'WHERE ' + where.join(' AND ') : '';
         const rows = (await q(`SELECT p.*, u.email AS user_email FROM payments p LEFT JOIN users u ON u.id = p.user_id ${w} ORDER BY p.created_at DESC, p.id LIMIT ? OFFSET ?`, [...args, limit, offset]))
           .map((r) => ({ ...mapPayment(r), userEmail: r.user_email }));
-        for (const p of rows) { p.invoices = await self.invoices.forPayment(p.id); p.refunds = await self.refunds.forPayment(p.id); }
-        return rows;
+        return attachDocuments(rows);
       },
       async countAll({ email = null, userId = null, status = null } = {}) {
         const where = [], args = [];

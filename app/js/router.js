@@ -154,8 +154,10 @@ export class Router {
     const found = matchRoute(path);
     const match = found ? { view: found.view } : null, params = found?.params || {};
 
-    // Show a loading placeholder only if the page takes longer than a moment.
-    const skeleton = setTimeout(() => { if (token === this.#token) this.root.innerHTML = '<div class="page-loading" aria-busy="true"><div class="spinner"></div></div>'; }, 180);
+    // Show the centred loader only if the page takes longer than a moment. It is laid OVER the page you
+    // are leaving (styles.css keeps it fixed, pointer-transparent and centred in the screen), so a slow
+    // page never blanks the screen and the floating menu stays usable while it loads.
+    const skeleton = setTimeout(() => { if (token === this.#token) this.root.insertAdjacentHTML('beforeend', PAGE_LOADER); }, 140);
     const div = document.createElement('div');
     div.className = 'view';
     // The context object passed to every view: its root element, URL params/query, a title setter, an
@@ -190,6 +192,10 @@ export class Router {
     document.getElementById('announcer').textContent = ctx.title || meta?.title || 'ADDABAAZ';
   }
 }
+
+/* The page loader: a small Material-style indeterminate arc (brand red) centred in the screen while the
+ * next page is fetched. The SVG carries the markup, styles.css the animation (.page-loader). */
+const PAGE_LOADER = '<div class="page-loader" role="status" aria-label="Loading" aria-busy="true"><svg viewBox="0 0 40 40" aria-hidden="true"><circle class="tr" cx="20" cy="20" r="15.9155"></circle><circle class="arc" cx="20" cy="20" r="15.9155"></circle></svg></div>';
 
 /** The public origin the server declared in <link rel=canonical> (PUBLIC_SITE_URL) — falls back to where we are. */
 const siteOrigin = () => { try { return new URL(document.querySelector('link[rel="canonical"]')?.href || location.href).origin; } catch { return location.origin; } };

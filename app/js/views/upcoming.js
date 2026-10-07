@@ -3,6 +3,7 @@
 import { app } from '../app.js';
 import { html, $$ } from '../util.js';
 import { remindBtn, img, sectionHeader } from '../ui/components.js';
+import { pageBack } from '../ui/page-back.js';
 
 // Adds .is-wide to a tile once its artwork's true orientation is known (landscape/square spans the row).
 // Artwork that is still loading keeps the two-per-row portrait layout until its load event arrives.
@@ -19,7 +20,10 @@ function fitTiles(root) {
 export default async function upcoming(ctx) {
   const cat = app.catalog;
   ctx.setTitle('Coming Soon');
+  // Arrived from a home banner or the top menu: Back returns to whichever page the viewer came from.
+  const backButton = pageBack(ctx);
   ctx.root.innerHTML = html`<div class="page">
+    ${backButton}
     ${sectionHeader({ tag: 'Future releases', title: 'Coming Soon', subtitle: 'A first look at the stories ADDABAAZ is bringing to the screen next. Set a reminder and we’ll tell you when they launch.' })}
     ${cat.upcoming.length ? html`<div class="grid grid-upcoming">${cat.upcoming.map((u) => html`
       <div class="show-tile">

@@ -6,12 +6,17 @@ import { remindBtn, listBtn, img, rail, enhanceRails, reelCard, videoCard, toast
 import { openArtwork, tapArtwork } from '../ui/lightbox.js';
 import { shareOrCopy } from '../util.js';
 import { shareUrl } from '../platform.js';
+import { pageBack } from '../ui/page-back.js';
 
 export default async function soon(ctx) {
   const cat = app.catalog;
   const u = cat.soon(ctx.params.id);
   if (!u) throw new Error('This title does not exist.');
   const extras = cat.extras(u.id);
+  // A Coming Soon page is nearly always reached from a banner somewhere else (home, the Coming Soon list),
+  // so it carries the same circular Back as the other detail-less pages — falling back to the Coming Soon
+  // list when the viewer landed here directly (a shared link) and there is no page to go back to.
+  const backButton = pageBack(ctx, '/upcoming');
   ctx.setTitle(`${u.titleEn || u.title} — Coming soon`);
   ctx.root.innerHTML = html`
     <section class="detail-hero" id="detailHero">
@@ -19,6 +24,7 @@ export default async function soon(ctx) {
       <div class="hero-inner">
         <button type="button" class="detail-poster" id="detailPoster" aria-label="Open the full poster">${img(u.posterLg || u.poster, u.title, { lazy: false })}</button>
         <div class="hero-copy soon-hero-copy">
+          ${backButton}
           <div class="eyebrow">${icon('clock', { size: 12 })} Coming soon</div>
           <h1 class="hero-title bn">${u.title}</h1>
           ${u.titleEn && u.titleEn !== u.title ? html`<div class="hero-title-en">${u.titleEn}</div>` : ''}
