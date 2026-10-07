@@ -14,7 +14,7 @@ export const SITE = 'ADDABAAZ';
 export const TYPE_LABEL = { series: 'Bengali web series', standup: 'Stand-up comedy', podcast: 'Fake podcast', film: 'Bengali short film' };
 const KIND_LABEL = { episode: 'episode', trailer: 'trailer', reel: 'reel', clip: 'clip' };
 // Pages that must never be indexed (they show personal data); value = the page name used in their title.
-const PRIVATE = { mylist: 'My List', account: 'Account', profiles: 'Choose a profile', billing: 'Billing & invoices', recover: 'Account recovery' };
+const PRIVATE = { mylist: 'My List', account: 'Account', settings: 'Settings', profiles: 'Choose a profile', billing: 'Billing & invoices', recover: 'Account recovery' };
 // The robots directive for normal, indexable pages (allows large image and video previews).
 const ROBOTS_INDEX = 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1';
 
@@ -155,10 +155,10 @@ export function pageMeta({ path, query = {}, cat, studio = null, origin, plans =
     return Object.assign(out, { redirect: '/', status: 301, robots: 'noindex,nofollow' });
   // Pricing page: describes the paid plans as schema.org offers.
   } else if (view === 'plans') {
-    out.title = `Plans & Pricing — ${SITE} Plus | ${SITE}`; out.canonical = '/plans';
-    out.description = `Watch free episodes and reels on ${SITE}, or go Plus from ₹99 a month for premium originals, early access and ad-free viewing on any device.`;
+    out.title = `Plans & Pricing — ${SITE} Premium | ${SITE}`; out.canonical = '/plans';
+    out.description = `Watch free episodes and reels on ${SITE}, or go Premium from ₹99 a month for premium originals, early access and ad-free viewing on any device.`;
     const paid = (plans || []).filter((p) => p.priceINR > 0);
-    out.jsonld = [...(paid.length ? [{ '@type': 'Product', name: `${SITE} Plus`, description: 'Premium originals, early access and ad-free viewing.', brand: { '@type': 'Brand', name: SITE }, url: `${origin}/plans`,
+    out.jsonld = [...(paid.length ? [{ '@type': 'Product', name: `${SITE} Premium`, description: 'Premium originals, early access and ad-free viewing.', brand: { '@type': 'Brand', name: SITE }, url: `${origin}/plans`,
       offers: paid.map((p) => ({ '@type': 'Offer', name: p.name, price: String(p.priceINR), priceCurrency: 'INR', availability: 'https://schema.org/InStock', url: `${origin}/plans` })) }] : []), crumbs(origin, [home, ['Plans', '/plans']])];
   // About / Services / Contact pages.
   } else if (view === 'studio') {

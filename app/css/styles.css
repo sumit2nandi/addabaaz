@@ -6,7 +6,7 @@
   --accent: #b80000; --accent-2: #d00000; --accent-rgb: 184,0,0;
   --accent-gradient: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,0) 78%), linear-gradient(135deg, #8f0000 0%, #b80000 50%, #d00000 100%);
   --accent-gradient-hover: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0) 78%), linear-gradient(135deg, #b00000 0%, #df0000 100%);
-  --gold: #f5c518; --ok: #2ecc71; --danger: #d04a4a; --danger-rgb: 208,74,74;
+  --gold: #f5c518; --gold-gradient: linear-gradient(135deg, #8a6a14 0%, #d4a017 38%, #ffe9a3 50%, #d4a017 62%, #8a6a14 100%); --gold-panel: linear-gradient(160deg, #221a0c 0%, #4d3d17 52%, #28200e 100%); --ok: #2ecc71; --danger: #d04a4a; --danger-rgb: 208,74,74;
   --border: rgba(255,255,255,.09); --border-2: rgba(255,255,255,.16);
   --radius: 12px; --radius-sm: 8px; --radius-lg: 18px;
   --font: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans Bengali', 'Nirmala UI', 'Bangla Sangam MN', sans-serif;
@@ -526,16 +526,11 @@ input, textarea, select { font: inherit; }
 /* ---------- panels, account, profiles, auth, plans ---------- */
 .card-panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px; display: grid; gap: 14px; align-content: start; } .card-panel h2, .card-panel h3 { font-size: 19px; }
 .card-panel.list { padding: 6px; gap: 0; }
-.who { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 16px; } .who > div:nth-child(2) { min-width: 0; } .who-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; } .who h2 { font-size: 22px; }
-.account-grid { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.profile-head { display: flex; align-items: center; gap: 14px; padding: 6px 4px 18px; } .profile-head .profile-id { min-width: 0; flex: 1; } .profile-head h2 { font-size: 20px; } .profile-head .muted { margin-top: 3px; font-size: 14px; } .profile-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+.group-list .row-link + .row-link { border-top: 1px solid var(--border); }
 .account-section { min-width: 0; }
 .account-section:empty { display: none; }
-@media (min-width: 900px) {
-  .page.account-page { max-width: 1320px; }
-  .who { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .who-actions { grid-column: auto; }
-  .account-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: clamp(24px, 3vw, 42px); }
-}
+.back-row { margin: 0 0 14px; } .back-link { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--muted); } .back-link:hover { color: #fff; }
 .row-link, .row-switch { display: flex; align-items: center; gap: 16px; width: 100%; padding: 14px 16px; border-radius: 12px; background: none; border: 0; text-align: left; color: #fff; } a.row-link:hover, button.row-link:hover, .row-switch:hover { background: var(--panel-2); }
 .row-link > span, .row-switch > span:first-child { flex: 1; display: grid; gap: 2px; } .row-link small, .row-switch small { color: var(--muted); font-size: 13px; font-weight: 400; } .chev { color: var(--muted); } .row-link.danger { color: #ff8a8c; } .row-link.static { cursor: default; } .row-switch { cursor: pointer; justify-content: space-between; }
 .row-link[hidden] { display: none; }
@@ -554,9 +549,66 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 /* Small round × at the top-right corner of the sign-in / create-account form. */
 .auth-close { position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border-2); background: rgba(255,255,255,.06); color: var(--text-2); transition: background .2s, border-color .2s, color .2s, transform .3s var(--ease); }
 .auth-close:hover { background: var(--accent); border-color: var(--accent); color: #fff; transform: rotate(90deg); }
-.plans { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 20px; } .plan { position: relative; background: var(--panel); border: 1px solid var(--border-2); border-radius: 20px; padding: 28px 24px; display: grid; gap: 16px; align-content: start; } .plan.best { border-color: var(--gold); } .plan.current { box-shadow: 0 0 0 2px var(--accent); }
-.plan .price { font-size: 38px; font-weight: 800; } .plan .price small { font-size: 14px; color: var(--muted); font-weight: 500; } .plan li { display: flex; gap: 8px; align-items: flex-start; color: var(--text-2); font-size: 14px; margin-bottom: 8px; } .plan li svg { color: var(--ok); margin-top: 3px; }
+.plans { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); margin-top: 20px; max-width: 680px; } .plan { position: relative; background: var(--panel); border: 1px solid var(--border-2); border-radius: 20px; padding: 24px 22px; display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; align-items: center; align-content: start; } .plan h2 { font-size: 20px; letter-spacing: .02em; text-transform: uppercase; } .plan.best { background-color: #2c2310; background-image: var(--gold-panel); border: 1px solid rgba(245,197,24,.38); box-shadow: 0 8px 28px rgba(0,0,0,.45); } .plan.current { box-shadow: 0 0 0 2px var(--accent); } .plan.best.current { box-shadow: 0 8px 28px rgba(0,0,0,.45), 0 0 0 2px var(--gold); } .plan.free { opacity: .88; }
+.badge.cur { background: var(--ok); color: #04120a; }
+/* Plans checkout card: one Premium card with duration tiles + a single pay button (Zee-style). */
+.plus-card { background-color: #2c2310; background-image: var(--gold-panel); border: 1px solid rgba(245,197,24,.38); border-radius: 20px; padding: 22px 20px; margin-top: 20px; max-width: 680px; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+.plus-card h2 { font-size: 21px; }
+/* Billing shortcut below the plan options: same width as the cards, breathing room above. */
+.plans-bill { margin-top: 16px; max-width: 680px; }
+.perks { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2px 14px; margin: 12px 0 16px; }
+.perks li { display: flex; gap: 8px; align-items: flex-start; color: var(--text-2); font-size: 13.5px; margin-bottom: 7px; }
+.perks li svg { color: var(--ok); margin-top: 3px; flex: none; }
+.durs { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.dur { position: relative; background: var(--panel-2); border: 1px solid var(--border-2); border-radius: 14px; padding: 14px 10px 12px; display: grid; gap: 1px; justify-items: center; text-align: center; transition: box-shadow .2s var(--ease), background .2s var(--ease), border-color .2s var(--ease); }
+.dur b { font-size: 24px; } .dur small { color: var(--muted); font-size: 13px; } .dur em { font-style: normal; font-size: 12px; color: var(--gold); margin-top: 2px; }
+.dur.is-sel { border-color: var(--accent-2); background: rgba(184,0,0,.12); box-shadow: 0 0 0 1px var(--accent-2), 0 4px 16px rgba(0,0,0,.35); }
+.dur.is-current { border-color: var(--gold); }
+.dur-tag { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: var(--gold); color: #000; font-size: 10.5px; font-weight: 800; padding: 2px 10px; border-radius: 999px; white-space: nowrap; }
+.dur-tag.cur { background: var(--ok); color: #04120a; }
+.dur .dur-tag + .dur-tag { top: auto; bottom: -10px; }
+.paybar { margin-top: 16px; border-radius: 999px; }
+.free-line { margin-top: 12px; text-align: center; color: var(--muted); font-size: 13px; }
+/* Plans purchase extras: credit row, coupon link/line, cancel screen, success celebration. */
+.credit-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 14px; color: var(--text-2); cursor: pointer; }
+.credit-row input { width: 18px; height: 18px; accent-color: var(--accent-2); flex: none; }
+.coupon-link { display: block; margin: 10px auto 0; font-size: 13.5px; color: var(--gold); }
+.coupon-line { margin-top: 10px; text-align: center; font-size: 13.5px; color: var(--text-2); }
+.coupon-line b { color: var(--gold); } .coupon-line .linklike { color: var(--muted); font-size: 13px; }
+.paybar s { opacity: .65; font-weight: 500; margin-right: 6px; }
+.btn-outline { background: transparent; border: 1px solid rgba(255,255,255,.5); color: #fff; border-radius: 999px; }
+.btn-outline:hover { border-color: #fff; }
+.dlg-fail .dlg-body { text-align: center; padding: 32px 24px 28px; }
+.dlg-fail h2 { font-size: 22px; }
+.fail-x { width: 64px; height: 64px; margin: 0 auto 16px; border-radius: 50%; background: rgba(255,255,255,.14); display: grid; place-items: center; color: #fff; }
+.fail-actions { display: grid; gap: 10px; margin-top: 20px; }
+.fail-actions .btn { border-radius: 12px; padding: 14px; font-size: 16px; }
+.celebrate { position: fixed; inset: 0; z-index: 400; background: rgba(3,3,5,.94); display: grid; place-items: center; overflow: hidden; animation: fadeIn .3s var(--ease); }
+.cel-box { position: relative; z-index: 2; text-align: center; padding: 24px; animation: celPop .45s var(--ease); }
+.cel-check { width: 88px; height: 88px; margin: 0 auto 18px; border-radius: 50%; background: linear-gradient(135deg, #1d7a3f, #2ecc71); display: grid; place-items: center; color: #fff; box-shadow: 0 0 0 10px rgba(46,204,113,.15), 0 12px 40px rgba(0,0,0,.5); }
+.cel-box h2 { font-size: 30px; margin-bottom: 8px; } .cel-box p { color: var(--text-2); margin-bottom: 22px; }
+.cel-box .btn-light { font-size: 16px; padding: 13px 34px; }
+.confetti { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.confetti i { position: absolute; top: -16px; width: 8px; height: 14px; border-radius: 2px; animation: confFall 3s ease-in forwards; }
+@keyframes confFall { to { transform: translateY(110vh) rotate(720deg); } }
+@keyframes celPop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+.plan .price { font-size: 34px; font-weight: 800; text-align: right; line-height: 1.1; } .plan .price small { display: block; font-size: 13px; color: var(--muted); font-weight: 500; } .plan.best .price small { color: rgba(255,255,255,.82); } .plan ul { grid-column: 1 / -1; margin-top: 10px; } .plan li { display: flex; gap: 8px; align-items: flex-start; color: var(--text-2); font-size: 14px; margin-bottom: 8px; } .plan li svg { color: var(--ok); margin-top: 3px; } .plan.best li { color: #fff; } .plan.best li svg { color: #7be495; } .plan .btn { grid-column: 1 / -1; margin-top: 10px; border-radius: 999px; padding: 14px 20px; font-size: 16px; }
 .badge { position: absolute; top: -12px; right: 20px; background: var(--gold); color: #000; font-size: 12px; font-weight: 800; padding: 4px 12px; border-radius: 999px; }
+/* Account subscribe banner (website only — never rendered in the native apps): compact gradient strip with a solid pill button. */
+.subscribe-banner { display: flex; align-items: center; gap: 14px; background-color: #d4a017; background-image: var(--gold-gradient); border: 0; margin-top: 0; margin-bottom: 14px; padding: 14px 18px; }
+.subscribe-banner > div { min-width: 0; }
+.subscribe-banner h2 { font-size: 16.5px; font-weight: 600; color: #201503; } .subscribe-banner .premium-word { background: none; color: #5a430a; -webkit-text-fill-color: #5a430a; filter: none; animation: none; } .subscribe-banner h2 span { color: var(--gold); font-weight: 800; }
+.subscribe-banner p { color: rgba(32,21,3,.78); font-size: 12.5px; margin-top: 2px; }
+.btn-light { background: #fff; color: #8f0000; border: 0; border-radius: 999px; padding: 9px 22px; font-size: 14px; font-weight: 800; white-space: nowrap; margin-left: auto; }
+.btn-light:hover { background: #ffe9e9; }
+.profile-head h2 .pill { margin-left: 8px; vertical-align: middle; }
+/* Sign out lives alone at the bottom of the page: quiet, centered, impossible to tap by accident. */
+/* Profile footer: blue Log Out, the legal links and the app version, all centered. */
+.profile-footer { display: grid; gap: 6px; justify-items: center; text-align: center; padding: 22px 0 10px; }
+.logout-link { background: none; border: 0; padding: 8px 20px; font-size: 16px; font-weight: 700; color: #4da3ff; cursor: pointer; }
+.profile-legal { display: flex; gap: 12px; align-items: center; margin: 0; font-size: 13.5px; color: var(--muted); }
+.profile-legal a { color: var(--muted); } .profile-legal .linklike { text-decoration: none; }
+.app-version { margin: 0; font-size: 13px; color: var(--muted); }
 /* Inline notice ("Your plan is active until…"): the icon stays with the first line and never shrinks,
  * and the sentence is ONE text column. That column is the whole point: as bare flex children the words
  * before a <b>, the <b> itself and the words after it become three separate flex items, and flex items
@@ -640,21 +692,17 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .btn-social.btn-facebook { background: #1877f2; border-color: #1877f2; }
 .or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; letter-spacing: .6px; text-transform: uppercase; }
 .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--border-2); }
-.premium-mark { position: absolute; z-index: 6; top: 8px; left: 8px; width: 38px; height: 38px; display: grid; place-items: center; color: #f5d993; border: 1px solid rgba(245,217,147,.58); border-radius: 50%; background: linear-gradient(145deg, rgba(255,255,255,.19), rgba(15,12,6,.62)); box-shadow: 0 4px 16px rgba(0,0,0,.52), inset 0 0 10px rgba(245,197,24,.16); backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px); pointer-events: none; transition: opacity .25s ease, transform .25s ease, visibility 0s linear 0s; }
-.premium-mark::after { content: ''; position: absolute; inset: 3px; border: 1px solid rgba(245,217,147,.24); border-radius: 50%; }
-.premium-mark svg { width: 22px; height: 22px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
-.premium-mark-compact { top: 4px; left: 4px; width: 30px; height: 30px; }
-.premium-mark-compact svg { width: 17px; height: 17px; }
-.premium-mark-hero { top: calc(var(--topbar-h) + var(--sat) + 16px); left: var(--pad); width: 46px; height: 46px; }
-.premium-mark-hero svg { width: 26px; height: 26px; }
-.premium-mark-player { top: 12px; left: 12px; width: 44px; height: 44px; }
-/* The crown marks premium video but never covers it while it plays: hidden during playback (watch page: .is-playing set from the player's
+.premium-mark { position: absolute; z-index: 6; top: 8px; left: 8px; display: inline-flex; align-items: center; padding: 3px 11px 4px; border: 1px solid rgba(245,217,147,.45); border-radius: 999px; background: rgba(10,8,4,.62); box-shadow: 0 4px 14px rgba(0,0,0,.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-size: 12.5px; line-height: 1.25; pointer-events: none; transition: opacity .25s ease, transform .25s ease, visibility 0s linear 0s; }
+.premium-mark-compact { top: 4px; left: 4px; padding: 2px 8px 3px; font-size: 11px; }
+.premium-mark-hero { top: calc(var(--topbar-h) + var(--sat) + 16px); left: var(--pad); padding: 4px 13px 5px; font-size: 14px; }
+.premium-mark-player { top: 12px; left: 12px; font-size: 13.5px; }
+/* The premium word marks premium video but never covers it while it plays: hidden during playback (watch page: .is-playing set from the player's
    state; Reels: the active reel that is not paused) and back whenever the video is paused, ended or failed. */
 .player-box.is-playing .premium-mark, .reel.playing:not(.paused) .premium-mark { opacity: 0; transform: scale(.85); visibility: hidden; transition: opacity .25s ease, transform .25s ease, visibility 0s linear .25s; }
-/* Other things that live in the top-left corner make room for the crown. */
-.chip-label.chip-after-mark { left: 54px; top: 17px; }
-.player-box.has-premium .unmute-pill { left: 68px; }
-.reel-frame.has-premium .unmute-pill { left: 58px; }
+/* Other things that live in the top-left corner make room for the premium word. */
+.chip-label.chip-after-mark { left: 96px; top: 10px; }
+.player-box.has-premium .unmute-pill { left: 104px; }
+.reel-frame.has-premium .unmute-pill { left: 95px; }
 .player-overlay .row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 6px; }
 
 /* ---------- checkout dialog & billing history ---------- */
@@ -667,7 +715,20 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .bill { display: grid; gap: 14px; } .bill-item { background: var(--panel); border: 1px solid var(--border-2); border-radius: 16px; padding: 18px 20px; display: grid; gap: 12px; }
 .bill-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; } .bill-head b { font-size: 17px; } .bill-amt { font-size: 20px; font-weight: 800; }
 .bill-docs { display: flex; flex-wrap: wrap; gap: 8px; } .bill-docs .btn { padding: 8px 12px; font-size: 13px; }
-.pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 700; background: #2a2200; color: var(--gold); } .pill.ok { background: #0f2415; color: #7be495; }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 700; background: #2a2200; color: var(--gold); } .pill.ok { background: #0f2415; color: #7be495; } .pill.free { color: #fff; }
+/* The "premium" brand word: italic, bold, glittery gold with a slow shine sweep. The transform/spacing resets keep it lowercase even inside uppercase eyebrows. */
+.premium-word { font-style: italic; font-weight: 800; text-transform: none; letter-spacing: normal; background: linear-gradient(100deg, #7a5200 0%, #d4a017 22%, #ffe9a3 40%, #fffbe8 50%, #ffe9a3 60%, #d4a017 78%, #7a5200 100%); background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 7px rgba(255,200,60,.35)); animation: premium-shine 3.4s linear infinite; }
+@keyframes premium-shine { from { background-position: 0% center; } to { background-position: -200% center; } }
+@media (prefers-reduced-motion: reduce) { .premium-word { animation: none; } }
+/* ADDABAAZ lockup outside the header: white-gradient ADDA + red BAAZ like .brand-text, with the gold premium word as a superscript exponent. */
+.brand-lockup { font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; white-space: nowrap; }
+.brand-lockup b { font-weight: 800; background: linear-gradient(180deg, #fff, #a8a8b4); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.brand-lockup i { font-style: normal; color: var(--accent); }
+.brand-lockup .premium-word { font-size: 12.5px; line-height: 1; vertical-align: super; margin-left: 2px; }
+/* Standalone superscript exponent: the small raised premium word outside a brand lockup. */
+.premium-sup { font-size: 12.5px; line-height: 1; vertical-align: super; }
+/* Inside the header brand (a flex row, where vertical-align does not apply) the exponent pins to the top instead. */
+.brand-text .premium-sup { align-self: flex-start; margin-left: 3px; }
 
 /* ---------- accounts, legal, consent, engagement (v2.6) ---------- */
 .linklike { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; opacity: .85; } .linklike:hover { opacity: 1; }
@@ -874,3 +935,4 @@ body.player-settings-open { overflow: hidden; }
 @keyframes abm-slide { 0% { transform: translateX(-110%) } 100% { transform: translateX(320%) } }
 .abm-note { margin: 0; color: var(--muted); font-size: 12.5px; max-width: 40ch; }
 @media (prefers-reduced-motion: reduce) { .maintenance-screen::before, .abm-glyph, .abm-bar i { animation: none } }
+fore, .abm-glyph, .abm-bar i { animation: none } }

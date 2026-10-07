@@ -18,11 +18,11 @@ Every successful payment produces a numbered PDF, in the same database transacti
 | `INVOICE_FOOTER`, `SUPPORT_EMAIL` | Optional footer line / contact address |
 
 - **Intra-state** (buyer's state = your state) → CGST 9% + SGST 9%. **Inter-state** → IGST 18%.
-- **Place of supply.** Checkout asks the buyer for their state (dropdown). A buyer who enters a valid **GSTIN** (and business name) gets the invoice in the business's name, with the place of supply taken from the GSTIN.
+- **Place of supply.** On GST-enabled servers, the buyer is asked for their state (dropdown, remembered after the first purchase). A buyer who enters a valid **GSTIN** (and business name) gets the invoice in the business's name, with the place of supply taken from the GSTIN. Without a GSTIN on the server, no billing details are asked at all.
 - **Numbering** is gapless and restarts every financial year (1 Apr–31 Mar, IST). Counters are row-locked, so simultaneous payments get consecutive numbers (there is a test for that).
 - **Discounts.** With a coupon, GST is computed on what was actually paid; the invoice shows list price and coupon.
 - **Free grants** (100%-off coupons) charge nothing and produce no invoice.
-- Buyers download invoices in **Account → Billing & invoices** (`GET /api/v1/invoices/:id/pdf`, owner only), can have them emailed again, and get the PDF attached to the receipt email.
+- Buyers download invoices in **Plans → Billing & invoices** (`GET /api/v1/invoices/:id/pdf`, owner only), can have them emailed again, and get the PDF attached to the receipt email.
 - **Retention.** Invoices and credit notes are kept for the statutory period even if the buyer deletes their account: the link to the user is cut (`user_id → NULL`) but the name, email, GSTIN and state printed on the document stay in the row. Say so in your privacy policy.
 - **Not built:** e-invoicing (IRN/QR) — only needed above the turnover threshold that applies to you; filing returns; TCS under section 52 (if you sell through a marketplace); HSN/SAC-wise summaries. Use the CSV export below for your returns.
 

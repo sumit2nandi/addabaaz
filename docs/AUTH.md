@@ -2,7 +2,7 @@
 
 ## Who needs to sign in?
 
-**Only viewers of premium titles.** Browsing, searching and watching free (YouTube) content never asks for an account. Premium additionally needs an **active paid plan** (see [PREMIUM.md](PREMIUM.md#payments-razorpay)) — signing in alone is not enough. A video with `"access": "premium"` in `data/catalog.json` is marked with a translucent crown medallion at the artwork’s top-right; opening it while signed out shows a *Sign in to watch* screen (with Sign in / Create account), and after signing in the viewer lands straight back on the video. The API enforces this too — `POST /api/v1/videos/:id/stream` answers `401 login_required` without a valid session, so hiding the UI can't be bypassed. See [PREMIUM.md](PREMIUM.md).
+**Only viewers of premium titles.** Browsing, searching and watching free (YouTube) content never asks for an account. Premium additionally needs an **active paid plan** (see [PREMIUM.md](PREMIUM.md#payments-razorpay)) — signing in alone is not enough. A video with `"access": "premium"` in `data/catalog.json` is marked with a small golden “premium” word at the artwork’s top-left; opening it while signed out shows a *Sign in to watch* screen (with Sign in / Create account), and after signing in the viewer lands straight back on the video. The API enforces this too — `POST /api/v1/videos/:id/stream` answers `401 login_required` without a valid session, so hiding the UI can't be bypassed. See [PREMIUM.md](PREMIUM.md).
 
 Accounts also give viewers My List / Continue Watching sync across devices and multiple profiles.
 

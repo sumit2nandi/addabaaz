@@ -26,10 +26,16 @@ const section = (path) => {
     about: 'studio', services: 'studio', contact: 'studio', support: 'studio', search: 'search', account: 'account', profiles: 'account', plans: 'account', billing: 'account', signin: 'account', signup: 'account' }[seg] || '';
 };
 
+// Light haptic tick on menu taps. Only vibrate-capable devices (mostly Android) respond — everywhere else this is a silent no-op.
+const tick = () => { try { if (typeof navigator !== 'undefined') navigator.vibrate?.(12); } catch { /* haptics unavailable */ } };
+
+// The header brand wears a superscript premium word for paid subscribers. Synced on boot, on account changes and after every navigation, so it appears right after a purchase with no reload.
+function syncBrandPremium() { const s = $('#brandPremium'); if (s) s.hidden = !app.user?.isPremium; }
+
 // Draw the frame and hook up menus and the search box.
 export function renderShell() {
   $('#topbar').innerHTML = html`
-    <a class="brand" href="#/" aria-label="ADDABAAZ home"><img src="media/icons/logo-96.webp" alt="" width="36" height="36"><span class="brand-text"><b>ADDA</b><i>BAAZ</i></span></a>
+    <a class="brand" href="#/" aria-label="ADDABAAZ home"><img src="media/icons/logo-96.webp" alt="" width="36" height="36"><span class="brand-text"><b>ADDA</b><i>BAAZ</i><em class="premium-word premium-sup" id="brandPremium" aria-hidden="true" hidden>premium</em></span></a>
     <nav class="nav" aria-label="Primary">
       ${NAV.map(([p, l, k]) => html`<a href="#${p}" data-nav="${k}">${l}</a>`)}
       <div class="nav-drop"><button type="button" class="nav-drop-btn" data-nav="studio" aria-haspopup="true" aria-expanded="false">Studio ${icon('right', { size: 14, cls: 'caret' })}</button>
@@ -60,6 +66,7 @@ export function renderTabbar() {
 
 // The avatar dropdown: switch profile, account, sign in/out. Re-drawn when the user or profile changes.
 export function renderProfileMenu() {
+  syncBrandPremium();
   const u = app.user; const wrap = $('#profileWrap'); if (!wrap) return;
   const p = u.profile;
   renderTabbar();
@@ -97,6 +104,7 @@ export function renderProfileMenu() {
 function wireMenus() {
   const closeAll = () => $$('.menu').forEach((m) => { m.hidden = true; m.parentElement.querySelector('[aria-expanded]')?.setAttribute('aria-expanded', 'false'); });
   document.addEventListener('click', (e) => {
+    if (e.target.closest('#tabbar a, #topbar a, #topbar button')) tick();
     const btn = e.target.closest('#profileBtn, .nav-drop-btn');
     if (btn) {
       const menu = btn.parentElement.querySelector('.menu'); const open = menu.hidden;
@@ -122,6 +130,7 @@ function wireMenus() {
 function markTabs(path) { const sec = section(path); $$('#tabbar a').forEach((a) => a.classList.toggle('active', section(a.dataset.tab) === sec)); }
 export function markActive({ path }) {
   lastPath = path;
+  syncBrandPremium();
   const sec = section(path);
   $$('#topbar [data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === sec));
   markTabs(path);

@@ -2,7 +2,7 @@
 import { api } from '../api.js';
 import { html, $, icon, inr, ago, fmtD, badge, barChart, pageHead, plural, toast, errMsg, formModal } from '../ui.js';
 
-const PLAN = { 'plus-monthly': 'Plus · monthly', 'plus-yearly': 'Plus · yearly' };
+const PLAN = { 'plus-monthly': 'Premium · monthly', 'plus-yearly': 'Premium · yearly' };
 const statusBadge = (p) => p.refundedPaise >= p.amountPaise && p.status === 'paid' ? badge('refunded', 'warn') : badge(p.status, p.status === 'paid' ? 'ok' : p.status === 'failed' ? 'bad' : '');
 
 export default async function dashboard(root, _p, ctx) {

@@ -46,11 +46,11 @@ export class Catalog {
   upcomingByCategory(category) { return this.upcoming.filter((item) => this.upcomingCategory(item) === category); }
   /** Premium access is inherited from the parent series so every episode is gated consistently. */
   isPremium(video) {
-    if (this.isFreeKind(video)) return false;   // trailers, clips and reels play for everyone - no crown, no lock
+    if (this.isFreeKind(video)) return false;   // trailers, clips and reels play for everyone - no premium badge, no lock
     return video?.access === 'premium' || (video?.showId && this._show.get(video.showId)?.access === 'premium') || false;
   }
   // Trailers, clips and reels are the marketing for a title: they always play for everyone,
-  // even when flagged premium themselves or belonging to a Plus-only show (the gate skips them).
+  // even when flagged premium themselves or belonging to a Premium-only show (the gate skips them).
   isFreeKind(video) {
     return video?.kind === 'trailer' || video?.kind === 'reel' || video?.kind === 'clip';
   }

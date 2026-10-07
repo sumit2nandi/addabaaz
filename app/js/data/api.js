@@ -3,8 +3,29 @@ import { storage, store } from '../util.js';
 /** A random id for this browser/app install: lets the server count how many screens are watching and list "your devices". */
 // Identifies this browser/app install to the server (used for the "screens at once" limit and the device list).
 export const deviceId = () => { try { let d = localStorage.getItem('ab.device'); if (!d) { d = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join(''); localStorage.setItem('ab.device', d); } return d; } catch { return 'anon'; } };
+// Best-effort device model ("OnePlus LE2121", "Pixel 7") for the "Your devices" list: the Capacitor
+// Device plugin when the native shell includes it, else the Chromium UA-CH model. Cached, so the
+// stored label upgrades on the next heartbeat after first resolve.
+const MODEL_KEY = 'ab.deviceModel';
+export const deviceModel = () => { try { return localStorage.getItem(MODEL_KEY) || ''; } catch { return ''; } };
+const rememberModel = (m) => { try { if (m) localStorage.setItem(MODEL_KEY, String(m).slice(0, 60)); } catch { /* private mode */ } };
+export async function resolveDeviceModel() {
+  if (deviceModel()) return deviceModel();
+  try {
+    const info = await window.Capacitor?.Plugins?.Device?.getInfo?.();
+    const named = info && `${info.manufacturer || ''} ${info.model || ''}`.trim();
+    if (named) { rememberModel(named); return named; }
+  } catch { /* plugin missing — fall through to UA-CH */ }
+  try {
+    const model = (await navigator.userAgentData?.getHighEntropyValues?.(['model']))?.model;
+    if (model) { rememberModel(model); return model; }
+  } catch { /* browsers without client hints */ }
+  return '';
+}
 export const deviceLabel = () => {
-  const ua = navigator.userAgent, os = /iPhone|iPad/.test(ua) ? 'iPhone / iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'Device';
+  const ua = navigator.userAgent;
+  if (window.Capacitor?.isNativePlatform?.()) { const m = deviceModel(); if (m) return `${m} · app`; }
+  const os = /iPhone|iPad/.test(ua) ? 'iPhone / iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'Device';
   const app = window.Capacitor?.isNativePlatform?.() ? 'app' : /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'browser';
   return `${os} · ${app}`;
 };

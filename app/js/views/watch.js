@@ -117,7 +117,7 @@ export default async function watch(ctx) {
       : kind === 'plan'
         // Signed in but no active plan: always offer the subscribe path (the plans page works in
         // the app too), with the old escape hatch as the secondary action.
-        ? html`${icon('lock', { size: 40 })}<h2>ADDABAAZ Plus exclusive</h2><div class="row"><a class="btn btn-primary btn-lg" href="#/plans?next=${here}">${icon('crown', { size: 20 })} See plans</a><a class="btn btn-ghost btn-lg" href="#/">Back to home</a></div>`.s
+        ? html`${icon('lock', { size: 40 })}<h2>ADDABAAZ <em class="premium-word">premium</em> exclusive</h2><div class="row"><a class="btn btn-primary btn-lg" href="#/plans?next=${here}">${icon('crown', { size: 20 })} See plans</a><a class="btn btn-ghost btn-lg" href="#/">Back to home</a></div>`.s
         : html`${icon('lock', { size: 40 })}<h2>Premium video needs an account</h2><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s;
   };
   // Locked: show the wall and stop; no player is created.
@@ -172,8 +172,8 @@ export default async function watch(ctx) {
       beat = setInterval(hb, 30_000);
     }
   };
-  // The Premium crown (top-left of the video) steps aside while the video plays and returns on pause, end or error.
-  // 'buffering' keeps whatever state it was in, so a mid-play stall does not make the crown flash back in.
+  // The Premium word (top-left of the video) steps aside while the video plays and returns on pause, end or error.
+  // 'buffering' keeps whatever state it was in, so a mid-play stall does not make the badge flash back in.
   const markPlaying = (on) => $('#playerBox', ctx.root)?.classList.toggle('is-playing', on);
   const onIdle = (stop) => { flushWatch(); playedAt = 0; clearInterval(tick); tick = null; clearInterval(beat); beat = null; if (stop && premium && u.account && api) api.stopPlayback().catch(() => {}); };
 

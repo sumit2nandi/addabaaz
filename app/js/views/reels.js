@@ -74,7 +74,7 @@ export default async function reels(ctx) {
       <div class="row"><a class="btn btn-primary" href="#/signin?next=${next}">Sign in</a><a class="btn btn-glass" href="#/signup?next=${next}">Create account</a></div>
     </div></div>`;
     if (state === 'plan') return html`<div class="reel-gate" role="status" aria-live="polite"><div>
-      ${icon('lock', { size: 38 })}<h2>ADDABAAZ Plus exclusive</h2><p>This reel needs an active paid plan.</p>
+      ${icon('lock', { size: 38 })}<h2>ADDABAAZ <em class="premium-word">premium</em> exclusive</h2><p>This reel needs an active paid plan.</p>
       <a class="btn btn-primary" href="#/plans?next=${next}">${icon('crown', { size: 18 })} See plans</a>
     </div></div>`;
     return html`<div class="reel-gate" role="status" aria-live="polite"><div>

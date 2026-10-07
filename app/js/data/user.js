@@ -291,7 +291,7 @@ export class User extends Emitter {
   setPref(k, v) { this.prefs = { ...this.prefs, [k]: v }; store('ab.prefs', this.prefs); this.emit('prefs'); }
   get isPremium() { const s = this.subscription; return !!(s?.planId && s.planId !== 'free' && s.status === 'active' && (!s.expiresAt || Date.parse(s.expiresAt) > Date.now())); }
   async checkout(planId, opts) { this.subscription = await this.adapter.checkout(planId, opts); this.emit('subscription'); return this.subscription; }
-  quote(planId, couponCode) { return this.adapter.quote(planId, couponCode); }
+  quote(planId, couponCode, useCredit = false) { return this.adapter.quote(planId, couponCode, useCredit); }
   billingHistory() { return this.adapter.billingHistory(); }
   invoiceBlob(id) { return this.adapter.invoiceBlob(id); }
   emailInvoice(id) { return this.adapter.emailInvoice(id); }

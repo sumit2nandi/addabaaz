@@ -59,7 +59,7 @@ test('pageMeta: titles, descriptions, canonical, robots', () => {
   const g = meta('/gallery');
   assert.equal(g.status, 301); assert.equal(g.redirect, '/'); assert.equal(g.robots, 'noindex,nofollow');
   // private pages are never indexed and have no canonical
-  for (const p of ['/search', '/signin', '/signup', '/account', '/profiles', '/billing', '/list']) assert.match(meta(p).robots, /^noindex/, p);
+  for (const p of ['/search', '/signin', '/signup', '/account', '/account/security', '/profiles', '/billing', '/list']) assert.match(meta(p).robots, /^noindex/, p);
   assert.equal(meta('/account').canonical, null);
   // unknown → 404; upcoming id under /show → redirect
   assert.equal(meta('/nope').status, 404); assert.equal(meta('/show/zzz').status, 404); assert.equal(meta('/watch/zzz').status, 404);
@@ -145,7 +145,7 @@ test('server: status codes — 404 for unknown pages, 301 for duplicates, noinde
   const q = await get('/shows/?view=episodes'); assert.equal(q.headers.get('location'), '/shows?view=episodes');
   const i = await get('/index.html'); assert.equal(i.status, 301); assert.equal(i.headers.get('location'), '/');
   const u = await get('/show/trap'); assert.equal(u.status, 301); assert.equal(u.headers.get('location'), '/soon/trap');
-  for (const p of ['/signin', '/search?q=x', '/account']) { const r = await get(p); assert.equal(r.status, 200, p); assert.match(attr(await r.text(), /<meta name="robots" content="([^"]+)"/), /^noindex/, p); assert.equal(r.headers.get('x-robots-tag'), 'noindex'); }
+  for (const p of ['/signin', '/search?q=x', '/account', '/account/security']) { const r = await get(p); assert.equal(r.status, 200, p); assert.match(attr(await r.text(), /<meta name="robots" content="([^"]+)"/), /^noindex/, p); assert.equal(r.headers.get('x-robots-tag'), 'noindex'); }
   assert.equal((await get('/api/v1/catalog')).headers.get('x-robots-tag'), 'noindex, nofollow');
   assert.equal((await get('/admin/')).headers.get('x-robots-tag'), 'noindex, nofollow');
 });

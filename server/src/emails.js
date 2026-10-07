@@ -39,7 +39,7 @@ const help = (o) => (o.supportEmail ? `Questions? Reply to this email or write t
 export function receiptEmail(o) {
   const tax = o.invoice.doc.title === 'TAX INVOICE';
   return layout({
-    subject: `Your ADDABAAZ Plus ${tax ? 'invoice' : 'receipt'} ${o.invoice.number}`,
+    subject: `Your ADDABAAZ Premium ${tax ? 'invoice' : 'receipt'} ${o.invoice.number}`,
     paragraphs: [
       hello(o.name),
       // A credit-only order has nothing "received" — say what actually happened.
@@ -58,7 +58,7 @@ export function receiptEmail(o) {
 // Sent when a 100%-off coupon unlocks access without payment.
 export function accessGrantedEmail(o) {
   return layout({
-    subject: 'Your ADDABAAZ Plus access is active',
+    subject: 'Your ADDABAAZ Premium access is active',
     paragraphs: [hello(o.name), `Coupon ${o.couponCode} unlocked ${o.planName} for you — no payment was needed. Premium videos are available until ${day(o.validUntil)}.`],
     button: { label: 'Start watching', url: o.siteUrl }, footer: help(o),
   });
@@ -73,7 +73,7 @@ export function refundEmail(o) {
       hello(o.name),
       `We have refunded ${inr(o.amountPaise)} to your original payment method. Banks usually take 5–7 working days to show it.`,
       o.creditNote ? `Credit note ${o.creditNote.number} for this refund is attached.` : null,
-      o.accessRevoked ? (full ? 'Your ADDABAAZ Plus access for that payment has ended.' : 'The plan time bought with that payment has been removed from your account.') : 'Your ADDABAAZ Plus access is unchanged.',
+      o.accessRevoked ? (full ? 'Your ADDABAAZ Premium access for that payment has ended.' : 'The plan time bought with that payment has been removed from your account.') : 'Your ADDABAAZ Premium access is unchanged.',
       o.reason ? `Reason noted: ${o.reason}` : null,
     ].filter(Boolean),
     footer: help(o),
@@ -92,7 +92,7 @@ export function paymentFailedEmail(o) {
 // Reminder a few days before a prepaid plan ends.
 export function expiringEmail(o) {
   return layout({
-    subject: `Your ADDABAAZ Plus ends on ${day(o.expiresAt)}`,
+    subject: `Your ADDABAAZ Premium ends on ${day(o.expiresAt)}`,
     paragraphs: [hello(o.name), `Your ${o.planName} plan ends on ${day(o.expiresAt)}. After that, premium videos will be locked again. Plans don’t renew automatically — renew any time and the new time is added after your current plan ends.`],
     button: { label: 'Renew now', url: o.renewUrl }, footer: help(o),
   });

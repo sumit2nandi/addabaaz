@@ -1,12 +1,40 @@
-/* The account page's newer sections: email confirmation, password & sessions, parental PIN, devices, notifications, privacy. */
+/* The profile page's settings groups: each group draws on its own sub-page (app/js/views/settings.js)
+ * behind /account/<group>; the profile page itself only lists them. Visibility follows the session:
+ * local mode and guests see a shorter list, signed-in accounts the full one. */
 import { app } from '../app.js';
-import { html, $, fmtDate, timeAgo } from '../util.js';
+import { html, $, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
-import { toast } from '../ui/components.js';
+import { toast, emptyState } from '../ui/components.js';
 import { openDialog, confirmDialog, pinPrompt } from '../ui/dialog.js';
-import { pushState, enablePush, disablePush, setPushPrefs } from '../push.js';
-import { openConsentDialog } from '../consent.js';
+import { pushState, enablePush, disablePush, setPushPrefs, pushSupported } from '../push.js';
 import { friendly } from '../errors.js';
+import { go } from '../router.js';
+import { isNative } from '../platform.js';
+
+// [id, title, subtitle, icon, who sees it ('all' | 'auth' | 'account'), link override for rows that leave the page]
+const GROUPS = [
+  ['playback', 'Playback', 'Autoplay and watch history', 'play', 'all'],
+  ['security', 'Security', 'Password, sessions and devices', 'lock', 'account'],
+  ['kids', 'Kids & parental controls', 'Parental PIN and Kids profiles', 'user', 'account'],
+  ['refer', 'Refer & earn', 'Invite credit and rewards', 'gift', 'account'],
+  ['notify', 'Notifications', 'Episode, launch and announcement alerts', 'bell', 'auth'],
+  ['help', 'Help & support', 'Help Centre and contact us', 'chat', 'all', '#/support'],
+  ['danger', 'Delete account', 'Permanently remove your account', 'trash', 'account'],
+];
+
+/** The rows the profile page lists for this viewer: [{ id, title, sub, ic, href }]. */
+export function settingGroups() {
+  const u = app.user;
+  return GROUPS.filter(([, , , , vis]) => vis === 'all' || (vis === 'auth' && u.supportsAuth) || (vis === 'account' && u.account))
+    .map(([id, title, sub, ic, , href]) => ({ id, title, sub, ic, href: href || `#/account/${id}` }));
+}
+
+/** The confirm-your-email strip; the profile page keeps it above the list so it is never missed. */
+export function verifyBanner() {
+  const acc = app.user.account;
+  if (!acc || acc.emailVerified !== false) return '';
+  return html`<section class="card-panel notice" id="verifyBanner"><div>${icon('mail', { size: 22 })}</div><div><b>Confirm your email</b><p class="muted">We sent a link to ${acc.email}. Confirming your email lets you buy a plan.</p></div><button class="btn btn-primary" id="resendVerify">Resend link</button></section>`;
+}
 
 // Settings row markup (icon, label, sub-label) that opens a dialog when clicked.
 const row = (id, ic, label, sub) => html`<button class="row-link" id="${id}">${icon(ic, { size: 22 })}<span><b>${label}</b>${sub ? html`<small>${sub}</small>` : ''}</span>${icon('right', { size: 18, cls: 'chev' })}</button>`;
@@ -16,7 +44,19 @@ const row = (id, ic, label, sub) => html`<button class="row-link" id="${id}">${i
 function wireNotifications(root, { guest = false, onCleanup = null } = {}) {
   const slot = $('#notifySlot', root); if (!slot) return;
   const draw = (s) => {
-    if (!s?.supported || !s.enabled) { slot.innerHTML = ''; return; }
+    // The slot is a whole sub-page now, so an unavailable state explains itself instead of hiding —
+    // with the actual reason: the browser can't do push (iPhone Safari tabs, very old browsers), the
+    // viewer is signed out, or the server hasn't switched notifications on.
+    if (!s?.supported || !s.enabled) {
+      const u = app.user;
+      const state = !s?.supported && !pushSupported() && !isNative
+        ? { title: 'Notifications unavailable', text: 'This browser can’t receive push notifications — install the ADDABAAZ app to get episode, launch and announcement alerts.' }
+        : !s?.supported && !u?.account
+          ? { title: 'Sign in for notifications', text: 'Episode, launch and announcement alerts need an account to target.', action: html`<a class="btn btn-primary" href="#/signin">Sign in</a>` }
+          : { title: 'Notifications unavailable', text: 'Notifications aren’t switched on right now — check back later.' };
+      slot.innerHTML = emptyState({ iconName: 'bell', ...state }).s;
+      return;
+    }
     const blocked = s.permission === 'denied'
       ? (s.native ? 'Blocked in Android settings. Allow notifications for ADDABAAZ there.' : 'Blocked in your browser settings.')
       : guest && s.native ? 'General updates only; your local profile and watch data stay on this phone.' : 'New episodes, launches and announcements.';
@@ -45,7 +85,7 @@ function wireNotifications(root, { guest = false, onCleanup = null } = {}) {
 /**
  * "Refer & earn": the viewer's own invite code, their credit balance, who joined with their link and a box
  * to add a friend's code. Filled in asynchronously (like the notifications slot) so a slow API — or the
- * offer being switched off — never delays the account page.
+ * offer being switched off — never delays the settings page.
  */
 function wireReferral(root) {
   const u = app.user;
@@ -53,8 +93,11 @@ function wireReferral(root) {
   slot.innerHTML = html`<h2 class="sub-h">Refer &amp; earn</h2><div class="card-panel"><div class="spinner" style="margin:14px auto"></div></div>`.s;
   const draw = async () => {
     let data = null;
-    try { data = await u.credits(); } catch { /* the section simply stays hidden */ }
-    if (!data || !data.offer?.enabled || (!data.offer.referralPaise && !data.creditPaise)) { slot.innerHTML = ''; return; }
+    try { data = await u.credits(); } catch { /* the section shows the empty state below */ }
+    if (!data || !data.offer?.enabled || (!data.offer.referralPaise && !data.creditPaise)) {
+      slot.innerHTML = emptyState({ iconName: 'gift', title: 'Refer & earn is off', text: 'There is no invite offer running right now — check back later.' }).s;
+      return;
+    }
     const inr = (p) => `₹${(p / 100).toFixed(p % 100 ? 2 : 0)}`;
     let share = null;
     try { share = await u.inviteLink(); } catch { /* the code alone is enough */ }
@@ -96,19 +139,20 @@ function wireReferral(root) {
   draw();
 }
 
-/** Returns { banner, sections, wire(root) } — both go into the page, wire() attaches the handlers once it is in the DOM. */
-export function accountExtras() {
-  const u = app.user, acc = u.account;
-  if (!u.supportsAuth) return { banner: '', sections: '', wire() {} };
-  if (!acc) {
-    return {
-      banner: '',
-      sections: html`<div id="notifySlot" class="account-section"></div><section class="account-section"><h2 class="sub-h">Privacy</h2><div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}<a class="row-link" href="#/privacy">${icon('info', { size: 22 })}<span><b>Privacy Policy</b></span>${icon('right', { size: 18, cls: 'chev' })}</a></div></section>`,
-      wire(root, ctx) { $('#consentBtn', root)?.addEventListener('click', openConsentDialog); wireNotifications(root, { guest: true, onCleanup: ctx?.onCleanup }); },
-    };
-  }
-  const verified = acc.emailVerified !== false;
-  const banner = verified ? '' : html`<section class="card-panel notice" id="verifyBanner"><div>${icon('mail', { size: 22 })}</div><div><b>Confirm your email</b><p class="muted">We sent a link to ${acc.email}. Confirming your email lets you buy a plan.</p></div><button class="btn btn-primary" id="resendVerify">Resend link</button></section>`;
+function playbackSection() {
+  const u = app.user;
+  return html`<section class="account-section">
+    <h2 class="sub-h">Playback</h2>
+    <div class="card-panel list">
+      <label class="row-switch"><span><b>Autoplay next episode</b><small>Keep watching without lifting a finger.</small></span><span class="switch"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span></span></label>
+      <button class="row-link" id="clearHist">${icon('trash', { size: 22 })}<span><b>Clear watch history</b><small>Removes Continue Watching for this profile.</small></span></button>
+    </div>
+  </section>`;
+}
+
+function securitySection() {
+  const acc = app.user.account;
+  if (!acc) return '';
   const signInMethod = acc.phoneVerified
     ? html`<div class="row-link static">${icon('phone', { size: 22 })}<span><b>SMS sign-in</b><small>Use your verified mobile number and one-time code to sign in.</small></span></div>
         ${acc.emailIsPlaceholder ? '' : row('chgPw', 'lock', acc.hasPassword === false ? 'Set a password' : 'Change password', acc.hasPassword === false ? 'Add a password to also sign in with your confirmed email.' : 'Signs you out on your other devices.')}`
@@ -125,102 +169,138 @@ export function accountExtras() {
         </form>
       </div>
     </section>` : '';
-  const sections = html`
-    ${contactEmail}
-    <section class="account-section">
-      <h2 class="sub-h">Security</h2>
-      <div class="card-panel list">
-        ${signInMethod}
-        ${row('signOutAll', 'logout', 'Sign out everywhere', 'Ends your session on every phone, TV and browser.')}
-        ${row('supportBtn', 'chat', 'Help & support', 'Trouble signing in, payments, playback — raise a ticket.')}
-        ${row('devices', 'tv', 'Your devices', 'See where you’re watching and how many screens your plan allows.')}
-      </div>
-    </section>
-    <section class="account-section">
-      <h2 class="sub-h">Kids &amp; parental controls</h2>
-      <div class="card-panel list">
-        ${row('pinBtn', 'lock', u.hasPin ? 'Change or remove parental PIN' : 'Set a parental PIN', u.hasPin ? 'Needed to leave a Kids profile or change profiles.' : 'Keeps children on their Kids profile and stops profile changes.')}
-        <a class="row-link" href="#/profiles?manage=1">${icon('user', { size: 22 })}<span><b>Kids profiles</b><small>Mark any profile as “Kids” to show only titles rated for children.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a>
-      </div>
-    </section>
-    <div id="referSlot" class="account-section"></div>
-    <div id="notifySlot" class="account-section"></div>
-    <section class="account-section">
-      <h2 class="sub-h">Privacy</h2>
-      <div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}<a class="row-link" href="#/privacy">${icon('info', { size: 22 })}<span><b>Privacy Policy</b></span>${icon('right', { size: 18, cls: 'chev' })}</a><a class="row-link" href="#/terms">${icon('info', { size: 22 })}<span><b>Terms of Use</b></span>${icon('right', { size: 18, cls: 'chev' })}</a><a class="row-link" href="#/delete-account">${icon('info', { size: 22 })}<span><b>Delete account</b><small>Delete your account or request deletion if you cannot sign in.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>
-    </section>`;
+  return html`${contactEmail}<section class="account-section">
+    <h2 class="sub-h">Security</h2>
+    <div class="card-panel list">
+      ${signInMethod}
+      ${row('signOutAll', 'logout', 'Sign out everywhere', 'Ends your session on every phone, TV and browser.')}
+      ${row('devices', 'tv', 'Your devices', 'See where you’re watching and how many screens your plan allows.')}
+    </div>
+  </section>`;
+}
 
-  const wire = (root, ctx) => {
-    $('#resendVerify', root)?.addEventListener('click', async (e) => { e.target.disabled = true; try { await u.remote.resendVerification(); toast('Sent — check your inbox.'); } catch (err) { toast(friendly(err)); e.target.disabled = false; } });
-    $('#contactEmailForm', root)?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const input = $('input[name="email"]', e.currentTarget), status = $('#contactEmailStatus', root), button = e.currentTarget.querySelector('button[type="submit"]');
-      const email = String(input?.value || '').trim();
-      if (!email) { status.textContent = 'Enter an email address you can access.'; input?.focus(); return; }
-      button.disabled = true; status.textContent = '';
+function kidsSection() {
+  const u = app.user;
+  if (!u.account) return '';
+  return html`<section class="account-section">
+    <h2 class="sub-h">Kids &amp; parental controls</h2>
+    <div class="card-panel list">
+      ${row('pinBtn', 'lock', u.hasPin ? 'Change or remove parental PIN' : 'Set a parental PIN', u.hasPin ? 'Needed to leave a Kids profile or change profiles.' : 'Keeps children on their Kids profile and stops profile changes.')}
+      <a class="row-link" href="#/profiles?manage=1">${icon('user', { size: 22 })}<span><b>Kids profiles</b><small>Mark any profile as “Kids” to show only titles rated for children.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a>
+    </div>
+  </section>`;
+}
+
+function dangerSection() {
+  if (!app.user.account) return '';
+  return html`<section class="account-section"><h2 class="sub-h">Danger zone</h2><div class="card-panel list"><button class="row-link danger" id="delAcc">${icon('trash', { size: 22 })}<span><b>Delete account</b><small>Permanently deletes your account and linked data. Billing records may remain detached.</small></span></button><a class="row-link" href="#/delete-account">${icon('info', { size: 22 })}<span><b>Delete account</b><small>Delete your account or request deletion if you cannot sign in.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a></div></section>`;
+}
+
+/** The sub-page body for a group id, or '' when the id has no section (Help leaves the page). */
+export function settingSection(id) {
+  if (id === 'playback') return playbackSection();
+  if (id === 'security') return securitySection();
+  if (id === 'kids') return kidsSection();
+  if (id === 'refer') return html`<div id="referSlot" class="account-section"></div>`;
+  if (id === 'notify') return html`<div id="notifySlot" class="account-section"></div>`;
+  if (id === 'danger') return dangerSection();
+  return '';
+}
+
+function wirePlayback(root) {
+  const u = app.user;
+  $('#autoNext', root).addEventListener('change', (e) => u.setPref('autoplayNext', e.target.checked));
+  $('#clearHist', root).addEventListener('click', async () => {
+    if (await confirmDialog({ title: 'Clear watch history?', text: 'This removes Continue Watching for this profile.', confirm: 'Clear', danger: true })) { u.clearHistory(); toast('Watch history cleared'); }
+  });
+}
+
+function wireSecurity(root) {
+  const u = app.user, acc = u.account;
+  $('#contactEmailForm', root)?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = $('input[name="email"]', e.currentTarget), status = $('#contactEmailStatus', root), button = e.currentTarget.querySelector('button[type="submit"]');
+    const email = String(input?.value || '').trim();
+    if (!email) { status.textContent = 'Enter an email address you can access.'; input?.focus(); return; }
+    button.disabled = true; status.textContent = '';
+    try {
+      await u.remote.requestAccountEmail(email);
+      status.textContent = acc.emailIsPlaceholder ? `Confirmation email sent to ${email}. Billing and account emails will use it only after you confirm the link.` : `Confirmation email sent to ${email}. Your current verified address stays active until you confirm the replacement.`;
+    } catch (err) { status.textContent = friendly(err); }
+    finally { button.disabled = false; }
+  });
+  $('#chgPw', root)?.addEventListener('click', () => {
+    if (acc.hasPassword === false) {
+      openDialog(html`<h2>Set a password</h2><p class="muted">We’ll email <b>${acc.email}</b> a link to choose a password. ${acc.phoneVerified ? 'You can keep signing in by SMS too.' : 'You can keep using your social sign-in too.'}</p><div class="row end"><button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" id="sendLink">Email me the link</button></div>`, { cls: 'dialog-sm' })
+        .el.querySelector('#sendLink').onclick = async (e) => { e.target.disabled = true; try { await u.remote.forgotPassword(acc.email); toast('Link sent — check your inbox.'); e.target.closest('dialog').close(); } catch (err) { toast(friendly(err)); e.target.disabled = false; } };
+      return;
+    }
+    const { el, close } = openDialog(html`<h2>Change password</h2><form class="form" id="pwf" novalidate>
+      <label>Current password<input name="cur" type="password" autocomplete="current-password" required></label>
+      <label>New password<input name="p1" type="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters"></label>
+      <label>Repeat new password<input name="p2" type="password" autocomplete="new-password" required minlength="8"></label>
+      <div class="form-status" id="pws" role="alert"></div><div class="row end"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" type="submit">Change password</button></div></form>`, { cls: 'dialog-sm' });
+    $('#pwf', el).addEventListener('submit', async (e) => {
+      e.preventDefault(); const f = new FormData(e.target), st = $('#pws', el);
+      if (String(f.get('p1')).length < 8) { st.textContent = 'The new password must be at least 8 characters.'; return; }
+      if (f.get('p1') !== f.get('p2')) { st.textContent = 'The two new passwords don’t match.'; return; }
+      try { await u.changePassword(String(f.get('cur')), String(f.get('p1'))); close(); toast('Password changed. Other devices were signed out.'); } catch (err) { st.textContent = friendly(err); }
+    });
+  });
+  $('#signOutAll', root)?.addEventListener('click', async () => {
+    if (await confirmDialog({ icon: 'logout', title: 'Sign out everywhere?', text: 'Every device signed in to this account — including this one, after you confirm — will need to sign in again.', confirm: 'Sign out everywhere', danger: true })) {
+      try { await u.signOutEverywhere(); toast('Signed out on your other devices'); } catch (err) { toast(friendly(err)); }
+    }
+  });
+  $('#devices', root)?.addEventListener('click', async () => {
+    const { el } = openDialog(html`<h2>Your devices</h2><div id="devBody"><div class="spinner" style="margin:20px auto"></div></div>`, { cls: 'dialog-sm' });
+    const draw = async () => {
       try {
-        await u.remote.requestAccountEmail(email);
-        status.textContent = acc.emailIsPlaceholder ? `Confirmation email sent to ${email}. Billing and account emails will use it only after you confirm the link.` : `Confirmation email sent to ${email}. Your current verified address stays active until you confirm the replacement.`;
-      } catch (err) { status.textContent = friendly(err); }
-      finally { button.disabled = false; }
-    });
-    $('#consentBtn', root)?.addEventListener('click', openConsentDialog);
-    $('#supportBtn', root)?.addEventListener('click', () => { location.hash = '#/support'; });
+        const d = await u.remote.devices();
+        $('#devBody', el).innerHTML = html`<p class="muted">Your plan allows ${d.streamLimit} screen${d.streamLimit === 1 ? '' : 's'} watching premium titles at once.</p>
+          <ul class="dev-list">${d.devices.length ? d.devices.map((x) => html`<li><span>${icon('tv', { size: 22 })}</span><div><b>${x.label || 'Device'}${x.current ? html` <em class="pill">This device</em>` : ''}</b><small>${x.watching ? 'Watching now' : `Last active ${timeAgo(x.lastSeen)}`}</small></div>${x.current ? '' : html`<button class="btn btn-ghost btn-sm" data-forget="${x.deviceId}">Remove</button>`}</li>`) : html`<li class="muted">No devices yet — they appear after you watch a premium title.</li>`}</ul>`.s;
+      } catch (err) { $('#devBody', el).textContent = friendly(err); }
+    };
+    el.addEventListener('click', async (e) => { const b = e.target.closest('[data-forget]'); if (!b) return; b.disabled = true; try { await u.remote.forgetDevice(b.dataset.forget); await draw(); } catch (err) { toast(friendly(err)); } });
+    draw();
+  });
+}
 
-    $('#chgPw', root)?.addEventListener('click', () => {
-      if (acc.hasPassword === false) {
-        openDialog(html`<h2>Set a password</h2><p class="muted">We’ll email <b>${acc.email}</b> a link to choose a password. ${acc.phoneVerified ? 'You can keep signing in by SMS too.' : 'You can keep using your social sign-in too.'}</p><div class="row end"><button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" id="sendLink">Email me the link</button></div>`, { cls: 'dialog-sm' })
-          .el.querySelector('#sendLink').onclick = async (e) => { e.target.disabled = true; try { await u.remote.forgotPassword(acc.email); toast('Link sent — check your inbox.'); e.target.closest('dialog').close(); } catch (err) { toast(friendly(err)); e.target.disabled = false; } };
-        return;
-      }
-      const { el, close } = openDialog(html`<h2>Change password</h2><form class="form" id="pwf" novalidate>
-        <label>Current password<input name="cur" type="password" autocomplete="current-password" required></label>
-        <label>New password<input name="p1" type="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters"></label>
-        <label>Repeat new password<input name="p2" type="password" autocomplete="new-password" required minlength="8"></label>
-        <div class="form-status" id="pws" role="alert"></div><div class="row end"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" type="submit">Change password</button></div></form>`, { cls: 'dialog-sm' });
-      $('#pwf', el).addEventListener('submit', async (e) => {
-        e.preventDefault(); const f = new FormData(e.target), st = $('#pws', el);
-        if (String(f.get('p1')).length < 8) { st.textContent = 'The new password must be at least 8 characters.'; return; }
-        if (f.get('p1') !== f.get('p2')) { st.textContent = 'The two new passwords don’t match.'; return; }
-        try { await u.changePassword(String(f.get('cur')), String(f.get('p1'))); close(); toast('Password changed. Other devices were signed out.'); } catch (err) { st.textContent = friendly(err); }
-      });
-    });
-    $('#signOutAll', root)?.addEventListener('click', async () => {
-      if (await confirmDialog({ icon: 'logout', title: 'Sign out everywhere?', text: 'Every device signed in to this account — including this one, after you confirm — will need to sign in again.', confirm: 'Sign out everywhere', danger: true })) {
-        try { await u.signOutEverywhere(); toast('Signed out on your other devices'); } catch (err) { toast(friendly(err)); }
-      }
-    });
-    $('#devices', root)?.addEventListener('click', async () => {
-      const { el } = openDialog(html`<h2>Your devices</h2><div id="devBody"><div class="spinner" style="margin:20px auto"></div></div>`, { cls: 'dialog-sm' });
-      const draw = async () => {
-        try {
-          const d = await u.remote.devices();
-          $('#devBody', el).innerHTML = html`<p class="muted">Your plan allows ${d.streamLimit} screen${d.streamLimit === 1 ? '' : 's'} watching premium titles at once.</p>
-            <ul class="dev-list">${d.devices.length ? d.devices.map((x) => html`<li><span>${icon('tv', { size: 22 })}</span><div><b>${x.label || 'Device'}${x.current ? html` <em class="pill">This device</em>` : ''}</b><small>${x.watching ? 'Watching now' : `Last active ${timeAgo(x.lastSeen)}`}</small></div>${x.current ? '' : html`<button class="btn btn-ghost btn-sm" data-forget="${x.deviceId}">Remove</button>`}</li>`) : html`<li class="muted">No devices yet — they appear after you watch a premium title.</li>`}</ul>`.s;
-        } catch (err) { $('#devBody', el).textContent = friendly(err); }
-      };
-      el.addEventListener('click', async (e) => { const b = e.target.closest('[data-forget]'); if (!b) return; b.disabled = true; try { await u.remote.forgetDevice(b.dataset.forget); await draw(); } catch (err) { toast(friendly(err)); } });
-      draw();
-    });
+function wireKids(root) {
+  const u = app.user;
+  $('#pinBtn', root)?.addEventListener('click', async () => {
+    if (!u.hasPin) {
+      const pin = await pinPrompt({ title: 'Set a parental PIN', text: 'Choose 4–6 digits. You’ll need it to leave a Kids profile or change profiles.', confirm: 'Set PIN', check: (p) => u.setPin(p) });
+      if (pin) { toast('Parental PIN set'); location.reload(); }
+      return;
+    }
+    const { el, close } = openDialog(html`<h2>Parental PIN</h2><div class="stack-sm"><button class="btn btn-ghost block" id="pinChange">Change PIN</button><button class="btn btn-danger block" id="pinRemove">Remove PIN</button></div>`, { cls: 'dialog-sm' });
+    $('#pinChange', el).onclick = async () => {
+      close(); const cur = await pinPrompt({ title: 'Current PIN', check: (p) => u.verifyPin(p) }); if (!cur) return;
+      const pin = await pinPrompt({ title: 'New PIN', text: '4–6 digits.', confirm: 'Save', check: (p) => u.setPin(p) }); if (pin) toast('PIN changed');
+    };
+    $('#pinRemove', el).onclick = async () => {
+      close(); const cur = await pinPrompt({ title: 'Remove PIN', text: 'Enter your PIN to remove it.', confirm: 'Remove', check: (p) => u.removePin(p) }); if (cur) { toast('PIN removed'); location.reload(); }
+    };
+  });
+}
 
-    $('#pinBtn', root)?.addEventListener('click', async () => {
-      if (!u.hasPin) {
-        const pin = await pinPrompt({ title: 'Set a parental PIN', text: 'Choose 4–6 digits. You’ll need it to leave a Kids profile or change profiles.', confirm: 'Set PIN', check: (p) => u.setPin(p) });
-        if (pin) { toast('Parental PIN set'); location.reload(); }
-        return;
-      }
-      const { el, close } = openDialog(html`<h2>Parental PIN</h2><div class="stack-sm"><button class="btn btn-ghost block" id="pinChange">Change PIN</button><button class="btn btn-danger block" id="pinRemove">Remove PIN</button></div>`, { cls: 'dialog-sm' });
-      $('#pinChange', el).onclick = async () => {
-        close(); const cur = await pinPrompt({ title: 'Current PIN', check: (p) => u.verifyPin(p) }); if (!cur) return;
-        const pin = await pinPrompt({ title: 'New PIN', text: '4–6 digits.', confirm: 'Save', check: (p) => u.setPin(p) }); if (pin) toast('PIN changed');
-      };
-      $('#pinRemove', el).onclick = async () => {
-        close(); const cur = await pinPrompt({ title: 'Remove PIN', text: 'Enter your PIN to remove it.', confirm: 'Remove', check: (p) => u.removePin(p) }); if (cur) { toast('PIN removed'); location.reload(); }
-      };
-    });
+function wireDanger(root) {
+  const u = app.user;
+  $('#delAcc', root)?.addEventListener('click', async () => {
+    if (await confirmDialog({ title: 'Delete your account?', text: 'This cannot be undone. Your account and linked data will be deleted. Payment and invoice records may be kept detached from your account; see the Privacy Policy.', confirm: 'Delete account', danger: true })) {
+      try { await u.deleteAccount(); toast('Account deleted'); go('/', { replace: true }); } catch (e) { toast(friendly(e)); }
+    }
+  });
+}
 
-    wireNotifications(root, { onCleanup: ctx?.onCleanup });
-    wireReferral(root);
-  };
-  return { banner, sections, wire };
+/** Attaches a sub-page's handlers once its section is in the DOM. */
+export function wireSetting(id, root, ctx) {
+  if (id === 'playback') return wirePlayback(root);
+  if (id === 'security') return wireSecurity(root);
+  if (id === 'kids') return wireKids(root);
+  if (id === 'refer') return wireReferral(root);
+  if (id === 'notify' && !app.user.account) return wireNotifications(root, { guest: true, onCleanup: ctx?.onCleanup });
+  if (id === 'notify') return wireNotifications(root, { onCleanup: ctx?.onCleanup });
+  if (id === 'danger') return wireDanger(root);
 }

@@ -31,8 +31,8 @@ test('the Support page is reachable everywhere a stuck viewer looks', () => {
   assert.match(shell, /\['\/about', 'About'\], \['\/services', 'Services'\], \['\/contact', 'Contact'\], \['\/support', 'Support'\]/, 'the Studio menu links to it');
   assert.match(shell, /<a class="menu-item" href="#\/support">\$\{icon\('chat', \{ size: 18 \}\)\}<span>Help &amp; support<\/span><\/a>/, 'so does the profile menu (shown signed in and out)');
   assert.match(shell, /support: 'studio'/, 'the nav highlights the right section');
-  assert.match(read('app/js/views/account.js'), /link\('#\/support', 'chat', 'Help & support'/, 'the Account page links to it');
-  assert.match(read('app/js/views/account-extra.js'), /row\('supportBtn', 'chat', 'Help & support'/, 'and so does the settings list');
+  assert.doesNotMatch(read('app/js/views/account.js'), /#\/support/, 'the decluttered Account page links to it nowhere');
+  assert.doesNotMatch(read('app/js/views/account-extra.js'), /supportBtn/, 'nor does the settings list (profile menu + Studio menu cover it)');
   assert.match(css, /\.tk-msg\.admin \{/, 'the ticket conversation is styled');
   assert.match(css, /\.sup-ref \{/, 'so is the reference');
 });

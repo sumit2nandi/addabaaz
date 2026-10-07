@@ -209,7 +209,7 @@ export function createPromos({ db, config = promosConfigFromEnv(), mailer = null
       if (s.signupPaise > 0 && !(await db.credits.hasKind(user.id, 'signup'))) {
         await db.credits.add({
           userId: user.id, kind: 'signup', amountPaise: s.signupPaise, status: 'available',
-          reason: `Welcome offer: ₹${s.signupPaise / 100} to try ADDABAAZ Plus`, refType: 'user', refId: user.id,
+          reason: `Welcome offer: ₹${s.signupPaise / 100} to try ADDABAAZ Premium`, refType: 'user', refId: user.id,
           expiresAt: addDays(s.expiryDays),
         });
         out.welcomePaise = s.signupPaise;

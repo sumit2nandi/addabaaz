@@ -1,6 +1,6 @@
-// Trailers, clips and reels are NEVER locked and never carry the crown: even flagged premium
-// themselves, or belonging to a Plus-only show, the gate says 'ok', the Reels feed plays them like
-// any other reel and no premium badge is drawn - the preview is free, only the show is Plus.
+// Trailers, clips and reels are NEVER locked and never carry the premium badge: even flagged premium
+// themselves, or belonging to a Premium-only show, the gate says 'ok', the Reels feed plays them like
+// any other reel and no premium badge is drawn - the preview is free, only the show is Premium.
 // Run:  node --test test/frontend/reels-premium-gate.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -49,7 +49,7 @@ const { User } = await import('../../app/js/data/user.js');
 const { LocalAdapter } = await import('../../app/js/data/adapters.js');
 
 app.catalog = new Catalog({
-  shows: [{ id: 'premium-series', title: 'Premium series', description: 'A plus-only show.', poster: 'media/shows/p.webp', access: 'premium' }],
+  shows: [{ id: 'premium-series', title: 'Premium series', description: 'A premium-only show.', poster: 'media/shows/p.webp', access: 'premium' }],
   videos: [
     { id: 'newer-reel', showId: 'premium-series', kind: 'reel', title: 'Newest reel', source: { type: 'youtube', id: 'lmnopqrstuv' }, duration: 30, publishedAt: '2026-02-01' },
     { id: 'premium-reel', showId: 'premium-series', kind: 'reel', title: 'A reel', source: { type: 'youtube', id: 'abcdefghijk' }, duration: 30, publishedAt: '2026-01-01', access: 'premium' },
@@ -76,7 +76,7 @@ test('gateFor: trailers, clips and reels always play; the premium episode stays 
   assert.notEqual(u.gateFor(cat.video('premium-ep'), cat), 'ok', 'the episode of the same show still requires a plan');
 });
 
-test('the Reels feed plays a premium-show reel with no lock wall and no crown', async () => {
+test('the Reels feed plays a premium-show reel with no lock wall and no premium badge', async () => {
   app.user = await guestUser();
   app.user.streamUrl = async () => { throw new Error('A YouTube reel must not request an R2 stream URL'); };
   const { default: reels } = await import('../../app/js/views/reels.js');
@@ -88,7 +88,7 @@ test('the Reels feed plays a premium-show reel with no lock wall and no crown', 
 
   const section = root.querySelector('.reel[data-i="1"]');
   assert.equal(section.querySelector('.reel-slot img').getAttribute('fetchpriority'), 'high', 'the directly selected reel poster gets the browser highest image priority');
-  assert.equal(section.querySelector('.premium-mark'), null, 'free previews wear no crown, even on a premium show');
+  assert.equal(section.querySelector('.premium-mark'), null, 'free previews wear no premium badge, even on a premium show');
   assert.equal(section.querySelector('.reel-frame.has-premium'), null, 'no premium framing on a free preview');
   await new Promise((r) => setTimeout(r, 20));
   assert.equal(youtubePlayerAttempts, 1, 'a directly selected /reels/:id starts without waiting for IntersectionObserver');

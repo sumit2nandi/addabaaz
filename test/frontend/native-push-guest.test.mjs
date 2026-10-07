@@ -1,6 +1,7 @@
 // Native app push registration is available to connected guests without uploading profile data.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 
 const values = new Map();
 globalThis.localStorage = {
@@ -131,4 +132,23 @@ test('the app keeps the same three notification choices as the browser', async (
   state = await nativePushState();
   assert.equal(state.guest, true);
   assert.equal(state.subscribed, true, 'a registered guest device counts as switched on');
+});
+
+test('a known device model replaces the generic app label', async () => {
+  clearStorage();
+  localStorage.setItem('ab.deviceModel', 'OnePlus LE2121');
+  const { calls, user } = makeUser(); app.user = user;
+  await attachNativePush();
+  assert.equal(calls.guest.length, 1);
+  assert.deepEqual(calls.guest[0], ['fcm-guest-unit-test-token-1234567890', 'android', 'OnePlus LE2121 · app']);
+  clearStorage();
+});
+
+test('streaming heartbeats learn the specific device model at startup', () => {
+  const api = fs.readFileSync(new URL('../../app/js/data/api.js', import.meta.url), 'utf8');
+  const main = fs.readFileSync(new URL('../../app/js/main.js', import.meta.url), 'utf8');
+  assert.match(api, /Device\?\.getInfo/, 'the native Device plugin is the first source');
+  assert.match(api, /getHighEntropyValues\?\.\(\['model'\]\)/, 'Chromium UA-CH is the fallback');
+  assert.match(api, /ab\.deviceModel/, 'the model is cached for synchronous reads');
+  assert.match(main, /resolveDeviceModel\(\);/, 'boot resolves it before any heartbeat');
 });
