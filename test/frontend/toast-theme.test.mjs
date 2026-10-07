@@ -29,17 +29,22 @@ const token = (name) => (css.match(new RegExp(`--${name}:\\s*([^;]+);`)) || [])[
 
 /* ---------------------------------------------------------------- the look */
 
-test('the toast is a black capsule with brand-red text, not the old light bar', () => {
+test('the toast is a black capsule whose text is the floating menu\'s dark red', () => {
   const toast = ruleText('.toast');
   // Black, near-opaque: the blurred artwork still tints the last few percent.
   assert.match(toast, /background:\s*rgba\(0,\s*0,\s*0,\s*\.9\)/, 'the fill is black');
   assert.match(toast, /backdrop-filter:\s*blur\(/, 'black glass over the artwork');
   assert.match(toast, /-webkit-backdrop-filter:\s*blur\(/, 'with the WebKit twin for iOS');
   assert.doesNotMatch(toast, /background-image:/, 'no coloured wash on top of the black');
-  // Red text on the black fill.
-  assert.match(toast, /color:\s*var\(--accent-bright\)/, 'the message is brand red');
-  assert.match(toast, /border:\s*1px solid rgba\(var\(--accent-rgb\),\s*\.5\)/, 'a red hairline keeps the capsule visible on the black page');
-  assert.doesNotMatch(toast, /text-shadow/, 'no halo needed on a near-opaque black fill');
+  // The message wears the SAME red the floating menu gives its active item — one shared token, so the two
+  // can never drift apart.
+  assert.match(toast, /color:\s*var\(--accent-2\)/, 'the message is the menu\'s dark red');
+  assert.match(ruleText('.tabbar a.active'), /color:\s*var\(--accent-2\)/, 'which is exactly the floating menu\'s active colour');
+  assert.doesNotMatch(css, /--accent-bright/, 'the one-off lighter red is gone');
+  // The hairline is an INSET ring, never a border: a border would add 2px to the capsule. It is what keeps
+  // the black capsule visible when it lands on the near-black page or on black artwork.
+  assert.match(toast, /box-shadow:\s*inset 0 0 0 1px rgba\(var\(--accent-rgb\),\s*\.55\),\s*0 10px 40px rgba\(0,0,0,\.6\)/, 'the original drop shadow plus a hairline INSIDE the box');
+  assert.doesNotMatch(toast, /(?:^|[;\s])border:/, 'no border: it would grow the capsule by 2px');
   // Capsule shape, like the floating menu.
   assert.match(toast, /border-radius:\s*999px/, 'a capsule');
   // The old opaque light bar is gone for good.
@@ -47,11 +52,12 @@ test('the toast is a black capsule with brand-red text, not the old light bar', 
   assert.doesNotMatch(toast, /color:\s*#111/);
 });
 
-test('the toast keeps exactly the size it had before the redesign', () => {
+test('the toast keeps exactly the size it had before the redesign (the 45px light bar)', () => {
   // The pre-redesign toast (git 84daf0c: app/css/styles.css) was:
-  //   display: flex; align-items: center; gap: 14px; padding: 12px 18px; font-weight: 600;
-  //   font-size: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.6);
-  // Only the fill, the text colour and the box radius may differ.
+  //   display: flex; align-items: center; gap: 14px; background: #f2f2f2; color: #111;
+  //   padding: 12px 18px; border-radius: 12px; font-weight: 600; font-size: 14px;
+  //   box-shadow: 0 10px 40px rgba(0,0,0,.6);
+  // Only the fill, the text colour, the radius and the (inset, size-neutral) hairline may differ.
   const toast = ruleText('.toast');
   assert.match(toast, /display:\s*flex/);
   assert.match(toast, /align-items:\s*center/);
@@ -59,38 +65,52 @@ test('the toast keeps exactly the size it had before the redesign', () => {
   assert.match(toast, /padding:\s*12px 18px/, 'the padding that set the old height and side rhythm');
   assert.match(toast, /font-size:\s*14px/);
   assert.match(toast, /font-weight:\s*600/, 'the old weight, not bolder (bolder text grows the line box)');
-  assert.match(toast, /box-shadow:\s*0 10px 40px rgba\(0,0,0,\.6\)/, 'the original drop shadow');
+  assert.match(toast, /box-shadow:[^;]*0 10px 40px rgba\(0,0,0,\.6\)/, 'the original drop shadow is still there');
   assert.doesNotMatch(toast, /letter-spacing/, 'no extra tracking: it would widen the capsule');
-  // The action chip stays inside the line box the plain message would use, so adding one never resizes it.
+  assert.doesNotMatch(toast, /(?:^|[;\s])border:/, 'no border: it would add 2px to height AND width');
+
+  // The arithmetic of the original box, spelled out: 14px x 1.5 line + 12px x 2 padding = 45px tall.
+  const size = (rule) => ({
+    font: Number((rule.match(/font-size:\s*(\d+(?:\.\d+)?)px/) || [])[1]),
+    line: Number((rule.match(/line-height:\s*(\d+(?:\.\d+)?)/) || [])[1] || 1.5),
+    padY: Number((rule.match(/padding:\s*(\d+(?:\.\d+)?)px/) || [])[1]),
+  });
+  const s = size(toast);
+  assert.equal(s.font * s.line + s.padY * 2, 45, 'the capsule is 45px tall, exactly as the light bar was');
+
+  // And the action chip stays inside that same 21px line box, so it cannot resize the capsule either.
   const button = ruleText('.toast button');
   assert.match(button, /font-size:\s*13px/);
   assert.match(button, /line-height:\s*1\.2/);
-  assert.match(button, /padding:\s*5px 12px/);
+  assert.match(button, /padding:\s*2px 10px/);
+  const b = size(button);
+  assert.ok(b.font * b.line + b.padY * 2 <= s.font * s.line, `the chip (${b.font * b.line + b.padY * 2}px) fits the message's line box (${s.font * s.line}px)`);
 });
 
 test('the optional action is a red chip, never a solid block', () => {
   const button = ruleText('.toast button');
   assert.match(button, /background:\s*rgba\(var\(--accent-rgb\),\s*\.22\)/, 'a translucent red chip on the black capsule');
-  assert.match(button, /border:\s*1px solid rgba\(var\(--accent-rgb\),\s*\.5\)/);
-  assert.match(button, /color:\s*var\(--accent-bright\)/, 'the same red as the message');
+  assert.match(button, /border:\s*0/, 'no border: the capsule keeps its exact size');
+  assert.match(button, /color:\s*var\(--accent-2\)/, 'the same dark red as the message');
   assert.match(button, /border-radius:\s*999px/);
-  assert.match(css, /\.toast button:hover,[^}]*background: rgba\(var\(--accent-rgb\), \.42\); color: #fff;/, 'it brightens on hover/focus');
+  assert.match(css, /\.toast button:hover,[^}]*background: rgba\(var\(--accent-rgb\), \.45\); color: #fff;/, 'it brightens on hover/focus');
 });
 
-test('the red used for text is the lightened brand tint and passes contrast on the dark page', () => {
-  const bright = token('accent-bright');
-  assert.match(bright, /^#[0-9a-f]{6}$/i, '--accent-bright is a plain hex colour');
+test('the menu red on the black capsule is legible, like the menu item it comes from', () => {
+  const red = token('accent-2');
+  assert.match(red, /^#[0-9a-f]{6}$/i, 'the floating menu\'s red is a plain hex colour');
   const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
   const lum = (hex) => rgb(hex).map((v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; })
     .reduce((n, c, i) => n + c * [0.2126, 0.7152, 0.0722][i], 0);
   const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
 
-  // The deep brand reds are unreadable on the near-black page: the text tint must be a lighter red.
-  for (const dark of ['accent', 'accent-2']) assert.ok(lum(bright) > lum(token(dark)), `${bright} is lighter than ${token(dark)}`);
-  assert.ok(contrast(bright, token('bg')) >= 4.5, `${bright} on the page background ${token('bg')} reads clearly`);
-  // And it stays red: the red channel dominates by a wide margin.
-  const [r, g, b] = rgb(bright);
-  assert.ok(r > 200 && g < 140 && b < 140 && r - Math.max(g, b) > 80, 'the hue is clearly red, not pink or orange');
+  // The toast sits on black glass; the floating menu item sits on the black bar. Same red, same kind of
+  // ground, so the two must read identically — and clear the 3:1 threshold for large/bold text.
+  assert.ok(contrast(red, '#000000') >= 3, `${red} on the black capsule clears the large-text contrast threshold`);
+  assert.ok(Math.abs(contrast(red, '#000000') - contrast(red, token('bg'))) < 0.2, 'and it reads the same as it does in the floating menu (the page is #050505, effectively black)');
+  // It stays the brand's deep red: the red channel dominates by a wide margin.
+  const [r, g, b] = rgb(red);
+  assert.ok(r >= 200 && g < 60 && b < 60, 'the hue is unmistakably red');
 });
 
 /* ---------------------------------------------------------------- behaviour */
