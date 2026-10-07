@@ -26,13 +26,14 @@ export function confirmDialog({ title, text = '', confirm = 'Confirm', danger = 
 }
 
 /** Asks for a 4–6 digit PIN (or any short secret). Resolves with the digits, or null if cancelled. `check(pin)` may throw to show an error and keep the dialog open. */
-export function pinPrompt({ title = 'Enter your PIN', text = '', confirm = 'Continue', check } = {}) {
+export function pinPrompt({ title = 'Enter your PIN', text = '', confirm = 'Continue', check, onForgot } = {}) {
   return new Promise((resolve) => {
     let result = null;
     const { el, close } = openDialog(html`<h2>${title}</h2>${text ? html`<p class="muted">${text}</p>` : ''}
       <form class="form" id="pinf" novalidate><label>PIN<input name="pin" type="password" inputmode="numeric" autocomplete="off" pattern="[0-9]*" maxlength="6" required class="pin-input" placeholder="••••"></label>
-      <div class="form-status" id="pins" role="alert"></div>
+      <div class="form-status" id="pins" role="alert"></div>${onForgot ? html`<button type="button" class="linklike" id="forgotPin">Forgot PIN?</button>` : ''}
       <div class="row end"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" type="submit">${confirm}</button></div></form>`, { title, cls: 'dialog-sm', onClose: () => resolve(result) });
+    $('#forgotPin', el)?.addEventListener('click', () => { close(); onForgot(); });
     const input = $('[name=pin]', el); input.focus();
     $('#pinf', el).addEventListener('submit', async (e) => {
       e.preventDefault(); const pin = input.value.trim();

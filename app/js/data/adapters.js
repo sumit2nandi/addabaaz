@@ -162,6 +162,8 @@ export class RemoteAdapter {
   /* ----- parental PIN & devices ----- */
   setPin(pin, currentPin) { return this.api.put('/me/pin', { pin, currentPin }); }
   removePin(pin) { return this.api.del('/me/pin', { pin }); }
+  forgotPin() { return this.api.post('/me/pin/forgot'); }
+  resetPin(token, pin) { return this.api.post('/auth/pin/reset', { token, pin }); }
   verifyPin(pin) { return this.api.post('/me/pin/verify', { pin }); }
   devices() { return this.api.get('/me/devices'); }
   forgetDevice(id) { return this.api.del(`/me/devices/${encodeURIComponent(id)}`); }

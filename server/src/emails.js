@@ -166,3 +166,10 @@ export function campaignEmail(o) {
   const footerHtml = esc([line, help(o)].filter(Boolean).join(' ')) + (o.unsubscribeUrl ? ` <a href="${esc(o.unsubscribeUrl)}" style="color:#666">Unsubscribe</a>` : '');
   return layout({ subject: o.subject, paragraphs, footer, footerHtml, image: o.image || null, imageAlt: o.imageAlt || '', button: o.button?.url ? { label: o.button.label || 'Open ADDABAAZ', url: o.button.url } : (o.siteUrl ? { label: 'Open ADDABAAZ', url: o.siteUrl } : null) });
 }
+
+export function resetParentalPinEmail(o) {
+  return layout({ subject: 'Reset your ADDABAAZ parental PIN',
+    paragraphs: [hello(o.name), 'Use this single-use link to choose a new parental PIN. It expires in 15 minutes.', 'If you did not request this, ignore this email. Your current PIN stays unchanged.'],
+    button: { label: 'Reset parental PIN', url: o.url }, footer: help(o),
+  });
+}

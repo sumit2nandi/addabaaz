@@ -1,6 +1,7 @@
 /* The profile page's settings groups: each group draws on its own sub-page (app/js/views/settings.js)
  * behind /account/<group>; the profile page itself only lists them. Visibility follows the session:
  * local mode and guests see a shorter list, signed-in accounts the full one. */
+import { forgotParentalPin } from '../ui/parental.js';
 import { app } from '../app.js';
 import { html, $, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
@@ -267,13 +268,14 @@ function wireKids(root) {
       if (pin) { toast('Parental PIN set'); location.reload(); }
       return;
     }
-    const { el, close } = openDialog(html`<h2>Parental PIN</h2><div class="stack-sm"><button class="btn btn-ghost block" id="pinChange">Change PIN</button><button class="btn btn-danger block" id="pinRemove">Remove PIN</button></div>`, { cls: 'dialog-sm' });
+    const { el, close } = openDialog(html`<h2>Parental PIN</h2><div class="stack-sm"><button class="btn btn-ghost block" id="pinChange">Change PIN</button><button class="btn btn-danger block" id="pinRemove">Remove PIN</button><button class="linklike" id="pinForgot">Forgot PIN?</button></div>`, { cls: 'dialog-sm' });
+    $('#pinForgot', el).onclick = () => { close(); forgotParentalPin(u); };
     $('#pinChange', el).onclick = async () => {
-      close(); const cur = await pinPrompt({ title: 'Current PIN', check: (p) => u.verifyPin(p) }); if (!cur) return;
+      close(); const cur = await pinPrompt({ title: 'Current PIN', check: (p) => u.verifyPin(p), onForgot: () => forgotParentalPin(u) }); if (!cur) return;
       const pin = await pinPrompt({ title: 'New PIN', text: '4–6 digits.', confirm: 'Save', check: (p) => u.setPin(p) }); if (pin) toast('PIN changed');
     };
     $('#pinRemove', el).onclick = async () => {
-      close(); const cur = await pinPrompt({ title: 'Remove PIN', text: 'Enter your PIN to remove it.', confirm: 'Remove', check: (p) => u.removePin(p) }); if (cur) { toast('PIN removed'); location.reload(); }
+      close(); const cur = await pinPrompt({ title: 'Remove PIN', text: 'Enter your PIN to remove it.', confirm: 'Remove', check: (p) => u.removePin(p), onForgot: () => forgotParentalPin(u) }); if (cur) { toast('PIN removed'); location.reload(); }
     };
   });
 }
