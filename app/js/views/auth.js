@@ -39,13 +39,13 @@ export default async function auth(ctx) {
   // with "ctx.stale is not a function".
   if (ctx.stale?.()) return;
 
-  ctx.root.innerHTML = html`<div class="auth-page">
+  ctx.root.innerHTML = html`<div class="auth-page auth-entry">
     <a href="#/" class="auth-brand"><img src="media/icons/icon-96.png" width="56" height="56" alt=""><span class="brand-text"><b>ADDA</b><i>BAAZ</i></span></a>
     <form class="auth-card form" id="af" novalidate>
       <button type="button" class="auth-close" id="authClose" aria-label="Close">${icon('x', { size: 16 })}</button>
-      <h1>${signup ? 'Create your account' : 'Welcome back'}</h1>
+      <h1>${signup ? 'Create account' : 'Welcome back'}</h1>
       ${ref ? html`<div class="notice ok" id="refNote">${icon('gift', { size: 18 })}<span>Invite code <b>${ref}</b> will be applied — you and your friend both get credit.</span></div>` : ''}
-      <p class="muted" id="authSub">${canOtp ? 'Sign in or create your account with your mobile number — we’ll text you a code.' : (signup ? 'Sync My List and Continue Watching across all your devices.' : 'Sign in to pick up where you left off.')}</p>
+      <p class="muted" id="authSub">${canOtp ? 'Use your mobile number to get started.' : (signup ? 'Save your favourites and watch across devices.' : 'Pick up where you left off.')}</p>
 
       ${canOtp ? html`<div class="seg seg-full" role="tablist" aria-label="Sign-in method">
         <button type="button" role="tab" class="on" id="tabOtp" aria-selected="true">${icon('phone', { size: 15 })} Mobile number</button>
@@ -81,8 +81,8 @@ export default async function auth(ctx) {
       <div class="form-status" id="as" role="alert"></div>
       ${signup ? html`<p class="fine">By creating an account you agree to our <a href="#/terms">Terms</a> and <a href="#/privacy">Privacy Policy</a>.</p>` : ''}
       <p class="switch-auth">${signup ? html`Already have an account? <a href="#/signin?next=${encodeURIComponent(next)}">Sign in</a>` : html`New to ADDABAAZ? <a href="#/signup?next=${encodeURIComponent(next)}">Create an account</a>`}</p>
-      <p class="fine">Trouble signing in? <a href="#/support">Get help</a></p>
-      <a class="skip" href="#/">Continue without an account</a>
+      <div class="auth-footer-links"><p class="fine">Trouble signing in? <a href="#/support">Get help</a></p>
+      <a class="skip" href="#/">Continue without an account</a></div>
     </form></div>`.s;
 
   const st = () => $('#as', ctx.root);
@@ -106,8 +106,8 @@ export default async function auth(ctx) {
     $('#tabOtp', ctx.root).setAttribute('aria-selected', String(m === 'otp'));
     $('#tabEmail', ctx.root).setAttribute('aria-selected', String(m === 'email'));
     $('#authSub', ctx.root).textContent = m === 'otp'
-      ? 'Sign in or create your account with your mobile number — we’ll text you a code.'
-      : (signup ? 'Sync My List and Continue Watching across all your devices.' : 'Sign in to pick up where you left off.');
+      ? 'Use your mobile number to get started.'
+      : (signup ? 'Save your favourites and watch across devices.' : 'Pick up where you left off.');
     setStatus('');
   };
   $('#tabOtp', ctx.root)?.addEventListener('click', () => setMode('otp'));
