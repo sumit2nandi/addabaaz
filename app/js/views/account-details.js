@@ -3,56 +3,61 @@ import { html, $ } from '../util.js';
 import { icon } from '../icons.js';
 import { go } from '../router.js';
 import { friendly } from '../errors.js';
+import { openDialog } from '../ui/dialog.js';
 
 export default async function accountDetails(ctx) {
   const u = app.user, account = u.account;
   if (!account) { go('/signin?next=/account/details', { replace: true }); return; }
-  ctx.setTitle('Edit account details');
-  ctx.root.innerHTML = html`<div class="page page-narrow account-page account-details-page">
-    <p class="back-row"><a class="back-link" href="#/account">${icon('left', { size: 18 })}<span>Account</span></a></p>
-    <h1>Edit account details</h1>
-    <p class="muted">Manage your account name and contact information. Viewing profiles are managed separately.</p>
-    <section class="card-panel"><form class="form" id="accountNameForm">
-      <label>Account name<input name="name" autocomplete="name" maxlength="60" required value="${account.name}"></label>
-      <p class="form-status" role="status"></p><button class="btn btn-primary" type="submit">Save name</button>
-    </form></section>
-    <section class="card-panel"><h2>Email address</h2><p class="muted">${account.emailIsPlaceholder ? 'No email address added.' : account.email}</p>
-      <form class="form" id="accountEmailForm"><label>New email address<input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"></label>
-        <p class="muted small">We’ll send a confirmation link. The address changes only after you confirm it. Verify your current email first if it is not yet verified.</p>
-        <p class="form-status" role="status"></p><button class="btn btn-primary" type="submit">Send confirmation link</button>
-      </form>
-      ${account.emailVerified === false && !account.phoneVerified ? html`<button type="button" class="btn btn-ghost" id="verifyCurrentEmail">Verify current email</button>` : ''}
-    </section>
-    <section class="card-panel"><h2>Phone number</h2><p>${account.phone || 'No phone number added'}</p><p class="muted small">For your security, adding or changing a sign-in phone number currently requires help from support. Do not create another account to change your number.</p><a class="btn btn-ghost" href="#/support">Request a phone-number change</a></section>
-    <section class="card-panel"><h2>Viewing profiles</h2><p class="muted">Edit profile names, colours and Kids settings.</p><a class="btn btn-ghost" href="#/profiles?manage=1">Manage profiles</a></section>
+  ctx.setTitle('Edit Account');
+  const parts = (account.name || '').trim().split(/\s+/);
+  let savedName = parts.join(' '), busy = false;
+  ctx.root.innerHTML = html`<div class="page page-narrow account-details-page">
+    <header class="account-edit-header"><a class="account-edit-back" href="#/account" aria-label="Back to Account">${icon('left', { size: 24 })}</a><h1>Edit Account</h1></header>
+    <form class="account-edit-form" id="accountNameForm">
+      <div class="account-name-fields">
+        <label class="account-line-field">First name<input name="firstName" autocomplete="given-name" maxlength="60" required value="${parts[0] || ''}"></label>
+        <label class="account-line-field">Last name<input name="lastName" autocomplete="family-name" maxlength="60" value="${parts.slice(1).join(' ')}"></label>
+      </div>
+      <div class="account-contact-field"><div><span class="account-field-label">Email ID</span><p>${account.emailIsPlaceholder ? 'Not added' : account.email}</p></div><button type="button" class="icon-btn" id="editEmail" aria-label="Edit email address">${icon('edit', { size: 20 })}</button></div>
+      <div class="account-contact-field"><div><span class="account-field-label">Mobile number</span><p>${account.phone || 'Not added'}</p></div><a class="icon-btn" href="#/support" aria-label="Request a phone-number change" title="Contact support to change your number">${icon('edit', { size: 20 })}</a></div>
+      <p class="account-field-help">Phone-number changes currently require support verification.</p>
+      <p class="form-status" id="accountSaveStatus" role="status"></p>
+      <button class="btn btn-primary account-save" type="submit" id="saveAccount" disabled>Save Changes</button>
+      <a class="account-manage-link" href="#/profiles?manage=1">Manage viewing profiles</a>
+    </form>
   </div>`.s;
-  const wireForm = (selector, action) => {
-    const form = $(selector, ctx.root);
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const button = form.querySelector('button'), status = form.querySelector('[role=status]');
-      button.disabled = true; status.textContent = '';
-      try { status.textContent = await action(form); }
-      catch (error) { status.textContent = friendly(error); }
+  const form = $('#accountNameForm', ctx.root), save = $('#saveAccount', form), status = $('#accountSaveStatus', form);
+  const nameValue = () => [$('[name=firstName]', form).value.trim(), $('[name=lastName]', form).value.trim()].filter(Boolean).join(' ');
+  const sync = () => { const name = nameValue(); save.disabled = busy || !name || name.length > 60 || !($('[name=firstName]', form).value.trim()) || name === savedName; };
+  form.addEventListener('input', sync);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault(); if (busy) return;
+    const name = nameValue();
+    if (!name || name.length > 60) { status.textContent = 'Enter a name of up to 60 characters.'; return; }
+    busy = true; sync(); status.textContent = '';
+    try { await u.remote.updateAccountName(name); savedName = name; await u.refreshAccount(); status.textContent = 'Account details saved.'; }
+    catch (error) { status.textContent = friendly(error); }
+    finally { busy = false; sync(); }
+  });
+  $('#editEmail', ctx.root).addEventListener('click', () => {
+    const { el } = openDialog(html`<h2>Edit email address</h2><form class="form" id="accountEmailForm">
+      <label>New email address<input name="email" type="email" autocomplete="email" maxlength="254" required value="${account.emailIsPlaceholder ? '' : account.email}"></label>
+      <p class="muted small">We’ll send a confirmation link. Your current address stays active until you confirm the new one.</p>
+      <p class="form-status" role="status"></p><button class="btn btn-primary" type="submit">Send confirmation link</button>
+      ${account.emailVerified === false && !account.phoneVerified ? html`<button type="button" class="btn btn-ghost" id="verifyCurrentEmail">Verify current email first</button>` : ''}
+    </form>`, { title: 'Edit email address', cls: 'dialog-sm' });
+    const emailForm = $('#accountEmailForm', el), emailStatus = $('[role=status]', emailForm);
+    emailForm.addEventListener('submit', async (event) => {
+      event.preventDefault(); const button = $('button[type=submit]', emailForm); button.disabled = true;
+      try { await u.remote.requestAccountEmail($('[name=email]', emailForm).value.trim()); emailStatus.textContent = 'Confirmation link sent. Check your new email inbox and spam folder.'; }
+      catch (error) { emailStatus.textContent = friendly(error); }
       finally { button.disabled = false; }
     });
-  };
-  wireForm('#accountNameForm', async (form) => {
-    const name = $('[name=name]', form).value.trim();
-    if (!name) throw new Error('Please enter your name.');
-    await u.remote.updateAccountName(name);
-    await u.refreshAccount();
-    return 'Account name saved.';
-  });
-  wireForm('#accountEmailForm', async (form) => {
-    await u.remote.requestAccountEmail($('[name=email]', form).value.trim());
-    return 'Confirmation link sent. Check the new email inbox and spam folder.';
-  });
-  $('#verifyCurrentEmail', ctx.root)?.addEventListener('click', async (event) => {
-    const button = event.currentTarget; button.disabled = true;
-    const status = $('#accountEmailForm [role=status]', ctx.root);
-    try { await u.remote.resendVerification(); status.textContent = 'Verification link sent to your current email.'; }
-    catch (error) { status.textContent = friendly(error); }
-    finally { button.disabled = false; }
+    $('#verifyCurrentEmail', el)?.addEventListener('click', async (event) => {
+      const button = event.currentTarget; button.disabled = true;
+      try { await u.remote.resendVerification(); emailStatus.textContent = 'Verification link sent to your current email.'; }
+      catch (error) { emailStatus.textContent = friendly(error); }
+      finally { button.disabled = false; }
+    });
   });
 }

@@ -25,6 +25,7 @@ export default async function account(ctx) {
     <section class="profile-head">
       ${p ? avatar(p, { size: 48 }) : ''}
       <div class="profile-id"><h2>${u.account ? u.account.name : p ? p.name : 'Guest'} ${u.isPremium ? html`<em class="premium-word premium-sup">premium</em>` : html`<em class="pill free">Free</em>`}${u.account ? html`<a class="profile-details-edit" href="#/account/details" aria-label="Edit account details" title="Edit account details">${icon('edit', { size: 16 })}</a>` : ''}</h2>
+        ${u.account && !u.account.emailIsPlaceholder ? html`<p class="muted profile-email">${u.account.email}</p>` : ''}
         ${!u.account ? html`<p class="muted">${identity}</p>` : ''}</div>
       ${u.supportsAuth && !u.account ? html`<div class="profile-actions"><a class="btn btn-primary" href="#/signin">Sign in</a><a class="btn btn-ghost" href="#/signup">Create account</a></div>` : ''}
     </section>
