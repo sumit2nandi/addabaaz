@@ -602,13 +602,11 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .btn-light { background: #fff; color: #8f0000; border: 0; border-radius: 999px; padding: 9px 22px; font-size: 14px; font-weight: 800; white-space: nowrap; margin-left: auto; }
 .btn-light:hover { background: #ffe9e9; }
 .profile-head h2 .pill { margin-left: 8px; vertical-align: middle; }
-/* Sign out lives alone at the bottom of the page: quiet, centered, impossible to tap by accident. */
-/* Profile footer: blue Log Out, the legal links and the app version, all centered. */
-.profile-footer { display: grid; gap: 6px; justify-items: center; text-align: center; padding: 22px 0 10px; }
-.logout-link { background: none; border: 0; padding: 8px 20px; font-size: 16px; font-weight: 700; color: #4da3ff; cursor: pointer; }
-.profile-legal { display: flex; gap: 12px; align-items: center; margin: 0; font-size: 13.5px; color: var(--muted); }
-.profile-legal a { color: var(--muted); } .profile-legal .linklike { text-decoration: none; }
-.app-version { margin: 0; font-size: 13px; color: var(--muted); }
+/* Profile footer: a single centered, brand-red sign-out action. */
+.profile-footer { display: grid; justify-items: center; text-align: center; padding: 22px 0 10px; }
+.logout-link { background: none; border: 0; padding: 8px 20px; font-size: 16px; font-weight: 700; color: var(--accent-2); cursor: pointer; }
+.logout-link:hover { text-decoration: underline; }
+.footer .app-version { margin: 28px 0 0; text-align: center; font-size: 13px; color: var(--muted); }
 /* Inline notice ("Your plan is active until…"): the icon stays with the first line and never shrinks,
  * and the sentence is ONE text column. That column is the whole point: as bare flex children the words
  * before a <b>, the <b> itself and the words after it become three separate flex items, and flex items
@@ -936,3 +934,6 @@ body.player-settings-open { overflow: hidden; }
 .abm-note { margin: 0; color: var(--muted); font-size: 12.5px; max-width: 40ch; }
 @media (prefers-reduced-motion: reduce) { .maintenance-screen::before, .abm-glyph, .abm-bar i { animation: none } }
 fore, .abm-glyph, .abm-bar i { animation: none } }
+
+/* Match the premium plan branding on the locked player, including the raised gold word. */
+.locked-premium-heading .brand-lockup .premium-word { font-size: .6em; }

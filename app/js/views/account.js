@@ -1,7 +1,6 @@
 // Profile page (#/account): a compact identity header plus the settings groups, each opening its own
 // sub-page. The banners stay on this page so nothing the old stacked layout surfaced gets silently dropped.
 import { app } from '../app.js';
-import { CONFIG } from '../config.js';
 import { html, $ } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast, confirmSignOut } from '../ui/components.js';
@@ -34,9 +33,7 @@ export default async function account(ctx) {
       ${settingGroups().map((g) => html`<a class="row-link${g.id === 'danger' ? ' danger' : ''}" href="${g.href}">${icon(g.ic, { size: 22 })}<span><b>${g.title}</b><small>${g.sub}</small></span>${icon('right', { size: 18, cls: 'chev' })}</a>`)}
     </nav>
     <footer class="profile-footer">
-      ${u.account ? html`<button class="logout-link" id="signout">Log Out</button>` : ''}
-      <p class="profile-legal"><a href="#/privacy">Privacy Policy</a><span aria-hidden="true">•</span><a href="#/terms">Terms of Use</a><span aria-hidden="true">•</span><button class="linklike" data-consent-open>Privacy choices</button></p>
-      <p class="app-version">App Version ${CONFIG.version}</p>
+      ${u.account ? html`<button class="logout-link" id="signout">Sign out</button>` : ''}
     </footer>
   </div>`.s;
 

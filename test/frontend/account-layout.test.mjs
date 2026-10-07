@@ -27,14 +27,15 @@ test('Account is a compact profile header over a settings-group list', () => {
     'every group is a link row, with the delete row in the danger style');
   assert.match(account, /<footer class="profile-footer">/,
     'the page ends in a footer, not another settings card');
-  assert.match(account, /<button class="logout-link" id="signout">Log Out<\/button>/,
-    'Log Out is a plain blue line, like the reference footer');
-  assert.match(account, /<a href="#\/privacy">Privacy Policy<\/a><span aria-hidden="true">•<\/span><a href="#\/terms">Terms of Use<\/a><span aria-hidden="true">•<\/span><button class="linklike" data-consent-open>Privacy choices<\/button>/,
-    'the footer links the Privacy Policy, Terms of Use and Privacy choices');
-  assert.match(account, /<p class="app-version">App Version \$\{CONFIG\.version\}<\/p>/,
-    'the footer shows the app version');
-  assert.match(css, /\.logout-link \{[^}]*color: #4da3ff/,
-    'Log Out is bright blue on the dark background');
+  assert.match(account, /<button class="logout-link" id="signout">Sign out<\/button>/);
+  assert.doesNotMatch(account, /profile-legal|app-version|Log Out/,
+    'duplicate legal links and the version are removed from the profile footer');
+  const index = read('index.html');
+  assert.match(index, /<\/nav>\s*<\/div>\s*<p class="app-version" id="appVersion"><\/p>\s*<\/footer>/,
+    'the version is below the main footer navigation');
+  assert.match(read('app/js/ui/shell.js'), /version.textContent = `App Version \$\{CONFIG.version\}`/);
+  assert.match(css, /\.logout-link \{[^}]*color: var\(--accent-2\)/,
+    'Sign out uses the brighter theme red');
   assert.doesNotMatch(account.match(/<section class="profile-head">[\s\S]*?<\/section>/)[0], /id="signout"/,
     'Log Out no longer crowds the profile header');
   assert.doesNotMatch(account, /account-grid/,
