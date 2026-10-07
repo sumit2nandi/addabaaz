@@ -54,37 +54,37 @@ test('the toast is an all-black capsule with white text', () => {
   assert.doesNotMatch(toast, /color:\s*#111/);
 });
 
-test('the toast keeps exactly the size it had before the redesign (the 45px light bar)', () => {
-  // The pre-redesign toast (git 84daf0c: app/css/styles.css) was:
-  //   display: flex; align-items: center; gap: 14px; background: #f2f2f2; color: #111;
-  //   padding: 12px 18px; border-radius: 12px; font-weight: 600; font-size: 14px;
-  //   box-shadow: 0 10px 40px rgba(0,0,0,.6);
-  // Only the fill, the text colour, the radius and the (inset, size-neutral) hairline may differ.
+test('the capsule is thin: about 60% of the old light bar, with the black above and below trimmed', () => {
+  // The pre-redesign toast (git 84daf0c: app/css/styles.css) was 12px 18px padding over a 14px/1.5 line:
+  // 21px + 24px = 45px tall, and most of that was empty black above and below the words. The capsule keeps
+  // the message size and the side padding, and trims that black back to ~60% of the height.
   const toast = ruleText('.toast');
   assert.match(toast, /display:\s*flex/);
   assert.match(toast, /align-items:\s*center/);
-  assert.match(toast, /gap:\s*14px/);
-  assert.match(toast, /padding:\s*12px 18px/, 'the padding that set the old height and side rhythm');
-  assert.match(toast, /font-size:\s*14px/);
-  assert.match(toast, /font-weight:\s*600/, 'the old weight, not bolder (bolder text grows the line box)');
+  assert.match(toast, /gap:\s*14px/, 'the side rhythm is unchanged');
+  assert.match(toast, /padding:\s*4px 18px/, 'the black above and below drops from 12px to 4px');
+  assert.match(toast, /font-size:\s*14px/, 'the message keeps its size');
+  assert.match(toast, /font-weight:\s*600/);
+  assert.match(toast, /line-height:\s*1\.35/, 'a tighter line box, so the capsule itself is thinner');
   assert.match(toast, /box-shadow:[^;]*0 10px 40px rgba\(0,0,0,\.6\)/, 'the original drop shadow is still there');
   assert.doesNotMatch(toast, /letter-spacing/, 'no extra tracking: it would widen the capsule');
-  assert.doesNotMatch(toast, /(?:^|[;\s])border:/, 'no border: it would add 2px to height AND width');
+  assert.doesNotMatch(toast, /(?:^|[;\s])border:/, 'no border property: the ring is an inset shadow, so it costs no size');
 
-  // The arithmetic of the original box, spelled out: 14px x 1.5 line + 12px x 2 padding = 45px tall.
   const size = (rule) => ({
     font: Number((rule.match(/font-size:\s*(\d+(?:\.\d+)?)px/) || [])[1]),
     line: Number((rule.match(/line-height:\s*(\d+(?:\.\d+)?)/) || [])[1] || 1.5),
     padY: Number((rule.match(/padding:\s*(\d+(?:\.\d+)?)px/) || [])[1]),
   });
-  const s = size(toast);
-  assert.equal(s.font * s.line + s.padY * 2, 45, 'the capsule is 45px tall, exactly as the light bar was');
+  const s = size(toast), OLD = 45;
+  const height = s.font * s.line + s.padY * 2;
+  assert.equal(Number((height / OLD * 100).toFixed(0)), 60, `the capsule is ${height.toFixed(1)}px — about 60% of the old ${OLD}px`);
+  assert.ok(s.padY * 2 < 12 * 2, 'and the black it is made of is at the top and bottom, not around the words');
 
-  // And the action chip stays inside that same 21px line box, so it cannot resize the capsule either.
+  // The action chip stays inside that 18.9px line box, so it cannot thicken the capsule either.
   const button = ruleText('.toast button');
-  assert.match(button, /font-size:\s*13px/);
+  assert.match(button, /font-size:\s*12\.5px/);
   assert.match(button, /line-height:\s*1\.2/);
-  assert.match(button, /padding:\s*2px 10px/);
+  assert.match(button, /padding:\s*1px 9px/);
   const b = size(button);
   assert.ok(b.font * b.line + b.padY * 2 <= s.font * s.line, `the chip (${b.font * b.line + b.padY * 2}px) fits the message's line box (${s.font * s.line}px)`);
 });
