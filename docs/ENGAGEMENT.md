@@ -63,7 +63,7 @@ iOS app built with the push plugin and an APNs key (or Firebase Cloud Messaging)
 
 ## Analytics
 - **First-party**: the player reports plays and watch time (`POST /events/play`, no cookies, no personal data, capped per request). Admin → Analytics shows plays/watch time per day, top shows and videos, revenue. Counted only when a video really starts playing here (ad-blockers may hide some). YouTube's own view counts are separate.
-- **Google Analytics 4 (optional)**: set `GA4_MEASUREMENT_ID=G-XXXXXXX`. It is loaded **only after the visitor accepts** the consent banner (shown only when an id is configured); *Privacy choices* in the footer changes the decision at any time. Page views are sent on route changes.
+- **Google Analytics 4 (optional)**: set `GA4_MEASUREMENT_ID=G-XXXXXXX`. It is loaded **only after the visitor accepts** the consent banner (shown only when an id is configured); *Privacy choices* on the Privacy page changes the decision at any time. Page views are sent on route changes.
 
 ## Scheduled publishing
 Set *Publish at* on a video: until then it is hidden from viewers, the API, the sitemap and Google (admins still see it, with a "goes live" badge). The scheduler (every minute, `server/src/jobs.js`) announces it when it goes live.

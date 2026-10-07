@@ -23,8 +23,8 @@ test('Account is a compact profile header over a settings-group list', () => {
     'the header shows a small avatar next to the name');
   assert.match(account, /<nav class="card-panel list group-list" aria-label="Settings">/,
     'the groups render as one labelled list');
-  assert.match(account, /settingGroups\(\)\.map\(\(g\) => html`<a class="row-link\$\{g\.id === 'danger' \? ' danger' : ''\}" href="\$\{g\.href\}">/,
-    'every group is a link row, with the delete row in the danger style');
+  assert.match(account, /settingGroups\(\)\.map\(accountGroup\)/);
+  assert.match(account, /wireAccountAccordion\(ctx.root, settingSection, wireSetting, ctx\)/);
   assert.match(account, /<footer class="profile-footer">/,
     'the page ends in a footer, not another settings card');
   assert.match(account, /<button class="logout-link" id="signout">Sign out<\/button>/);

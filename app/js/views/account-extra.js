@@ -15,9 +15,9 @@ import { isNative } from '../platform.js';
 const GROUPS = [
   ['playback', 'Playback', 'Autoplay and watch history', 'play', 'all'],
   ['security', 'Security', 'Password, sessions and devices', 'lock', 'account'],
-  ['kids', 'Kids & parental controls', 'Parental PIN and Kids profiles', 'user', 'account'],
-  ['refer', 'Refer & earn', 'Invite credit and rewards', 'gift', 'account'],
+  ['kids', 'Parental Control', 'Parental PIN and Kids profiles', 'user', 'account'],
   ['notify', 'Notifications', 'Episode, launch and announcement alerts', 'bell', 'auth'],
+  ['refer', 'Refer & earn', 'Invite credit and rewards', 'gift', 'account'],
   ['help', 'Help & support', 'Help Centre and contact us', 'chat', 'all', '#/support'],
 ];
 
@@ -182,7 +182,7 @@ function kidsSection() {
   const u = app.user;
   if (!u.account) return '';
   return html`<section class="account-section">
-    <h2 class="sub-h">Kids &amp; parental controls</h2>
+    <h2 class="sub-h">Parental Control</h2>
     <div class="card-panel list">
       ${row('pinBtn', 'lock', u.hasPin ? 'Change or remove parental PIN' : 'Set a parental PIN', u.hasPin ? 'Needed to leave a Kids profile or change profiles.' : 'Keeps children on their Kids profile and stops profile changes.')}
       <a class="row-link" href="#/profiles?manage=1">${icon('user', { size: 22 })}<span><b>Kids profiles</b><small>Mark any profile as “Kids” to show only titles rated for children.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a>

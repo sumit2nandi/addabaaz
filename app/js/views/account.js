@@ -1,12 +1,12 @@
-// Profile page (#/account): a compact identity header plus the settings groups, each opening its own
-// sub-page. The banners stay on this page so nothing the old stacked layout surfaced gets silently dropped.
+// Profile page (#/account): inline expandable settings plus referral and support links. The banners stay on this page so nothing the old stacked layout surfaced gets silently dropped.
 import { app } from '../app.js';
 import { html, $ } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast, confirmSignOut } from '../ui/components.js';
 import { go } from '../router.js';
 import { isNative } from '../platform.js';
-import { verifyBanner, settingGroups } from './account-extra.js';
+import { accountGroup, wireAccountAccordion } from '../ui/account-accordion.js';
+import { verifyBanner, settingGroups, settingSection, wireSetting } from './account-extra.js';
 import { friendly } from '../errors.js';
 
 // Draws the page: banners, the profile header, the group list and sign-out.
@@ -30,12 +30,14 @@ export default async function account(ctx) {
       ${u.supportsAuth && !u.account ? html`<div class="profile-actions"><a class="btn btn-primary" href="#/signin">Sign in</a><a class="btn btn-ghost" href="#/signup">Create account</a></div>` : ''}
     </section>
     <nav class="card-panel list group-list" aria-label="Settings">
-      ${settingGroups().map((g) => html`<a class="row-link${g.id === 'danger' ? ' danger' : ''}" href="${g.href}">${icon(g.ic, { size: 22 })}<span><b>${g.title}</b><small>${g.sub}</small></span>${icon('right', { size: 18, cls: 'chev' })}</a>`)}
+      ${settingGroups().map(accountGroup)}
     </nav>
     <footer class="profile-footer">
       ${u.account ? html`<button class="logout-link" id="signout">Sign out</button>` : ''}
     </footer>
   </div>`.s;
+
+  wireAccountAccordion(ctx.root, settingSection, wireSetting, ctx);
 
   $('#resendVerify', ctx.root)?.addEventListener('click', async (e) => { e.target.disabled = true; try { await u.remote.resendVerification(); toast('Sent — check your inbox.'); } catch (err) { toast(friendly(err)); e.target.disabled = false; } });
   $('#signout', ctx.root)?.addEventListener('click', async () => {

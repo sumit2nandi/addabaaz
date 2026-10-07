@@ -22,14 +22,29 @@ function loadGa() {
   trackPage();
 }
 /** Page views for single-page navigation (called on every route change). */
-export function trackPage() { if (gaLoaded && window.gtag) window.gtag('event', 'page_view', { page_path: location.pathname + location.search + location.hash, page_title: document.title }); }
+export function trackPage() { if (getConsent() === 'all' && gaLoaded && window.gtag) window.gtag('event', 'page_view', { page_path: location.pathname + location.search + location.hash, page_title: document.title }); }
 
 // Save the choice. Choosing 'essential' also removes any analytics cookies already set.
 export function setConsent(v) {
   try { localStorage.setItem(KEY, v); } catch { /* private mode */ }
   document.getElementById('consentBar')?.remove();
-  if (v === 'all') loadGa();
+  if (v === 'all') { window[`ga-disable-${gaId()}`] = false; loadGa(); }
   else if (gaLoaded) { document.cookie.split(';').forEach((c) => { const n = c.split('=')[0].trim(); if (/^_ga/.test(n)) document.cookie = `${n}=; Max-Age=0; path=/; domain=${location.hostname}`; }); window[`ga-disable-${gaId()}`] = true; }
+}
+
+// Shared inline privacy controls, also available in the legacy consent dialog.
+export function privacyChoices() {
+  return html`<section class="card-panel" aria-labelledby="privacyChoicesTitle"><h2 id="privacyChoicesTitle">Privacy choices</h2>
+    <p class="muted">Essential storage keeps you signed in and remembers your profile and settings. It cannot be switched off.</p>
+    ${gaId() ? html`<label class="row-switch"><span><b>Analytics (Google Analytics)</b><small>Allow optional analytics. You can change your choice at any time.</small></span><span class="switch"><input type="checkbox" id="privacyAnalytics" ${getConsent() === 'all' ? 'checked' : ''}><span class="track"></span></span></label>` : html`<p class="muted">Optional analytics is not enabled on this site.</p>`}
+    <p class="muted small" id="privacyChoiceStatus" role="status"></p>
+  </section>`;
+}
+export function wirePrivacyChoices(root) {
+  $('#privacyAnalytics', root)?.addEventListener('change', (e) => {
+    setConsent(e.target.checked ? 'all' : 'essential');
+    $('#privacyChoiceStatus', root).textContent = 'Privacy choice saved.';
+  });
 }
 
 // The "Privacy choices" dialog (opened from the footer).

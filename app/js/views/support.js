@@ -37,7 +37,7 @@ export default async function support(ctx) {
   const u = app.user;
   ctx.setTitle('Support');
   if (!u.supportsAuth) {
-    ctx.root.innerHTML = html`<div class="page page-narrow"><div class="empty">${icon('chat', { size: 44 })}
+    ctx.root.innerHTML = html`<div class="page page-narrow"><p class="back-row"><a class="back-link" href="#/account">${icon('left', { size: 18 })}<span>Account</span></a></p><div class="empty">${icon('chat', { size: 44 })}
       <h2>Support needs a connection</h2><p>This copy of ADDABAAZ runs without the server, so tickets can’t be sent from here. Please write to us once you’re back online.</p>
       <a class="btn btn-primary" href="#/contact">Contact us instead</a></div></div>`.s;
     return;
@@ -49,6 +49,7 @@ export default async function support(ctx) {
   if (ctx.stale?.()) return;   // see the sign-in page: an older shell may not have it yet
 
   ctx.root.innerHTML = html`<div class="page page-narrow support-page">
+    <p class="back-row"><a class="back-link" href="#/account">${icon('left', { size: 18 })}<span>Account</span></a></p>
     <div class="account-layout">${accountNav(settingGroups(), 'help')}<div class="account-content">
     ${sectionHeader({ tag: 'We’re here to help', title: 'Support', subtitle: 'Tell us what went wrong and we’ll get back to you by e-mail — usually within one working day.' })}
     ${acc ? html`<div class="card-panel notice"><div>${icon('mail', { size: 22 })}</div><div><b>Signed in as ${acc.name}</b>

@@ -980,3 +980,28 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
   .deletion-page p { max-width: 78ch; line-height: 1.75; }
   .profiles-page .profile-grid { gap: 32px; max-width: 1100px; }
 }
+
+/* Inline profile settings: animate intrinsic height so asynchronous notification content fits too. */
+.account-accordion { min-width: 0; }
+.group-list > .account-accordion + *, .group-list > a + .account-accordion { border-top: 1px solid var(--border); }
+.accordion-toggle .chev { transform: rotate(90deg); transition: transform .25s ease; }
+.is-open > .accordion-toggle .chev { transform: rotate(-90deg); }
+.accordion-panel { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows .28s ease, opacity .2s ease, visibility .28s; }
+.is-open > .accordion-panel { grid-template-rows: 1fr; opacity: 1; visibility: visible; }
+.accordion-clip { min-height: 0; overflow: hidden; }
+.accordion-body { padding: 0 12px 16px; }
+.accordion-body .account-section > .sub-h { display: none; }
+.accordion-body .account-section + .account-section { margin-top: 16px; }
+.accordion-body .row-link, .accordion-body .row-switch { gap: 12px; }
+.accordion-body .row-link > span, .accordion-body .row-switch > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.accordion-body .switch, .accordion-body svg { flex-shrink: 0; }
+@media (min-width: 1024px) {
+  .profile-page .group-list { align-items: start; }
+  .profile-page .group-list > .account-accordion { border: 1px solid var(--border); border-radius: 16px; background: var(--panel); }
+  .profile-page .group-list .account-accordion .row-link { border: 0; min-height: 76px; }
+  .profile-page .group-list .account-accordion > .accordion-toggle { min-height: 104px; }
+  .profile-page .group-list .account-accordion .card-panel { box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .accordion-panel, .accordion-toggle .chev { transition: none; }
+}

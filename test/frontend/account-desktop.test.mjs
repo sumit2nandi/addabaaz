@@ -23,7 +23,7 @@ test('desktop navigation preserves filtered destinations and marks only the curr
 test('desktop layouts cover settings and support without replacing mobile navigation', () => {
   const css = read('app/css/styles.css');
   assert.match(css, /\.account-sidebar \{ display: none; \}/);
-  const desktop = css.slice(css.lastIndexOf('@media (min-width: 1024px)'));
+  const desktop = css.slice(css.indexOf('@media (min-width: 1024px)'));
   assert.match(desktop, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(desktop, /grid-template-columns: 250px minmax\(0, 1fr\)/);
   assert.match(desktop, /\.account-sidebar \{ display: grid;/);

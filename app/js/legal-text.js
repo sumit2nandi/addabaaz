@@ -40,7 +40,7 @@ export function legalDoc(slug, { studio = {}, refundDays = 7 } = {}) {
         ]],
         ['Cookies and device storage', [
           'The app uses local storage and session storage for essential items such as the sign-in session, active profile, settings, local-mode library and consent choice. The service worker may cache application files and artwork. Browser storage is kept on your device and can be cleared through its settings.',
-          'Google Analytics is off until you accept the consent banner; you can withdraw that choice in Privacy choices in the footer. YouTube embeds and other providers may use their own cookies or similar technologies when their content is loaded.',
+          'Google Analytics is off until you accept the consent banner; you can withdraw that choice in Privacy choices on the Privacy page. YouTube embeds and other providers may use their own cookies or similar technologies when their content is loaded.',
         ]],
         ['Retention and account deletion', [
           'You can delete a signed-in account from the Delete account page linked in the footer. If you cannot sign in, use the instructions at /delete-account. After a verified request, we delete the account, sign-in identities, profiles, ratings, My List, reminders, watch progress, subscription, credits/referrals, linked push registrations, pending contact-email tokens/addresses, phone OTP history for the account number, linked diagnostics, refund requests, playback/notification records, and support-ticket conversations/replies linked by account ID, account email or verified phone number. Contact-form records in our database matching the account email or verified phone number are also removed.',
