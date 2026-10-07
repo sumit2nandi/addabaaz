@@ -137,7 +137,7 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     const first = run();
     assert.match(first, /AndroidManifest\.xml: main activity locked to portrait/);
     assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'src', 'main', 'res', 'mipmap-mdpi', 'ic_launcher.png')), 'the patch also stamps the logo launcher icons');
-    assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'src', 'main', 'res', 'drawable-xxxhdpi', 'splash.png')), 'the branded dark splash replaces the stock white Capacitor tile');
+    assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'src', 'main', 'res', 'drawable-xxxhdpi', 'splash.png')), 'the branded launch art replaces the stock white Capacitor tile');
     assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'src', 'main', 'res', 'drawable', 'splash.png')), 'the template splash.png itself is overwritten');
     const patched = fs.readFileSync(manifest, 'utf8');
     assert.equal(isPortraitLocked(patched), true);
@@ -149,7 +149,8 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     assert.ok(hasStableSigning(fs.readFileSync(buildGradle, 'utf8')), 'debug builds are signed with the shared key, so new APKs install over old ones');
     assert.ok(hasCoreDependency(fs.readFileSync(buildGradle, 'utf8')), 'androidx.core is on the app classpath for the fullscreen insets');
     const patchedStyles = fs.readFileSync(styles, 'utf8');
-    assert.match(patchedStyles, /windowSplashScreenAnimatedIcon/, 'the system splash uses the dark logo artwork');
+    assert.match(patchedStyles, /windowSplashScreenBackground">#b80000<\/item>/, 'the system splash matches the branded red HTML loader');
+    assert.match(patchedStyles, /windowSplashScreenAnimatedIcon/, 'the system splash uses centered logo artwork');
     assert.match(patchedStyles, /ab-dark-window/, 'the window theme patch was applied');
     assert.match(patchedStyles, /<item name="android:navigationBarColor">#050505<\/item>/, 'nav bar is dark - no white strips around full-screen video');
     assert.match(patchedStyles, /<item name="android:windowBackground">#050505<\/item>/, 'the activity window itself is dark');
@@ -163,9 +164,22 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     assert.ok(fs.existsSync(path.join(path.dirname(mainActivity), 'FullscreenClient.java')), 'the client class is written next to MainActivity');
     assert.match(first, /fullscreen video client installed/);
 
+    // Upgrade a previously-generated project whose Android 12 splash still has the old dark background.
+    const staleSplashStyles = patchedStyles.replace(
+      '<item name="android:windowSplashScreenBackground">#b80000</item>',
+      '<item name="android:windowSplashScreenBackground">#050505</item>');
+    assert.notEqual(staleSplashStyles, patchedStyles, 'the fixture contains a replaceable legacy splash color');
+    fs.writeFileSync(styles, staleSplashStyles);
+    const upgrade = run();
+    assert.match(upgrade, /system splash uses the branded red canvas/);
+    const upgradedStyles = fs.readFileSync(styles, 'utf8');
+    assert.match(upgradedStyles, /windowSplashScreenBackground">#b80000<\/item>/);
+    assert.equal((upgradedStyles.match(/windowSplashScreenBackground/g) || []).length, 1, 'the upgrade replaces the old item instead of duplicating it');
+
     const second = run();
     assert.equal(/locked to portrait/.test(second), false, 'a second run has nothing to change');
     assert.equal(/no backup/.test(second), false, 'the backup patch is idempotent as well');
+    assert.equal(/system splash uses the branded red canvas/.test(second), false, 'the splash patch is idempotent too');
     assert.equal(fs.readFileSync(mainActivity, 'utf8'), patchedActivity, 'a second run leaves MainActivity alone');
     assert.equal(fs.readFileSync(manifest, 'utf8'), patched);
 

@@ -178,5 +178,5 @@ boot().catch((err) => {
   console.error(err);
   reportClientError(err, { where: 'boot' });
   const boot = $('#boot');
-  if (boot) boot.innerHTML = `<div class="empty"><h2>ADDABAAZ couldn’t start</h2><p>${friendly(err, 'Check your connection and try again.')}</p><button class="btn btn-primary" data-reload>Try again</button></div>`;
+  if (boot) boot.innerHTML = `<div class="empty" role="alert"><h2>ADDABAAZ couldn’t start</h2><p>${friendly(err, 'Check your connection and try again.')}</p><button class="btn btn-primary" data-reload>Try again</button></div>`;
 });

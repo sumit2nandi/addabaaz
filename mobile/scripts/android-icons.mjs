@@ -41,7 +41,7 @@ export function stampLauncherIcons(androidRoot) {
   fs.copyFileSync(path.join(ICON_SOURCE, 'ic_launcher_playstore.png'), path.join(res, 'drawable', 'ic_launcher_playstore.png'));
   done.push('drawable/ic_launcher_playstore.png');
   // The stock Capacitor splash (white tile + blue bot) flashes for a moment on every launch; the
-  // branded dark splash replaces it in every density bucket AND as the drawable/splash.png the
+  // branded red splash replaces it in every density bucket AND as the drawable/splash.png the
   // template's styles reference (system splash icon + the SplashScreen plugin both use it).
   for (const d of DENSITIES) {
     const target = path.join(res, `drawable-${d}`);

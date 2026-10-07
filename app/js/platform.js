@@ -16,11 +16,22 @@ export function initPlatform() {
     else if (location.hash && location.hash !== '#/' ) location.hash = '#/';
     else P.App.exitApp?.();
   });
-  // Dark status bar to match the brand background
-  P.StatusBar?.setStyle?.({ style: 'DARK' });
-  P.StatusBar?.setBackgroundColor?.({ color: '#050505' }).catch?.(() => {});
-  // Hide the native splash once the first view has painted
-  window.addEventListener('ab:ready', () => P.SplashScreen?.hide?.(), { once: true });
+  // White status-bar icons sit on the red launch screen. Restore the regular dark app chrome
+  // after the router has rendered its first route.
+  P.StatusBar?.setStyle?.({ style: 'LIGHT' });
+  P.StatusBar?.setBackgroundColor?.({ color: '#b80000' }).catch?.(() => {});
+  window.addEventListener('ab:ready', () => {
+    P.StatusBar?.setStyle?.({ style: 'DARK' });
+    P.StatusBar?.setBackgroundColor?.({ color: '#050505' }).catch?.(() => {});
+  }, { once: true });
+  // Hand off quickly from the OS splash to the full-screen HTML loader. Keep that loader visible
+  // until ab:ready, rather than leaving the native splash up until the first route is complete.
+  const hideNativeSplash = () => {
+    const pending = P.SplashScreen?.hide?.();
+    pending?.catch?.(() => {});
+  };
+  const afterPaint = window.requestAnimationFrame?.bind(window) || ((callback) => setTimeout(callback, 0));
+  afterPaint(() => afterPaint(hideNativeSplash));
   // Custom-scheme / universal links: addabaaz://show/shahid  ->  #/show/shahid
   P.App?.addListener?.('appUrlOpen', ({ url }) => {
     try {

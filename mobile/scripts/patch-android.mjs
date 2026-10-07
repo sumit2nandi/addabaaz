@@ -77,12 +77,28 @@ patch('app/src/main/AndroidManifest.xml', 'no backup / no device-transfer restor
 patch('app/src/main/res/values/strings.xml', 'app_name -> Addabaaz', (t) =>
   t.replace(/<string name="app_name">[^<]*<\/string>/, '<string name="app_name">Addabaaz</string>'));
 
-// Android 12+ system splash: use the dark logo artwork as the splash icon instead of the launcher
-// icon's square, so launching never shows white squares around the logo.
-patch('app/src/main/res/values/styles.xml', 'system splash shows the dark logo artwork', (t) =>
-  t.includes('windowSplashScreenAnimatedIcon') ? t : t.replace(
-    /(<style name="AppTheme\.NoActionBarLaunch"[^>]*>\s*<item name="android:background">@drawable\/splash<\/item>)/,
-    '$1\n        <item name="android:windowSplashScreenBackground">#050505</item>\n        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash</item>'));
+// Android 12+ system splash: match the ADDABAAZ red launch canvas and use the logo artwork
+// instead of the launcher icon's square. Update existing items too, so older generated projects
+// are corrected on the next sync rather than silently keeping the previous splash color.
+patch('app/src/main/res/values/styles.xml', 'system splash uses the branded red canvas + centered logo', (t) => {
+  const style = t.match(/<style name="AppTheme\.NoActionBarLaunch"[^>]*>[\s\S]*?<\/style>/);
+  if (!style) throw new Error('[android:patch] could not find AppTheme.NoActionBarLaunch in styles.xml.');
+  let launch = style[0];
+  for (const [name, value] of [
+    ['android:windowSplashScreenBackground', '#b80000'],
+    ['android:windowSplashScreenAnimatedIcon', '@drawable/splash'],
+  ]) {
+    const item = new RegExp(`<item name="${name}">[^<]*<\\/item>`);
+    const markup = `<item name="${name}">${value}</item>`;
+    if (item.test(launch)) launch = launch.replace(item, markup);
+    else {
+      const anchor = /<item name="android:background">[^<]*<\/item>/;
+      if (!anchor.test(launch)) throw new Error('[android:patch] AppTheme.NoActionBarLaunch has no splash background item.');
+      launch = launch.replace(anchor, (match) => `${match}\n        ${markup}`);
+    }
+  }
+  return t.replace(style[0], launch);
+});
 
 // The activity window and both system bars are the brand dark: white strips must never show
 // around full-screen video (or anywhere else - overscroll, rotation, immersive transitions).

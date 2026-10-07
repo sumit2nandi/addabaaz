@@ -58,5 +58,5 @@ mkdir -p resources
 convert -size 512x512 xc:none -fill white -draw 'circle 256,256 256,0' /tmp/round-mask.png
 convert images/addabaaz-logo.png -resize 512x512 -alpha set /tmp/round-mask.png -compose DstIn -composite -strip -depth 8 -define png:compression-level=9 PNG32:resources/icon-only.png
 convert -size 1024x1024 xc:'#050505' resources/icon-background.png
-convert -size 2732x2732 xc:'#050505' \( images/addabaaz-logo.png -resize 900x900 \) -gravity center -composite -strip -define png:compression-level=9 resources/splash.png
+convert -size 2732x2732 xc:'#b80000' \( resources/icon-only.png -resize 620x620 \) -gravity center -composite -strip -define png:compression-level=9 resources/splash.png
 echo "done"; du -sh media resources
