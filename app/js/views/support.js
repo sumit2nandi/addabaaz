@@ -49,7 +49,7 @@ export default async function support(ctx) {
   ctx.root.innerHTML = html`<div class="page page-narrow">
     ${sectionHeader({ tag: 'We’re here to help', title: 'Support', subtitle: 'Tell us what went wrong and we’ll get back to you by e-mail — usually within one working day.' })}
     ${acc ? html`<div class="card-panel notice"><div>${icon('mail', { size: 22 })}</div><div><b>Signed in as ${acc.name}</b>
-      <p class="muted">${acc.emailIsPlaceholder ? `Replies go to your mobile number’s account — add an e-mail below so we can write back.` : `We’ll reply to ${acc.email}.`}</p></div></div>` : ''}
+      <p class="muted">${acc.emailIsPlaceholder ? `This account signs in with SMS. Enter a separate e-mail address below so we can reply to your ticket.` : `We’ll reply to ${acc.email}.`}</p></div></div>` : ''}
     <section class="card-panel form" id="supForm">
       <h2>Raise a ticket</h2>
       <label>What is this about?<select name="category" id="supCat">${CATEGORIES.map(([id, label]) => html`<option value="${id}">${label}</option>`)}</select></label>

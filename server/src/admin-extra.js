@@ -2,13 +2,13 @@ import { HttpError, bad, wrap } from './http.js';
 import * as mail from './emails.js';
 import { TICKET_CATEGORIES, emailTemplates } from './routes/support.js';
 import { notificationPayload } from './push.js';
-import { normalizePhone, generateOtp, maskPhone } from './sms.js';
+import { normalizePhone, generateOtp, maskPhone, isPhoneEmail } from './sms.js';
 
 // Reads `limit` / `offset` from the query string.
 const asPage = (req, dflt = 50, max = 200) => ({ limit: Math.min(Math.max(Number(req.query.limit) || dflt, 1), max), offset: Math.max(Number(req.query.offset) || 0, 0) });
 
 /**
- * Admin routes for the engagement features: analytics, comment moderation, refund requests, push notifications, error log.
+ * Admin routes for analytics, refund requests, push notifications, support tickets and the error log.
  * Mounted by createAdminRouter (so they sit behind the same admin sign-in, rate limit and audit log).
  */
 export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns = null, unsubscribeUrlFor = null, log, logger = console, siteUrl, sms = null, email = mail.campaignEmail }) {
@@ -16,10 +16,10 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
   // absolute before it leaves the server, or the image will not load.
   const absoluteUrl = (v) => (/^https?:/i.test(v) ? v : `${String(siteUrl || '').replace(/\/+$/, '')}${String(v).startsWith('/') ? '' : '/'}${v}`);
   /* ---------- badges for the sidebar ---------- */
-  // Counts shown as badges in the admin sidebar: comments to review, refund requests pending, recent errors.
+  // Counts shown as badges in the admin sidebar: pending refund requests, recent errors and open support tickets.
   router.get('/inbox', wrap(async (_req, res) => {
-    const [comments, refunds, errors, tickets] = await Promise.all([db.comments.reviewCount(), db.refundRequests.pendingCount(), db.errors.count24h(), db.tickets.awaitingCount().catch((e) => { logger.warn('[admin] ticket inbox count failed:', e); return 0; })]);
-    res.json({ comments, refunds, errors, tickets });
+    const [refunds, errors, tickets] = await Promise.all([db.refundRequests.pendingCount(), db.errors.count24h(), db.tickets.awaitingCount().catch((e) => { logger.warn('[admin] ticket inbox count failed:', e); return 0; })]);
+    res.json({ refunds, errors, tickets });
   }));
 
   /* ---------- email delivery diagnostic ---------- */
@@ -78,20 +78,6 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
     });
   }));
 
-  /* ---------- comments ---------- */
-  // Comment moderation queue: reported/hidden comments first, with the video each belongs to.
-  router.get('/comments', wrap(async (req, res) => {
-    const filter = ['review', 'hidden', 'all'].includes(req.query.filter) ? req.query.filter : 'review';
-    const out = await db.comments.adminList({ filter, q: typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 100) : '', ...asPage(req) });
-    const snap = await catalog.get({ all: true });
-    res.json({ total: out.total, comments: out.items.map((c) => ({ ...c, videoTitle: snap.videoById.get(c.videoId)?.title || c.videoId })) });
-  }));
-  const commentOr404 = async (id) => { const c = await db.comments.byId(String(id)); if (!c) throw new HttpError(404, 'not_found', 'Unknown comment.'); return c; };
-  // Approve = make visible again; Hide = remove from the site but keep for review; Delete = remove for good.
-  router.post('/comments/:id/approve', wrap(async (req, res) => { await commentOr404(req.params.id); await db.comments.setStatus(req.params.id, 'visible'); await log(req, 'comment.approve', req.params.id); res.sendStatus(204); }));
-  router.post('/comments/:id/hide', wrap(async (req, res) => { await commentOr404(req.params.id); await db.comments.setStatus(req.params.id, 'hidden', 'admin'); await log(req, 'comment.hide', req.params.id); res.sendStatus(204); }));
-  router.delete('/comments/:id', wrap(async (req, res) => { await commentOr404(req.params.id); await db.comments.remove(req.params.id); await log(req, 'comment.delete', req.params.id); res.sendStatus(204); }));
-
   /* ---------- refund requests ---------- */
   // Customers' refund requests, with the payment each refers to.
   router.get('/refund-requests', wrap(async (req, res) => {
@@ -118,7 +104,7 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
     const r = await requestOr404(req.params.id), note = typeof req.body?.note === 'string' ? req.body.note.trim().slice(0, 300) : '';
     if (!(await db.refundRequests.decide(r.id, 'declined', req.admin.email, note))) throw new HttpError(409, 'already_decided', `This request was already ${r.status === 'pending' ? 'decided' : r.status}.`);
     const [user, pay] = await Promise.all([db.users.byId(r.userId), db.payments.byId(r.paymentId)]);
-    if (user && mailer?.provider === 'smtp') mailer.send({ to: user.email, ...mail.refundDeclinedEmail({ name: user.name, planName: pay?.planId || 'your plan', note, supportEmail: billing.config.supportEmail, siteUrl }) }).catch((e) => logger.warn('[refund] decline e-mail failed:', e));
+    if (user && !isPhoneEmail(user.email) && mailer?.provider === 'smtp') mailer.send({ to: user.email, ...mail.refundDeclinedEmail({ name: user.name, planName: pay?.planId || 'your plan', note, supportEmail: billing.config.supportEmail, siteUrl }) }).catch((e) => logger.warn('[refund] decline e-mail failed:', e));
     await log(req, 'refund_request.decline', r.id, { paymentId: r.paymentId, note });
     res.sendStatus(204);
   }));
@@ -164,7 +150,7 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
     const title = str(b.title, limit.title), body = str(b.body, limit.body), url = str(b.url, 300) || '/', button = str(b.button, 40);
     const imageUrl = normalizeImage(b.imageUrl), imageAlt = str(b.imageAlt, 200);
     if (!title || !body) throw bad('A title and a message are required.');
-    if (b.imageUrl && !imageUrl) throw bad('The image must be an https:// address or an upload path starting with /uploads/ or /media/.', 'invalid_image');
+    if (b.imageUrl && !imageUrl) throw bad('The image must be an https:// URL or a local path under /uploads/, /media/ or /r2-assets/broadcast/.', 'invalid_image');
     if (!/^\/(?!\/)/.test(url) && !/^https:\/\//.test(url)) throw bad('The link must start with / (a page on this site) or https://.');
     const a = String(b.audience || (channel === 'email' ? 'all' : 'news'));
     const snap = await catalog.get({ all: true });
@@ -327,11 +313,15 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
   router.delete('/errors', wrap(async (req, res) => { await db.errors.clear(); await log(req, 'errors.clear'); res.sendStatus(204); }));
 }
 
-// Broadcast images may be an admin upload (/uploads/…, /media/…) or a full https URL. Anything else is
-// dropped (an image URL in a notification is loaded by every viewer's device).
+// Broadcast images may be an admin upload (/uploads/…, /media/…), a private-R2 broadcast image URL,
+// or a full https URL. Anything else is dropped (notification images are fetched by viewer devices).
 export function normalizeImage(value) {
   const v = typeof value === 'string' ? value.trim().slice(0, 500) : '';
   if (!v) return '';
-  if (/^https:\/\/[^\s]+$/.test(v) || /^\/(uploads|media)\/[A-Za-z0-9._/-]+$/.test(v)) return v;
+  if (/^https:\/\/[^\s]+$/.test(v)) return v;
+  // The legacy upload endpoint returns `uploads/<hash>.<ext>` (no leading slash); accept both forms.
+  const localPath = v.startsWith('/') ? v.slice(1) : v;
+  if (/^(uploads|media)\/[A-Za-z0-9._/-]+$/.test(localPath)
+    || /^r2-assets\/broadcast\/[0-9a-f]{24}\.(?:webp|png|jpg|gif)$/.test(localPath)) return `/${localPath}`;
   return '';
 }

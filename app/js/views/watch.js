@@ -1,4 +1,4 @@
-// Video page (#/watch/:id): the player, episode list, likes, comments and "next episode" countdown.
+// Video page (#/watch/:id): the player, episode list and "next episode" countdown.
 // Premium videos are checked first (gateFor): signed out -> sign-in wall, no plan -> subscribe wall. Every view is a function of `ctx`
 // (the router context: params, root element, setTitle, onCleanup).
 import { app } from '../app.js';
@@ -12,8 +12,6 @@ import { listBtn, videoCard, rail, enhanceRails, metaLine, toast, img, premiumMa
 import { epRow } from './show.js';
 import { shareUrl } from '../platform.js';
 import { lockPortrait } from '../orientation.js';
-
-// mountRating, mountComments removed: like/dislike/comments disabled per requirement
 
 // Renders the page, then starts the player and wires progress saving. Cleanup (timers, listeners) is registered with ctx.onCleanup.
 export default async function watch(ctx) {
@@ -97,9 +95,7 @@ export default async function watch(ctx) {
     if (r === 'copied') toast('Link copied');
   });
 
-  // mountRating, mountComments removed: like/dislike/comments disabled per requirement
-  // mountRating($('#rateBox', ctx.root), { type: 'video', id: v.id, label: 'this video' });
-  // mountComments($('#commentsBox', ctx.root), { video: v });
+  // Rating UI remains intentionally unmounted; keep it separate from playback behavior.
   // The player area shows a message instead of the player when the viewer is locked out.
   const msg = $('#playerMsg', ctx.root), slot = $('#playerSlot', ctx.root);
   // Behind the lock wall the video's own artwork is shown instead of a black background. The same-origin

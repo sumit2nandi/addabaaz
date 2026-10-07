@@ -59,6 +59,15 @@ test('without an icon the dialog keeps the plain layout (existing confirms uncha
   assert.equal(await p, true);
 });
 
+test('account deletion opts the current installation out of push before removing the account', () => {
+  const user = fs.readFileSync(new URL('../../app/js/data/user.js', import.meta.url), 'utf8');
+  const start = user.indexOf('async deleteAccount()');
+  const deletion = user.slice(start, user.indexOf('#localSnapshot()', start));
+  assert.ok(deletion.indexOf('disablePush()') >= 0, 'clear local/account push registration first');
+  assert.ok(deletion.indexOf('disablePush') < deletion.indexOf('this.remote.deleteAccount()'), 'push is detached before account deletion');
+  assert.ok(deletion.indexOf('this.remote.deleteAccount()') < deletion.indexOf('this.signOut()'), 'local sign-out still follows server deletion');
+});
+
 test('both Sign out buttons open this confirmation before signing out', () => {
   const shell = fs.readFileSync(new URL('../../app/js/ui/shell.js', import.meta.url), 'utf8');
   const account = fs.readFileSync(new URL('../../app/js/views/account.js', import.meta.url), 'utf8');

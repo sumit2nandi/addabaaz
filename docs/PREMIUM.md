@@ -17,13 +17,13 @@ Viewer opens a Premium title hosted in R2
 ## 1. Create the bucket and credentials
 
 1. Cloudflare dashboard → **R2 Object Storage → Create bucket** (e.g. `addabaaz-premium`). Leave **public access OFF** (no r2.dev URL, no custom domain).
-2. *R2 → Manage API tokens → Create API token*: permission **Object Read only**, scoped to that bucket. Copy the Access Key ID and Secret. (The server only ever reads. Upload with a separate, write-capable credential.)
+2. *R2 → Manage API tokens → Create API token*: permission **Object Read & Write**, scoped to that bucket. Copy the Access Key ID and Secret to the server environment only. The server signs browser video/reel PUTs and uploads validated Broadcast photos; the credentials themselves are never sent to a browser or app.
 3. Note your **Account ID** (R2 overview page).
 4. Server environment: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (see `.env.example`).
-5. Bucket **CORS** (needed for browser HLS, where hls.js fetches segments cross-origin; native Capacitor WebViews proxy segments through the API). *Bucket → Settings → CORS policy*:
+5. Bucket **CORS** (needed for browser HLS reads and browser-direct video/reel uploads; Broadcast-photo uploads run server-side). *Bucket → Settings → CORS policy*:
    ```json
    [{ "AllowedOrigins": ["https://addabaaz.in", "https://app.addabaaz.in", "http://localhost:3000"],
-      "AllowedMethods": ["GET", "HEAD"], "AllowedHeaders": ["Range"], "ExposeHeaders": ["Content-Length", "Content-Range"], "MaxAgeSeconds": 3600 }]
+      "AllowedMethods": ["GET", "HEAD", "PUT"], "AllowedHeaders": ["Range", "Content-Type"], "ExposeHeaders": ["Content-Length", "Content-Range"], "MaxAgeSeconds": 3600 }]
    ```
    (`app.addabaaz.in` is the Capacitor WebView origin — keep it in sync with `mobile/capacitor.config.json`.)
 
@@ -114,6 +114,6 @@ GST invoices, coupons, refunds and payment emails are documented in [BILLING.md]
 
 - **Signed URLs are bearer links.** Anyone holding one can play that file until it expires (`STREAM_URL_TTL`, default 6 h — long enough for a film plus pausing; shorten it if you like, it's requested again on every page load). This stops casual sharing and hotlinking, and hides the bucket, but it is **not DRM**: a determined signed-in viewer can still record or download what they can watch. If you need studio-grade protection, put the bucket behind Cloudflare Stream/DRM (Widevine/FairPlay) later — the `POST /videos/:id/stream` contract stays the same.
 - HLS gateway tokens are scoped (`aud: media`, one video, same TTL) and can't be used as login sessions (and vice-versa). Playlist paths are confined to the video's own folder (path traversal is rejected; covered by tests).
-- Keep the R2 credential **read-only** and out of the browser/app — it exists only in the server environment.
+- Keep the R2 **Object Read & Write** credential scoped to the media bucket and out of the browser/app — it exists only in the server environment. The browser receives only short-lived, object-specific signed URLs.
 - The catalog (and therefore the object *keys*) is public; that's harmless with a private bucket, but don't put secrets in key names.
 - With `NODE_ENV=production` set `PUBLIC_API_URL` (e.g. `https://api.addabaaz.in`) if the API sits behind a proxy that doesn't forward the original host/proto correctly (also set `TRUST_PROXY`).

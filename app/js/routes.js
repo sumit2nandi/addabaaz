@@ -8,7 +8,7 @@ export const ROUTES = [
   ['/gallery', 'gallery'],   // hidden page: old links and search results bounce home (app/js/views/gallery.js)
   ['/search', 'search'], ['/list', 'mylist'], ['/account', 'account'], ['/account/:group', 'settings'],
   ['/profiles', 'profiles'], ['/signin', 'auth'], ['/signup', 'auth'], ['/plans', 'plans'], ['/billing', 'billing'],
-  ['/forgot', 'recover'], ['/reset', 'recover'], ['/verify', 'recover'], ['/privacy', 'legal'], ['/terms', 'legal'], ['/refunds', 'legal'],
+  ['/forgot', 'recover'], ['/reset', 'recover'], ['/verify', 'recover'], ['/privacy', 'legal'], ['/terms', 'legal'], ['/refunds', 'legal'], ['/delete-account', 'deletion'],
   ['/about', 'studio'], ['/services', 'studio'], ['/contact', 'studio'], ['/support', 'support'],
 ].map(([pattern, view]) => ({
   pattern, view,

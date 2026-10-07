@@ -63,8 +63,10 @@ export const api = {
   },
   /** Uploads a .srt/.vtt subtitle file (converted to WebVTT on the server) → { path, cues }. */
   uploadSubtitle: (file) => send('POST', '/uploads/subtitle', { raw: file, headers: { 'Content-Type': 'application/octet-stream' } }),
-  /** Uploads an image (already resized by prepareImage) → { path }. */
+  /** Uploads a general admin image (already resized by prepareImage) → { path }. */
   uploadImage: (blob) => send('POST', '/uploads/image', { raw: blob, headers: { 'Content-Type': blob.type || 'application/octet-stream' } }),
+  /** Uploads a Broadcast image to private R2 (the server validates it and returns a stable public app URL). */
+  uploadBroadcastImage: (blob) => send('POST', '/uploads/broadcast-image', { raw: blob, headers: { 'Content-Type': blob.type || 'application/octet-stream' } }),
 };
 
 /** PUT a big file straight to R2 with progress (XHR: fetch has no upload progress). */

@@ -46,7 +46,7 @@ test('routes: shared matcher', () => {
 });
 
 test('pageMeta: titles, descriptions, canonical, robots', () => {
-  for (const p of ['/', '/shows', '/show/shahid', '/upcoming', '/soon/trap', '/plans', '/about', '/services', '/contact']) {
+  for (const p of ['/', '/shows', '/show/shahid', '/upcoming', '/soon/trap', '/plans', '/about', '/services', '/contact', '/delete-account']) {
     const m = meta(p);
     assert.equal(m.status, 200, p); assert.match(m.robots, /^index,follow/, p);
     assert.ok(m.title.length >= 10 && m.title.length <= 75, `${p} title length ${m.title.length}: ${m.title}`);
@@ -116,7 +116,7 @@ test('server: page HTML carries per-page metadata for crawlers that do not run J
 
 test('server: every public page renders for a direct visit, including the Reels feed (/reels) and a single reel', async () => {
   // Regression: /reels (no :id) used to crash the renderer -> 503 -> a reload or shared link of Reels showed the home page instead.
-  for (const path of ['/', '/shows', '/reels', '/upcoming', '/plans', '/about', '/search', '/account']) {
+  for (const path of ['/', '/shows', '/reels', '/upcoming', '/plans', '/about', '/search', '/account', '/delete-account']) {
     const r = await get(path); assert.equal(r.status, 200, path);
     assert.match(await r.text(), /<meta name="ab:routing" content="history">/, path + ' must be served with real-URL routing');
   }
@@ -124,6 +124,8 @@ test('server: every public page renders for a direct visit, including the Reels 
   const gallery = await get('/gallery');
   assert.equal(gallery.status, 301); assert.equal(gallery.headers.get('location'), '/');
   assert.doesNotMatch(await (await get('/')).text(), /Behind the scenes/i);
+  const deletion = await get('/delete-account'); assert.equal(deletion.status, 200);
+  const deletionHtml = await deletion.text(); assert.match(deletionHtml, /Delete your ADDABAAZ account/); assert.match(deletionHtml, /mailto:office@addabaaz\.in\?subject=/); assert.match(deletionHtml, /target account email\/ID/); assert.match(deletionHtml, /Privacy Policy/);
   const reel = cat.reels()[0]; assert.equal((await get('/reels/' + reel.id)).status, 200);
   assert.equal((await get('/reels/zzzzzzzzzzz')).status, 404);
 });
@@ -166,7 +168,7 @@ test('robots.txt and sitemap.xml', async () => {
   const sm = await get('/sitemap.xml'); assert.match(sm.headers.get('content-type'), /xml/);
   const xml = await sm.text(); const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
   assert.equal(new Set(locs).size, locs.length, 'no duplicate URLs'); assert.ok(locs.every((l) => l.startsWith(SITE + '/') && !l.includes('#')));
-  for (const p of ['/', '/shows', '/show/shahid', '/soon/trap', '/about', '/contact', '/plans', '/upcoming']) assert.ok(locs.includes(SITE + p), p);
+  for (const p of ['/', '/shows', '/show/shahid', '/soon/trap', '/about', '/contact', '/plans', '/upcoming', '/delete-account']) assert.ok(locs.includes(SITE + p), p);
   assert.ok(!locs.includes(SITE + '/gallery'), 'the hidden gallery is not in the sitemap');
   for (const p of ['/search', '/signin', '/account', '/billing', '/admin', '/youtube', '/gallery']) assert.ok(!locs.includes(SITE + p), `${p} must not be in the sitemap`);
   const reel = cat.videos.find((v) => v.kind === 'reel'), ep = cat.episodes('shahid')[0];

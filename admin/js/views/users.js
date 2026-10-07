@@ -31,8 +31,8 @@ export default async function users(root, _p, ctx) {
    * One address must be one account. Rows that still collide differ by characters MySQL's collation does
    * not ignore (a pasted non-breaking space, an ideographic space, a full-width ＠ …) or are identical
    * rows from a database that predates the unique e-mail index. The card shows the offending characters
-   * made visible and merges the accounts into one: profiles, devices, payments and comments move to the
-   * account that stays, the others are deleted. */
+   * made visible and merges the accounts into one: profiles, devices, payments and support tickets move
+   * to the account that stays, the others are deleted. */
   const box = $('#dupes', root);
   const loadDupes = async () => {
     let r;
@@ -42,7 +42,7 @@ export default async function users(root, _p, ctx) {
     if (!groups.length) { box.innerHTML = ''; return; }
     box.innerHTML = html`${groups.map((g) => html`<section class="card setup" data-group="${g.key}">
       <h2>${icon('alert', 20)} ${g.count} accounts share one e-mail address</h2>
-      <p>These rows are the same address to a person but different strings to MySQL — usually a copy-pasted non-breaking space, an ideographic space or a full-width <b>＠</b>, and sometimes an account created before the unique e-mail index existed (in that case the rows are identical character for character). New sign-ups for the address are already refused; pick the account to keep here: the others’ profiles, watch history, devices, payments, comments and push subscriptions move to it, then they are deleted.</p>
+      <p>These rows are the same address to a person but different strings to MySQL — usually a copy-pasted non-breaking space, an ideographic space or a full-width <b>＠</b>, and sometimes an account created before the unique e-mail index existed (in that case the rows are identical character for character). New sign-ups for the address are already refused; pick the account to keep here: the others’ profiles, watch history, devices, payments, support tickets and push subscriptions move to it, then they are deleted.</p>
       ${new Set(g.users.map((u) => u.email)).size === 1 ? html`<p class="muted small">${icon('alert', 14)} All ${g.count} rows carry exactly the same address — typical of a database created before the unique e-mail index existed. Keep the account the person uses.</p>` : ''}
       <table class="tbl compact"><thead><tr><th>Account</th><th>Address as stored</th><th>Plan</th><th>Joined</th><th class="end">Keep this one</th></tr></thead><tbody>
         ${g.users.map((u) => html`<tr><td><strong>${u.name}</strong>${u.isAdmin ? html` ${badge('admin', 'ok')}` : ''}${u.disabled ? html` ${badge('disabled', 'bad')}` : ''}<br><small class="muted">${[u.providers.join(', '), u.profiles ? `${u.profiles} profile${u.profiles === 1 ? '' : 's'}` : '', u.devices ? `${u.devices} device${u.devices === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ') || '—'}</small></td>
@@ -60,7 +60,7 @@ export default async function users(root, _p, ctx) {
     const others = group.users.filter((u) => u.id !== keep.id);
     const m = openModal(html`
       <p>Keep <strong>${keep.name}</strong> (<code>${keep.emailVisible}</code>) and move everything from ${others.length === 1 ? html`<strong>${others[0].name}</strong>` : html`${others.length} other accounts`} into it?</p>
-      <ul class="muted small"><li>Profiles, My List, watch history and reminders</li><li>Devices, push subscriptions and app installations</li><li>Plan, payments, invoices and refund requests</li><li>Comments and error reports</li></ul>
+      <ul class="muted small"><li>Profiles, My List, watch history and reminders</li><li>Devices, push subscriptions and app installations</li><li>Plan, payments, invoices and refund requests</li><li>Support conversations and error reports</li></ul>
       <p class="muted small">The other account${others.length === 1 ? '' : 's'} ${others.length === 1 ? 'is' : 'are'} deleted. This cannot be undone — take a backup first if you are unsure (<code>npm run backup</code>).</p>
       <div class="row end"><button class="btn" data-close>Cancel</button><button class="btn primary" data-ok>${icon('check', 16)} Merge into ${keep.name}</button></div>`, { title: 'Merge duplicate accounts' });
     $('[data-ok]', m.el).onclick = (e) => guard(e.currentTarget, async () => {

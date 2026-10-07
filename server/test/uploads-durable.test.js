@@ -41,7 +41,7 @@ const fakeDb = () => {
     put: async (name, type, data) => { stored.set(name, { type, data }); },
     existing: async (names) => new Set(names.filter((n) => stored.has(n))),
   };
-  return new Proxy({ uploads, catalog, audit: { add: async () => {} } }, { get: (target, prop) => (prop in target ? target[prop] : async () => null) });
+  return new Proxy({ uploads, catalog, audit: { add: async () => {} }, settings: { all: async () => ({}) } }, { get: (target, prop) => (prop in target ? target[prop] : async () => null) });
 };
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-uploads-'));
@@ -116,6 +116,43 @@ test('unknown or malformed names are a plain 404, and odd names never reach MySQ
   assert.deepEqual(asked, [], 'names that are not content-hash file names are rejected before any lookup');
   assert.equal((await fetch(`${base}/uploads/ffffffffffffffffffffffff.png`)).status, 404, 'well-formed but never uploaded');
   assert.deepEqual(asked, ['ffffffffffffffffffffffff.png']);
+});
+
+test('Broadcast photos upload to private R2, avoid the MySQL uploads store, and resolve through a stable URL', async () => {
+  const objects = new Map();
+  const r2 = {
+    configured: true,
+    async putObject(key, data, metadata) { objects.set(key, { data: Buffer.from(data), ...metadata }); },
+    presignGet(key, { ttl }) { return `https://r2.example.test/${key}?ttl=${ttl}`; },
+  };
+  const { base } = await start({ r2 });
+  const image = Buffer.concat([PNG, crypto.randomBytes(32)]);
+  const upload = await fetch(`${base}/api/v1/admin/uploads/broadcast-image`, {
+    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'image/png' }, body: image,
+  });
+  assert.equal(upload.status, 201, await upload.clone().text());
+  const result = await upload.json();
+  assert.match(result.path, /^r2-assets\/broadcast\/[0-9a-f]{24}\.png$/);
+  const name = result.path.split('/').at(-1), key = `broadcast/${name}`;
+  assert.deepEqual(objects.get(key).data, image, 'the image bytes are written to R2');
+  assert.equal(objects.get(key).contentType, 'image/png');
+  assert.match(objects.get(key).cacheControl, /immutable/);
+  assert.equal(stored.has(name), false, 'Broadcast photos are not copied into MySQL uploaded_files');
+
+  const previewResponse = await fetch(`${base}/api/v1/admin/notifications/preview`, {
+    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel: 'push', title: 'New release', body: 'Watch now', imageUrl: result.path }),
+  });
+  assert.equal(previewResponse.status, 200);
+  const preview = await previewResponse.json();
+  assert.equal(new URL(preview.image, 'https://preview.example').pathname, `/${result.path}`);
+  assert.equal(preview.push.image, preview.image, 'the image URL is in the actual push payload too');
+
+  const stableUrl = await fetch(`${base}/${result.path}`, { redirect: 'manual' });
+  assert.equal(stableUrl.status, 302);
+  assert.equal(stableUrl.headers.get('location'), `https://r2.example.test/${key}?ttl=3600`);
+  assert.match(stableUrl.headers.get('cache-control'), /max-age=60/);
+  assert.equal((await fetch(`${base}/r2-assets/broadcast/not-an-image.png`, { redirect: 'manual' })).status, 404);
 });
 
 test('hotlink guard: the website, the native app and listed hosts may show uploads; other sites may not', async () => {

@@ -36,7 +36,7 @@ flowchart LR
       system[system]
       identity[auth / identity]
       account[accounts]
-      engagement[features<br/>PIN · ratings · comments · push · devices]
+      engagement[features<br/>PIN · ratings · push · devices]
       billingRoutes[billing + payment webhook]
       mediaRoutes[media / HLS]
       adminRoutes[admin + admin-extra]
@@ -63,7 +63,7 @@ flowchart LR
 
   subgraph data[Durable data]
     mysql[(MySQL 8<br/>users · catalog · billing · uploads · engagement)]
-    r2[(Private object storage<br/>video / HLS)]
+    r2[(Private object storage<br/>video / HLS / Broadcast photos)]
     seed[data/catalog.json + studio.json<br/>seed and static-mode fallback]
     cache[(Local upload cache<br/>recoverable from MySQL)]
     localBackups[(Local backup files<br/>encrypted when configured)]
@@ -260,8 +260,9 @@ flowchart TB
 |---|---|---|
 | Accounts, identities, sessions, profiles, library, playback, subscriptions, payments, invoices, refunds | MySQL | Client-side account state is a session cache; local guest state is separate until sync. |
 | Curated catalog, studio documents, moderation, YouTube preview/import records | MySQL once the API is active | JSON files seed the database and serve as static-mode fallback; catalog service keeps an in-process versioned snapshot. |
-| Admin-uploaded images and subtitles | MySQL `uploaded_files` | `UPLOAD_DIR` is a content-hash filesystem cache and can be rebuilt. |
-| Premium video objects | Private R2-compatible object storage | Only expiring signed URLs or the HLS API gateway are given to a viewer. |
+| Admin-uploaded catalog images and subtitles | MySQL `uploaded_files` | `UPLOAD_DIR` is a content-hash filesystem cache and can be rebuilt. |
+| Broadcast photos | Private R2-compatible object storage under `broadcast/` | MySQL stores the campaign path; a stable app URL redirects recipients to a fresh signed GET URL. |
+| Video/reel media objects | Private R2-compatible object storage | Catalog metadata and object keys stay in MySQL; delivery uses signed URLs or the HLS API gateway. |
 | Push tokens, preferences, campaigns, analytics, errors | MySQL | Push provider sends are external side effects; dead native tokens are removed when providers report them. |
 | Backups | Local backup volume and optional separate R2 bucket | Encryption is controlled by `BACKUP_PASSPHRASE`; backups must be copied off-host and tested with restore. |
 
@@ -317,3 +318,4 @@ The current system already includes web checkout, admin catalog and YouTube-impo
 - **Analytics and discovery:** aggregate play events are available; recommendations such as “Because you watched…”, richer analytics, and hero A/B tests need explicit product, privacy, and measurement decisions.
 - **Localization:** a Bengali/English language toggle would need a shared translation catalog and a pass over strings that are currently embedded in views.
 - **Scale-out:** use shared edge/Redis rate limiting and review MySQL capacity before adding instances. Campaign leases and push-device tables are already database-backed; keep backups off-host and routinely test restores.
+ edge/Redis rate limiting and review MySQL capacity before adding instances. Campaign leases and push-device tables are already database-backed; keep backups off-host and routinely test restores.

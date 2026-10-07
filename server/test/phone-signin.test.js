@@ -7,6 +7,7 @@ import express from 'express';
 import { smsFromEnv, createMsg91, normalizePhone, generateOtp, phoneEmail, isPhoneEmail, maskPhone, SmsError } from '../src/sms.js';
 import { registerOtpRoutes } from '../src/routes/otp.js';
 import { registerAuthRoutes } from '../src/routes/auth.js';
+import { extraDb } from '../src/db-extra.js';
 
 /* ---------- normalisation ---------- */
 test('phone numbers are normalised to MSG91’s 91XXXXXXXXXX form', () => {
@@ -25,6 +26,21 @@ test('the reserved phone-account address can never receive or be mistaken for re
   assert.equal(isPhoneEmail('919812345678@PHONE.ADDABAAZ.IN'), true);
   assert.equal(isPhoneEmail('viewer@example.com'), false);
   assert.equal(isPhoneEmail(''), false);
+});
+
+test('phone-only accounts persist their required placeholder email and normalized unique key', async () => {
+  const statements = [];
+  const store = extraDb({
+    q: async (sql, params) => { statements.push({ sql, params }); return []; },
+    tx: async (fn) => fn({ query: async (sql, params) => { statements.push({ sql, params }); return []; } }),
+    iso: (value) => value,
+  });
+  const user = { id: 'phone-user', name: 'Ram Sen', phone: '919812345678', email: phoneEmail('919812345678') };
+  await store.phones.createWithPhone(user, { id: 'phone-profile', name: 'Ram', color: 0 });
+  assert.match(statements[0].sql, /email_norm, name, phone, phone_verified_at/);
+  assert.deepEqual(statements[0].params, [user.id, user.email, user.email, user.name, user.phone]);
+  assert.doesNotMatch(statements[0].sql, /VALUES \(\?,NULL/);
+  assert.equal(store.phones.setEmail, undefined, 'phone-account addresses can change only through the confirmation-token transaction');
 });
 
 test('the masked form shown to admins hides the middle of the number', () => {

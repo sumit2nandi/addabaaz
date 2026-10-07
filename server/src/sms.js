@@ -56,10 +56,9 @@ export function normalizePhone(input, defaultCountry = '91') {
   return digits.length >= 11 && digits.length <= 15 ? digits : null;
 }
 
-// Accounts created by phone sign-in have no email address yet. `users.email` is NOT NULL (a unique key
-// from before phone sign-in existed), so such an account gets an address on this reserved domain that
-// can never receive mail. It is replaced the moment the viewer shares a real address, and no mail is ever
-// sent to it (see features.js and the campaign audience queries).
+// SMS-only accounts have no user-supplied email address. The legacy `users.email` column is NOT NULL,
+// so they receive an internal placeholder on this reserved subdomain. `isPhoneEmail` marks it so
+// code paths can distinguish it from a user-supplied contact address.
 export const PHONE_EMAIL_DOMAIN = 'phone.addabaaz.in';
 export const phoneEmail = (phone) => `${String(phone).replace(/\D/g, '')}@${PHONE_EMAIL_DOMAIN}`;
 export const isPhoneEmail = (email) => !!email && String(email).toLowerCase().endsWith(`@${PHONE_EMAIL_DOMAIN}`);

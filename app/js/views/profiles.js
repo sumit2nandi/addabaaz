@@ -37,7 +37,7 @@ export default async function profiles(ctx) {
       <form id="pf" class="form" novalidate>
         <div class="avatar-preview" id="ap">${avatar({ name: p?.name || 'A', color }, { size: 84 })}</div>
         <label>Name<input name="name" maxlength="24" required value="${p?.name || ''}" autocomplete="off" placeholder="e.g. Rupa"></label>
-        <label class="check"><input type="checkbox" name="kids" ${p?.kids ? 'checked' : ''}><span>Kids profile — shows only titles rated for children, and can’t post comments</span></label>
+        <label class="check"><input type="checkbox" name="kids" ${p?.kids ? 'checked' : ''}><span>Kids profile — shows only titles rated for children</span></label>
         <div class="swatches" role="radiogroup" aria-label="Colour">${Array.from({ length: AVATAR_COUNT }, (_, i) => html`<button type="button" role="radio" aria-checked="${i === color}" class="swatch ${i === color ? 'on' : ''}" data-c="${i}" style="background:${avatarColor(i)}" aria-label="Colour ${i + 1}"></button>`)}</div>
         <div class="form-status" id="pfs" role="alert"></div>
         <div class="row end">${p && u.profiles.length > 1 ? html`<button type="button" class="btn btn-danger" id="del">Delete</button>` : ''}<button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" type="submit">Save</button></div>

@@ -30,7 +30,7 @@ test('the Admin console includes the CMS while the focused Content Studio remain
   assert.match(adminMain, /import \{ startConsole \} from '\.\/console\.js'/, 'the admin entry point uses it');
   assert.match(studioMain, /import \{ startConsole \} from '\/admin\/js\/console\.js'/, 'so does the studio');
   // Admin keeps its business pages and now exposes the complete CMS in its Content group.
-  for (const page of ['users', 'payments', 'refunds', 'coupons', 'support', 'messages', 'comments', 'analytics', 'notifications', 'cache', 'errors', 'audit'])
+  for (const page of ['users', 'payments', 'refunds', 'coupons', 'support', 'messages', 'analytics', 'notifications', 'cache', 'errors', 'audit'])
     assert.ok(adminMain.includes(`'${page}'`), `the admin sidebar still has ${page}`);
   assert.match(adminMain, /\['catalog', 'Content overview', 'dashboard'\]/, 'the catalog overview is available in Admin');
   for (const page of ['shows', 'videos', 'upcoming', 'top', 'studio']) assert.ok(adminMain.includes(`'${page}'`), `Admin includes ${page}`);

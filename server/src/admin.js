@@ -246,7 +246,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     const u = await userOr404(req.params.id);
     if (req.admin.id === u.id) throw new HttpError(409, 'cannot_lock_yourself_out', 'You can’t delete your own account here — use the site’s Account page.');
     if (u.isAdmin && !u.disabledAt && (await db.adminUsers.countAdmins()) <= 1) throw new HttpError(409, 'last_admin', 'This is the last administrator.');
-    await db.users.remove(u.id); await log(req, 'user.delete', u.email);
+    await db.users.remove(u.id); await log(req, 'user.delete', u.id);
     res.sendStatus(204);
   }));
 
@@ -586,6 +586,24 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     await log(req, 'upload.image', saved.path, { bytes: saved.bytes });
     res.status(201).json({ path: saved.path, bytes: saved.bytes, type: saved.type });
   }));
+  // Broadcast images live in private R2, not uploaded_files/MySQL. Their stable public app URL redirects
+  // to a fresh short-lived R2 GET signature whenever a notification or e-mail client fetches the image.
+  router.post('/uploads/broadcast-image', express.raw({ type: () => true, limit: '10mb' }), wrap(async (req, res) => {
+    if (!r2?.configured || typeof r2.putObject !== 'function') {
+      throw new HttpError(503, 'storage_not_configured', 'Broadcast photo storage (R2) is not configured on this server. Configure R2 with Object Read & Write access, then try again.');
+    }
+    if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the image file as the request body.');
+    const saved = describeImage(req.body); if (!saved) throw bad('Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
+    const key = `broadcast/${saved.name}`;
+    try {
+      await r2.putObject(key, saved.data, { contentType: saved.type, cacheControl: 'public, max-age=31536000, immutable' });
+    } catch (e) {
+      throw new HttpError(502, 'r2_upload_failed', `Could not upload the broadcast photo to Cloudflare R2${e?.statusCode ? ` (HTTP ${e.statusCode})` : ''}. Check the R2 credentials and try again.`, { cause: e });
+    }
+    const publicPath = `r2-assets/${key}`;
+    await log(req, 'upload.broadcast_image', publicPath, { bytes: saved.bytes });
+    res.status(201).json({ path: publicPath, bytes: saved.bytes, type: saved.type });
+  }));
   // Subtitle upload (.vtt or .srt; converted to WebVTT).
   router.post('/uploads/subtitle', express.raw({ type: () => true, limit: '2mb' }), wrap(async (req, res) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the .vtt or .srt file as the request body.');
@@ -607,7 +625,7 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     res.status(201).json({ key: k.key, format: k.format, contentType: k.contentType, uploadUrl: r2.presignPut(k.key, { ttl: 6 * 3600 }), expiresInSeconds: 6 * 3600 });
   }));
 
-  // More admin endpoints (analytics, comments moderation, refund requests, notifications, errors ...) live in admin-extra.js.
+  // More admin endpoints (analytics, refund requests, notifications, support tickets, errors ...) live in admin-extra.js.
   adminExtraRoutes({ router, db, billing, catalog, push, mailer, campaigns, unsubscribeUrlFor, log, logger, siteUrl: siteUrl || billing.config.siteUrl, sms });
   // Credit & referrals (Admin → Promotions). Without a promos collaborator the section is simply absent,
   // exactly like the other optional features — the console hides it when /admin/promos answers 404.
