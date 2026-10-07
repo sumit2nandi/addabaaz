@@ -28,3 +28,19 @@ test('account saved section follows Profiles, with an accessible view-all icon a
   assert.match(read('app/js/ui/saved-list.js'), /progress: false/);
   assert.match(read('app/css/styles.css'), /\.account-saved-track \{[^}]*overflow-x: auto/);
 });
+
+test('saved upcoming cards expose the same removal toggle as saved shows', async () => {
+  const { app } = await import('../../app/js/app.js');
+  const { savedCard } = await import('../../app/js/ui/saved-list.js');
+  const previous = app.user;
+  app.user = { inList: (type, id) => type === 'upcoming' && id === 'soon-one' };
+  try {
+    const { document } = parseHTML(savedCard({ type: 'upcoming', item: { id: 'soon-one', title: 'Soon', poster: 'poster.jpg' } }).s);
+    const button = document.querySelector('.card-quick .list-btn');
+    assert.ok(button);
+    assert.equal(button.getAttribute('data-list'), 'upcoming:soon-one');
+    assert.equal(button.getAttribute('aria-label'), 'Remove from My List');
+    assert.equal(button.getAttribute('aria-pressed'), 'true');
+    assert.equal(document.querySelector('a').getAttribute('href'), '#/soon/soon-one');
+  } finally { app.user = previous; }
+});

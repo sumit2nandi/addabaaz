@@ -10,7 +10,7 @@ export function savedEntries(user, catalog) {
   }).filter(Boolean);
 }
 export function savedCard({ type, item }) {
-  return type === 'show' ? showCard(item) : type === 'video' ? videoCard(item, { progress: false }) : soonCard(item);
+  return type === 'show' ? showCard(item) : type === 'video' ? videoCard(item, { progress: false }) : soonCard(item, { saved: true });
 }
 export function savedListStrip(entries) {
   return html`<section class="account-saved" aria-labelledby="accountSavedTitle">
