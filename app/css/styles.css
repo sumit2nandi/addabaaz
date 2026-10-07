@@ -1183,3 +1183,9 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .auth-entry .auth-icon-field > svg { position: absolute; left: 0; top: 13px; color: var(--muted); pointer-events: none; }
 .auth-entry .form .auth-icon-field input:not([type=checkbox]) { padding-left: 30px; }
 .auth-entry .form input::placeholder { color: var(--muted); opacity: 1; }
+
+/* Compact provider choices; Google uses its official icon-only SDK button. */
+.auth-entry .social.social-compact { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
+.social-compact .btn-social { width: 44px; height: 44px; min-height: 44px; max-width: 44px; flex: 0 0 44px; padding: 0; border-radius: 50%; gap: 0; }
+.social-compact .social-g { width: 44px; min-height: 44px; flex: 0 0 44px; align-items: center; }
+.social-compact .btn-social:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
