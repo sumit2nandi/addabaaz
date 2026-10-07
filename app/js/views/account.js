@@ -15,6 +15,7 @@ import { friendly } from '../errors.js';
 // Draws the page: banners, the profile header, the group list and sign-out.
 export default async function account(ctx) {
   const u = app.user;
+  if (!u.account) { go('/signin?next=/account', { replace: true }); return; }
   ctx.setTitle('Account');
   const p = u.profile;
   const identity = u.supportsAuth ? 'Browsing as a guest — sign in to sync across devices.' : 'Your list and progress are saved on this device.';

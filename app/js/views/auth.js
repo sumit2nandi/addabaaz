@@ -130,7 +130,7 @@ export default async function auth(ctx) {
     if (shown) { box.hidden = false; $('#or', ctx.root).hidden = false; }
   });
   $('#pwt', ctx.root)?.addEventListener('click', () => { const i = $('[name=password]', ctx.root); i.type = i.type === 'password' ? 'text' : 'password'; });
-  $('#authClose', ctx.root).addEventListener('click', () => go(next));   // the × at the top-right closes the form
+  $('#authClose', ctx.root).addEventListener('click', () => go(!u.account && /^\/account(?:[/?]|$)/.test(next) ? '/' : next));   // the × at the top-right closes the form
 
   /* ---------- phone sign-in (SMS OTP) ---------- */
   // The number is sent to the server in the form people type it; the server normalizes it (country code,
