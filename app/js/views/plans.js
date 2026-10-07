@@ -144,7 +144,7 @@ export default async function plans(ctx) {
     const pr = sp ? priceOf(sp) : null;
     // Duration tiles + one pay button (website with payments only — canBuy already implies !isNative).
     const plusCard = html`<div class="plus-card">
-      <h2>ADDABAAZ <em class="premium-word">premium</em></h2>
+      <h2><span class="brand-lockup"><b>ADDA</b><i>BAAZ</i> <em class="premium-word">premium</em></span></h2>
       <p class="muted small">Premium originals, early access &amp; ad-free viewing.</p>
       <ul class="perks">${perks.map((f) => html`<li>${icon('check', { size: 15 })} ${f}</li>`)}</ul>
       <div class="durs" role="radiogroup" aria-label="Billing period">${paid.map((p) => html`<button class="dur ${p.id === sel ? 'is-sel' : ''} ${p.id === cur ? 'is-current' : ''}" data-sel="${p.id}" role="radio" aria-checked="${p.id === sel}">${p.id === 'plus-yearly' ? html`<span class="dur-tag">Best Value</span>` : ''}${p.id === cur ? html`<span class="dur-tag cur">Current</span>` : ''}<b>₹${p.priceINR}</b><small>${p.interval === 'year' ? 'Year' : 'Month'}</small>${p.interval === 'year' ? html`<em>Just ₹${Math.round(p.priceINR / 12)}/month</em>` : ''}</button>`)}</div>

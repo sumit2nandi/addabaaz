@@ -720,6 +720,11 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .premium-word { font-style: italic; font-weight: 800; text-transform: none; letter-spacing: normal; background: linear-gradient(100deg, #7a5200 0%, #d4a017 22%, #ffe9a3 40%, #fffbe8 50%, #ffe9a3 60%, #d4a017 78%, #7a5200 100%); background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 7px rgba(255,200,60,.35)); animation: premium-shine 3.4s linear infinite; }
 @keyframes premium-shine { from { background-position: 0% center; } to { background-position: -200% center; } }
 @media (prefers-reduced-motion: reduce) { .premium-word { animation: none; } }
+/* ADDABAAZ lockup outside the header: white-gradient ADDA + red BAAZ like .brand-text, with the gold premium word as a superscript exponent. */
+.brand-lockup { font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; white-space: nowrap; }
+.brand-lockup b { font-weight: 800; background: linear-gradient(180deg, #fff, #a8a8b4); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.brand-lockup i { font-style: normal; color: var(--accent); }
+.brand-lockup .premium-word { font-size: 12.5px; line-height: 1; vertical-align: super; margin-left: 2px; }
 
 /* ---------- accounts, legal, consent, engagement (v2.6) ---------- */
 .linklike { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; opacity: .85; } .linklike:hover { opacity: 1; }

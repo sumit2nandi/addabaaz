@@ -58,8 +58,14 @@ test('the Premium brand word is italic, bold and glittery gold', () => {
   const plans = read('app/js/views/plans.js');
   const css = read('app/css/styles.css');
 
-  assert.match(plans, /<h2>ADDABAAZ <em class="premium-word">premium<\/em><\/h2>/,
-    'the purchase card titles it ADDABAAZ premium');
+  assert.match(plans, /<h2><span class="brand-lockup"><b>ADDA<\/b><i>BAAZ<\/i> <em class="premium-word">premium<\/em><\/span><\/h2>/,
+    'the purchase card titles it with the header-style lockup and a superscript premium');
+  assert.match(css, /\.brand-lockup b \{[^}]*background-clip: text/,
+    '...ADDA in the header white gradient');
+  assert.match(css, /\.brand-lockup i \{[^}]*color: var\(--accent\)/,
+    '...BAAZ in header red');
+  assert.match(css, /\.brand-lockup \.premium-word \{[^}]*font-size: 12\.5px[^}]*vertical-align: super/,
+    '...premium small and raised like an exponent');
   assert.match(plans, /: \{ title: 'Choose your plan', subtitle: 'Pay once for the period/,
     'the header opens directly on the title, with no brand eyebrow above it');
   assert.doesNotMatch(plans, /tag: html`ADDABAAZ/,
