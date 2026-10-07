@@ -8,7 +8,7 @@ import { showCard, videoCard, showMeta, emptyState } from '../ui/components.js';
 const PAGE = 24;
 export default async function browse(ctx) {
   const cat = app.catalog;
-  const st = { genre: ctx.query.genre || '', show: ctx.query.show || '', sort: ctx.query.sort || 'new', n: PAGE };
+  const st = { genre: ctx.query.genre || '', access: ctx.query.access || '', show: ctx.query.show || '', sort: ctx.query.sort || 'new', n: PAGE };
   ctx.setTitle('Shows & Episodes');
   ctx.root.innerHTML = html`
     <div class="page">
@@ -26,6 +26,7 @@ export default async function browse(ctx) {
   const sync = () => {
     const q = new URLSearchParams();
     if (st.genre) q.set('genre', st.genre);
+    if (st.access) q.set('access', st.access);
     if (st.show) q.set('show', st.show);
     if (st.sort !== 'new') q.set('sort', st.sort);
     replaceUrl('/shows' + (q.toString() ? '?' + q : ''));
@@ -36,11 +37,11 @@ export default async function browse(ctx) {
     const showFilters = $('#showFilters', ctx.root), showResults = $('#showsResults', ctx.root);
     const episodeFilters = $('#episodeFilters', ctx.root), episodeResults = $('#episodesResults', ctx.root);
 
-    showFilters.innerHTML = html`<div class="filter-group">${chip('All', 'genre', '')}${cat.genres.map((g) => chip(g, 'genre', g))}</div>`.s;
-    const shows = cat.shows.filter((s) => !st.genre || (s.genres || []).includes(st.genre));
+    showFilters.innerHTML = html`<div class="filter-group">${chip('All', 'genre', '')}${chip('Premium', 'access', 'premium')}${chip('Free', 'access', 'free')}${cat.genres.map((g) => chip(g, 'genre', g))}</div>`.s;
+    const shows = cat.shows.filter((s) => (!st.genre || (s.genres || []).includes(st.genre)) && (!st.access || (s.access || 'free') === st.access));
     showResults.innerHTML = shows.length ? html`<div class="grid grid-shows">${shows.map((s) => html`<div class="show-tile">${showCard(s)}<div class="show-tile-info"><a href="#/show/${s.id}">${s.title}</a>${showMeta(s)}</div></div>`)}</div>
       ${cat.upcoming.length ? html`<h3 class="sub-h">Coming soon</h3><div class="grid grid-shows">${cat.upcoming.map((u) => html`<a class="show-tile" href="#/soon/${u.id}"><div class="card card-poster"><div class="poster"><img src="${u.poster}" alt="${u.title}" loading="lazy"><span class="chip chip-soon">Coming soon</span></div></div><div class="show-tile-info"><span>${u.title}</span></div></a>`)}</div>` : ''}`.s
-      : emptyState({ title: 'No shows in this genre yet' }).s;
+      : emptyState({ title: 'No shows match these filters' }).s;
 
     const episodeShows = cat.shows.filter((s) => cat.episodes(s.id).length);
     episodeFilters.innerHTML = html`<div class="filter-group">${chip('All shows', 'show', '')}${episodeShows.map((s) => chip(s.titleEn || s.title, 'show', s.id))}</div>
@@ -57,7 +58,7 @@ export default async function browse(ctx) {
   };
 
   ctx.root.addEventListener('click', (e) => {
-    const c = e.target.closest('[data-f]'); if (c) { st[c.dataset.f] = c.dataset.v; st.n = PAGE; draw(); return; }
+    const c = e.target.closest('[data-f]'); if (c) { st[c.dataset.f] = c.dataset.v; if (c.dataset.f === 'genre' && !c.dataset.v) st.access = ''; st.n = PAGE; draw(); return; }
     if (e.target.closest('#more')) { st.n += PAGE; draw(); }
   });
   ctx.root.addEventListener('change', (e) => { if (e.target.id === 'sortSel') { st.sort = e.target.value; st.n = PAGE; draw(); } });
