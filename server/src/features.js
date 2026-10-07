@@ -287,9 +287,9 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         if (last && Date.now() - last.getTime() < 60_000) throw new HttpError(429, 'too_soon', 'We just sent one — please wait a minute before asking again.');
         await sendVerification(req.user, { strict: true }); res.status(202).json({ ok: true });
       }));
-      // Phone-verified accounts can add or update a contact address; the current address remains active until the new one is confirmed.
+      // Accounts with a verified email or phone can update their email; the current address remains active until the new one is confirmed.
       api.post('/me/email', authLimit, wrap(async (req, res) => {
-        if (!req.user.phoneVerifiedAt) throw new HttpError(409, 'phone_signin_required', 'Add or update a contact email after verifying a mobile number on this account.');
+        if (!req.user.phoneVerifiedAt && !req.user.emailVerifiedAt) throw new HttpError(403, 'email_unverified', 'Verify your current email address before changing it.');
         const { email, ok } = normalizeEmail(req.body?.email);
         if (!ok) throw bad('Enter a valid email address.', 'invalid_email');
         if (isPhoneEmail(email)) throw bad('Use an email address you can receive mail at.', 'invalid_email');

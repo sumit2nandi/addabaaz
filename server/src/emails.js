@@ -118,7 +118,7 @@ export function verifyEmailEmail(o) {
 export function phoneAccountEmailVerification(o) {
   return layout({
     subject: 'Confirm the email for your ADDABAAZ account',
-    paragraphs: [hello(o.name), 'You asked to add this address to an account that signs in by SMS. Confirm it within 1 hour to use it for account and billing emails; SMS sign-in will continue to work as before.', 'If you didn’t make this request, ignore this email — the address will not be added.'],
+    paragraphs: [hello(o.name), 'You asked to use this email address for your ADDABAAZ account. Confirm it within 1 hour. Your current email stays active until you confirm the new one.', 'If you didn’t make this request, ignore this email — the address will not be added.'],
     button: { label: 'Confirm this email', url: o.url }, footer: help(o),
   });
 }

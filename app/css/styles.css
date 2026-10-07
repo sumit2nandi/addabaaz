@@ -1071,3 +1071,9 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
   .profile-page .profile-head .profile-actions { grid-column: 1 / -1; width: 100%; margin-left: 0; justify-content: flex-start; }
   .profile-page .profile-head .profile-actions .btn { flex: 1 1 130px; white-space: nowrap; text-align: center; }
 }
+
+.profile-details-edit { display: inline-flex; vertical-align: middle; align-items: center; justify-content: center; width: 32px; height: 32px; margin-left: 6px; border-radius: 50%; color: var(--muted); }
+.profile-details-edit:hover { background: var(--panel-2); color: #fff; }
+.account-details-page > h1 { font-size: 24px; margin-bottom: 8px; }
+.account-details-page > .card-panel { margin-top: 20px; }
+.account-details-page .card-panel > p { overflow-wrap: anywhere; }

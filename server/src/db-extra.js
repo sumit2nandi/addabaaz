@@ -61,7 +61,7 @@ export function extraDb({ q, tx, iso }) {
         if (!hint || !(await t.query('SELECT id FROM users WHERE id = ? FOR UPDATE', [hint.user_id]))[0]) return null;
         const row = (await t.query('SELECT user_id, email, email_norm FROM email_change_tokens WHERE token_hash = ? AND expires_at > UTC_TIMESTAMP(3) FOR UPDATE', [tokenHash]))[0];
         if (!row) return null;
-        const updated = await t.query('UPDATE users SET email = ?, email_norm = ?, email_verified_at = UTC_TIMESTAMP(3) WHERE id = ? AND phone_verified_at IS NOT NULL',
+        const updated = await t.query('UPDATE users SET email = ?, email_norm = ?, email_verified_at = UTC_TIMESTAMP(3) WHERE id = ? AND disabled_at IS NULL AND (phone_verified_at IS NOT NULL OR email_verified_at IS NOT NULL)',
           [row.email, row.email_norm, row.user_id]);
         // Once redeemed (or no longer applicable), remove the pending address and hash in this same transaction.
         await t.query('DELETE FROM email_change_tokens WHERE token_hash = ?', [tokenHash]);

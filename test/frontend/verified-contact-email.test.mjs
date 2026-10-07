@@ -31,7 +31,7 @@ test('the email link selects the contact-email confirmation flow and keeps billi
 
   assert.match(recover, /ctx\.query\.emailChange === '1'/);
   assert.match(recover, /verifyAccountEmail\(token\)/);
-  assert.match(recover, /SMS sign-in stays the same/);
+  assert.match(recover, /Account and billing emails can now be sent here/);
   assert.match(billing, /u\.account\.emailIsPlaceholder \? 'Refund requested — check this page for updates'/);
   assert.match(billing, /Confirm an email in Account to send documents by email/);
   assert.match(billingServer, /if \(isPhoneEmail\(user\.email\)\) throw new BillingError\(409, 'email_not_verified'/);
