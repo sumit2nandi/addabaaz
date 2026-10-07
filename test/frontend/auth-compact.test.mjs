@@ -34,3 +34,11 @@ test('auth fields use minimalist underlines including the phone prefix group', (
   assert.match(minimal, /\.otp-phone:focus-within/);
   assert.match(minimal, /\.pw input:not\(\[type=checkbox\]\) \{ padding-right: 46px;/);
 });
+
+test('sign-in and registration share a circular arrow submit with an accessible visible label', () => {
+  const source = read('app/js/views/auth.js');
+  assert.match(source, /id="authSubmitLabel">\$\{signup \? 'Create account' : 'Sign in'\}/);
+  assert.match(source, /class="btn btn-primary auth-submit-circle" type="submit" id="asub" aria-labelledby="authSubmitLabel"/);
+  assert.match(source, /aria-labelledby="authSubmitLabel">\$\{icon\('right', \{ size: 26 \}\)\}/);
+  assert.match(read('app/css/styles.css'), /\.auth-submit-circle \{ width: 58px; height: 58px;[^}]*border-radius: 50%/);
+});

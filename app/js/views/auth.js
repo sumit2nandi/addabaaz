@@ -74,7 +74,7 @@ export default async function auth(ctx) {
         <label>Email<input name="email" type="email" autocomplete="email" required placeholder="name@example.com" inputmode="email"></label>
         <label>Password<span class="pw"><input name="password" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" required minlength="8" placeholder="${signup ? 'At least 8 characters' : 'Your password'}"><button type="button" class="icon-btn" id="pwt" aria-label="Show password">${icon('eye', { size: 18 })}</button></span></label>
         ${signup ? '' : html`<a class="forgot-link" href="#/forgot">Forgot password?</a>`}
-        <button class="btn btn-primary btn-lg block" type="submit" id="asub">${signup ? 'Create account' : 'Sign in'}</button>
+        <div class="auth-submit-row"><span id="authSubmitLabel">${signup ? 'Create account' : 'Sign in'}</span><button class="btn btn-primary auth-submit-circle" type="submit" id="asub" aria-labelledby="authSubmitLabel">${icon('right', { size: 26 })}</button></div>
       </div>
 
       <div class="auth-busy" id="asBusy" hidden><div class="spinner"></div><p id="asBusyMsg">Signing you in…</p></div>
