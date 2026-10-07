@@ -640,6 +640,8 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
   body { padding-bottom: 0; } .tabbar { display: none; } .nav { display: flex; } .toasts { bottom: 28px; }
 }
 @media (max-width: 899px) {
+  /* Search is already available in the floating mobile navigation. */
+  .topbar .search-link { display: none; }
   .topbar { gap: 12px; } .brand-text { font-size: 17px; } #installBtn { display: none !important; }
   .hero { min-height: 74vh; min-height: 74svh; --hero-dock-bottom: 48px; } .hero-desc { -webkit-line-clamp: 3; font-size: 14.5px; }
   .hero-actions .btn-lg { padding: 11px 18px; font-size: 15px; } .hero-actions > .btn-glass:last-child { display: none; }

@@ -89,3 +89,12 @@ test('the stylesheet has no scroll-driven hide state for the tab bar', () => {
   assert.match(rule, /position:\s*fixed/, 'the tab bar is a fixed (floating) element');
   assert.equal(/transition:/.test(rule), false, 'the tab bar never animates its position');
 });
+
+test('header search hides at the floating-menu breakpoint, while both search links remain available in their layouts', () => {
+  const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
+  const shell = fs.readFileSync(new URL('../../app/js/ui/shell.js', import.meta.url), 'utf8');
+  assert.match(css, /@media \(max-width: 899px\) \{\s*\/\*[^]*?\*\/\s*\.topbar \.search-link \{ display: none; \}/);
+  assert.match(css, /@media \(min-width: 900px\) \{[^}]*\} \.tabbar \{ display: none; \}/);
+  assert.match(shell, /\['\/search', 'Search', 'search'\]/);
+  assert.match(shell, /class="icon-btn search-link" href="#\/search"/);
+});
