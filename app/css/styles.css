@@ -727,6 +727,8 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .brand-lockup .premium-word { font-size: 12.5px; line-height: 1; vertical-align: super; margin-left: 2px; }
 /* Standalone superscript exponent: the small raised premium word outside a brand lockup. */
 .premium-sup { font-size: 12.5px; line-height: 1; vertical-align: super; }
+/* Inside the header brand (a flex row, where vertical-align does not apply) the exponent pins to the top instead. */
+.brand-text .premium-sup { align-self: flex-start; margin-left: 3px; }
 
 /* ---------- accounts, legal, consent, engagement (v2.6) ---------- */
 .linklike { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; opacity: .85; } .linklike:hover { opacity: 1; }
