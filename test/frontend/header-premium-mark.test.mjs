@@ -38,4 +38,8 @@ test('header shows the premium exponent for subscribers, hides it otherwise', as
   const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
   assert.match(css, /\.brand-text \.premium-sup \{[^}]*align-self: flex-start/,
     'the header exponent pins to the top of the flex-row brand');
+
+  const main = fs.readFileSync(new URL('../../app/js/main.js', import.meta.url), 'utf8');
+  assert.match(main, /app\.user\.on\('subscription', renderProfileMenu\)/,
+    'buying (or ending) a plan re-renders the menus, so the header exponent flips with no reload');
 });

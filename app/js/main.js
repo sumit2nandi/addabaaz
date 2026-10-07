@@ -53,6 +53,7 @@ async function boot() {
   app.user.on('library', () => syncButtons(document));
   app.user.on('profile', () => { applyKids(); renderProfileMenu(); });
   app.user.on('account', renderProfileMenu);
+  app.user.on('subscription', renderProfileMenu);
   // The API said our token is no longer valid: sign out locally and tell the user.
   window.addEventListener('ab:unauthorized', () => { app.user.signOut().then(() => toast('Your session expired. Please sign in again.')); });
 
