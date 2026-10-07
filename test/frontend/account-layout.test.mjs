@@ -51,8 +51,8 @@ test('unsubscribed website viewers get a Subscribe banner above the settings gri
     'the banner sits above the profile card');
   assert.match(account, /u\.isPremium \? html`<em class="premium-word premium-sup">premium<\/em>` : html`<em class="pill free">Free<\/em>`/,
     'the profile name carries a Free pill or a superscript premium exponent');
-  assert.match(account, /html`ADDABAAZ <em class="premium-word premium-sup">premium<\/em>`/,
-    'the Access row raises premium as a superscript exponent');
+  assert.doesNotMatch(account, /<h2 class="sub-h">Access<\/h2>/,
+    'the Access section is gone (billing lives on the plans page now)');
   assert.match(css, /\.premium-sup \{[^}]*font-size: 12\.5px[^}]*vertical-align: super/,
     'premium exponents are small and raised');
   assert.match(account, /<h2>Subscribe to <em class="premium-word">premium<\/em><\/h2>/,

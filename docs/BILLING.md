@@ -22,7 +22,7 @@ Every successful payment produces a numbered PDF, in the same database transacti
 - **Numbering** is gapless and restarts every financial year (1 Apr–31 Mar, IST). Counters are row-locked, so simultaneous payments get consecutive numbers (there is a test for that).
 - **Discounts.** With a coupon, GST is computed on what was actually paid; the invoice shows list price and coupon.
 - **Free grants** (100%-off coupons) charge nothing and produce no invoice.
-- Buyers download invoices in **Account → Billing & invoices** (`GET /api/v1/invoices/:id/pdf`, owner only), can have them emailed again, and get the PDF attached to the receipt email.
+- Buyers download invoices in **Plans → Billing & invoices** (`GET /api/v1/invoices/:id/pdf`, owner only), can have them emailed again, and get the PDF attached to the receipt email.
 - **Retention.** Invoices and credit notes are kept for the statutory period even if the buyer deletes their account: the link to the user is cut (`user_id → NULL`) but the name, email, GSTIN and state printed on the document stay in the row. Say so in your privacy policy.
 - **Not built:** e-invoicing (IRN/QR) — only needed above the turnover threshold that applies to you; filing returns; TCS under section 52 (if you sell through a marketplace); HSN/SAC-wise summaries. Use the CSV export below for your returns.
 

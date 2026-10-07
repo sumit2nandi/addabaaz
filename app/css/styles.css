@@ -559,6 +559,8 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 /* Plans checkout card: one Premium card with duration tiles + a single pay button (Zee-style). */
 .plus-card { background: var(--panel); border: 1px solid var(--border-2); border-radius: 20px; padding: 22px 20px; margin-top: 20px; max-width: 680px; }
 .plus-card h2 { font-size: 21px; }
+/* Billing shortcut below the plan options: same width as the cards, breathing room above. */
+.plans-bill { margin-top: 16px; max-width: 680px; }
 .perks { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2px 14px; margin: 12px 0 16px; }
 .perks li { display: flex; gap: 8px; align-items: flex-start; color: var(--text-2); font-size: 13.5px; margin-bottom: 7px; }
 .perks li svg { color: var(--ok); margin-top: 3px; flex: none; }

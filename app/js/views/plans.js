@@ -170,6 +170,7 @@ export default async function plans(ctx) {
       ${status}${why}
       ${!isNative && creditPaise > 0 ? html`<div class="notice ok">${icon('gift', { size: 18 })}<span>You have <b>${inr(creditPaise)}</b> of ADDABAAZ credit${offer?.expiryDays ? html` — it expires ${offer.expiryDays} days after it was added` : ''}. Tick “use my credit” at checkout and it comes straight off the price.</span></div>` : ''}
       ${canBuy ? plusCard : legacyCards}
+      ${u.account ? html`<div class="card-panel list plans-bill"><a class="row-link" href="#/billing">${icon('download', { size: 22 })}<span><b>Billing &amp; invoices</b><small>GST invoices, credit notes and refunds</small></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>` : ''}
       ${s.demo ? html`<p class="muted" style="margin-top:18px"><button class="btn btn-ghost" data-cancel>End demo plan</button></p>` : ''}
       <p class="muted" style="margin-top:18px;font-size:13px">${isNative
         ? html`No purchase can be started or completed in this app. Existing members can view past invoices and refunds here. ${u.account ? html`<a href="#/billing">Billing & invoices</a>` : ''}`

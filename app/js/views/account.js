@@ -1,7 +1,7 @@
 // Account page (#/account): profile details, subscription, preferences, security, devices and the danger zone (delete account).
 import { app } from '../app.js';
 import { CONFIG } from '../config.js';
-import { html, $, fmtDate } from '../util.js';
+import { html, $ } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast, confirmSignOut } from '../ui/components.js';
 import { confirmDialog } from '../ui/dialog.js';
@@ -15,9 +15,6 @@ export default async function account(ctx) {
   const u = app.user;
   ctx.setTitle('Account');
   const p = u.profile;
-  const plan = u.subscription?.planId || 'free';
-  const link = (href, ic, label, sub = '') => html`<a class="row-link" href="${href}">${icon(ic, { size: 22 })}<span><b>${label}</b>${sub ? html`<small>${sub}</small>` : ''}</span>${icon('right', { size: 18, cls: 'chev' })}</a>`;
-
   const extras = accountExtras();
   ctx.root.innerHTML = html`<div class="page page-narrow account-page">
     ${!u.supportsAuth ? html`<section class="card-panel notice" role="status"><div>${icon('info', { size: 22 })}</div><div><b>Local-only mode</b><p class="muted">This app isn’t connected to ADDABAAZ cloud. Profiles and settings stay on this phone; sign-in, sync, and push notifications need a cloud connection.</p></div></section>` : ''}
@@ -40,7 +37,6 @@ export default async function account(ctx) {
         </div>
       </section>
 
-      ${u.supportsAuth ? html`<section class="account-section"><h2 class="sub-h">Access</h2><div class="card-panel list">${link('#/plans', 'crown', plan === 'free' ? 'Free access' : html`ADDABAAZ <em class="premium-word premium-sup">premium</em>`, plan === 'free' ? (isNative ? 'View your account access' : 'Subscribe to watch premium originals') : (u.subscription.expiresAt ? `Active until ${fmtDate(u.subscription.expiresAt)}` : (isNative ? 'View your access' : 'Manage your plan')))}${u.account ? link('#/billing', 'download', 'Billing & invoices', 'GST invoices, credit notes and refunds') : ''}</div></section>` : ''}
 
       <section class="account-section">
         <h2 class="sub-h">App</h2>

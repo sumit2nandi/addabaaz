@@ -22,6 +22,12 @@ test('website checkout is one Plus card with duration tiles and a single pay but
     'paying reuses the existing purchase flow with the selected plan');
   assert.match(plans, /\$\{canBuy \? plusCard : legacyCards\}/,
     'the selector renders only when buying is possible');
+  assert.match(plans, /\$\{canBuy \? plusCard : legacyCards\}\s*\$\{u\.account \? html`<div class="card-panel list plans-bill">/,
+    'a billing shortcut sits directly below the plan options for signed-in viewers');
+  assert.match(plans, /<a class="row-link" href="#\/billing">.*Billing &amp; invoices/,
+    '...leading to Billing & invoices');
+  assert.match(css, /\.plans-bill \{[^}]*max-width: 680px/,
+    '...at the same width as the cards');
   assert.match(css, /\.dur\.is-sel \{[^}]*box-shadow/,
     'the selected tile glows');
   assert.match(css, /\.dur\.is-current \{[^}]*border-color: var\(--gold\)/,
