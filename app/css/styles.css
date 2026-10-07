@@ -1120,7 +1120,8 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .profile-page .profile-head .profile-email { margin-top: 0; line-height: 1.35; }
 
 /* Compact sign-in/sign-up only; recovery forms keep their existing layout. */
-.auth-entry { grid-template-columns: minmax(0, 440px); justify-content: center; }
+.auth-page.auth-entry { min-height: 0; grid-template-columns: minmax(0, 440px); justify-content: center; align-content: start; background: none; padding: 28px var(--pad) 40px; }
+.auth-entry .auth-card { background: transparent; border: 0; box-shadow: none; }
 .auth-entry #af { gap: 12px; }
 .auth-entry #af #emailPane, .auth-entry #af #otpPane,
 .auth-entry #af #otpPhoneStep, .auth-entry #af #otpCodeStep { gap: 12px; }
@@ -1129,11 +1130,8 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .auth-entry .auth-footer-links { display: grid; gap: 8px; text-align: center; }
 .auth-entry .pw input { padding-right: 46px; }
 @media (max-width: 599px) {
-  .auth-page.auth-entry { min-height: 100svh; align-content: start; gap: 12px; padding: calc(12px + var(--sat)) 14px calc(16px + var(--sab)); }
-  .auth-entry .auth-brand { gap: 9px; }
-  .auth-entry .auth-brand img { width: 36px; height: 36px; }
-  .auth-entry .auth-brand .brand-text { font-size: 17px; }
-  .auth-entry .auth-card { width: 100%; padding: 18px 16px; border-radius: 16px; }
+  .auth-page.auth-entry { min-height: 0; align-content: start; gap: 12px; padding: 20px var(--pad) 40px; }
+  .auth-entry .auth-card { width: 100%; padding: 8px 0; border-radius: 0; }
   .auth-entry .auth-card h1 { font-size: 23px; padding-right: 36px; }
   .auth-entry #authSub { font-size: 13px; line-height: 1.4; }
   .auth-entry #af { gap: 10px; }

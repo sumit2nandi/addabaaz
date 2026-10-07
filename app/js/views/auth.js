@@ -23,8 +23,7 @@ export default async function auth(ctx) {
   // method is used, so both sides get their bonus (see server/src/promos.js).
   const ref = String(ctx.query.ref || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
   ctx.setTitle(signup ? 'Create account' : 'Sign in');
-  document.body.classList.add('bare'); ctx.onCleanup(() => document.body.classList.remove('bare'));
-  if (!u.supportsAuth) { ctx.root.innerHTML = html`<div class="auth-page"><div class="empty"><h2>Accounts aren’t enabled</h2><p>This copy of ADDABAAZ runs in local mode, so your list and progress are saved on this device. Connect the ADDABAAZ API to enable sign-in and cross-device sync.</p><a class="btn btn-primary" href="#/">Back to home</a></div></div>`.s; return; }
+  if (!u.supportsAuth) { ctx.root.innerHTML = html`<div class="page"><div class="empty"><h2>Accounts aren’t enabled</h2><p>This copy of ADDABAAZ runs in local mode, so your list and progress are saved on this device. Connect the ADDABAAZ API to enable sign-in and cross-device sync.</p><a class="btn btn-primary" href="#/">Back to home</a></div></div>`.s; return; }
   if (u.account) { go('/account', { replace: true }); return; }
 
   // Which methods the server offers. `/auth/providers` never throws; the email form is the floor.
@@ -39,8 +38,7 @@ export default async function auth(ctx) {
   // with "ctx.stale is not a function".
   if (ctx.stale?.()) return;
 
-  ctx.root.innerHTML = html`<div class="auth-page auth-entry">
-    <a href="#/" class="auth-brand"><img src="media/icons/icon-96.png" width="56" height="56" alt=""><span class="brand-text"><b>ADDA</b><i>BAAZ</i></span></a>
+  ctx.root.innerHTML = html`<div class="page auth-page auth-entry">
     <form class="auth-card form" id="af" novalidate>
       <button type="button" class="auth-close" id="authClose" aria-label="Close">${icon('x', { size: 16 })}</button>
       <h1>${signup ? 'Create account' : 'Welcome back'}</h1>
