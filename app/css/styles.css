@@ -1195,3 +1195,6 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .account-current-plan .account-field-label { font-size: 13px; line-height: 1.5; }
 .account-current-plan .account-plan-name { margin: 6px 0 4px; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
 .account-current-plan .icon-btn { flex-shrink: 0; }
+
+/* No saved titles: the account's My List slot must not reserve any space. */
+#accountSavedList:empty { display: none; }

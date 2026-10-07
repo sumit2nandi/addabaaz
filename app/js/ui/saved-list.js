@@ -13,8 +13,9 @@ export function savedCard({ type, item }) {
   return type === 'show' ? showCard(item) : type === 'video' ? videoCard(item, { progress: false }) : soonCard(item, { saved: true });
 }
 export function savedListStrip(entries) {
+  if (!entries.length) return html``;
   return html`<section class="account-saved" aria-labelledby="accountSavedTitle">
     <div class="profile-selector-head"><h2 id="accountSavedTitle">My List</h2><a class="icon-btn" href="#/list" aria-label="View all saved items" title="View all saved items">${icon('right', { size: 20 })}</a></div>
-    ${entries.length ? html`<div class="account-saved-track" role="list" tabindex="0" aria-label="Saved shows and videos">${entries.slice(0, 12).map((entry) => html`<div class="account-saved-item ${entry.type === 'video' ? 'saved-video' : 'saved-poster'}" role="listitem">${savedCard(entry)}</div>`)}</div>` : html`<p class="muted small">Nothing saved yet. Tap + on a show or video to add it to My List.</p>`}
+    <div class="account-saved-track" role="list" tabindex="0" aria-label="Saved shows and videos">${entries.slice(0, 12).map((entry) => html`<div class="account-saved-item ${entry.type === 'video' ? 'saved-video' : 'saved-poster'}" role="listitem">${savedCard(entry)}</div>`)}</div>
   </section>`;
 }

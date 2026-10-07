@@ -16,11 +16,12 @@ test('My List includes explicit saves only, ignores unavailable and unknown item
   assert.deepEqual(savedEntries(user, catalog), []);
 });
 
-test('account saved section follows Profiles, with an accessible view-all icon and empty state', () => {
-  const { document } = parseHTML(savedListStrip([]).s);
+test('account saved section is hidden when empty and shows the view-all icon only with items', () => {
+  assert.equal(savedListStrip([]).s, '');
+  const { document } = parseHTML(savedListStrip([{ type: 'upcoming', item: { id: 'soon', title: 'Soon', poster: 'poster.jpg' } }]).s);
   assert.equal(document.querySelector('a').getAttribute('href'), '#/list');
   assert.equal(document.querySelector('a').getAttribute('aria-label'), 'View all saved items');
-  assert.match(document.textContent || document.toString(), /Nothing saved yet/);
+  assert.equal(document.querySelectorAll('[role="listitem"]').length, 1);
   const account = read('app/js/views/account.js');
   assert.match(account, /\$\{profileStrip\(u\)\}\s*<div id="accountSavedList">/);
   assert.match(account, /u.on\('library'/);
