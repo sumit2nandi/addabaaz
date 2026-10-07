@@ -1,18 +1,51 @@
-// A completed custom pull-to-refresh reloads the current page; its startup fetch must bypass caches
-// so video changes saved in Admin are visible immediately. The browser-native gesture stays disabled.
-// The reload is flagged as an in-app refresh so it must NOT replay the launch splash (splash = first launch only).
+// Pull-to-refresh refreshes the page IN PLACE.
+//
+// A reload re-runs app start-up, so the WebView painted the launch screen again (the brand-red splash)
+// and the page the viewer was looking at vanished while the catalog came down. A completed pull now
+// asks the app for a soft refresh (main.js `softRefresh` → `router.refresh()`): the catalog is re-read
+// with cache-busting (Admin edits show up immediately) and the current page is redrawn from it. No
+// reload → no launch screen, no blank frame, same URL, same history/back depth, same reading position.
+//
+// `softRefresh` reports what happened, and the gesture acts on it: 'refreshed' (done), 'stale' (nothing
+// could be read — the page is kept, the toast has already explained why) and 'restart' (the app is not
+// on the live catalog, so a fresh start is the only way — main.js only asks for that once the API
+// answers again).
+//
+// `location.reload()` survives as the last-resort fallback (no soft refresh in the running bundle, it
+// threw, or the app needs the restart). Even that reload is flagged (sessionStorage `ab:refresh`, read
+// by app/refresh-flag.js) so it cannot replay the launch artwork either.
+//
+// The browser-native pull-to-refresh gesture stays disabled; this custom gesture is the only one.
 // Run: node --test test/frontend/ptr-refresh.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { parseHTML } from 'linkedom';
 
-const { document, window } = parseHTML('<!doctype html><html><head></head><body></body></html>');
+/* ---------- DOM harness ---------- */
+// #boot sits inside #view exactly as in index.html: the launch screen the viewer must never see again
+// during a refresh, and the node a reload would put back on screen.
+const { document, window } = parseHTML('<!doctype html><html><head></head><body><main id="view"><div id="boot" class="boot"></div></main><div id="announcer"></div><div id="toasts"></div></body></html>');
 globalThis.document = document;
 globalThis.window = window;
+window.matchMedia = () => ({ matches: false });
+globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+globalThis.IntersectionObserver = class { observe() {} disconnect() {} unobserve() {} };
+globalThis.requestAnimationFrame = (fn) => setTimeout(() => fn(0), 0);
+window.requestAnimationFrame = globalThis.requestAnimationFrame;
 let reloads = 0;
-globalThis.location = { reload: () => { reloads++; }, protocol: 'https:', href: 'https://t.in/', hash: '', search: '', pathname: '/' };
+globalThis.location = { reload: () => { reloads++; }, protocol: 'https:', origin: 'https://t.in', href: 'https://t.in/#/', hash: '#/', search: '', pathname: '/' };
 window.location = globalThis.location;
+globalThis.localStorage = window.localStorage ?? { getItem: () => null, setItem() {}, removeItem() {} };
+globalThis.sessionStorage = globalThis.sessionStorage ?? { getItem: () => null, setItem() {}, removeItem() {} };
+// linkedom has no session history: the router touches scrollRestoration/pushState/replaceState.
+globalThis.history = window.history ?? { scrollRestoration: 'auto', length: 1, state: null, pushState() {}, replaceState() {}, back() {} };
+window.history = globalThis.history;
+const scrolls = [];
+window.scrollTo = (x, y) => scrolls.push(typeof x === 'object' ? { ...x } : { top: y });
+Object.defineProperty(window, 'scrollY', { configurable: true, writable: true, value: 0 });
+globalThis.scrollTo = window.scrollTo;
+
 const store = {};
 globalThis.sessionStorage = {
   getItem: (k) => (k in store ? store[k] : null),
@@ -20,6 +53,7 @@ globalThis.sessionStorage = {
   removeItem: (k) => { delete store[k]; },
 };
 
+const { app } = await import('../../app/js/app.js');
 const { initPullToRefresh } = await import('../../app/js/ui/ptr.js');
 initPullToRefresh();
 
@@ -28,32 +62,182 @@ const touch = (type, y) => {
   e.touches = y == null ? [] : [{ clientY: y }];
   document.dispatchEvent(e);
 };
-// PTR lets the indicator appear for 220 ms before calling location.reload().
-const tick = () => new Promise((r) => setTimeout(r, 240));
+// A completed pull spins the indicator while it refreshes, and holds it for a beat (MIN_SPIN) so the
+// gesture feels acknowledged even when the data lands instantly.
+const settle = () => new Promise((r) => setTimeout(r, 520));
+const pull = async () => { touch('touchstart', 20); touch('touchmove', 140); touch('touchend'); await settle(); };
 
-test('pulling down past the threshold reloads the current page', async () => {
-  const before = reloads;      // counts are per-gesture: the tests must not depend on run order
-  touch('touchstart', 20);
-  touch('touchmove', 140);          // dy = 120 > threshold 88
-  touch('touchend');
-  await tick();
-  assert.equal(reloads - before, 1, 'the completed pull called location.reload()');
-  assert.ok(document.getElementById('ptr'), 'the pull indicator is present while reload starts');
-});
-
-test('a completed pull flags the reload as an in-app refresh so the launch splash is not replayed', async () => {
-  delete store['ab:refresh'];   // the previous test's reload: refresh-flag.js consumed its flag
-  assert.equal(store['ab:refresh'], undefined, 'no flag before the gesture');
+/* ---------- the gesture ---------- */
+test('a completed pull refreshes the app in place — no reload, so no launch screen', async () => {
   const before = reloads;
-  touch('touchstart', 20);
-  touch('touchmove', 140);          // dy = 120 > threshold 88
-  touch('touchend');
-  await tick();
-  assert.equal(reloads - before, 1);
-  assert.equal(store['ab:refresh'], '1', 'the flag is planted before the reload so the reloading page skips the splash');
+  const calls = [];
+  app.softRefresh = async () => { calls.push('refresh'); return 'refreshed'; };
+  await pull();
+  assert.deepEqual(calls, ['refresh'], 'the pull asked the app for a soft refresh');
+  assert.equal(reloads - before, 0, 'the document was never reloaded — there is no launch screen to replay');
+  assert.equal(document.getElementById('ptr').classList.contains('on'), false, 'and the indicator is put away when it is done');
 });
 
-test('the refresh flag swaps the launch splash for the compact loader (and applies to one reload only)', () => {
+test('the indicator stays up while the refresh is running', async () => {
+  let resolveRefresh;
+  app.softRefresh = () => new Promise((resolve) => { resolveRefresh = resolve; });
+  touch('touchstart', 20);
+  touch('touchmove', 140);
+  touch('touchend');
+  await new Promise((r) => setTimeout(r, 60));
+  const indicator = document.getElementById('ptr');
+  assert.ok(indicator.classList.contains('on'), 'the spinner is visible while the catalog is being re-read');
+  assert.equal(indicator.style.transform, 'translateY(0px)', 'held at the top of the screen');
+  resolveRefresh('refreshed');
+  await settle();
+  assert.equal(indicator.classList.contains('on'), false, 'and slides away once the page has been refreshed');
+});
+
+test('a refresh that could not complete leaves the page alone instead of reloading it', async () => {
+  const before = reloads;
+  app.softRefresh = async () => 'stale';      // offline: softRefresh already told the viewer why
+  await pull();
+  assert.equal(reloads - before, 0, 'no reload: the page the viewer is looking at is not thrown away for nothing');
+  assert.equal(document.getElementById('ptr').classList.contains('on'), false, 'the indicator still goes away');
+});
+
+test('an app that never reached the API reloads: a fresh start is the only way back onto the live catalog', async () => {
+  const before = reloads;
+  delete store['ab:refresh'];
+  app.softRefresh = async () => 'restart';    // main.js: the app is running off its bundled catalog
+  await pull();
+  assert.equal(reloads - before, 1, 'the pull restarts the app, which re-probes the API and re-reads the catalog');
+  assert.equal(store['ab:refresh'], '1', 'flagged like the other fallbacks, so no launch artwork is replayed');
+});
+
+test('without an in-place refresh the pull falls back to a flagged reload (never the launch artwork)', async () => {
+  const before = reloads;
+  delete store['ab:refresh'];               // the previous test consumed it (refresh-flag.js does that on load)
+  app.softRefresh = null;
+  await pull();
+  assert.equal(reloads - before, 1, 'a bundle with no soft refresh still refreshes — by reloading');
+  assert.equal(store['ab:refresh'], '1', 'the reload is flagged so it skips the splash');
+});
+
+test('a soft refresh that throws also falls back to the flagged reload', async () => {
+  const before = reloads;
+  delete store['ab:refresh'];
+  app.softRefresh = async () => { throw new Error('boom'); };
+  await pull();
+  assert.equal(reloads - before, 1, 'an unexpected failure still ends in a fresh document');
+  assert.equal(store['ab:refresh'], '1', 'flagged, so even that reload shows the compact loader');
+  app.softRefresh = async () => 'refreshed';
+});
+
+test('a short pull does nothing', async () => {
+  const before = reloads;
+  const calls = [];
+  app.softRefresh = async () => { calls.push('refresh'); return 'refreshed'; };
+  touch('touchstart', 20);
+  touch('touchmove', 60);           // dy = 40 < 88
+  touch('touchend');
+  await settle();
+  assert.equal(calls.length, 0);
+  assert.equal(reloads - before, 0);
+});
+
+test('a wobbling finger still completes the pull once the gesture engaged', async () => {
+  const calls = [];
+  app.softRefresh = async () => { calls.push('refresh'); return 'refreshed'; };
+  touch('touchstart', 20);
+  touch('touchmove', 150);          // engage: dy = 130
+  touch('touchmove', 26);           // finger wobbles back up to dy = 6 — the gesture is still ours
+  touch('touchmove', 140);          // and pulls again: dy = 120 > threshold
+  touch('touchend');
+  await settle();
+  assert.deepEqual(calls, ['refresh'], 'the pull completed instead of being eaten by native overscroll');
+});
+
+test('the system taking the gesture (touchcancel) never refreshes', async () => {
+  const before = reloads;
+  const calls = [];
+  app.softRefresh = async () => { calls.push('refresh'); return 'refreshed'; };
+  touch('touchstart', 20);
+  touch('touchmove', 160);          // well past the threshold…
+  touch('touchcancel');             // …but the OS cancelled the gesture (scroll takeover, call, notification)
+  await settle();
+  assert.equal(calls.length, 0, 'a cancelled gesture is not a completed pull');
+  assert.equal(reloads - before, 0);
+});
+
+test('no pull-to-refresh while a video is playing', async () => {
+  const box = document.createElement('div');
+  box.className = 'player-box is-playing';
+  document.body.appendChild(box);
+  const before = reloads;
+  const calls = [];
+  app.softRefresh = async () => { calls.push('refresh'); return 'refreshed'; };
+  touch('touchstart', 20);
+  touch('touchmove', 160);
+  touch('touchend');
+  await settle();
+  assert.equal(calls.length, 0, 'the gesture was refused while media plays');
+  box.classList.remove('is-playing');
+  touch('touchstart', 20);
+  touch('touchmove', 160);
+  touch('touchend');
+  await settle();
+  assert.equal(calls.length, 1, 'a paused/stopped player lets the refresh through again');
+  assert.equal(reloads - before, 0);
+});
+
+test('all app platforms use the gesture, while the browser-native PTR stays disabled', () => {
+  const main = fs.readFileSync(new URL('../../app/js/main.js', import.meta.url), 'utf8');
+  assert.match(main, /initPullToRefresh\(\)/, 'the app installs the refresh gesture on all platforms');
+
+  const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /html \{[^}]*overscroll-behavior-y: contain/, 'the browser PTR is disabled on html');
+  assert.match(css, /body \{[^}]*overscroll-behavior-y: contain/, 'and on body - browsers differ on which element they check');
+
+  const ptr = fs.readFileSync(new URL('../../app/js/ui/ptr.js', import.meta.url), 'utf8');
+  assert.match(ptr, /app\?\.softRefresh/, 'the pull asks the app for the in-place refresh first');
+  assert.match(ptr, /player-box\.is-playing/, 'the gesture is refused while a video plays');
+  // location.reload() lives in the fallback helper only — never in the normal refresh path.
+  const fn = (name) => ptr.slice(ptr.indexOf(`async function ${name}(`), ptr.indexOf('\n}', ptr.indexOf(`async function ${name}(`)));
+  const fallback = fn('reloadForRefresh');
+  assert.match(fallback, /setItem\('ab:refresh', '1'\)[\s\S]*?location\.reload\(\)/, 'the fallback plants the refresh flag, then reloads');
+  assert.doesNotMatch(fn('refresh'), /location\.reload\(\)/, 'the normal path never reloads the document directly');
+  assert.match(fn('refresh'), /if \(result === 'restart'\) return reloadForRefresh\(since\);/, "only 'restart' (a bundle that cannot reach the live catalog) asks for the reload fallback");
+});
+
+/* ---------- the in-place refresh itself ---------- */
+test('softRefresh re-reads the catalog (cache-busting) and redraws the current page without navigating', () => {
+  const main = fs.readFileSync(new URL('../../app/js/main.js', import.meta.url), 'utf8');
+  const body = main.slice(main.indexOf('export async function softRefresh'), main.indexOf('// The first-run "turn on notifications"'));
+  assert.match(body, /loadCatalog\(catalogSource\.url, undefined, \{ mediaBase: catalogSource\.mediaBase \}\)/,
+    'the same source as start-up is read again — and loadCatalog asks for it with cache: "no-store", so Admin edits are not served from a cache');
+  assert.match(body, /app\.fullCatalog = catalog;\s*\n\s*app\.catalog = catalog;\s*\n\s*applyKids\(\);/,
+    'the same hand-off as start-up, so a Kids profile re-derives its filtered catalog from the fresh one (never a stale one)');
+  assert.match(body, /app\.studio = null;/, 'the cached studio profile is dropped so About/Contact re-read it, like a reload would');
+  assert.match(body, /await app\.router\.refresh\(\)/, 'the page on screen is redrawn from the new data');
+  assert.match(body, /const stale = \(message\) => \{ toast\(message\); return 'stale'; \};/,
+    'a refresh that cannot complete keeps the page and says so');
+  assert.match(body, /return stale\(friendly\(err/, 'the catalog fetch failure reports the real reason');
+  assert.match(body, /if \(!app\.api\) \{\s*\n\s*if \(navigator\.onLine === false\) return stale\(/,
+    "with no API the catalog being re-read is the app's own bundled copy, so a restart is asked for instead");
+  assert.match(body, /const reachable = await detectApi\(CONFIG\.apiBase\);\s*\n\s*return reachable \? 'restart' : stale\(/,
+    'and only once the API answers again — a restart must actually get somewhere (cold starts, flaky launches)');
+  assert.doesNotMatch(body, /location\.reload\(\)/, 'softRefresh never reloads the document itself');
+  assert.match(main, /app\.softRefresh = softRefresh;/, 'the router app exposes it to the gesture');
+
+  const router = fs.readFileSync(new URL('../../app/js/router.js', import.meta.url), 'utf8');
+  assert.match(router, /refresh\(\) \{ return this\.resolve\(\{ refresh: true \}\)/, 'router.refresh() is the in-place redraw');
+  assert.match(router, /const holdScroll = refresh \? window\.scrollY : null;/, 'a refresh keeps the reading position');
+  assert.match(router, /jumpScroll\(refresh \? holdScroll/, 'and puts the viewer back where they were');
+  // A refresh must not go through the history bookkeeping (depth/scroll map): it is not a navigation.
+  const resolveBody = router.slice(router.indexOf('async resolve('), router.indexOf('const token = ++this.#token'));
+  assert.match(resolveBody, /if \(refresh\) restore = false;\s*\n\s*else \{[\s\S]*?window\.__navDepth = this\.#depth;/, 'the back-button depth is only touched by a real navigation');
+
+  const appSrc = fs.readFileSync(new URL('../../app/js/app.js', import.meta.url), 'utf8');
+  assert.match(appSrc, /softRefresh: null/, 'the shared app object declares it, so the gesture can check for it');
+});
+
+test('a refresh reload (fallback) shows the compact loader on the app background — never the launch canvas', () => {
   const html = fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
   assert.match(html, /<script src="app\/refresh-flag\.js"><\/script>/, 'the flag reader loads from <head> (before first paint)');
   const flag = fs.readFileSync(new URL('../../app/refresh-flag.js', import.meta.url), 'utf8');
@@ -62,71 +246,11 @@ test('the refresh flag swaps the launch splash for the compact loader (and appli
   assert.match(flag, /classList\.add\('ab-refresh'\)/, 'it marks the document before the first paint');
 
   const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
-  assert.match(css, /html\.ab-refresh #boot \.boot-native \{ display: none; \}/, 'the full splash artwork is hidden on a refresh reload');
+  assert.match(css, /html\.ab-refresh #boot \{ background: var\(--bg\)/, 'the brand-red launch canvas is NOT repainted on a refresh');
+  assert.match(css, /html\.ab-refresh #boot \.boot-native \{ display: none; \}/, 'the full splash artwork is hidden');
   assert.match(css, /html\.ab-refresh #boot \.boot-web \{ display: grid; \}/, '…and the compact loader takes its place');
   assert.ok(css.indexOf('html.ab-refresh #boot .boot-native') > css.indexOf('html[data-platform="android"] #boot .boot-native'),
     'the ab-refresh rules stay after the data-platform rules so they win the specificity tie');
-});
-
-test('a short pull does nothing', async () => {
-  const before = reloads;
-  touch('touchstart', 20);
-  touch('touchmove', 60);           // dy = 40 < 88
-  touch('touchend');
-  await tick();
-  assert.equal(reloads - before, 0);
-});
-
-test('a wobbling finger still completes the pull once the gesture engaged', async () => {
-  const before = reloads;
-  touch('touchstart', 20);
-  touch('touchmove', 150);          // engage: dy = 130
-  touch('touchmove', 26);           // finger wobbles back up to dy = 6 — the gesture is still ours
-  touch('touchmove', 140);          // and pulls again: dy = 120 > threshold
-  touch('touchend');
-  await tick();
-  assert.equal(reloads - before, 1, 'the pull completed instead of being eaten by native overscroll');
-});
-
-test('the system taking the gesture (touchcancel) never reloads the page', async () => {
-  const before = reloads;
-  touch('touchstart', 20);
-  touch('touchmove', 160);          // well past the threshold…
-  touch('touchcancel');             // …but the OS cancelled the gesture (scroll takeover, call, notification)
-  await tick();
-  assert.equal(reloads - before, 0, 'a cancelled gesture is not a completed pull');
-});
-
-test('no pull-to-refresh while a video is playing', async () => {
-  const box = document.createElement('div');
-  box.className = 'player-box is-playing';
-  document.body.appendChild(box);
-  const before = reloads;
-  touch('touchstart', 20);
-  touch('touchmove', 160);
-  touch('touchend');
-  await tick();
-  assert.equal(reloads - before, 0, 'the gesture was refused while media plays');
-  box.classList.remove('is-playing');
-  touch('touchstart', 20);
-  touch('touchmove', 160);
-  touch('touchend');
-  await tick();
-  assert.equal(reloads - before, 1, 'a paused/stopped player lets the refresh through again');
-});
-
-test('all app platforms use the reload gesture, while the browser-native PTR stays disabled', () => {
-  const main = fs.readFileSync(new URL('../../app/js/main.js', import.meta.url), 'utf8');
-  assert.match(main, /initPullToRefresh\(\)/, 'the app installs the reload gesture on all platforms');
-  assert.doesNotMatch(main, /softRefresh|rerender: true/, 'there is no longer an in-place refresh path');
-
-  const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
-  assert.match(css, /html \{[^}]*overscroll-behavior-y: contain/, 'the browser PTR is disabled on html');
-  assert.match(css, /body \{[^}]*overscroll-behavior-y: contain/, 'and on body - browsers differ on which element they check');
-
-  const ptr = fs.readFileSync(new URL('../../app/js/ui/ptr.js', import.meta.url), 'utf8');
-  assert.match(ptr, /setTimeout\(\(\) => location\.reload\(\), 220\)/, 'a completed pull triggers a full reload');
-  assert.match(ptr, /player-box\.is-playing/, 'the gesture is refused while a video plays');
 });
 
 test('the catalog loader bypasses browser HTTP caches on startup after reload', async () => {
@@ -143,4 +267,47 @@ test('the catalog loader bypasses browser HTTP caches on startup after reload', 
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+/* ---------- router.refresh(): the page on screen is redrawn, and nothing else moves ---------- */
+test('router.refresh() redraws the current page from the new catalog, keeping URL, history depth and scroll', async () => {
+  const { Catalog } = await import('../../app/js/data/catalog.js');
+  const { Router } = await import('../../app/js/router.js');
+  const seed = JSON.parse(fs.readFileSync(new URL('../../data/catalog.json', import.meta.url), 'utf8'));
+
+  app.catalog = new Catalog(seed);
+  app.studio = null;
+  app.user = { lib: { progress: {}, list: [], reminders: [] }, inList: () => false, hasReminder: () => false, fraction: () => 0 };
+  globalThis.location.hash = '#/search?q=shahid';
+
+  const root = document.getElementById('view');
+  const router = new Router(root, { onRoute: () => { document.getElementById('boot')?.remove(); document.body.classList.add('booted'); } });
+  router.start();
+  await new Promise((r) => setTimeout(r, 60));
+
+  const before = root.querySelector('.search-page');
+  assert.ok(before, 'the search page rendered from the catalog');
+  const hits = before.querySelectorAll('a.card').length;
+  assert.ok(hits > 0, 'the seeded catalog has results for "shahid"');
+  assert.equal(document.getElementById('boot'), null, 'start-up removed the launch screen (`booted`)');
+  const depth = window.__navDepth;
+
+  // The server-side catalog changed (an admin re-titled or removed the title) and the viewer pulls down.
+  app.catalog = new Catalog({ shows: [], videos: [], upcoming: [], gallery: [], homePosters: {} });
+  window.scrollY = 620;                       // a refresh must not throw the viewer back to the top
+  scrolls.length = 0;
+  const reloadsBefore = reloads;
+  await router.refresh();
+
+  const after = root.querySelector('.search-page');
+  assert.ok(after, 'the page is redrawn (still the search page — the URL did not change)');
+  assert.notEqual(after, before, 'a fresh page, like a reload would give — but without reloading');
+  assert.equal(after.querySelectorAll('a.card').length, 0, 'the new catalog is what is on screen now');
+  assert.match(after.textContent, /No results for “shahid”/, 'the empty state comes from the fresh data');
+  assert.equal(reloads, reloadsBefore, 'no document reload happened: the launch screen can never come back');
+  assert.equal(document.getElementById('boot'), null, 'so the launch screen is still gone after the refresh');
+  assert.equal(globalThis.location.hash, '#/search?q=shahid', 'the URL is untouched');
+  assert.equal(window.__navDepth, depth, 'a refresh is not a navigation: the back-button depth is untouched');
+  assert.equal(window.history.scrollRestoration, 'manual', 'the router still owns scroll restoration');
+  assert.equal(scrolls[scrolls.length - 1]?.top, 620, 'the viewer stays exactly where they were reading');
 });

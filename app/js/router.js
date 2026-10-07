@@ -138,16 +138,26 @@ export class Router {
   }
   #keyNow() { return HISTORY ? location.pathname + location.search : location.hash || '#/'; }
   start() { this.resolve(); }
+  /** Redraw the page that is on screen from fresh data — pull-to-refresh (main.js `softRefresh`).
+   *  It is NOT a navigation: same URL, same history entry, same back-button depth, same scroll
+   *  position. Nothing is reloaded, so the app never replays its launch screen for a refresh. */
+  refresh() { return this.resolve({ refresh: true }); }
   // Handle the current URL and restore the saved position for browser-history navigation.
-  async resolve() {
+  async resolve({ refresh = false } = {}) {
     const { path, query } = parseLocation();
     const key = this.#keyNow();
     let restore = !this.#fresh;
-    if (this.#lastKey !== null) this.#scroll.set(this.#lastKey, window.scrollY);
-    if (replaceNext) { restore = false; replaceNext = false; }
-    else this.#depth = this.#fresh ? this.#depth + 1 : Math.max(0, this.#depth - 1);
-    window.__navDepth = this.#depth;
-    this.#fresh = false; this.#lastKey = key;
+    // Where the viewer is standing, captured before the page is replaced: a refresh puts them back
+    // exactly there, and everything that tracks history is left untouched.
+    const holdScroll = refresh ? window.scrollY : null;
+    if (refresh) restore = false;
+    else {
+      if (this.#lastKey !== null) this.#scroll.set(this.#lastKey, window.scrollY);
+      if (replaceNext) { restore = false; replaceNext = false; }
+      else this.#depth = this.#fresh ? this.#depth + 1 : Math.max(0, this.#depth - 1);
+      window.__navDepth = this.#depth;
+      this.#fresh = false; this.#lastKey = key;
+    }
     const token = ++this.#token;
     this.#cleanups.splice(0).forEach((fn) => { try { fn(); } catch (e) { console.error(e); } });
 
@@ -187,7 +197,7 @@ export class Router {
     const meta = app.catalog ? pageMeta({ path, query, cat: app.catalog, studio: app.studio, origin: siteOrigin() }) : null;
     if (meta && match) applyHead(meta, { canonical: HISTORY });
     else document.title = ctx.title ? `${ctx.title} — ADDABAAZ` : 'ADDABAAZ — Bengali Originals, Comedy & Web Series';
-    jumpScroll(restore ? this.#scroll.get(key) || 0 : 0);
+    jumpScroll(refresh ? holdScroll : restore ? this.#scroll.get(key) || 0 : 0);
     this.onRoute?.({ path, query, params, view: match?.view });
     document.getElementById('announcer').textContent = ctx.title || meta?.title || 'ADDABAAZ';
   }

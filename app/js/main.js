@@ -24,6 +24,10 @@ import { initNotifyPrompt } from './notify-prompt.js';
 import { initPullToRefresh } from './ui/ptr.js';
 import { initFullscreenRotation } from './orientation.js';
 
+// Where the catalog was read from at start-up (API vs bundled JSON), kept so a pull-to-refresh can
+// re-read the same source without a page reload. Filled in by boot().
+let catalogSource = null;
+
 // Native-shell hooks and diagnostics must run before boot: initial API/catalog/session failures are still reports.
 initPlatform();
 initErrorReporting();
@@ -39,6 +43,7 @@ async function boot() {
   const useApi = await detectApi(base);
   app.api = useApi ? new ApiClient(base === 'off' ? '' : base) : null;
   const catalogUrl = useApi ? `${base}/api/v1/catalog` : 'data/catalog.json';
+  catalogSource = { url: catalogUrl, mediaBase: useApi ? base : '' };
 
   const [catalog] = await Promise.all([loadCatalog(catalogUrl, undefined, { mediaBase: useApi ? base : '' })]);
   app.fullCatalog = catalog; app.catalog = catalog;
@@ -50,6 +55,8 @@ async function boot() {
   renderShell();
   // Create the router, which draws each page into #view.
   const router = app.router = new Router($('#view'), { onRoute: (r) => { markActive(r); syncButtons(document); window.dispatchEvent(new Event('ab:ready')); $('#boot')?.remove(); document.body.classList.add('booted'); } });
+  // Pull-to-refresh refreshes through this: see softRefresh() below and app/js/ui/ptr.js.
+  app.softRefresh = softRefresh;
   wireGlobalActions();
 
   app.user.on('library', () => syncButtons(document));
@@ -65,7 +72,7 @@ async function boot() {
   }
   router.start();
   networkStatus();
-  initPullToRefresh();   // the custom pull gesture reloads the current page so the latest server catalog is fetched
+  initPullToRefresh();   // the custom pull gesture refreshes the current page in place — see softRefresh()
   initFullscreenRotation();   // the app is portrait-only; the screen turns only in video fullscreen
   initConsent(); initPush();
   // Maintenance mode: an open tab or a resumed app shows the maintenance screen the moment the API says so.
@@ -78,6 +85,57 @@ async function boot() {
   wireImageFallbacks();
   lockMedia();
   registerServiceWorker();
+}
+
+/** Pull-to-refresh, done in place (app/js/ui/ptr.js calls this through `app.softRefresh`).
+ *
+ *  It does the two things a refresh is for — read the catalog again (cache-busting, so anything edited
+ *  in Admin appears straight away) and draw the page that is on screen from that fresh data — but
+ *  WITHOUT reloading the document. That is the whole point: a reload re-runs start-up from the top, so
+ *  the viewer was thrown back to the launch screen, and the page they were looking at vanished while
+ *  the catalog came down. Here nothing disappears: the app keeps the same history entry, the same
+ *  back-button depth and the same reading position, and only the content is redrawn.
+ *
+ *  Resolves with what happened, so the gesture knows whether to fall back to a reload:
+ *    'refreshed' — the page was redrawn from the freshly read catalog
+ *    'stale'     — nothing could be read (offline, server down): the page is untouched and a toast
+ *                  explains why, so a failed pull is never worse than not pulling at all
+ *    'restart'   — this app is not on the live catalog: only a fresh start can help (see below) */
+export async function softRefresh() {
+  if (!app.router || !catalogSource) return 'stale';
+  // Nothing could be read. The page is left exactly as it was and the viewer is told — this is the
+  // "a failed pull is never worse than not pulling" path.
+  const stale = (message) => { toast(message); return 'stale'; };
+  // No API: the catalog being re-read here is the copy bundled with the app (data/catalog.json), so a
+  // title published since the app was built can never appear through it. A fresh start is what helps —
+  // boot() re-probes the API (detectApi) and comes up on the live catalog. But a restart must only
+  // happen when it would actually get somewhere: this is exactly the state an app is in when its
+  // launch happened while the server was unreachable (a cold start, a flaky connection), so the API is
+  // re-probed first. Reachable → restart onto the live catalog; still unreachable → keep the page and
+  // say so. Offline there is nothing to probe at all.
+  if (!app.api) {
+    if (navigator.onLine === false) return stale('You’re offline — connect and pull again.');
+    const reachable = await detectApi(CONFIG.apiBase);
+    return reachable ? 'restart' : stale('Couldn’t reach ADDABAAZ — try again in a moment.');
+  }
+  let catalog;
+  try {
+    catalog = await loadCatalog(catalogSource.url, undefined, { mediaBase: catalogSource.mediaBase });
+  } catch (err) {
+    console.warn('[refresh]', err);
+    return stale(friendly(err, 'Couldn’t refresh — check your connection and try again.'));
+  }
+  // The same hand-off as start-up: the fresh catalog becomes the full one, and a Kids profile
+  // re-derives its filtered view from it (applyKids reads app.catalog, so it cannot be left stale).
+  app.fullCatalog = catalog;
+  app.catalog = catalog;
+  applyKids();
+  // The studio profile (About / Services / Contact, and the legal pages) is cached in memory by
+  // views/studio.js; dropping it makes the pages re-read it while they are redrawn, exactly as a
+  // reload would — while a page that does not use it is unaffected.
+  app.studio = null;
+  await app.router.refresh();                   // redraw the current page from the new catalog
+  return 'refreshed';
 }
 
 // The first-run "turn on notifications" prompt: once per installation, a few seconds after opening the

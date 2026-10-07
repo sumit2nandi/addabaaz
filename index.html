@@ -45,7 +45,8 @@
 
 <!-- Deployment settings (API address etc.) — a separate file so it can be changed without touching the app. -->
 <script src="app/env.js"></script>
-<!-- Pull-to-refresh reload flag: swaps the launch splash for the compact loader before first paint. -->
+<!-- Pull-to-refresh reload flag (fallback path only — a normal pull refreshes in place, no reload):
+     swaps the launch splash for the compact loader before first paint. -->
 <script src="app/refresh-flag.js"></script>
 <!-- Platform before first paint, so a native launch never flashes the compact web loader first. -->
 <script src="app/launch-platform.js"></script>
