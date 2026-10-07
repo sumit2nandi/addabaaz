@@ -1,4 +1,6 @@
 // Profile page (#/account): inline expandable settings plus referral and support links. The banners stay on this page so nothing the old stacked layout surfaced gets silently dropped.
+import { profileStrip } from '../ui/profile-strip.js';
+import { mayLeaveKids } from '../ui/parental.js';
 import { app } from '../app.js';
 import { html, $ } from '../util.js';
 import { icon } from '../icons.js';
@@ -29,6 +31,7 @@ export default async function account(ctx) {
         <p class="muted">${identity}</p></div>
       ${u.supportsAuth && !u.account ? html`<div class="profile-actions"><a class="btn btn-primary" href="#/signin">Sign in</a><a class="btn btn-ghost" href="#/signup">Create account</a></div>` : ''}
     </section>
+    ${profileStrip(u)}
     <nav class="card-panel list group-list" aria-label="Settings">
       ${settingGroups().map(accountGroup)}
     </nav>
@@ -37,6 +40,21 @@ export default async function account(ctx) {
     </footer>
   </div>`.s;
 
+  let switchingProfile = false;
+  ctx.root.querySelectorAll('[data-account-profile]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      if (switchingProfile || button.dataset.accountProfile === u.activeId) return;
+      const target = u.profiles.find((profile) => profile.id === button.dataset.accountProfile);
+      if (!target) return;
+      switchingProfile = true;
+      try {
+        if (!(await mayLeaveKids(u, target))) return;
+        await u.selectProfile(target.id);
+        go('/');
+      } catch (error) { if (!error.cancelled) toast(friendly(error)); }
+      finally { switchingProfile = false; }
+    });
+  });
   wireAccountAccordion(ctx.root, settingSection, wireSetting, ctx);
 
   $('#resendVerify', ctx.root)?.addEventListener('click', async (e) => { e.target.disabled = true; try { await u.remote.resendVerification(); toast('Sent — check your inbox.'); } catch (err) { toast(friendly(err)); e.target.disabled = false; } });

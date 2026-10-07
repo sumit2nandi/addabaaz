@@ -60,6 +60,8 @@ export default async function profiles(ctx) {
     });
   };
 
+  if (ctx.query.add === '1' && u.profiles.length < CONFIG.maxProfiles) form(null);
+
   ctx.root.addEventListener('click', async (e) => {
     if (e.target.closest('[data-add]')) return form(null);
     const t = e.target.closest('[data-pid]'); if (!t) return;
