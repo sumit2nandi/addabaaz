@@ -1,3 +1,4 @@
+import { accountPlan } from '../ui/account-plan.js';
 import { addPhone } from '../ui/add-phone.js';
 import { app } from '../app.js';
 import { html, $ } from '../util.js';
@@ -14,6 +15,7 @@ export default async function accountDetails(ctx) {
   let savedName = parts.join(' '), busy = false;
   ctx.root.innerHTML = html`<div class="page page-narrow account-details-page">
     <header class="account-edit-header"><a class="account-edit-back" href="#/account" aria-label="Back to Account">${icon('left', { size: 24 })}</a><h1>Edit Account</h1></header>
+    <div id="accountPlanSummary">${accountPlan(u)}</div>
     <form class="account-edit-form" id="accountNameForm">
       <div class="account-name-fields">
         <label class="account-line-field">First name<input name="firstName" autocomplete="given-name" maxlength="60" required value="${parts[0] || ''}"></label>
@@ -27,6 +29,10 @@ export default async function accountDetails(ctx) {
       <a class="account-manage-link" href="#/profiles?manage=1">Manage viewing profiles</a>
     </form>
   </div>`.s;
+  ctx.onCleanup(u.on('subscription', () => {
+    const summary = $('#accountPlanSummary', ctx.root);
+    if (summary) summary.innerHTML = accountPlan(u).s;
+  }));
   const form = $('#accountNameForm', ctx.root), save = $('#saveAccount', form), status = $('#accountSaveStatus', form);
   const nameValue = () => [$('[name=firstName]', form).value.trim(), $('[name=lastName]', form).value.trim()].filter(Boolean).join(' ');
   const sync = () => { const name = nameValue(); save.disabled = busy || !name || name.length > 60 || !($('[name=firstName]', form).value.trim()) || name === savedName; };

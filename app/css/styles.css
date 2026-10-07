@@ -1189,3 +1189,9 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .social-compact .btn-social { width: 44px; height: 44px; min-height: 44px; max-width: 44px; flex: 0 0 44px; padding: 0; border-radius: 50%; gap: 0; }
 .social-compact .social-g { width: 44px; min-height: 44px; flex: 0 0 44px; align-items: center; }
 .social-compact .btn-social:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+
+.account-current-plan { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 0 18px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+.account-current-plan > div { min-width: 0; }
+.account-current-plan .account-field-label { font-size: 13px; line-height: 1.5; }
+.account-current-plan .account-plan-name { margin: 6px 0 4px; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.account-current-plan .icon-btn { flex-shrink: 0; }
