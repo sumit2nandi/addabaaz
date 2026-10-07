@@ -1177,14 +1177,9 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .auth-entry .otp-phone .otp-cc { padding: 0 12px 0 0; border-right: 0; }
 .auth-entry .otp-phone input:not([type=checkbox]):focus { box-shadow: none; }
 
-/* A labelled action with a circular arrow, matching the minimal auth fields. */
-.auth-submit-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 8px; }
-.auth-submit-row > span { font-size: 20px; font-weight: 700; letter-spacing: -.3px; }
-.auth-entry #af .auth-submit-circle { width: 58px; height: 58px; min-height: 58px; flex: 0 0 58px; padding: 0; border-radius: 50%; box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 6px 20px rgba(var(--accent-rgb),.22); transition: transform .2s, box-shadow .2s; }
-.auth-submit-circle:focus-visible { outline: 2px solid var(--text); outline-offset: 4px; }
-@media (hover: hover) {
-  .auth-submit-circle:hover:not(:disabled) { transform: translateX(2px); box-shadow: 0 8px 24px rgba(var(--accent-rgb),.35); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .auth-entry #af .auth-submit-circle { transition: none; transform: none; }
-}
+/* Placeholder-led auth fields retain labels for assistive technology. */
+.auth-entry .auth-field-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.auth-entry .auth-icon-field { position: relative; }
+.auth-entry .auth-icon-field > svg { position: absolute; left: 0; top: 13px; color: var(--muted); pointer-events: none; }
+.auth-entry .form .auth-icon-field input:not([type=checkbox]) { padding-left: 30px; }
+.auth-entry .form input::placeholder { color: var(--muted); opacity: 1; }

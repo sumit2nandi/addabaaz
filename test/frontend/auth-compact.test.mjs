@@ -20,7 +20,7 @@ test('mobile compaction retains readable inputs, tap targets and page scrolling'
   assert.match(compact, /font-size: 16px; min-height: 44px/);
   assert.match(compact, /\.auth-brand img \{ width: 36px; height: 36px;/);
   assert.match(compact, /#otpVerify \{ margin-bottom: 0;/);
-  assert.doesNotMatch(compact, /overflow: hidden|height: 100dvh/);
+  assert.doesNotMatch(compact.replace(/\.auth-entry \.auth-field-label \{[^}]*\}/g, ''), /overflow: hidden|height: 100dvh/);
 });
 
 test('auth fields use minimalist underlines including the phone prefix group', () => {
@@ -35,10 +35,12 @@ test('auth fields use minimalist underlines including the phone prefix group', (
   assert.match(minimal, /\.pw input:not\(\[type=checkbox\]\) \{ padding-right: 46px;/);
 });
 
-test('sign-in and registration share a circular arrow submit with an accessible visible label', () => {
+test('placeholder-led fields retain accessible labels and full-width submit buttons', () => {
   const source = read('app/js/views/auth.js');
-  assert.match(source, /id="authSubmitLabel">\$\{signup \? 'Create account' : 'Sign in'\}/);
-  assert.match(source, /class="btn btn-primary auth-submit-circle" type="submit" id="asub" aria-labelledby="authSubmitLabel"/);
-  assert.match(source, /aria-labelledby="authSubmitLabel">\$\{icon\('right', \{ size: 26 \}\)\}/);
-  assert.match(read('app/css/styles.css'), /\.auth-submit-circle \{ width: 58px; height: 58px;[^}]*border-radius: 50%/);
+  assert.match(source, /class="auth-field-label">Email<\/span>/);
+  assert.match(source, /class="auth-field-label">Password<\/span>/);
+  assert.match(source, /placeholder="Email address"/);
+  assert.match(source, /class="btn btn-primary btn-lg block" type="submit" id="asub">\$\{signup \? 'Create account' : 'Sign in'\}/);
+  assert.doesNotMatch(source, /auth-submit-circle|auth-submit-row/);
+  assert.match(read('app/css/styles.css'), /\.auth-entry \.auth-field-label \{[^}]*clip-path: inset\(50%\)/);
 });

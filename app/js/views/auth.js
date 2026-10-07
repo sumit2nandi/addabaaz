@@ -54,14 +54,14 @@ export default async function auth(ctx) {
 
       ${canOtp ? html`<div id="otpPane">
         <div id="otpPhoneStep">
-          <label>Mobile number<span class="otp-phone"><b class="otp-cc">+${country}</b><input name="phone" type="tel" inputmode="numeric" autocomplete="tel-national" required placeholder="98765 43210" maxlength="14"></span></label>
+          <label><span class="auth-field-label">Mobile number</span><span class="otp-phone"><b class="otp-cc">+${country}</b><input name="phone" type="tel" inputmode="numeric" autocomplete="tel-national" required placeholder="Mobile number" maxlength="14"></span></label>
           <p class="fine fine-left">We’ll send a 6-digit code by SMS. Standard message rates may apply.</p>
           <button class="btn btn-primary btn-lg block" type="submit" id="otpSend">Send me a code</button>
         </div>
         <div id="otpCodeStep" hidden>
           <p class="muted" id="otpSentTo"></p>
-          <label>Enter the 6-digit code<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" class="pin-input" placeholder="••••••"></label>
-          <label>Your name <small>(new accounts only)</small><input name="name" maxlength="60" autocomplete="name" placeholder="Full name"></label>
+          <label><span class="auth-field-label">Enter the 6-digit code</span><input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" class="pin-input" placeholder="6-digit code"></label>
+          <label class="auth-icon-field"><span class="auth-field-label">Your name (new accounts only)</span>${icon('user', { size: 18 })}<input name="name" maxlength="60" autocomplete="name" placeholder="Full name"></label>
           <button class="btn btn-primary btn-lg block" type="submit" id="otpVerify">Verify &amp; continue</button>
           <div class="row between otp-links"><button type="button" class="linklike" id="otpResend" disabled>Resend code</button><button type="button" class="linklike" id="otpChange">Change number</button></div>
         </div>
@@ -70,11 +70,11 @@ export default async function auth(ctx) {
       <div id="emailPane" ${canOtp ? 'hidden' : ''}>
         <div class="social" id="social" hidden></div>
         <div class="or" id="or" hidden><span>or use your email</span></div>
-        ${signup ? html`<label>Your name<input name="name" autocomplete="name" required maxlength="60" placeholder="Full name"></label>` : ''}
-        <label>Email<input name="email" type="email" autocomplete="email" required placeholder="name@example.com" inputmode="email"></label>
-        <label>Password<span class="pw"><input name="password" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" required minlength="8" placeholder="${signup ? 'At least 8 characters' : 'Your password'}"><button type="button" class="icon-btn" id="pwt" aria-label="Show password">${icon('eye', { size: 18 })}</button></span></label>
+        ${signup ? html`<label class="auth-icon-field"><span class="auth-field-label">Your name</span>${icon('user', { size: 18 })}<input name="name" autocomplete="name" required maxlength="60" placeholder="Full name"></label>` : ''}
+        <label class="auth-icon-field"><span class="auth-field-label">Email</span>${icon('mail', { size: 18 })}<input name="email" type="email" autocomplete="email" required placeholder="Email address" inputmode="email"></label>
+        <label class="auth-icon-field"><span class="auth-field-label">Password</span>${icon('lock', { size: 18 })}<span class="pw"><input name="password" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" required minlength="8" placeholder="${signup ? 'Password (8+ characters)' : 'Password'}"><button type="button" class="icon-btn" id="pwt" aria-label="Show password">${icon('eye', { size: 18 })}</button></span></label>
         ${signup ? '' : html`<a class="forgot-link" href="#/forgot">Forgot password?</a>`}
-        <div class="auth-submit-row"><span id="authSubmitLabel">${signup ? 'Create account' : 'Sign in'}</span><button class="btn btn-primary auth-submit-circle" type="submit" id="asub" aria-labelledby="authSubmitLabel">${icon('right', { size: 26 })}</button></div>
+        <button class="btn btn-primary btn-lg block" type="submit" id="asub">${signup ? 'Create account' : 'Sign in'}</button>
       </div>
 
       <div class="auth-busy" id="asBusy" hidden><div class="spinner"></div><p id="asBusyMsg">Signing you in…</p></div>
