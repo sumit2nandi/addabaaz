@@ -17,7 +17,7 @@ export default async function billing(ctx) {
   const u = app.user;
   ctx.setTitle('Billing & invoices');
   if (!u.supportsAuth || !u.account) { go('/signin?next=' + encodeURIComponent('/billing'), { replace: true }); return; }
-  const backLink = html`<p class="back-row"><a class="account-edit-back" href="#/account" aria-label="Back to Account" title="Back to Account">${icon('left', { size: 24 })}</a></p>`;
+  const backLink = html`<p class="back-row"><a class="account-edit-back" href="#/plans" aria-label="Back to plan details">${icon('left', { size: 24 })}</a></p>`;
   let items, rr = { requests: [], windowDays: 0 };
   try { items = await u.billingHistory(); } catch (e) { ctx.root.innerHTML = html`<div class="page page-narrow">${backLink}<div class="empty"><h2>Couldn’t load your billing history</h2><p>${friendly(e)}</p></div></div>`.s; return; }
 

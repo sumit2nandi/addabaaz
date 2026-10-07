@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const read = (p) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
 
-test('billing reuses the circular Account back button in normal, empty and failed states', () => {
+test('billing uses an icon-only back button to plan details in normal, empty and failed states', () => {
   const view = read('app/js/views/billing.js');
-  assert.match(view, /class="account-edit-back" href="#\/account" aria-label="Back to Account"/);
+  assert.match(view, /class="account-edit-back" href="#\/plans" aria-label="Back to plan details"/);
+  const backLink = view.match(/const backLink = html`([^`]+)`;/)[1];
+  assert.doesNotMatch(backLink, /title=|<span|href="#\/account"/);
+  assert.match(backLink, />\$\{icon\('left', \{ size: 24 \}\)\}<\/a>/);
   assert.match(view, /\$\{backLink\}\s*\$\{sectionHeader/);
   assert.match(view, /\$\{backLink\}<div class="empty"><h2>Couldn’t load/);
   assert.equal((view.match(/\$\{backLink\}/g) || []).length, 2);
