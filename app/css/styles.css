@@ -1077,3 +1077,16 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .account-details-page > h1 { font-size: 24px; margin-bottom: 8px; }
 .account-details-page > .card-panel { margin-top: 20px; }
 .account-details-page .card-panel > p { overflow-wrap: anywhere; }
+
+/* Saved items sit below Profiles and scroll independently on phones and desktops. */
+.account-saved { margin: 0 0 24px; min-width: 0; }
+.account-saved .profile-selector-head { margin-bottom: 8px; }
+.account-saved-track { display: flex; align-items: flex-start; gap: 14px; overflow-x: auto; padding: 6px 3px 14px; scroll-snap-type: x proximity; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.account-saved-item { flex: 0 0 auto; scroll-snap-align: start; }
+.account-saved-item.saved-poster { width: 128px; }
+.account-saved-item.saved-video { width: 220px; }
+.account-saved .card-title { font-size: 13px; }
+@media (min-width: 1024px) {
+  .account-saved-item.saved-poster { width: 150px; }
+  .account-saved-item.saved-video { width: 260px; }
+}

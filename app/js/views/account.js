@@ -1,4 +1,5 @@
 // Profile page (#/account): inline expandable settings plus referral and support links. The banners stay on this page so nothing the old stacked layout surfaced gets silently dropped.
+import { savedEntries, savedListStrip } from '../ui/saved-list.js';
 import { profileStrip } from '../ui/profile-strip.js';
 import { mayLeaveKids } from '../ui/parental.js';
 import { app } from '../app.js';
@@ -28,6 +29,7 @@ export default async function account(ctx) {
       ${u.supportsAuth && !u.account ? html`<div class="profile-actions"><a class="btn btn-primary" href="#/signin">Sign in</a><a class="btn btn-ghost" href="#/signup">Create account</a></div>` : ''}
     </section>
     ${profileStrip(u)}
+    <div id="accountSavedList">${savedListStrip(savedEntries(u, app.catalog))}</div>
     <nav class="card-panel list group-list" aria-label="Settings">
       ${settingGroups().map(accountGroup)}
     </nav>
@@ -36,6 +38,14 @@ export default async function account(ctx) {
     </footer>
   </div>`.s;
 
+  ctx.onCleanup(u.on('library', () => {
+    const saved = $('#accountSavedList', ctx.root);
+    if (!saved) return;
+    const scroll = saved.querySelector('.account-saved-track')?.scrollLeft || 0;
+    saved.innerHTML = savedListStrip(savedEntries(u, app.catalog)).s;
+    const track = saved.querySelector('.account-saved-track');
+    if (track) track.scrollLeft = scroll;
+  }));
   let switchingProfile = false;
   ctx.root.querySelectorAll('[data-account-profile]').forEach((button) => {
     button.addEventListener('click', async () => {
