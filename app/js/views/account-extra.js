@@ -45,11 +45,12 @@ const row = (id, ic, label, sub) => html`<button class="row-link" id="${id}">${i
 
 // Shared notification control for account settings and connected guest settings. Native guest
 // notifications are general broadcasts only; local profile/list data never leaves the device.
-function wireNotifications(root, { guest = false, onCleanup = null, empty = false } = {}) {
+function wireNotifications(root, { guest = false, onCleanup = null } = {}) {
   const slot = $('#notifySlot', root); if (!slot) return;
   const draw = (s) => {
+    // The slot is a whole sub-page now, so an unavailable state explains itself instead of hiding.
     if (!s?.supported || !s.enabled) {
-      slot.innerHTML = empty ? emptyState({ iconName: 'bell', title: 'Notifications unavailable', text: 'Turn notifications on to get episode, launch and announcement alerts on this device.' }).s : '';
+      slot.innerHTML = emptyState({ iconName: 'bell', title: 'Notifications unavailable', text: 'Turn notifications on to get episode, launch and announcement alerts on this device.' }).s;
       return;
     }
     const blocked = s.permission === 'denied'
@@ -82,7 +83,7 @@ function wireNotifications(root, { guest = false, onCleanup = null, empty = fals
  * to add a friend's code. Filled in asynchronously (like the notifications slot) so a slow API — or the
  * offer being switched off — never delays the settings page.
  */
-function wireReferral(root, { empty = false } = {}) {
+function wireReferral(root) {
   const u = app.user;
   const slot = $('#referSlot', root); if (!slot) return;
   slot.innerHTML = html`<h2 class="sub-h">Refer &amp; earn</h2><div class="card-panel"><div class="spinner" style="margin:14px auto"></div></div>`.s;
@@ -90,7 +91,7 @@ function wireReferral(root, { empty = false } = {}) {
     let data = null;
     try { data = await u.credits(); } catch { /* the section shows the empty state below */ }
     if (!data || !data.offer?.enabled || (!data.offer.referralPaise && !data.creditPaise)) {
-      slot.innerHTML = empty ? emptyState({ iconName: 'gift', title: 'Refer & earn is off', text: 'There is no invite offer running right now — check back later.' }).s : '';
+      slot.innerHTML = emptyState({ iconName: 'gift', title: 'Refer & earn is off', text: 'There is no invite offer running right now — check back later.' }).s;
       return;
     }
     const inr = (p) => `₹${(p / 100).toFixed(p % 100 ? 2 : 0)}`;
@@ -136,7 +137,7 @@ function wireReferral(root, { empty = false } = {}) {
 
 function playbackSection() {
   const u = app.user;
-  return `<section class="account-section">
+  return html`<section class="account-section">
     <h2 class="sub-h">Playback</h2>
     <div class="card-panel list">
       <label class="row-switch"><span><b>Autoplay next episode</b><small>Keep watching without lifting a finger.</small></span><span class="switch"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span></span></label>
@@ -155,7 +156,7 @@ function securitySection() {
       ${row('signOutAll', 'logout', 'Sign out everywhere', 'Ends your session on every phone, TV and browser.')}
       ${row('devices', 'tv', 'Your devices', 'See where you’re watching and how many screens your plan allows.')}
     </div>
-  </section>`.s;
+  </section>`;
 }
 
 function kidsSection() {
@@ -167,22 +168,22 @@ function kidsSection() {
       ${row('pinBtn', 'lock', u.hasPin ? 'Change or remove parental PIN' : 'Set a parental PIN', u.hasPin ? 'Needed to leave a Kids profile or change profiles.' : 'Keeps children on their Kids profile and stops profile changes.')}
       <a class="row-link" href="#/profiles?manage=1">${icon('user', { size: 22 })}<span><b>Kids profiles</b><small>Mark any profile as “Kids” to show only titles rated for children.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a>
     </div>
-  </section>`.s;
+  </section>`;
 }
 
 function privacySection() {
   const u = app.user;
   if (!u.supportsAuth) return '';
-  const terms = u.account ? `<a class="row-link" href="#/terms">${icon('info', { size: 22 })}<span><b>Terms of Use</b></span>${icon('right', { size: 18, cls: 'chev' })}</a>` : '';
+  const terms = u.account ? html`<a class="row-link" href="#/terms">${icon('info', { size: 22 })}<span><b>Terms of Use</b></span>${icon('right', { size: 18, cls: 'chev' })}</a>` : '';
   return html`<section class="account-section">
     <h2 class="sub-h">Privacy</h2>
     <div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}<a class="row-link" href="#/privacy">${icon('info', { size: 22 })}<span><b>Privacy Policy</b></span>${icon('right', { size: 18, cls: 'chev' })}</a>${terms}</div>
-  </section>`.s;
+  </section>`;
 }
 
 function appSection() {
   const u = app.user;
-  return `<section class="account-section">
+  return html`<section class="account-section">
     <h2 class="sub-h">App</h2>
     <div class="card-panel list">
       <button class="row-link" data-install hidden>${icon('download', { size: 22 })}<span><b>Install ADDABAAZ</b><small>Add to your home screen for a full-screen app experience.</small></span></button>
@@ -193,7 +194,7 @@ function appSection() {
 
 function dangerSection() {
   if (!app.user.account) return '';
-  return `<section class="account-section"><h2 class="sub-h">Danger zone</h2><div class="card-panel list"><button class="row-link danger" id="delAcc">${icon('trash', { size: 22 })}<span><b>Delete account</b><small>Permanently removes your account, profiles, list and history.</small></span></button></div></section>`;
+  return html`<section class="account-section"><h2 class="sub-h">Danger zone</h2><div class="card-panel list"><button class="row-link danger" id="delAcc">${icon('trash', { size: 22 })}<span><b>Delete account</b><small>Permanently removes your account, profiles, list and history.</small></span></button></div></section>`;
 }
 
 /** The sub-page body for a group id, or '' when the id has no section (Help leaves the page). */
@@ -201,8 +202,8 @@ export function settingSection(id) {
   if (id === 'playback') return playbackSection();
   if (id === 'security') return securitySection();
   if (id === 'kids') return kidsSection();
-  if (id === 'refer') return `<div id="referSlot" class="account-section"></div>`;
-  if (id === 'notify') return `<div id="notifySlot" class="account-section"></div>`;
+  if (id === 'refer') return html`<div id="referSlot" class="account-section"></div>`;
+  if (id === 'notify') return html`<div id="notifySlot" class="account-section"></div>`;
   if (id === 'privacy') return privacySection();
   if (id === 'app') return appSection();
   if (id === 'danger') return dangerSection();
@@ -293,8 +294,9 @@ export function wireSetting(id, root, ctx) {
   if (id === 'playback') return wirePlayback(root);
   if (id === 'security') return wireSecurity(root);
   if (id === 'kids') return wireKids(root);
-  if (id === 'refer') return wireReferral(root, { empty: true });
-  if (id === 'notify') return wireNotifications(root, { guest: !app.user.account, onCleanup: ctx?.onCleanup, empty: true });
+  if (id === 'refer') return wireReferral(root);
+  if (id === 'notify' && !app.user.account) return wireNotifications(root, { guest: true, onCleanup: ctx?.onCleanup });
+  if (id === 'notify') return wireNotifications(root, { onCleanup: ctx?.onCleanup });
   if (id === 'privacy') return wirePrivacy(root);
   if (id === 'app') return;
   if (id === 'danger') return wireDanger(root);
