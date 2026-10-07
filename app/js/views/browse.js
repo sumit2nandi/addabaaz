@@ -12,8 +12,7 @@ export default async function browse(ctx) {
   ctx.setTitle('Shows & Episodes');
   ctx.root.innerHTML = html`
     <div class="page">
-      <section aria-labelledby="showsHeading">
-        <h2 class="sub-h" id="showsHeading">Shows</h2>
+      <section aria-label="Shows">
         <div class="filters" id="showFilters"></div>
         <div id="showsResults"></div>
       </section>
@@ -39,8 +38,8 @@ export default async function browse(ctx) {
 
     showFilters.innerHTML = html`<div class="filter-group">${chip('All', 'genre', '')}${cat.genres.map((g) => chip(g, 'genre', g))}</div>`.s;
     const shows = cat.shows.filter((s) => !st.genre || (s.genres || []).includes(st.genre));
-    showResults.innerHTML = shows.length ? html`<div class="grid grid-shows">${shows.map((s) => html`<div class="show-tile">${showCard(s)}<div class="show-tile-info"><a href="#/show/${s.id}" class="bn">${s.title}</a>${showMeta(s)}</div></div>`)}</div>
-      ${cat.upcoming.length ? html`<h3 class="sub-h">Coming soon</h3><div class="grid grid-shows">${cat.upcoming.map((u) => html`<a class="show-tile" href="#/soon/${u.id}"><div class="card card-poster"><div class="poster"><img src="${u.poster}" alt="${u.title}" loading="lazy"><span class="chip chip-soon">Coming soon</span></div></div><div class="show-tile-info"><span class="bn">${u.title}</span></div></a>`)}</div>` : ''}`.s
+    showResults.innerHTML = shows.length ? html`<div class="grid grid-shows">${shows.map((s) => html`<div class="show-tile">${showCard(s)}<div class="show-tile-info"><a href="#/show/${s.id}">${s.title}</a>${showMeta(s)}</div></div>`)}</div>
+      ${cat.upcoming.length ? html`<h3 class="sub-h">Coming soon</h3><div class="grid grid-shows">${cat.upcoming.map((u) => html`<a class="show-tile" href="#/soon/${u.id}"><div class="card card-poster"><div class="poster"><img src="${u.poster}" alt="${u.title}" loading="lazy"><span class="chip chip-soon">Coming soon</span></div></div><div class="show-tile-info"><span>${u.title}</span></div></a>`)}</div>` : ''}`.s
       : emptyState({ title: 'No shows in this genre yet' }).s;
 
     const episodeShows = cat.shows.filter((s) => cat.episodes(s.id).length);
