@@ -89,3 +89,15 @@ test('unsubscribed website viewers get a Subscribe banner above the profile head
   assert.match(css, /\.pill\.free \{[^}]*color: #fff/,
     'the Free badge is bold white');
 });
+
+test('deletion action follows the public details and the profile footer stays compact', () => {
+  const deletion = read('app/js/views/deletion.js');
+  assert.doesNotMatch(read('app/js/views/account-extra.js'), /\['danger',/);
+  assert.ok(deletion.indexOf('id="delAcc"') > deletion.indexOf('Privacy contact:'));
+  assert.match(deletion, /app.user.account \? html`/);
+  assert.match(deletion, /wireAccountDeletion\(ctx.root\)/);
+  assert.match(read('app/js/views/account-extra.js'), /export function wireAccountDeletion[\s\S]*confirmDialog[\s\S]*u.deleteAccount\(\)/);
+  assert.doesNotMatch(read('index.html').match(/<footer[\s\S]*?<\/footer>/)[0], /Coming Soon/);
+  assert.match(read('app/css/styles.css'), /\.profile-page \{ padding-bottom: 8px; \}/);
+  assert.match(read('app/css/styles.css'), /:has\(\.profile-page\) \.footer \{ margin-top: 8px; \}/);
+});

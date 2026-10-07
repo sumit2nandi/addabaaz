@@ -6,6 +6,7 @@ import { icon } from '../icons.js';
 import { settingGroups, settingSection, wireSetting } from './account-extra.js';
 
 export default async function settings(ctx) {
+  if (ctx.params.group === 'danger') { go('/delete-account', { replace: true }); return; }
   const meta = settingGroups().find((g) => g.id === ctx.params.group);
   const body = meta ? settingSection(meta.id) : '';
   if (!meta || !body) { go('/account', { replace: true }); return; }   // unknown group, or not for this viewer

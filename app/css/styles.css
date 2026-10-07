@@ -937,3 +937,9 @@ fore, .abm-glyph, .abm-bar i { animation: none } }
 
 /* Match the premium plan branding on the locked player, including the raised gold word. */
 .locked-premium-heading .brand-lockup .premium-word { font-size: .6em; }
+
+/* Keep the profile sign-out close to the site footer without changing other settings pages. */
+.profile-page { padding-bottom: 8px; }
+body[data-route="account"]:has(.profile-page) #view { min-height: 0; }
+body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
+.deletion-actions { margin-top: 24px; }

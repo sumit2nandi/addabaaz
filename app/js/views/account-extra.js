@@ -19,7 +19,6 @@ const GROUPS = [
   ['refer', 'Refer & earn', 'Invite credit and rewards', 'gift', 'account'],
   ['notify', 'Notifications', 'Episode, launch and announcement alerts', 'bell', 'auth'],
   ['help', 'Help & support', 'Help Centre and contact us', 'chat', 'all', '#/support'],
-  ['danger', 'Delete account', 'Permanently remove your account', 'trash', 'account'],
 ];
 
 /** The rows the profile page lists for this viewer: [{ id, title, sub, ic, href }]. */
@@ -191,11 +190,6 @@ function kidsSection() {
   </section>`;
 }
 
-function dangerSection() {
-  if (!app.user.account) return '';
-  return html`<section class="account-section"><h2 class="sub-h">Danger zone</h2><div class="card-panel list"><button class="row-link danger" id="delAcc">${icon('trash', { size: 22 })}<span><b>Delete account</b><small>Permanently deletes your account and linked data. Billing records may remain detached.</small></span></button><a class="row-link" href="#/delete-account">${icon('info', { size: 22 })}<span><b>Delete account</b><small>Delete your account or request deletion if you cannot sign in.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a></div></section>`;
-}
-
 /** The sub-page body for a group id, or '' when the id has no section (Help leaves the page). */
 export function settingSection(id) {
   if (id === 'playback') return playbackSection();
@@ -203,7 +197,6 @@ export function settingSection(id) {
   if (id === 'kids') return kidsSection();
   if (id === 'refer') return html`<div id="referSlot" class="account-section"></div>`;
   if (id === 'notify') return html`<div id="notifySlot" class="account-section"></div>`;
-  if (id === 'danger') return dangerSection();
   return '';
 }
 
@@ -285,7 +278,7 @@ function wireKids(root) {
   });
 }
 
-function wireDanger(root) {
+export function wireAccountDeletion(root) {
   const u = app.user;
   $('#delAcc', root)?.addEventListener('click', async () => {
     if (await confirmDialog({ title: 'Delete your account?', text: 'This cannot be undone. Your account and linked data will be deleted. Payment and invoice records may be kept detached from your account; see the Privacy Policy.', confirm: 'Delete account', danger: true })) {
@@ -302,5 +295,4 @@ export function wireSetting(id, root, ctx) {
   if (id === 'refer') return wireReferral(root);
   if (id === 'notify' && !app.user.account) return wireNotifications(root, { guest: true, onCleanup: ctx?.onCleanup });
   if (id === 'notify') return wireNotifications(root, { onCleanup: ctx?.onCleanup });
-  if (id === 'danger') return wireDanger(root);
 }

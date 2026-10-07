@@ -19,7 +19,7 @@ export default async function account(ctx) {
       ? `SMS sign-in${u.account.phone ? ` · +${u.account.phone}` : ''}`
       : [u.account.email, u.account.phoneVerified ? `SMS sign-in${u.account.phone ? ` · +${u.account.phone}` : ''}` : '', u.account.providers?.length ? u.account.providers.map((x) => ({ google: 'Google', facebook: 'Facebook', apple: 'Apple' }[x] || x)).join(' & ') + ' sign-in' : ''].filter(Boolean).join(' · ')
     : u.supportsAuth ? 'Browsing as a guest — sign in to sync across devices.' : 'Your list and progress are saved on this device.';
-  ctx.root.innerHTML = html`<div class="page page-narrow account-page">
+  ctx.root.innerHTML = html`<div class="page page-narrow account-page profile-page">
     ${!u.supportsAuth ? html`<section class="card-panel notice" role="status"><div>${icon('info', { size: 22 })}</div><div><b>Local-only mode</b><p class="muted">This app isn’t connected to ADDABAAZ cloud. Profiles and settings stay on this phone; sign-in, sync, and push notifications need a cloud connection.</p></div></section>` : ''}
     ${verifyBanner()}
     ${u.supportsAuth && !u.isPremium && !isNative ? html`<section class="card-panel subscribe-banner"><div><h2>Subscribe to <em class="premium-word">premium</em></h2><p>Premium originals, early access</p></div><a class="btn btn-light" href="#/plans">Subscribe</a></section>` : ''}
