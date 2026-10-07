@@ -528,25 +528,26 @@ body.reels-mode { overflow: hidden; padding-bottom: 0; } body.reels-mode .footer
 }
 .toasts { position: fixed; z-index: 500; left: 50%; bottom: calc(var(--tabbar-h) + var(--sab) + 16px); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 24px); pointer-events: none; }
 /* Toast (ui/components.js `toast()`): the small status bar at the bottom of the screen — "Watch history
- * cleared", "Link copied", … A BLACK capsule with WHITE text, ringed by the brand red so it still reads
- * as part of the theme (and stays visible when it lands on the near-black page or on black artwork).
+ * cleared", "Link copied", … An all-black capsule: black glass fill, a black hairline ring and WHITE text.
  *
  * Its size is exactly the one the toast has always had — padding 12px 18px, font-size 14px, weight 600,
  * line-height 1.5 (21px), gap 14px and the original drop shadow, i.e. 45px tall, exactly as the old light
- * bar was measured. Two details are deliberate: the red hairline is an INSET ring in the box-shadow rather
- * than a `border`, because a border would add 2px to the height and width; and the action chip below is
- * sized to stay inside that 21px line box, so adding an action never grows the capsule either.
- * The fill is near-opaque black glass: the blurred artwork tints only the last few percent. */
+ * bar was measured. Two details are deliberate: the ring is an INSET shadow rather than a `border`,
+ * because a border would add 2px to the height and width; and the action chip below is sized to stay
+ * inside that 21px line box, so adding an action never grows the capsule either.
+ * The fill is near-opaque black glass: the blurred artwork tints only the last few percent, while the
+ * opaque black ring keeps a faint edge over bright artwork. */
 .toast { display: flex; align-items: center; gap: 14px;
   background: rgba(0,0,0,.9);
   backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
   color: var(--text);
   padding: 12px 18px; border-radius: 999px; font-weight: 600; font-size: 14px; line-height: 1.5;
-  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), .55), 0 10px 40px rgba(0,0,0,.6);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.95), 0 10px 40px rgba(0,0,0,.6);
   opacity: 0; transform: translateY(12px); transition: .25s var(--ease); pointer-events: auto; }
 .toast.show { opacity: 1; transform: none; }
-/* The optional action ("Restart", "Undo"): white text on a faint red-tinted chip. 2px padding over a
-   13px/1.2 line = 19.6px — inside the message's 21px line box, so the capsule keeps its exact height. */
+/* The optional action ("Restart", "Undo"): white text on a faint red-tinted chip — the one spot of
+   colour left, so it still reads as a button. 2px padding over a 13px/1.2 line = 19.6px — inside the
+   message's 21px line box, so the capsule keeps its exact height. */
 .toast button { background: rgba(var(--accent-rgb), .22); border: 0; border-radius: 999px; color: var(--text); font-weight: 800; font-size: 13px; line-height: 1.2; padding: 2px 10px; transition: background .2s, color .2s; }
 .toast button:hover, .toast button:focus-visible { background: rgba(var(--accent-rgb), .45); }
 
