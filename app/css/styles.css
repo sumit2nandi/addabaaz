@@ -4,10 +4,6 @@
   --bg: #050505; --bg-2: #0b0b0d; --panel: #111114; --panel-2: #18181c; --panel-3: #222228;
   --text: #fff; --text-2: #d1d1d6; --muted: #9a9aa6;
   --accent: #b80000; --accent-2: #d00000; --accent-rgb: 184,0,0;
-  /* The accent red, lightened. The deep accent red is a button fill — as a glyph on the near-black page it
-     all but disappears — so every ✕ / close button draws with this instead (see the "cross buttons" section
-     at the end of this file). Change it here and every cross in the app follows. */
-  --accent-soft: #ff6b6b;
   --accent-gradient: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,0) 78%), linear-gradient(135deg, #8f0000 0%, #b80000 50%, #d00000 100%);
   --accent-gradient-hover: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0) 78%), linear-gradient(135deg, #b00000 0%, #df0000 100%);
   --gold: #f5c518; --gold-gradient: linear-gradient(135deg, #8a6a14 0%, #d4a017 38%, #ffe9a3 50%, #d4a017 62%, #8a6a14 100%); --gold-panel: linear-gradient(160deg, #221a0c 0%, #4d3d17 52%, #28200e 100%); --ok: #2ecc71; --danger: #d04a4a; --danger-rgb: 208,74,74;
@@ -115,8 +111,6 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .nav-drop, .menu-wrap { position: relative; }
 .top-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 .icon-btn { display: inline-grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; border: 0; background: transparent; color: #fff; transition: background .2s, transform .2s; }
-/* White by default — this is the base for play, share, arrows and list buttons alike. The ✕ buttons are the
-   exception: they take --accent-soft from the "cross buttons" section at the end of this file. */
 .icon-btn:hover { background: rgba(255,255,255,.14); }
 .icon-btn.big { width: 52px; height: 52px; background: rgba(255,255,255,.14); backdrop-filter: blur(8px); }
 .avatar { --av: var(--accent); display: inline-grid; place-items: center; border-radius: 50%; background: var(--av); color: #fff; font-weight: 800; flex: none; user-select: none; }
@@ -991,6 +985,7 @@ body.player-settings-open { overflow: hidden; }
 @keyframes abm-slide { 0% { transform: translateX(-110%) } 100% { transform: translateX(320%) } }
 .abm-note { margin: 0; color: var(--muted); font-size: 12.5px; max-width: 40ch; }
 @media (prefers-reduced-motion: reduce) { .maintenance-screen::before, .abm-glyph, .abm-bar i { animation: none } }
+fore, .abm-glyph, .abm-bar i { animation: none } }
 
 /* Match the premium plan branding on the locked player, including the raised gold word. */
 .locked-premium-heading .brand-lockup .premium-word { font-size: .6em; }
@@ -1278,12 +1273,3 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .country-row:hover { background: rgba(255,255,255,.06); }
 .country-row b { flex: none; color: var(--text-2); font-weight: 600; }
 .country-row.on, .country-row.on b { color: var(--gold); }
-
-/* ---------- cross buttons ---------- */
-/* Every ✕ in the app draws in the theme's light red (--accent-soft): the dialog's close, the lightbox's,
- * the sign-in / create-account sheet's, the player settings sheet's, the "dismiss next video" chip and the
- * search field's clear button. Kept as one rule, at the end of the file that declares each of those buttons,
- * so the cascade never lets a button's own base colour (white, or --text-2) win and there is one place to
- * edit — add any new ✕ to this selector list. State rules (:hover/:focus) still override it deliberately:
- * the auth sheet's ✕ fills red and turns white on hover. */
-.dlg-x, .lb-close, .next-close, .auth-close, #clr, .ytp-settings-header [data-settings-close] { color: var(--accent-soft); }
