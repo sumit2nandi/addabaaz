@@ -943,3 +943,38 @@ fore, .abm-glyph, .abm-bar i { animation: none } }
 body[data-route="account"]:has(.profile-page) #view { min-height: 0; }
 body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .deletion-actions { margin-top: 24px; }
+
+/* Account pages keep the single-column phone flow; desktop gets room to navigate and work. */
+.account-sidebar { display: none; }
+.account-content { min-width: 0; }
+.account-content .row-link > span, .account-content .row-switch > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.account-content .row-link > svg, .account-content .switch { flex-shrink: 0; }
+.profile-id { overflow-wrap: anywhere; }
+@media (min-width: 1024px) {
+  .profile-page, .settings-page, .support-page { max-width: 1200px; padding-top: 36px; }
+  .profile-page .profile-head { padding: 0 0 28px; gap: 18px; }
+  .profile-page .group-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 0; background: none; border: 0; box-shadow: none; }
+  .profile-page .group-list .row-link { min-height: 104px; padding: 24px; border: 1px solid var(--border); border-radius: 16px; background: var(--panel); transition: background .15s, border-color .15s; }
+  .profile-page .group-list .row-link:hover { background: var(--panel-2); border-color: var(--accent); }
+  .profile-page .group-list .row-link > span { min-width: 0; }
+  .profile-page .group-list .row-link > svg { flex-shrink: 0; }
+  .profile-page .group-list small { margin-top: 4px; line-height: 1.5; }
+  .profile-page .profile-footer { padding-top: 20px; }
+  .account-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 40px; align-items: start; }
+  .account-sidebar { display: grid; gap: 6px; position: sticky; top: calc(var(--topbar-h) + 24px); padding: 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--panel); }
+  .account-sidebar a { display: flex; align-items: center; gap: 12px; padding: 13px 12px; border-radius: 10px; color: var(--muted); font-size: 14px; font-weight: 600; }
+  .account-sidebar svg { flex-shrink: 0; }
+  .account-sidebar a:hover { background: var(--panel-2); color: var(--text); }
+  .account-sidebar a[aria-current="page"] { background: rgba(var(--accent-rgb), .14); color: #fff; box-shadow: inset 3px 0 var(--accent); }
+  .account-sidebar .account-overview { margin-bottom: 8px; color: var(--text); }
+  .settings-page .back-row { display: none; }
+  .account-content .sub-h:first-child { margin-top: 0; }
+  .account-content .account-section + .account-section { margin-top: 28px; }
+  .account-content .row-link, .account-content .row-switch { padding: 20px 24px; min-height: 76px; }
+  .account-content .row-link small, .account-content .row-switch small { line-height: 1.5; }
+  .account-content .form { max-width: 100%; }
+  .account-content .form .btn { justify-self: start; width: auto; min-width: 160px; }
+  .deletion-page { max-width: 960px; }
+  .deletion-page p { max-width: 78ch; line-height: 1.75; }
+  .profiles-page .profile-grid { gap: 32px; max-width: 1100px; }
+}

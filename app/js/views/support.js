@@ -4,6 +4,8 @@
 // Signed-in viewers see their previous tickets and their replies in one place. Guests can still write in:
 // the form asks for a name and an e-mail, the reference is shown on screen and mailed to them, and the
 // ticket form is the only thing they need (the reply thread is reachable with the same e-mail).
+import { accountNav } from '../ui/account-nav.js';
+import { settingGroups } from './account-extra.js';
 import { app } from '../app.js';
 import { CONFIG } from '../config.js';
 import { html, $, timeAgo, fmtDate } from '../util.js';
@@ -46,7 +48,8 @@ export default async function support(ctx) {
   if (acc) { try { tickets = (await u.myTickets({ limit: 25 })).tickets || []; } catch { /* the form still works */ } }
   if (ctx.stale?.()) return;   // see the sign-in page: an older shell may not have it yet
 
-  ctx.root.innerHTML = html`<div class="page page-narrow">
+  ctx.root.innerHTML = html`<div class="page page-narrow support-page">
+    <div class="account-layout">${accountNav(settingGroups(), 'help')}<div class="account-content">
     ${sectionHeader({ tag: 'We’re here to help', title: 'Support', subtitle: 'Tell us what went wrong and we’ll get back to you by e-mail — usually within one working day.' })}
     ${acc ? html`<div class="card-panel notice"><div>${icon('mail', { size: 22 })}</div><div><b>Signed in as ${acc.name}</b>
       <p class="muted">${acc.emailIsPlaceholder ? `This account signs in with SMS. Enter a separate e-mail address below so we can reply to your ticket.` : `We’ll reply to ${acc.email}.`}</p></div></div>` : ''}
@@ -73,6 +76,7 @@ export default async function support(ctx) {
         <div class="row-link static">${icon('play', { size: 22 })}<span><b>Video won’t play?</b><small>Try another network or the ADDABAAZ app, and mention the title you were watching.</small></span></div>
         <a class="row-link" href="#/contact">${icon('mail', { size: 22 })}<span><b>Business &amp; production enquiries</b><small>Use the contact page instead.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a>
       </div></section>
+    </div></div>
   </div>`.s;
 
   const form = $('#supForm', ctx.root);
