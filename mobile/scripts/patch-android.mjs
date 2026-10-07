@@ -21,6 +21,7 @@ import { lockPortrait, isPortraitLocked, addOAuthRedirect, hasOAuthRedirect,
 import { stampLauncherIcons } from './android-icons.mjs';
 import { stableSigning, hasStableSigning } from './android-gradle.mjs';
 import { patchMainActivity, mainActivityInstallsFullscreen, writeFullscreenClient, addCoreDependency, javaSourceDir } from './android-fullscreen.mjs';
+import { stampNativeLaunchHtml, hasNativeLaunchMarker } from './stamp-native-launch.mjs';
 
 // Deep-link scheme for the Google sign-in redirect back into the app (= the Capacitor appId;
 // the API's /auth/google/native-page deep-links to the same scheme, keep them in step).
@@ -77,9 +78,23 @@ patch('app/src/main/AndroidManifest.xml', 'no backup / no device-transfer restor
 patch('app/src/main/res/values/strings.xml', 'app_name -> Addabaaz', (t) =>
   t.replace(/<string name="app_name">[^<]*<\/string>/, '<string name="app_name">Addabaaz</string>'));
 
-// Android 12+ system splash: match the ADDABAAZ red launch canvas and use the logo artwork
-// instead of the launcher icon's square. Update existing items too, so older generated projects
-// are corrected on the next sync rather than silently keeping the previous splash color.
+// The launch screen must be right in the VERY FIRST frame: the compact web loader (.boot-web) must
+// never paint on a native launch. Marking the document from JS (app/launch-platform.js, which runs
+// from <head>) is only a safety net - it depends on Capacitor's runtime being injected before it,
+// and getPlatform() still reports 'web' at that point because the native bridge object is not there
+// yet. Stamping the marker straight into the packaged HTML removes the dependency entirely: the file
+// the WebView serves already says data-app="native" (see app/css/styles.css), and app/js/platform.js
+// fills in the exact data-platform once the bridge is up. cap sync regenerates this file from ../www
+// on every sync and this script runs right after, so the stamp can never go stale.
+patch('app/src/main/assets/public/index.html', 'native launch marked before the first paint (no web-loader flash)', (t) => {
+  const out = stampNativeLaunchHtml(t);
+  if (!hasNativeLaunchMarker(out)) throw new Error('[android:patch] could not mark app/src/main/assets/public/index.html for the native launch screen - index.html changed shape; update mobile/scripts/stamp-native-launch.mjs.');
+  return out;
+});
+
+// Android 12+ system splash: match the red launch canvas (the logo's colour) and use the logo
+// artwork instead of the launcher icon's square. Update existing items too, so older generated
+// projects are corrected on the next sync rather than silently keeping the previous splash color.
 patch('app/src/main/res/values/styles.xml', 'system splash uses the branded red canvas + centered logo', (t) => {
   const style = t.match(/<style name="AppTheme\.NoActionBarLaunch"[^>]*>[\s\S]*?<\/style>/);
   if (!style) throw new Error('[android:patch] could not find AppTheme.NoActionBarLaunch in styles.xml.');

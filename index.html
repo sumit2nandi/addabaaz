@@ -45,6 +45,10 @@
 
 <!-- Deployment settings (API address etc.) — a separate file so it can be changed without touching the app. -->
 <script src="app/env.js"></script>
+<!-- Pull-to-refresh reload flag: swaps the launch splash for the compact loader before first paint. -->
+<script src="app/refresh-flag.js"></script>
+<!-- Platform before first paint, so a native launch never flashes the compact web loader first. -->
+<script src="app/launch-platform.js"></script>
 </head>
 <body>
 <!-- Accessibility: keyboard users can jump past the menu. -->
@@ -58,16 +62,8 @@
     <div class="boot-web" aria-hidden="true"><div class="boot-mark"><img src="media/icons/icon-192.png" width="88" height="88" alt=""><span class="boot-ring"><svg viewBox="0 0 100 100"><circle class="tr" cx="50" cy="50" r="54"></circle><circle class="arc" cx="50" cy="50" r="54"></circle></svg></span></div></div>
     <div class="boot-native" role="status" aria-live="polite" aria-busy="true">
       <div class="boot-native-content">
-        <div class="boot-native-emblem" aria-hidden="true">
-          <svg viewBox="0 0 100 100" focusable="false">
-            <circle cx="50" cy="50" r="49" fill="rgba(95,0,24,.35)" />
-            <rect x="19" y="24" width="62" height="44" rx="10" fill="#fff" />
-            <path d="M44 34.5a3 3 0 0 1 4.6-2.5l17 13a3 3 0 0 1 0 4.8l-17 13a3 3 0 0 1-4.6-2.4z" fill="#b80000" />
-            <rect x="39" y="74" width="22" height="5" rx="2.5" fill="#fff" />
-          </svg>
-        </div>
-        <strong class="boot-native-title">ADDABAAZ</strong>
-        <span class="boot-native-tagline">STORIES BEYOND THE SCREEN</span>
+        <!-- The launch screen shows only the brand logo (its badge already carries the name + tagline). -->
+        <img class="boot-native-logo" src="media/icons/icon-512.png" width="512" height="512" alt="ADDABAAZ">
         <div class="boot-native-progress" role="progressbar" aria-label="Loading ADDABAAZ"><span></span></div>
       </div>
     </div>

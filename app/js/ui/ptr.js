@@ -1,6 +1,8 @@
 /* Pull-to-refresh: dragging down while at the top reloads the current page. That boot fetch gets
  * the latest catalog edited in Admin. The browser's built-in pull-to-refresh is disabled in
- * styles.css so this custom gesture is the only refresh path. */
+ * styles.css so this custom gesture is the only refresh path. The reload is flagged as an
+ * in-app refresh (sessionStorage `ab:refresh`, read by app/refresh-flag.js) so it never replays
+ * the launch splash — that belongs to the first launch only. */
 const THRESHOLD = 88;   // px of pull required to trigger a refresh
 const MAX = 96;         // px the indicator may travel
 let startY = null, pulled = 0, engaged = false, el = null;
@@ -57,6 +59,9 @@ export function initPullToRefresh() {
     abandon();
     if (fire) {
       const e = ensure(); e.classList.add('on'); e.style.transform = 'translateY(0px)';
+      // The reload is an in-app refresh, not an app launch: app/refresh-flag.js (run from <head>)
+      // reads this flag and shows the compact loader instead of replaying the full launch splash.
+      try { sessionStorage.setItem('ab:refresh', '1'); } catch { /* storage blocked: the splash will show once */ }
       setTimeout(() => location.reload(), 220);   // allow the indicator to appear before a full page reload
     }
     else rest();

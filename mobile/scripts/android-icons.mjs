@@ -41,15 +41,25 @@ export function stampLauncherIcons(androidRoot) {
   fs.copyFileSync(path.join(ICON_SOURCE, 'ic_launcher_playstore.png'), path.join(res, 'drawable', 'ic_launcher_playstore.png'));
   done.push('drawable/ic_launcher_playstore.png');
   // The stock Capacitor splash (white tile + blue bot) flashes for a moment on every launch; the
-  // branded red splash replaces it in every density bucket AND as the drawable/splash.png the
+  // branded red (logo-colour) splash replaces it in every density bucket AND as the drawable/splash.png the
   // template's styles reference (system splash icon + the SplashScreen plugin both use it).
-  for (const d of DENSITIES) {
-    const target = path.join(res, `drawable-${d}`);
-    fs.mkdirSync(target, { recursive: true });
-    fs.copyFileSync(path.join(ICON_SOURCE, 'splash', `${d}.png`), path.join(target, 'splash.png'));
-    done.push(`drawable-${d}/splash.png`);
+  // It has to replace the port/land buckets too: `@drawable/splash` resolves to drawable-port-* on a
+  // portrait device (this app is portrait-locked), so the template's drawable-port-*/drawable-land-*/
+  // splash.png outranked the plain drawable/ copy and the Capacitor bot flashed before the branded
+  // splash on every launch. So: sweep every drawable* directory that already holds a splash.png
+  // (whatever a newer template or @capacitor/assets put there), then guarantee the canonical buckets.
+  const SPLASH = path.join(ICON_SOURCE, 'splash');
+  const densityOf = (dir) => DENSITIES.find((d) => dir.endsWith(`-${d}`)) || 'mdpi';
+  const splashDirs = new Set(['drawable', ...DENSITIES.map((d) => `drawable-${d}`)]);
+  for (const entry of fs.readdirSync(res, { withFileTypes: true })) {
+    if (entry.isDirectory() && /^drawable/.test(entry.name) &&
+        fs.existsSync(path.join(res, entry.name, 'splash.png'))) splashDirs.add(entry.name);
   }
-  fs.copyFileSync(path.join(ICON_SOURCE, 'splash', 'mdpi.png'), path.join(res, 'drawable', 'splash.png'));
-  done.push('drawable/splash.png');
+  for (const dir of splashDirs) {
+    const target = path.join(res, dir);
+    fs.mkdirSync(target, { recursive: true });
+    fs.copyFileSync(path.join(SPLASH, `${densityOf(dir)}.png`), path.join(target, 'splash.png'));
+    done.push(`${dir}/splash.png`);
+  }
   return done;
 }

@@ -16,8 +16,8 @@ export function initPlatform() {
     else if (location.hash && location.hash !== '#/' ) location.hash = '#/';
     else P.App.exitApp?.();
   });
-  // White status-bar icons sit on the red launch screen. Restore the regular dark app chrome
-  // after the router has rendered its first route.
+  // White status-bar icons sit on the red launch screen (the logo's colour). The regular dark
+  // app chrome takes over after the router has rendered its first route.
   P.StatusBar?.setStyle?.({ style: 'LIGHT' });
   P.StatusBar?.setBackgroundColor?.({ color: '#b80000' }).catch?.(() => {});
   window.addEventListener('ab:ready', () => {

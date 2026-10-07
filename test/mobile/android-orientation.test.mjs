@@ -115,7 +115,7 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ab-android-'));
   try {
     fs.mkdirSync(path.join(dir, 'scripts'));
-    for (const f of ['patch-android.mjs', 'android-manifest.mjs', 'android-icons.mjs', 'android-gradle.mjs', 'android-fullscreen.mjs']) fs.copyFileSync(new URL(f, SCRIPTS), path.join(dir, 'scripts', f));
+    for (const f of ['patch-android.mjs', 'android-manifest.mjs', 'android-icons.mjs', 'android-gradle.mjs', 'android-fullscreen.mjs', 'stamp-native-launch.mjs']) fs.copyFileSync(new URL(f, SCRIPTS), path.join(dir, 'scripts', f));
     fs.cpSync(new URL('../../mobile/android-icons', import.meta.url), path.join(dir, 'android-icons'), { recursive: true });
     fs.copyFileSync(new URL('../../mobile/capacitor.config.json', import.meta.url), path.join(dir, 'capacitor.config.json'));
     fs.mkdirSync(path.join(dir, 'keystores'));
@@ -128,10 +128,22 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     const styles = path.join(dir, 'android', 'app', 'src', 'main', 'res', 'values', 'styles.xml');
     fs.mkdirSync(path.dirname(styles), { recursive: true });
     fs.writeFileSync(styles, `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">\n    </style>\n    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">\n        <item name="windowActionBar">false</item>\n    </style>\n    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">\n        <item name="android:background">@drawable/splash</item>\n    </style>\n</resources>\n`);
+    // Capacitor's template also ships its stock splash (white tile + blue bot) in the portrait and
+    // landscape buckets — and those outrank the plain drawable/ copy on a portrait device.
+    const resDir = path.join(dir, 'android', 'app', 'src', 'main', 'res');
+    for (const bucket of ['drawable-port-xxxhdpi', 'drawable-land-mdpi']) {
+      const b = path.join(resDir, bucket);
+      fs.mkdirSync(b, { recursive: true });
+      fs.writeFileSync(path.join(b, 'splash.png'), `stock Capacitor splash in ${bucket}`);
+    }
     // Capacitor's stock MainActivity (package rewritten to the appId), for the fullscreen patch.
     const mainActivity = path.join(dir, 'android', 'app', 'src', 'main', 'java', 'in', 'addabaaz', 'app', 'MainActivity.java');
     fs.mkdirSync(path.dirname(mainActivity), { recursive: true });
     fs.writeFileSync(mainActivity, 'package in.addabaaz.app;\n\nimport com.getcapacitor.BridgeActivity;\n\npublic class MainActivity extends BridgeActivity {}\n');
+    // What `cap sync` copies into the app module: the packaged web bundle, index.html included.
+    const webIndex = path.join(dir, 'android', 'app', 'src', 'main', 'assets', 'public', 'index.html');
+    fs.mkdirSync(path.dirname(webIndex), { recursive: true });
+    fs.writeFileSync(webIndex, '<!doctype html>\n<html lang="en">\n<head><script src="app/launch-platform.js"></script></head>\n<body></body>\n</html>\n');
     const run = () => execFileSync(process.execPath, [path.join(dir, 'scripts', 'patch-android.mjs')], { cwd: dir, encoding: 'utf8', stdio: 'pipe' });
 
     const first = run();
@@ -139,6 +151,13 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'src', 'main', 'res', 'mipmap-mdpi', 'ic_launcher.png')), 'the patch also stamps the logo launcher icons');
     assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'src', 'main', 'res', 'drawable-xxxhdpi', 'splash.png')), 'the branded launch art replaces the stock white Capacitor tile');
     assert.ok(fs.existsSync(path.join(dir, 'android', 'app', 'src', 'main', 'res', 'drawable', 'splash.png')), 'the template splash.png itself is overwritten');
+    // `@drawable/splash` resolves to the portrait bucket on a portrait device (this app is
+    // portrait-locked), so the port/land buckets must carry the branded art too — otherwise the
+    // stock Capacitor splash keeps flashing before the branded one on every launch.
+    const brandedSplash = (d) => fs.readFileSync(new URL(`../../mobile/android-icons/splash/${d}.png`, import.meta.url));
+    assert.ok(fs.existsSync(path.join(resDir, 'drawable-port-xxxhdpi', 'splash.png')), 'the fixture ships the stock portrait splash bucket');
+    assert.deepEqual(fs.readFileSync(path.join(resDir, 'drawable-port-xxxhdpi', 'splash.png')), brandedSplash('xxxhdpi'), 'the portrait splash bucket carries the branded art, not the Capacitor bot');
+    assert.deepEqual(fs.readFileSync(path.join(resDir, 'drawable-land-mdpi', 'splash.png')), brandedSplash('mdpi'), '…and the landscape bucket too');
     const patched = fs.readFileSync(manifest, 'utf8');
     assert.equal(isPortraitLocked(patched), true);
     assert.equal(patched, disableBackup(addOAuthRedirect(lockPortrait(generated), 'in.addabaaz.app')), 'portrait lock, the Google sign-in deep-link filter and no backup/restore');
@@ -149,7 +168,7 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     assert.ok(hasStableSigning(fs.readFileSync(buildGradle, 'utf8')), 'debug builds are signed with the shared key, so new APKs install over old ones');
     assert.ok(hasCoreDependency(fs.readFileSync(buildGradle, 'utf8')), 'androidx.core is on the app classpath for the fullscreen insets');
     const patchedStyles = fs.readFileSync(styles, 'utf8');
-    assert.match(patchedStyles, /windowSplashScreenBackground">#b80000<\/item>/, 'the system splash matches the branded red HTML loader');
+    assert.match(patchedStyles, /windowSplashScreenBackground">#b80000<\/item>/, 'the system splash matches the red HTML loader (the logo colour)');
     assert.match(patchedStyles, /windowSplashScreenAnimatedIcon/, 'the system splash uses centered logo artwork');
     assert.match(patchedStyles, /ab-dark-window/, 'the window theme patch was applied');
     assert.match(patchedStyles, /<item name="android:navigationBarColor">#050505<\/item>/, 'nav bar is dark - no white strips around full-screen video');
@@ -157,6 +176,12 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     assert.match(patchedStyles, /ab-dark-window-activity/, 'the theme the activity really runs in (AppTheme.NoActionBar) was patched too');
     assert.match(patchedStyles, /<item name="android:windowLightNavigationBar">false<\/item>/, 'dark nav bar with light icons (no white bar in the system light mode)');
     assert.match(patchedStyles, /<item name="android:windowLightStatusBar">false<\/item>/);
+    // The packaged HTML carries the native launch marker, so the branded launch screen is the very
+    // first frame without depending on when Capacitor injects its runtime (or on getPlatform(),
+    // which still answers "web" that early). This is what stops the compact web loader flashing.
+    assert.match(first, /index\.html: native launch marked before the first paint/);
+    assert.match(fs.readFileSync(webIndex, 'utf8'), /<html lang="en" data-app="native">/, 'the WebView serves a document that is already marked native');
+    const stampedIndex = fs.readFileSync(webIndex, 'utf8');
 
     // Full-screen video: MainActivity installs the client that shows the video alone on black.
     const patchedActivity = fs.readFileSync(mainActivity, 'utf8');
@@ -164,7 +189,7 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     assert.ok(fs.existsSync(path.join(path.dirname(mainActivity), 'FullscreenClient.java')), 'the client class is written next to MainActivity');
     assert.match(first, /fullscreen video client installed/);
 
-    // Upgrade a previously-generated project whose Android 12 splash still has the old dark background.
+    // Upgrade a previously-generated project whose Android 12 splash still has the old black background.
     const staleSplashStyles = patchedStyles.replace(
       '<item name="android:windowSplashScreenBackground">#b80000</item>',
       '<item name="android:windowSplashScreenBackground">#050505</item>');
@@ -180,6 +205,7 @@ test('npm run android:patch locks the generated project, is idempotent, and fail
     assert.equal(/locked to portrait/.test(second), false, 'a second run has nothing to change');
     assert.equal(/no backup/.test(second), false, 'the backup patch is idempotent as well');
     assert.equal(/system splash uses the branded red canvas/.test(second), false, 'the splash patch is idempotent too');
+    assert.equal(fs.readFileSync(webIndex, 'utf8'), stampedIndex, 'the launch marker is idempotent: every `cap sync` re-stamps safely');
     assert.equal(fs.readFileSync(mainActivity, 'utf8'), patchedActivity, 'a second run leaves MainActivity alone');
     assert.equal(fs.readFileSync(manifest, 'utf8'), patched);
 
