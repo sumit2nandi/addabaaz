@@ -27,7 +27,8 @@ import { initFullscreenRotation } from './orientation.js';
 // Native-shell hooks and diagnostics must run before boot: initial API/catalog/session failures are still reports.
 initPlatform();
 initErrorReporting();
-resolveDeviceModel();   // best-effort device name for the "Your devices" list (cached, sync reads)
+// Best-effort device name for the "Your devices" list (cached; heartbeat reads stay synchronous).
+resolveDeviceModel();
 
 // Start-up sequence. Any failure ends in the friendly error box at the bottom of this file.
 async function boot() {
