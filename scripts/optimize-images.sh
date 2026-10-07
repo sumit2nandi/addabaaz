@@ -58,5 +58,7 @@ mkdir -p resources
 convert -size 512x512 xc:none -fill white -draw 'circle 256,256 256,0' /tmp/round-mask.png
 convert images/addabaaz-logo.png -resize 512x512 -alpha set /tmp/round-mask.png -compose DstIn -composite -strip -depth 8 -define png:compression-level=9 PNG32:resources/icon-only.png
 convert -size 1024x1024 xc:'#050505' resources/icon-background.png
-convert -size 2732x2732 xc:'#b80000' \( resources/icon-only.png -resize 620x620 \) -gravity center -composite -strip -define png:compression-level=9 resources/splash.png
+# Splash master: the ADDABAAZ red canvas (the logo's colour) with the ADDABAAZ logo. The mark's
+# alpha is flattened against the canvas colour so the background stays flat instead of a noisy halo.
+convert -size 2732x2732 xc:'#b80000' \( resources/icon-only.png -resize 620x620 -background '#b80000' -alpha remove -alpha off \) -gravity center -composite -depth 8 -strip -define png:compression-level=9 resources/splash.png
 echo "done"; du -sh media resources

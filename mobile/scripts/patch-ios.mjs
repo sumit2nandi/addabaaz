@@ -5,9 +5,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stampNativeLaunchFile } from './stamp-native-launch.mjs';
 
 const MOBILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const APP_DELEGATE = path.join(MOBILE, 'ios', 'App', 'App', 'AppDelegate.swift');
+const PUBLIC_INDEX = path.join(MOBILE, 'ios', 'App', 'App', 'public', 'index.html');
 const MARKER = '// ADDABAAZ-FIREBASE-PUSH';
 
 export function patchAppDelegate(source) {
@@ -20,6 +22,15 @@ export function patchAppDelegate(source) {
 }
 
 function main() {
+  // The branded launch screen has to be the first frame: mark the packaged HTML as native so the
+  // compact web loader never paints on launch (see stamp-native-launch.mjs). Same reasoning and the
+  // same marker as the Android stamp in patch-android.mjs.
+  if (fs.existsSync(PUBLIC_INDEX)) {
+    const stamped = stampNativeLaunchFile(PUBLIC_INDEX);
+    console.log(stamped
+      ? '[ios:patch] public/index.html: native launch marked before the first paint (no web-loader flash).'
+      : '[ios:patch] public/index.html: native launch marker already present.');
+  }
   if (!fs.existsSync(APP_DELEGATE)) {
     console.log('[ios:patch] no mobile/ios project yet; run `npm run add:ios` first.');
     return;

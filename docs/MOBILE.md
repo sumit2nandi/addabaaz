@@ -122,12 +122,38 @@ it down.
   background and transparent foreground; older launchers use the same white-tile
   PNG fallback.
 - On Android and iOS, tapping the app icon shows a branded launch sequence:
-  a native red launch canvas with the ADDABAAZ mark, then a full-screen HTML
-  loader with the app name and an indeterminate progress bar while the first
-  route is prepared. The HTML loader remains until the router emits `ab:ready`;
-  it does not claim a fake percentage. Android's system splash uses the red
-  canvas plus centered logo artwork, and iOS assets are generated from
-  `resources/splash.png`. The existing compact boot ring remains for web/PWA.
+  a native brand-red launch canvas (the logo's colour) with the ADDABAAZ logo,
+  then a full-screen HTML loader showing the same logo plus an indeterminate
+  progress bar while the first route is prepared. The HTML loader remains
+  until the router emits `ab:ready`; it does not claim a fake percentage.
+  Android's system splash uses the red canvas plus centered logo artwork,
+  and iOS assets are generated from `resources/splash.png`. The existing
+  compact boot ring remains for web/PWA — and the two mechanisms below keep
+  it from flashing on a native launch.
+- The first frame of a native launch is guaranteed **without trusting
+  JavaScript**: `mobile/scripts/stamp-native-launch.mjs` stamps
+  `data-app="native"` straight into the generated `index.html` that
+  `cap sync` copies into the Android/iOS project, and the launch CSS turns
+  `#boot` into the red canvas for that marker as well as for `data-platform`.
+  `cap sync` regenerates the file and the platform patch scripts run right
+  after it, so the stamp can never go stale. `www/` itself is left unmarked,
+  because the same bundle is also the website.
+- `app/launch-platform.js` runs from `<head>` as the safety net: Capacitor
+  injects its own runtime as an inline script immediately after `<head>`, so
+  `window.Capacitor` is already defined there. It marks the *shell*
+  (`data-app="native"`), not the platform — `getPlatform()` still answers
+  `"web"` that early, because Capacitor's native bridge object
+  (`window.androidBridge`) is only injected around that moment, and stamping
+  `"web"` is precisely what kept the compact web loader on screen.
+  `app/js/platform.js` (an ES module, which only runs after the first paint)
+  fills in the exact `data-platform` once the bridge is up.
+- The branded splash art is stamped into **every** drawable bucket that can
+  hold a `splash.png` — `drawable/`, `drawable-<density>/` (what
+  `@capacitor/assets` writes) and the template's `drawable-port-*` /
+  `drawable-land-*`. Those last two matter most: `@drawable/splash` resolves
+  to the portrait bucket on a portrait-locked device, so leaving them alone
+  let Capacitor's own splash (white tile + blue bot) flash before the branded
+  one on every launch.
 - Capacitor's native splash auto-hide stays disabled. `app/js/platform.js`
   reveals the HTML loader as soon as the WebView can paint it, then restores the
   usual dark status bar when the first route is ready.
