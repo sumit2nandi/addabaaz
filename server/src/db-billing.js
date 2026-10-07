@@ -60,6 +60,18 @@ export function billingDb({ q, tx, self, iso }) {
     },
     async byId(id) { return mapInvoice((await q('SELECT * FROM invoices WHERE id = ?', [id]))[0]); },
     async forPayment(paymentId) { return (await q('SELECT * FROM invoices WHERE payment_id = ? ORDER BY issued_at, number', [paymentId])).map(mapInvoice); },
+    /**
+     * The documents of MANY payments in one query, grouped by payment id. The Billing page lists a whole
+     * page of payments at once: asking per payment meant 2 extra round trips for every row (a 12-payment
+     * account waited on 25 queries before the page could paint) — this is one query for all of them.
+     */
+    async forPayments(paymentIds) {
+      const out = new Map(paymentIds.map((id) => [id, []]));
+      if (!paymentIds.length) return out;
+      const rows = await q(`SELECT * FROM invoices WHERE payment_id IN (${paymentIds.map(() => '?').join(',')}) ORDER BY issued_at, number`, paymentIds);
+      for (const r of rows) { const inv = mapInvoice(r); out.get(inv.paymentId)?.push(inv); }
+      return out;
+    },
     /** Sales register for a date range (UTC), invoices and credit notes — feed for GSTR-1 / your accountant. */
     async register(from, to) {
       return (await q('SELECT * FROM invoices WHERE issued_at >= ? AND issued_at < ? ORDER BY issued_at, number', [from, to])).map(mapInvoice);
@@ -112,6 +124,14 @@ export function billingDb({ q, tx, self, iso }) {
   // ---- Refunds: one row per refund event reported by an admin, the API or a webhook ----
   const refunds = {
     async forPayment(paymentId) { return (await q('SELECT * FROM refunds WHERE payment_id = ? ORDER BY created_at', [paymentId])).map(mapRefund); },
+    /** The refunds of many payments in one query, grouped by payment id (see invoices.forPayments). */
+    async forPayments(paymentIds) {
+      const out = new Map(paymentIds.map((id) => [id, []]));
+      if (!paymentIds.length) return out;
+      const rows = await q(`SELECT * FROM refunds WHERE payment_id IN (${paymentIds.map(() => '?').join(',')}) ORDER BY created_at`, paymentIds);
+      for (const r of rows) { const refund = mapRefund(r); out.get(refund.paymentId)?.push(refund); }
+      return out;
+    },
     /**
      * Records a refund event idempotently (admin action, API response and webhooks can all report the same refund):
      *  - never lets refunds exceed the amount paid,

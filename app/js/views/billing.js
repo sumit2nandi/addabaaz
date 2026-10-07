@@ -12,16 +12,36 @@ import { isNative } from '../platform.js';
 // Formats paise (integer hundredths of a rupee) as ₹ with Indian digit grouping.
 const inr = (paise) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: paise % 100 ? 2 : 0 })}`;
 
+/* Billing is the slowest read in the app (payments, then a document lookup for each one — see the batching
+ * in server/src/db.js), so its two requests go out TOGETHER and the last answer is remembered for a few
+ * seconds: stepping away to Plan details and straight back paints instantly instead of waiting again. The
+ * cache is keyed to the account and the plan, so buying a plan — or signing in as somebody else — can
+ * never show a stale list. */
+const CACHE_MS = 30_000;
+let cache = null;   // { key, at, items, rr }
+const cacheKey = () => {
+  const u = app.user, s = u?.subscription;
+  return [u?.account?.id || '', s?.planId || '', s?.startedAt || '', s?.expiresAt || ''].join('|');
+};
+
 /** Billing & invoices: every paid plan with its GST invoice, credit notes for refunds, and the refund status. */
 export default async function billing(ctx) {
   const u = app.user;
   ctx.setTitle('Billing & invoices');
   if (!u.supportsAuth || !u.account) { go('/signin?next=' + encodeURIComponent('/billing'), { replace: true }); return; }
   const backLink = html`<p class="back-row"><a class="account-edit-back" href="#/plans" aria-label="Back to plan details">${icon('left', { size: 24 })}</a></p>`;
+  const key = cacheKey();
+  const hit = cache && cache.key === key && Date.now() - cache.at < CACHE_MS ? cache : null;
   let items, rr = { requests: [], windowDays: 0 };
-  try { items = await u.billingHistory(); } catch (e) { ctx.root.innerHTML = html`<div class="page page-narrow">${backLink}<div class="empty"><h2>Couldn’t load your billing history</h2><p>${friendly(e)}</p></div></div>`.s; return; }
-
-  try { rr = await u.remote.refundRequests(); } catch { /* older server: no self-service refunds */ }
+  if (hit) { items = hit.items; rr = hit.rr; }
+  else {
+    // One round trip, not two in a row: the history and the refund window are fetched at the same time.
+    const [history, refunds] = await Promise.allSettled([u.billingHistory(), u.remote.refundRequests()]);
+    if (history.status === 'rejected') { ctx.root.innerHTML = html`<div class="page page-narrow">${backLink}<div class="empty"><h2>Couldn’t load your billing history</h2><p>${friendly(history.reason)}</p></div></div>`.s; return; }
+    items = history.value;
+    if (refunds.status === 'fulfilled') rr = refunds.value;   // older server: no self-service refunds
+    cache = { key, at: Date.now(), items, rr };
+  }
   const pending = new Set(rr.requests.filter((r) => r.status === 'pending').map((r) => r.paymentId));
   const canAsk = (p) => rr.windowDays > 0 && p.provider === 'razorpay' && p.amountPaise > 0 && p.refundedPaise < p.amountPaise && !pending.has(p.id) && (Date.now() - Date.parse(p.paidAt)) / 864e5 <= rr.windowDays;
   const doc = (d, label) => html`<button class="btn btn-ghost" data-dl="${d.id}" data-name="${d.number}">${icon('download', { size: 16 })} ${label} ${d.number}</button>`;
@@ -61,7 +81,7 @@ export default async function billing(ctx) {
       <div class="form-status" role="alert"></div><div class="row end"><button type="button" class="btn btn-ghost" data-close>Not now</button><button class="btn btn-primary" type="submit">Send request</button></div></form>`, { cls: 'dialog-sm' });
     $('#rfForm', el).addEventListener('submit', async (e) => {
       e.preventDefault(); const st = $('.form-status', el); e.submitter && (e.submitter.disabled = true);
-      try { await u.remote.requestRefund(paymentId, new FormData(e.target).get('reason')); close(); toast(hasVerifiedEmail ? 'Request sent — we’ll email you the outcome.' : 'Request sent — check Billing for updates.'); go('/billing', { replace: true }); location.reload(); }
+      try { await u.remote.requestRefund(paymentId, new FormData(e.target).get('reason')); close(); cache = null; toast(hasVerifiedEmail ? 'Request sent — we’ll email you the outcome.' : 'Request sent — check Billing for updates.'); go('/billing', { replace: true }); location.reload(); }
       catch (err) { st.textContent = friendly(err); e.submitter && (e.submitter.disabled = false); }
     });
   }

@@ -90,6 +90,24 @@ test('the stylesheet has no scroll-driven hide state for the tab bar', () => {
   assert.equal(/transition:/.test(rule), false, 'the tab bar never animates its position');
 });
 
+test('the floating menu is slim: a 54px pill with compact icons and labels', () => {
+  const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
+  const height = Number((css.match(/--tabbar-h:\s*(\d+)px/) || [])[1]);
+  assert.ok(height > 0 && height <= 54, `the bar is at most 54px tall (was 62px, is ${height}px)`);
+  // Everything parked above the bar (toasts, the pull-to-refresh indicator's neighbours, the Reels
+  // captions, the body's bottom padding) follows the same variable, so they all move with it.
+  assert.match(css, /body \{[^}]*padding-bottom: calc\(var\(--tabbar-h\)/);
+  const bar = css.split('\n').find((line) => line.startsWith('.tabbar {')) || '';
+  assert.match(bar, /bottom: calc\(10px \+ var\(--sab\)\)/, 'it floats a little closer to the bottom edge');
+  assert.match(bar, /padding: 0 6px/, 'and carries less side padding');
+  const tab = css.split('\n').find((line) => line.startsWith('.tabbar a {')) || '';
+  assert.match(tab, /gap: 2px/, 'icon and label sit closer together');
+  assert.match(tab, /font-size: 10\.5px/, 'with a smaller label');
+
+  const shell = fs.readFileSync(new URL('../../app/js/ui/shell.js', import.meta.url), 'utf8');
+  assert.match(shell, /icon\(ic, \{ size: 22 \}\)/, 'and 22px icons instead of 24px');
+});
+
 test('header search hides at the floating-menu breakpoint, while both search links remain available in their layouts', () => {
   const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
   const shell = fs.readFileSync(new URL('../../app/js/ui/shell.js', import.meta.url), 'utf8');

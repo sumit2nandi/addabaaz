@@ -20,9 +20,11 @@ test('website checkout is one Plus card with duration tiles and a single pay but
     'a single pay button buys the selected tile');
   assert.match(plans, /const b = pay \? \{ dataset: \{ plan: sel \} \} : e\.target\.closest\('\[data-plan\]'\)/,
     'paying reuses the existing purchase flow with the selected plan');
-  assert.match(plans, /\$\{canBuy \? plusCard : legacyCards\}/,
-    'the selector renders only when buying is possible');
-  assert.match(plans, /\$\{canBuy \? plusCard : legacyCards\}\s*\$\{u\.account \? html`<div class="card-panel list plans-bill">/,
+  // Guests on the website see the same selector (prices plus a "Sign in to subscribe" CTA) — see
+  // plans-guest.test.mjs; only the native apps fall back to the legacy cards.
+  assert.match(plans, /\$\{canBuy \|\| guestWeb \? plusCard : legacyCards\}/,
+    'the selector renders whenever there is something to show');
+  assert.match(plans, /\$\{canBuy \|\| guestWeb \? plusCard : legacyCards\}\s*\$\{u\.account \? html`<div class="card-panel list plans-bill">/,
     'a billing shortcut sits directly below the plan options for signed-in viewers');
   assert.match(plans, /<a class="row-link" href="#\/billing">.*Billing &amp; invoices/,
     '...leading to Billing & invoices');

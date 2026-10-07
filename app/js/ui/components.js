@@ -153,6 +153,9 @@ export function fitPoster(root) {
 // A horizontal scrolling row with a heading and a "See all" link.
 export function rail({ title, subtitle = '', items = [], href = '', linkLabel = 'See all', cls = '', id = '', hideHeading = false, headExtra = '' }) {
   if (!items.length) return html``;
+  // `headExtra` is a heading action rendered beside the title, not inside it: the header distributes its
+  // children with space-between, so it lands at the far right of the row — the same slot a rail's
+  // "See all" link takes (see the Continue Watching bin and the My List link on the home page).
   return html`<section class="rail ${cls}" ${id ? raw(`id="${esc(id)}"`) : ''} aria-label="${title}">
     ${hideHeading ? (href ? html`<div class="rail-head rail-head-minimal"><a class="see-all" href="${href}">${linkLabel} ${icon('right', { size: 16 })}</a></div>` : '') : html`<div class="rail-head"><div><h2>${title}</h2>${subtitle ? html`<p class="rail-sub">${subtitle}</p>` : ''}</div>
       ${headExtra}

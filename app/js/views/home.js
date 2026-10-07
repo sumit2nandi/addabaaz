@@ -370,7 +370,7 @@ export default async function home(ctx) {
   ctx.root.innerHTML = html`
     ${slides.length ? heroHtml(slides) : ''}
     <div class="rails rails-lean">
-      ${rail({ title: 'Continue Watching', items: cw.map(({ video }) => videoCard(video)), cls: 'r-video', id: 'cw-rail', headExtra: html`<button type="button" class="rail-clear" data-clear-history aria-label="Clear watch history">${icon('trash', { size: 16 })}</button>` })}
+      ${rail({ title: 'Continue Watching', items: cw.map(({ video }) => videoCard(video)), cls: 'r-video', id: 'cw-rail', headExtra: html`<button type="button" class="rail-clear" data-clear-history aria-label="Clear watch history">${icon('trash', { size: 18 })}</button>` })}
       ${rec ? rail({ title: `Because you watched ${rec.because.titleEn || rec.because.title}`, items: rec.items.map((x) => showCard(x)), cls: 'r-poster', id: 'byw-rail' }) : ''}
       ${rail({ title: 'My List', items: mine, href: '#/list', cls: 'r-poster' })}
       ${comingSoonSection(cat)}
