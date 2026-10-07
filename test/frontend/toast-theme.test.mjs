@@ -1,7 +1,7 @@
 // Toast redesign. The status bar at the bottom of the screen ("Watch history cleared", "Link copied"…)
 // used to be an opaque light bar with black text — the only element on the site that was not part of the
-// dark, red-accented theme. It is now a BLACK capsule with brand-red text, at exactly the size it always
-// had (same padding, font-size, weight, gap and shadow — see the size test at the bottom).
+// dark theme. It is now a BLACK capsule with WHITE text, ringed in the brand red, at exactly the size it
+// always had (same padding, font-size, weight, gap and shadow — see the size test at the bottom).
 //
 // Run: node --test test/frontend/toast-theme.test.mjs
 import { test } from 'node:test';
@@ -29,20 +29,20 @@ const token = (name) => (css.match(new RegExp(`--${name}:\\s*([^;]+);`)) || [])[
 
 /* ---------------------------------------------------------------- the look */
 
-test('the toast is a black capsule whose text is the floating menu\'s dark red', () => {
+test('the toast is a black capsule with white text, ringed in the brand red', () => {
   const toast = ruleText('.toast');
   // Black, near-opaque: the blurred artwork still tints the last few percent.
   assert.match(toast, /background:\s*rgba\(0,\s*0,\s*0,\s*\.9\)/, 'the fill is black');
   assert.match(toast, /backdrop-filter:\s*blur\(/, 'black glass over the artwork');
   assert.match(toast, /-webkit-backdrop-filter:\s*blur\(/, 'with the WebKit twin for iOS');
   assert.doesNotMatch(toast, /background-image:/, 'no coloured wash on top of the black');
-  // The message wears the SAME red the floating menu gives its active item — one shared token, so the two
-  // can never drift apart.
-  assert.match(toast, /color:\s*var\(--accent-2\)/, 'the message is the menu\'s dark red');
-  assert.match(ruleText('.tabbar a.active'), /color:\s*var\(--accent-2\)/, 'which is exactly the floating menu\'s active colour');
-  assert.doesNotMatch(css, /--accent-bright/, 'the one-off lighter red is gone');
-  // The hairline is an INSET ring, never a border: a border would add 2px to the capsule. It is what keeps
-  // the black capsule visible when it lands on the near-black page or on black artwork.
+  // White message text — the site's own --text token.
+  assert.match(toast, /color:\s*var\(--text\)/, 'the message is the theme\'s white');
+  assert.equal(token('text'), '#fff', 'which is plain white');
+  assert.doesNotMatch(toast, /color:\s*var\(--accent/, 'no red text on the toast any more');
+  assert.doesNotMatch(css, /--accent-bright/, 'the one-off lighter red stayed deleted');
+  // The brand red stays as the ring: it is what keeps the black capsule visible on the near-black page
+  // and carries the theme now that the text is white. An INSET ring, never a border (a border adds 2px).
   assert.match(toast, /box-shadow:\s*inset 0 0 0 1px rgba\(var\(--accent-rgb\),\s*\.55\),\s*0 10px 40px rgba\(0,0,0,\.6\)/, 'the original drop shadow plus a hairline INSIDE the box');
   assert.doesNotMatch(toast, /(?:^|[;\s])border:/, 'no border: it would grow the capsule by 2px');
   // Capsule shape, like the floating menu.
@@ -87,28 +87,30 @@ test('the toast keeps exactly the size it had before the redesign (the 45px ligh
   assert.ok(b.font * b.line + b.padY * 2 <= s.font * s.line, `the chip (${b.font * b.line + b.padY * 2}px) fits the message's line box (${s.font * s.line}px)`);
 });
 
-test('the optional action is a red chip, never a solid block', () => {
+test('the optional action is a chip on the black capsule, never a solid block', () => {
   const button = ruleText('.toast button');
   assert.match(button, /background:\s*rgba\(var\(--accent-rgb\),\s*\.22\)/, 'a translucent red chip on the black capsule');
   assert.match(button, /border:\s*0/, 'no border: the capsule keeps its exact size');
-  assert.match(button, /color:\s*var\(--accent-2\)/, 'the same dark red as the message');
+  assert.match(button, /color:\s*var\(--text\)/, 'white, like the message');
   assert.match(button, /border-radius:\s*999px/);
-  assert.match(css, /\.toast button:hover,[^}]*background: rgba\(var\(--accent-rgb\), \.45\); color: #fff;/, 'it brightens on hover/focus');
+  assert.match(css, /\.toast button:hover,[^}]*background: rgba\(var\(--accent-rgb\), \.45\);/, 'it brightens on hover/focus');
 });
 
-test('the menu red on the black capsule is legible, like the menu item it comes from', () => {
-  const red = token('accent-2');
-  assert.match(red, /^#[0-9a-f]{6}$/i, 'the floating menu\'s red is a plain hex colour');
-  const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+test('white on the black capsule reads clearly, and the red ring carries the brand', () => {
+  const white = token('text'), red = token('accent-2');
+  assert.equal(white, '#fff', 'the message colour is the theme white');
+  assert.match(red, /^#[0-9a-f]{6}$/i, 'the ring uses the floating menu\'s red token');
+  // #abc and #aabbcc both expand to [r, g, b].
+  const rgb = (hex) => { const h = hex.length === 4 ? [...hex.slice(1)].map((c) => c + c).join('') : hex.slice(1); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); };
   const lum = (hex) => rgb(hex).map((v) => { const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; })
     .reduce((n, c, i) => n + c * [0.2126, 0.7152, 0.0722][i], 0);
   const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
 
-  // The toast sits on black glass; the floating menu item sits on the black bar. Same red, same kind of
-  // ground, so the two must read identically — and clear the 3:1 threshold for large/bold text.
-  assert.ok(contrast(red, '#000000') >= 3, `${red} on the black capsule clears the large-text contrast threshold`);
-  assert.ok(Math.abs(contrast(red, '#000000') - contrast(red, token('bg'))) < 0.2, 'and it reads the same as it does in the floating menu (the page is #050505, effectively black)');
-  // It stays the brand's deep red: the red channel dominates by a wide margin.
+  // White on the near-opaque black fill: comfortably past the WCAG AA bar for normal text.
+  assert.ok(contrast(white, '#000000') >= 7, `${white} on the black capsule is AAA-legible`);
+  // The ring stays the brand's deep red (the same token the floating menu paints its active item with),
+  // at 55% alpha — a hairline that marks the capsule without competing with the message.
+  assert.match(ruleText('.tabbar a.active'), /color:\s*var\(--accent-2\)/, 'the floating menu and the toast ring share one red');
   const [r, g, b] = rgb(red);
   assert.ok(r >= 200 && g < 60 && b < 60, 'the hue is unmistakably red');
 });
