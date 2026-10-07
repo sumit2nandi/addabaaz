@@ -330,6 +330,9 @@ img.img-failed { opacity: 0; }
   .home-release-arrow { width: 32px; height: 32px; background: rgba(0,0,0,.5); }
 }
 .see-all { display: inline-flex; align-items: center; gap: 2px; color: var(--text-2); font-weight: 700; font-size: 13.5px; white-space: nowrap; } .see-all:hover { color: var(--gold); }
+/* Circular bin at the end of the Continue Watching heading — clears this profile's watch history. */
+.rail-clear { flex: none; align-self: center; width: 36px; height: 36px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(245, 197, 24, .45); background: rgba(255, 255, 255, .05); color: var(--gold); transition: background .2s, border-color .2s, color .2s; }
+.rail-clear:hover { background: var(--gold); border-color: var(--gold); color: #141414; }
 .page .rail-head, .page-tight .rail-head { padding: 0; } .page-tight .rail-track { padding-left: 0; padding-right: 0; }
 .rail-wrap { position: relative; }
 .rail-track { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none; padding: 8px var(--pad) 14px; scroll-padding: 0 var(--pad); overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }

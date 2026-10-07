@@ -3,7 +3,8 @@ import { app } from '../app.js';
 import { html, $, $$, fmtDate } from '../util.js';
 import { icon } from '../icons.js';
 import { CONFIG } from '../config.js';
-import { rail, enhanceRails, showCard, videoCard, reelCard, soonCard, listBtn, img, heroBg, showMeta, premiumMark, syncButtons } from '../ui/components.js';
+import { rail, enhanceRails, showCard, videoCard, reelCard, soonCard, listBtn, img, heroBg, showMeta, premiumMark, syncButtons, toast } from '../ui/components.js';
+import { confirmDialog } from '../ui/dialog.js';
 
 // Place the inactive slides just off one side of the active slide. Recomputing the positions on
 // every change gives the browser a direction-aware transform to animate for autoplay, dots and swipes.
@@ -369,8 +370,8 @@ export default async function home(ctx) {
   ctx.root.innerHTML = html`
     ${slides.length ? heroHtml(slides) : ''}
     <div class="rails rails-lean">
-      ${rail({ title: 'Continue Watching', items: cw.map(({ video }) => videoCard(video)), cls: 'r-video' })}
-      ${rec ? rail({ title: `Because you watched ${rec.because.titleEn || rec.because.title}`, items: rec.items.map((x) => showCard(x)), cls: 'r-poster' }) : ''}
+      ${rail({ title: 'Continue Watching', items: cw.map(({ video }) => videoCard(video)), cls: 'r-video', id: 'cw-rail', headExtra: html`<button type="button" class="rail-clear" data-clear-history aria-label="Clear watch history">${icon('trash', { size: 16 })}</button>` })}
+      ${rec ? rail({ title: `Because you watched ${rec.because.titleEn || rec.because.title}`, items: rec.items.map((x) => showCard(x)), cls: 'r-poster', id: 'byw-rail' }) : ''}
       ${rail({ title: 'My List', items: mine, href: '#/list', cls: 'r-poster' })}
       ${comingSoonSection(cat)}
       ${recentlyAddedSection(cat, N)}
@@ -386,4 +387,15 @@ export default async function home(ctx) {
   mountHero(ctx.root, ctx);
   mountReleaseSlideshow(ctx.root, ctx);
   enhanceRails(ctx.root);
+  // The bin beside the Continue Watching heading clears this profile's watch history (with a confirm).
+  const onClear = async (e) => {
+    if (!e.target.closest('[data-clear-history]')) return;
+    if (!(await confirmDialog({ title: 'Clear watch history?', text: 'This removes Continue Watching for this profile.', confirm: 'Clear', danger: true }))) return;
+    u.clearHistory();
+    toast('Watch history cleared');
+    $('#cw-rail', ctx.root)?.remove();
+    $('#byw-rail', ctx.root)?.remove();
+  };
+  ctx.root.addEventListener('click', onClear);
+  ctx.onCleanup(() => ctx.root.removeEventListener('click', onClear));
 }
