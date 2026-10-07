@@ -42,3 +42,14 @@ test('referral/support remain links; order, back links and privacy integration m
   assert.match(read('app/js/views/legal.js'), /wirePrivacyChoices\(ctx.root\)/);
   assert.match(read('app/css/styles.css'), /prefers-reduced-motion: reduce\) \{\s*\.accordion-panel/);
 });
+
+test('expanded settings are borderless and share the parent surface on mobile and desktop', () => {
+  const css = read('app/css/styles.css');
+  const cards = css.match(/\.profile-page \.accordion-body \.card-panel \{([^}]+)\}/)?.[1];
+  assert.ok(cards);
+  for (const property of ['background: transparent', 'border: 0', 'border-radius: 0', 'box-shadow: none', 'padding: 0']) {
+    assert.ok(cards.includes(property), property);
+  }
+  assert.match(css, /\.profile-page \.group-list \.accordion-body \.row-link,\s*\.profile-page \.group-list \.accordion-body \.row-switch \{\s*background: transparent;\s*border: 0;\s*border-radius: 0;/);
+  assert.ok(css.indexOf('.profile-page .accordion-body .card-panel {') > css.lastIndexOf('.profile-page .group-list .account-accordion .card-panel'), 'shared flattening rules follow the desktop overrides');
+});

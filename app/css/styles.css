@@ -1005,3 +1005,24 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 @media (prefers-reduced-motion: reduce) {
   .accordion-panel, .accordion-toggle .chev { transition: none; }
 }
+
+/* Expanded controls belong to their parent group, not another card inside it. */
+.profile-page .accordion-body .card-panel {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+.profile-page .group-list .accordion-body .row-link,
+.profile-page .group-list .accordion-body .row-switch {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+@media (hover: hover) {
+  .profile-page .group-list .accordion-body button.row-link:hover,
+  .profile-page .group-list .accordion-body a.row-link:hover,
+  .profile-page .group-list .accordion-body .row-switch:hover { background: rgba(255,255,255,.035); }
+}
