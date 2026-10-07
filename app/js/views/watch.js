@@ -2,6 +2,7 @@
 // Premium videos are checked first (gateFor): signed out -> sign-in wall, no plan -> subscribe wall. Every view is a function of `ctx`
 // (the router context: params, root element, setTitle, onCleanup).
 import { app } from '../app.js';
+import { prepareHtml5Player } from '../players/html5.js';
 import { CONFIG } from '../config.js';
 import { ApiError } from '../data/api.js';
 import { html, $, fmtDate, shareOrCopy } from '../util.js';
@@ -32,6 +33,7 @@ export default async function watch(ctx) {
     }
     return streamUrlPromise;
   };
+  if (gate === 'ok') prepareHtml5Player(v.source).catch(() => {});
   if (gate === 'ok' && v.source.type === 'r2') getStreamUrl().catch(() => {});
   // Fetch the YouTube IFrame API while the page renders — script + handshake is the slowest part of playback
   // starting on mobile networks, so overlap it with everything else rather than starting it inside the player.
@@ -239,6 +241,7 @@ export default async function watch(ctx) {
       let media = v;
       if (v.source.type === 'r2') {                     // premium/own-hosted video in Cloudflare R2: the API checks access and signs a short-lived URL
         const s = await getStreamUrl();
+        if (dead) return;
         media = { ...v, source: { type: s.type, url: s.url }, poster: cat.thumb(v) };
       }
       $('#playPill', ctx.root)?.remove();
@@ -284,6 +287,7 @@ export default async function watch(ctx) {
       const cb = $('#castBtn', ctx.root);
       if (cb && ctl.castSupported?.()) { cb.hidden = false; cb.onclick = () => ctl.cast().catch((e) => { if (e?.name !== 'NotAllowedError') toast('No cast devices found nearby.'); }); }
     } catch (e) {
+      if (dead) return;
       console.warn(e);
       if (e instanceof ApiError && e.status === 401) return wall('login');       // session expired or never signed in
       if (e instanceof ApiError && e.status === 402) return wall('plan');
