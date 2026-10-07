@@ -75,9 +75,13 @@ ul { margin: 0; padding: 0; list-style: none; }
 html[data-platform="android"] #boot, html[data-platform="ios"] #boot, html[data-app="native"] #boot { position: fixed; z-index: 9999; inset: 0; width: 100%; height: 100vh; height: 100dvh; min-height: 100vh; min-height: 100dvh; margin: 0; padding: calc(env(safe-area-inset-top, 0px) + 16px) calc(env(safe-area-inset-right, 0px) + 20px) calc(env(safe-area-inset-bottom, 0px) + 16px) calc(env(safe-area-inset-left, 0px) + 20px); overflow: hidden; display: grid; place-items: center; background: #b80000; color: #fff; }
 html[data-platform="android"] #boot .boot-web, html[data-platform="ios"] #boot .boot-web, html[data-app="native"] #boot .boot-web { display: none; }
 html[data-platform="android"] #boot .boot-native, html[data-platform="ios"] #boot .boot-native, html[data-app="native"] #boot .boot-native { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; text-align: center; }
-/* Pull-to-refresh reloads (html.ab-refresh, set from <head> by app/refresh-flag.js) stay on the launch
-   canvas but show the compact loader instead of replaying the full splash artwork — these rules must
-   stay AFTER the marker rules above (equal specificity, last one wins). */
+/* A refresh reload (html.ab-refresh: planted by ui/ptr.js, read from <head> by app/refresh-flag.js)
+   shows the compact loader instead of the launch artwork — and keeps the app's own dark background
+   instead of the brand-red launch canvas, because someone who pulled down to refresh must never be
+   handed a splash screen. These rules must stay AFTER the marker rules above (equal specificity, last
+   one wins). A reload is only the fallback path now: a normal pull refreshes in place (main.js
+   softRefresh) and never re-enters this screen at all. */
+html.ab-refresh #boot { background: var(--bg); color: var(--text); }
 html.ab-refresh #boot .boot-native { display: none; }
 html.ab-refresh #boot .boot-web { display: grid; }
 .boot-native-content { display: flex; flex-direction: column; align-items: center; transform: translateY(-2vh); }
