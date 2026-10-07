@@ -50,6 +50,10 @@ test('every settings group opens its own sub-page', () => {
     'an empty Refer & earn page explains itself instead of rendering blank');
   assert.match(extras, /title: 'Notifications unavailable'/,
     'an empty Notifications page explains itself instead of rendering blank');
+  assert.match(extras, /install the ADDABAAZ app to get episode, launch and announcement alerts/,
+    'browsers without push (iPhone Safari tabs) get an honest explanation, not a dead toggle');
+  assert.match(extras, /title: 'Sign in for notifications'/,
+    'signed-out viewers are pointed at sign-in instead of a dead end');
   assert.match(extras, /\['notify', 'Notifications', '[^\]]*'auth'\]/,
     'guests keep their notifications group');
   assert.match(extras, /\['danger', 'Delete account', '[^\]]*'account'\]/,

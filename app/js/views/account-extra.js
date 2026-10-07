@@ -7,11 +7,11 @@ import { html, $, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { toast, emptyState } from '../ui/components.js';
 import { openDialog, confirmDialog, pinPrompt } from '../ui/dialog.js';
-import { pushState, enablePush, disablePush, setPushPrefs } from '../push.js';
+import { pushState, enablePush, disablePush, setPushPrefs, pushSupported } from '../push.js';
 import { openConsentDialog } from '../consent.js';
 import { friendly } from '../errors.js';
 import { go } from '../router.js';
-import { platform } from '../platform.js';
+import { platform, isNative } from '../platform.js';
 
 // [id, title, subtitle, icon, who sees it ('all' | 'auth' | 'account'), link override for rows that leave the page]
 const GROUPS = [
@@ -20,7 +20,7 @@ const GROUPS = [
   ['kids', 'Kids & parental controls', 'Parental PIN and Kids profiles', 'user', 'account'],
   ['refer', 'Refer & earn', 'Invite credit and rewards', 'gift', 'account'],
   ['notify', 'Notifications', 'Episode, launch and announcement alerts', 'bell', 'auth'],
-  ['privacy', 'Privacy', 'Privacy choices and policies', 'info', 'auth'],
+  ['privacy', 'Privacy', 'Analytics and stored data', 'info', 'auth'],
   ['app', 'App', 'Install the app and version info', 'download', 'all'],
   ['help', 'Help & support', 'Help Centre and contact us', 'chat', 'all', '#/support'],
   ['danger', 'Delete account', 'Permanently remove your account', 'trash', 'account'],
@@ -48,9 +48,17 @@ const row = (id, ic, label, sub) => html`<button class="row-link" id="${id}">${i
 function wireNotifications(root, { guest = false, onCleanup = null } = {}) {
   const slot = $('#notifySlot', root); if (!slot) return;
   const draw = (s) => {
-    // The slot is a whole sub-page now, so an unavailable state explains itself instead of hiding.
+    // The slot is a whole sub-page now, so an unavailable state explains itself instead of hiding —
+    // with the actual reason: the browser can't do push (iPhone Safari tabs, very old browsers), the
+    // viewer is signed out, or the server hasn't switched notifications on.
     if (!s?.supported || !s.enabled) {
-      slot.innerHTML = emptyState({ iconName: 'bell', title: 'Notifications unavailable', text: 'Turn notifications on to get episode, launch and announcement alerts on this device.' }).s;
+      const u = app.user;
+      const state = !s?.supported && !pushSupported() && !isNative
+        ? { title: 'Notifications unavailable', text: 'This browser can’t receive push notifications — install the ADDABAAZ app to get episode, launch and announcement alerts.' }
+        : !s?.supported && !u?.account
+          ? { title: 'Sign in for notifications', text: 'Episode, launch and announcement alerts need an account to target.', action: html`<a class="btn btn-primary" href="#/signin">Sign in</a>` }
+          : { title: 'Notifications unavailable', text: 'Notifications aren’t switched on right now — check back later.' };
+      slot.innerHTML = emptyState({ iconName: 'bell', ...state }).s;
       return;
     }
     const blocked = s.permission === 'denied'
@@ -171,13 +179,12 @@ function kidsSection() {
   </section>`;
 }
 
+// The Privacy Policy and Terms links live in the profile footer now — this group is just the live choices.
 function privacySection() {
-  const u = app.user;
-  if (!u.supportsAuth) return '';
-  const terms = u.account ? html`<a class="row-link" href="#/terms">${icon('info', { size: 22 })}<span><b>Terms of Use</b></span>${icon('right', { size: 18, cls: 'chev' })}</a>` : '';
+  if (!app.user.supportsAuth) return '';
   return html`<section class="account-section">
     <h2 class="sub-h">Privacy</h2>
-    <div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}<a class="row-link" href="#/privacy">${icon('info', { size: 22 })}<span><b>Privacy Policy</b></span>${icon('right', { size: 18, cls: 'chev' })}</a>${terms}</div>
+    <div class="card-panel list">${row('consentBtn', 'info', 'Privacy choices', 'Analytics and stored data.')}</div>
   </section>`;
 }
 

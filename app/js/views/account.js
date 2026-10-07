@@ -1,6 +1,7 @@
 // Profile page (#/account): a compact identity header plus the settings groups, each opening its own
 // sub-page. The banners stay on this page so nothing the old stacked layout surfaced gets silently dropped.
 import { app } from '../app.js';
+import { CONFIG } from '../config.js';
 import { html, $ } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast, confirmSignOut } from '../ui/components.js';
@@ -27,7 +28,11 @@ export default async function account(ctx) {
     <nav class="card-panel list group-list" aria-label="Settings">
       ${settingGroups().map((g) => html`<a class="row-link${g.id === 'danger' ? ' danger' : ''}" href="${g.href}">${icon(g.ic, { size: 22 })}<span><b>${g.title}</b><small>${g.sub}</small></span>${icon('right', { size: 18, cls: 'chev' })}</a>`)}
     </nav>
-    ${u.account ? html`<p class="signout-wrap"><button class="btn btn-ghost" id="signout">${icon('logout', { size: 18 })} Sign out</button></p>` : ''}
+    <footer class="profile-footer">
+      ${u.account ? html`<button class="logout-link" id="signout">Log Out</button>` : ''}
+      <p class="profile-legal"><a href="#/privacy">Privacy Policy</a><span aria-hidden="true">•</span><a href="#/terms">Terms of Use</a></p>
+      <p class="app-version">App Version ${CONFIG.version}</p>
+    </footer>
   </div>`.s;
 
   $('#resendVerify', ctx.root)?.addEventListener('click', async (e) => { e.target.disabled = true; try { await u.remote.resendVerification(); toast('Sent — check your inbox.'); } catch (err) { toast(friendly(err)); e.target.disabled = false; } });

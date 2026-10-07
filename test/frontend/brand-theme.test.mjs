@@ -24,11 +24,11 @@ test('public and admin themes use a darker logo red with stronger button gradien
   assert.match(adminCss, /\.btn\.primary \{[^}]*background-image: var\(--accent-gradient\)/,
     'admin primary buttons use the branded gradient too');
   assert.match(appCss, /\.account-page \.btn-ghost \{[^}]*background-image: var\(--accent-gradient\)/,
-    'secondary Account & Settings actions such as Sign out and Copy are red too');
+    'secondary Account & Settings actions such as Copy stay red');
   assert.match(read('app/js/views/account.js'), /class="page page-narrow account-page"/,
     'the red account-action styling stays scoped to Account & Settings');
-  assert.match(read('app/js/views/account.js'), /class="btn btn-ghost" id="signout"/,
-    'the Sign out action uses the account button styling');
+  assert.match(read('app/js/views/account.js'), /<button class="logout-link" id="signout">Log Out<\/button>/,
+    'Log Out is a plain blue footer line, outside the red button styling');
   assert.match(read('app/js/views/account-extra.js'), /class="btn btn-ghost" type="button" data-copy=/,
     'Copy actions use the account button styling');
   assert.doesNotMatch(appCss, /#e50914|#ff2a36|#ff5a5f/, 'the old, louder reds are removed from the public theme');

@@ -25,10 +25,18 @@ test('Account is a compact profile header over a settings-group list', () => {
     'the groups render as one labelled list');
   assert.match(account, /settingGroups\(\)\.map\(\(g\) => html`<a class="row-link\$\{g\.id === 'danger' \? ' danger' : ''\}" href="\$\{g\.href\}">/,
     'every group is a link row, with the delete row in the danger style');
-  assert.match(account, /<p class="signout-wrap"><button class="btn btn-ghost" id="signout">/,
-    'Sign out lives as a quiet row at the bottom of the page');
+  assert.match(account, /<footer class="profile-footer">/,
+    'the page ends in a footer, not another settings card');
+  assert.match(account, /<button class="logout-link" id="signout">Log Out<\/button>/,
+    'Log Out is a plain blue line, like the reference footer');
+  assert.match(account, /<a href="#\/privacy">Privacy Policy<\/a><span aria-hidden="true">•<\/span><a href="#\/terms">Terms of Use<\/a>/,
+    'the footer links the Privacy Policy and Terms of Use');
+  assert.match(account, /<p class="app-version">App Version \$\{CONFIG\.version\}<\/p>/,
+    'the footer shows the app version');
+  assert.match(css, /\.logout-link \{[^}]*color: #4da3ff/,
+    'Log Out is bright blue on the dark background');
   assert.doesNotMatch(account.match(/<section class="profile-head">[\s\S]*?<\/section>/)[0], /id="signout"/,
-    'Sign out no longer crowds the profile header');
+    'Log Out no longer crowds the profile header');
   assert.doesNotMatch(account, /account-grid/,
     'the stacked settings grid is gone — groups open their own sub-pages');
   assert.doesNotMatch(account, /<h2 class="sub-h">/,
@@ -47,6 +55,10 @@ test('Account is a compact profile header over a settings-group list', () => {
     'Help & support stays one tap away, leaving the page for the Support page');
   assert.match(account, /resendVerification/,
     'the email-confirm banner still offers a resend from this page');
+  assert.doesNotMatch(extras, /#\/privacy/,
+    'the Privacy Policy link lives in the profile footer now, not in the Privacy group');
+  assert.doesNotMatch(extras, /#\/terms/,
+    'same for the Terms of Use link');
 });
 
 test('unsubscribed website viewers get a Subscribe banner above the profile header', () => {
