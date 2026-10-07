@@ -132,6 +132,13 @@ jobs:
     needs: build
     if: needs.build.result == 'success'
     runs-on: ubuntu-latest
+    # A push and its pull_request run both build the same commit and both publish the SAME rolling
+    # release. The publish step deletes the release and recreates it, so two of them at once fight
+    # over it and one dies with a red X even though the APK is fine. One shared group serialises the
+    # publishes (the jobs still build in parallel); the newest one publishes last.
+    concurrency:
+      group: apk-release
+      cancel-in-progress: false
     permissions:
       contents: write                     # only this job may write to the repository (the release asset)
     steps:
