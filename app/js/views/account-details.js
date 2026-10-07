@@ -1,3 +1,4 @@
+import { addPhone } from '../ui/add-phone.js';
 import { app } from '../app.js';
 import { html, $ } from '../util.js';
 import { icon } from '../icons.js';
@@ -19,8 +20,8 @@ export default async function accountDetails(ctx) {
         <label class="account-line-field">Last name<input name="lastName" autocomplete="family-name" maxlength="60" value="${parts.slice(1).join(' ')}"></label>
       </div>
       <div class="account-contact-field"><div><span class="account-field-label">Email ID</span><p>${account.emailIsPlaceholder ? 'Not added' : account.email}</p></div><button type="button" class="icon-btn" id="editEmail" aria-label="Edit email address">${icon('edit', { size: 20 })}</button></div>
-      <div class="account-contact-field"><div><span class="account-field-label">Mobile number</span><p>${account.phone || 'Not added'}</p></div><a class="icon-btn" href="#/support" aria-label="Request a phone-number change" title="Contact support to change your number">${icon('edit', { size: 20 })}</a></div>
-      <p class="account-field-help">Phone-number changes currently require support verification.</p>
+      <div class="account-contact-field"><div><span class="account-field-label">Mobile number</span><p id="accountPhoneValue">${account.phone ? `+${account.phone}` : 'Not added'}</p></div><span id="accountPhoneAction">${account.phone ? html`<a class="icon-btn" href="#/support" aria-label="Request a phone-number change" title="Contact support to change your number">${icon('edit', { size: 20 })}</a>` : html`<button type="button" class="icon-btn" id="addAccountPhone" aria-label="Add mobile number">${icon('plus', { size: 20 })}</button>`}</span></div>
+      <p class="account-field-help" id="accountPhoneHelp">${account.phone ? 'Phone-number changes currently require support verification.' : 'Add a mobile number using SMS verification.'}</p>
       <p class="form-status" id="accountSaveStatus" role="status"></p>
       <button class="btn btn-primary account-save" type="submit" id="saveAccount" disabled>Save Changes</button>
       <a class="account-manage-link" href="#/profiles?manage=1">Manage viewing profiles</a>
@@ -39,6 +40,13 @@ export default async function accountDetails(ctx) {
     catch (error) { status.textContent = friendly(error); }
     finally { busy = false; sync(); }
   });
+  $('#addAccountPhone', ctx.root)?.addEventListener('click', () => addPhone(u, (phone) => {
+    const value = $('#accountPhoneValue', ctx.root);
+    if (!value) return;
+    value.textContent = `+${phone}`;
+    $('#accountPhoneHelp', ctx.root).textContent = 'Mobile number verified. Contact support if you need to change it.';
+    $('#accountPhoneAction', ctx.root).innerHTML = html`<a class="icon-btn" href="#/support" aria-label="Request a phone-number change">${icon('edit', { size: 20 })}</a>`.s;
+  }));
   $('#editEmail', ctx.root).addEventListener('click', () => {
     const { el } = openDialog(html`<h2>Edit email address</h2><form class="form" id="accountEmailForm">
       <label>New email address<input name="email" type="email" autocomplete="email" maxlength="254" required value="${account.emailIsPlaceholder ? '' : account.email}"></label>

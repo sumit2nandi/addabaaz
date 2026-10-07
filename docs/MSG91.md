@@ -132,3 +132,16 @@ If `otp` is still `false`, the server did not read both variables — check `MSG
 * One-time: DLT entity registration (~₹5,000–5,900 + GST).
 * Per SMS: roughly ₹0.15–0.25 (transactional route), so 1,000 sign-ins ≈ ₹150–250.
 * A failed verify (wrong code) costs nothing — the SMS was already paid for, but no extra message is sent.
+
+## Adding a phone to an existing account
+
+Edit Account offers **Add mobile number** when the account has no registered number.
+The authenticated `/me/phone/request` and `/me/phone/verify` endpoints use MSG91 but
+are separate from sign-in OTPs: they neither create an account nor issue a session token.
+Codes are bound to the account and number using an HMAC, expire after 10 minutes,
+and allow five attempts. Resends have a one-minute cooldown and five-per-hour
+account/number limits plus the authentication IP limiter. The phone becomes verified
+only inside the successful verification transaction. Existing phone numbers cannot
+be replaced through this flow, and numbers owned by another account are refused.
+Migration `034_account_phone_otp.sql` adds short-lived challenges; expired records
+are purged with the existing OTP job and account deletion cascades their removal.

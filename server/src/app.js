@@ -43,6 +43,7 @@ import { registerPaymentWebhook } from './routes/payment-webhook.js';
 import { registerUnsubscribeRoute } from './routes/unsubscribe.js';
 import { registerAccountRoutes } from './routes/accounts.js';
 import { registerBillingRoutes } from './routes/billing.js';
+import { registerPhoneLinkRoutes } from './routes/phone-link.js';
 import { registerOtpRoutes } from './routes/otp.js';
 import { registerSupportRoutes, emailTemplates as supportEmails } from './routes/support.js';
 import { registerPromoRoutes } from './routes/promos.js';
@@ -186,6 +187,7 @@ export function createApp({
     notDisabled(session.user);
     req.user = session.user; next();
   }));
+  registerPhoneLinkRoutes(api, { db, sms, secret, authLimit });
   features.authed(api);           // account security, PIN, devices, ratings, push and refund requests
   registerAccountRoutes(api, { db, publicUser, features, exists, maxProfiles: MAX_PROFILES, palette: PALETTE });
   registerBillingRoutes(api, { db, billing, payments, features, rate });
