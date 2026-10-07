@@ -4,7 +4,7 @@ import { CONFIG } from '../config.js';
 import { html, $, $$ } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast } from '../ui/components.js';
-import { avatarColor, AVATAR_COUNT } from '../data/user.js';
+import { AVATARS } from '../ui/avatar-options.js';
 import { openDialog, confirmDialog } from '../ui/dialog.js';
 import { go } from '../router.js';
 import { withPin, mayLeaveKids } from '../ui/parental.js';
@@ -32,19 +32,19 @@ export default async function profiles(ctx) {
   ctx.onCleanup(offProfile);
 
   const form = (p) => {
-    let color = p?.color ?? u.profiles.length;
+    let color = p?.color ?? 0;
     const { el, close } = openDialog(html`<h2>${p ? 'Edit profile' : 'Add profile'}</h2>
       <form id="pf" class="form" novalidate>
         <div class="avatar-preview" id="ap">${avatar({ name: p?.name || 'A', color }, { size: 84 })}</div>
+        <div class="avatar-options" role="group" aria-label="Choose an avatar">${AVATARS.map((option, i) => html`<button type="button" aria-pressed="${i === color}" class="avatar-option" data-c="${i}" aria-label="${option.name}">${avatar({ name: p?.name || 'A', color: i }, { size: 60 })}</button>`)}</div>
         <label>Name<input name="name" maxlength="24" required value="${p?.name || ''}" autocomplete="off" placeholder="e.g. Rupa"></label>
         <label class="check"><input type="checkbox" name="kids" ${p?.kids ? 'checked' : ''}><span>Kids profile — shows only titles rated for children</span></label>
-        <div class="swatches" role="radiogroup" aria-label="Colour">${Array.from({ length: AVATAR_COUNT }, (_, i) => html`<button type="button" role="radio" aria-checked="${i === color}" class="swatch ${i === color ? 'on' : ''}" data-c="${i}" style="background:${avatarColor(i)}" aria-label="Colour ${i + 1}"></button>`)}</div>
         <div class="form-status" id="pfs" role="alert"></div>
         <div class="row end">${p && u.profiles.length > 1 ? html`<button type="button" class="btn btn-danger" id="del">Delete</button>` : ''}<button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" type="submit">Save</button></div>
       </form>`, { title: 'Profile', cls: 'dialog-sm' });
     const nameEl = $('[name=name]', el), preview = () => { $('#ap', el).innerHTML = avatar({ name: nameEl.value || 'A', color }, { size: 84 }).s; };
     nameEl.addEventListener('input', preview); nameEl.focus();
-    el.addEventListener('click', (e) => { const s = e.target.closest('[data-c]'); if (s) { color = +s.dataset.c; $$('.swatch', el).forEach((x) => { x.classList.toggle('on', x === s); x.setAttribute('aria-checked', x === s); }); preview(); } });
+    el.addEventListener('click', (e) => { const s = e.target.closest('[data-c]'); if (s) { color = +s.dataset.c; $$('.avatar-option', el).forEach((x) => x.setAttribute('aria-pressed', String(x === s))); s.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'center' }); preview(); } });
     $('#pf', el).addEventListener('submit', async (e) => {
       e.preventDefault(); const name = nameEl.value.trim();
       if (!name) { $('#pfs', el).textContent = 'Please enter a name.'; return; }

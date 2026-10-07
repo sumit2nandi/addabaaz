@@ -36,8 +36,8 @@ export function registerAccountRoutes(api, { db, publicUser, features, exists, m
   // Adding, editing or deleting a profile asks for the parental PIN if one is set.
   api.post('/profiles', wrap(async (req, res) => {
     await features.requirePin(req);
-    const { name, kids } = cleanProfile(req.body || {});
-    const profile = await db.profiles.create(req.user.id, { id: crypto.randomUUID(), name, kids }, MAX_PROFILES, PALETTE);
+    const { name, kids, color = 0 } = cleanProfile(req.body || {});
+    const profile = await db.profiles.create(req.user.id, { id: crypto.randomUUID(), name, kids, color }, MAX_PROFILES, PALETTE);
     if (!profile) throw new HttpError(409, 'profile_limit', `You can have up to ${MAX_PROFILES} profiles.`);
     res.status(201).json({ profile });
   }));

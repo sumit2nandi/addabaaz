@@ -183,12 +183,11 @@ export async function createDb({ config = dbConfigFromEnv(), ensureDatabase = fa
       async list(userId) { return (await q('SELECT id, name, color, kids FROM profiles WHERE user_id = ? ORDER BY created_at, id', [userId])).map(profileRow); },
       async get(id, userId) { const r = (await q('SELECT id, name, color, kids FROM profiles WHERE id = ? AND user_id = ?', [id, userId]))[0]; return r ? profileRow(r) : null; },
       /** Enforces the per-user limit under a row lock so concurrent requests can't exceed it. Returns null at the limit. */
-      async create(userId, { id, name, kids = false }, max, palette) {
+      async create(userId, { id, name, kids = false, color = 0 }, max, palette) {
         return tx(async (t) => {
           await t.query('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId]);
           const [{ n }] = await t.query('SELECT COUNT(*) AS n FROM profiles WHERE user_id = ?', [userId]);
           if (n >= max) return null;
-          const color = n % palette;
           await t.query('INSERT INTO profiles (id, user_id, name, color, kids) VALUES (?,?,?,?,?)', [id, userId, name, color, kids ? 1 : 0]);
           return { id, name, color, ...(kids ? { kids: true } : {}) };
         });
