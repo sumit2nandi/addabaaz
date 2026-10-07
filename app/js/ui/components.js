@@ -2,7 +2,7 @@
 import { app } from '../app.js';
 import { html, raw, esc, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
-import { avatarOption } from './avatar-options.js';
+import { avatarColor } from '../data/user.js';
 import { confirmDialog } from './dialog.js';
 
 // If an image fails to load, main.js's delegated handler reads data-fb to pick a fallback (inline
@@ -187,8 +187,8 @@ export function scrollRail(btn) {
 /* ---------- misc ---------- */
 // Round profile avatar: the first letter of the name on the profile's colour.
 export function avatar(profile, { size = 36, cls = '' } = {}) {
-  const option = avatarOption(profile?.color); const c = '#b80000'; const ch = (profile?.name || '?').trim().charAt(0).toUpperCase();
-  return html`<span class="avatar ${cls}" style="--av:${c};width:${size}px;height:${size}px;font-size:${Math.round(size * 0.46)}px" aria-hidden="true">${option.file ? html`<img src="media/avatars/${option.file}.svg" alt="" width="${size}" height="${size}">` : ch}</span>`;
+  const c = avatarColor(profile?.color); const ch = (profile?.name || '?').trim().charAt(0).toUpperCase();
+  return html`<span class="avatar ${cls}" style="--av:${c};width:${size}px;height:${size}px;font-size:${Math.round(size * 0.46)}px" aria-hidden="true">${ch}</span>`;
 }
 // Small "a · b · c" line; empty parts are dropped.
 export function metaLine(parts) {
