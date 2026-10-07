@@ -1113,3 +1113,8 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
   .account-edit-header { margin-bottom: 40px; }
   .account-name-fields { gap: 28px; }
 }
+
+/* Keep the edit icon's hit area without letting it inflate the name's text line. */
+.profile-page .profile-details-edit { position: relative; height: 20px; line-height: 1; }
+.profile-page .profile-details-edit::after { content: ''; position: absolute; inset: -6px 0; }
+.profile-page .profile-head .profile-email { margin-top: 0; line-height: 1.35; }

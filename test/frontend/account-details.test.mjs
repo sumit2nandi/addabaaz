@@ -36,3 +36,10 @@ test('account editor has paired name fields, inline contact editing, and dirty-s
   assert.doesNotMatch(source, /class="card-panel"/);
   assert.match(read('app/css/styles.css'), /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
 });
+
+test('profile email sits tightly below the name without the edit button inflating the line', () => {
+  const css = read('app/css/styles.css');
+  assert.match(css, /\.profile-page \.profile-details-edit \{ position: relative; height: 20px; line-height: 1; \}/);
+  assert.match(css, /\.profile-details-edit::after \{[^}]*inset: -6px 0;/);
+  assert.match(css, /\.profile-page \.profile-head \.profile-email \{ margin-top: 0; line-height: 1.35; \}/);
+});
