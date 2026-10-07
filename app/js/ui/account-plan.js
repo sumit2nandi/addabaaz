@@ -4,8 +4,9 @@ import { icon } from '../icons.js';
 export function accountPlan(user) {
   const subscription = user.subscription || {};
   const active = user.isPremium;
+  const period = subscription.planId === 'plus-yearly' ? 'Yearly' : subscription.planId === 'plus-monthly' ? 'Monthly' : '';
   const title = active
-    ? subscription.planId === 'plus-yearly' ? 'ADDABAAZ Premium (Yearly)' : subscription.planId === 'plus-monthly' ? 'ADDABAAZ Premium (Monthly)' : 'ADDABAAZ Premium'
+    ? html`<span class="brand-lockup"><b>ADDA</b><i>BAAZ</i> <em class="premium-word">premium</em></span>${period ? html`<span class="account-plan-period">${period}</span>` : ''}`
     : 'Free';
   const validDate = subscription.expiresAt && Number.isFinite(Date.parse(subscription.expiresAt));
   const expired = !active && (subscription.status === 'expired' || (subscription.planId !== 'free' && validDate && Date.parse(subscription.expiresAt) <= Date.now()));

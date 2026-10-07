@@ -1190,7 +1190,7 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .social-compact .social-g { width: 44px; min-height: 44px; flex: 0 0 44px; align-items: center; }
 .social-compact .btn-social:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
 
-.account-current-plan { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 0 18px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+.account-current-plan { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; margin-bottom: 24px; border: 0; border-radius: var(--radius-lg); background-color: #d4a017; background-image: var(--gold-gradient); color: #201503; }
 .account-current-plan > div { min-width: 0; }
 .account-current-plan .account-field-label { font-size: 13px; line-height: 1.5; }
 .account-current-plan .account-plan-name { margin: 6px 0 4px; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
@@ -1198,3 +1198,12 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 
 /* No saved titles: the account's My List slot must not reserve any space. */
 #accountSavedList:empty { display: none; }
+
+/* Same gold surface as Subscribe; dark supporting text remains legible on its highlights. */
+.account-current-plan .account-field-label, .account-current-plan .account-field-help { color: rgba(32,21,3,.82); }
+.account-current-plan .account-plan-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.account-current-plan .brand-lockup { font-size: clamp(16px, 4.5vw, 21px); letter-spacing: .5px; }
+.account-current-plan .brand-lockup b { filter: drop-shadow(0 1px 1px rgba(32,21,3,.6)); }
+.account-current-plan .premium-word { background: none; color: #5a430a; -webkit-text-fill-color: #5a430a; filter: none; animation: none; font-size: .6em; }
+.account-plan-period { font-size: 12px; font-weight: 600; }
+.account-current-plan .icon-btn { color: #201503; width: 32px; }
