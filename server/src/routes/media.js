@@ -1,5 +1,6 @@
 // Private video access policy and the R2/HLS gateway. No storage keys or provider SDK leak into handlers.
 import path from 'node:path';
+import { mediaHeadCache } from '../media-head-cache.js';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { HttpError, wrap } from '../http.js';
@@ -10,6 +11,7 @@ const CAPACITOR_ORIGIN = 'https://app.addabaaz.in';
 const isNativeWebView = (req) => req.get('origin') === CAPACITOR_ORIGIN || /\bwv\b/i.test(req.get('user-agent') || '');
 
 export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, r2, catalog, features, userFromRequest, logger = console }) {
+  const checkObject = mediaHeadCache((key) => r2.head(key));
   // Small helpers: catalog lookup, the public base URL for links we hand out, and mp4-vs-HLS detection.
   const findVideo = (id) => catalog.video(id);
   const isPremiumVideo = async (v) => {
@@ -40,7 +42,7 @@ export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, 
     // Public viewer messages stay non-technical; detailed storage diagnostics are only shown in the Admin console.
     if (!r2.configured) throw new HttpError(503, 'storage_not_configured', 'This video isn’t available right now — please try again later.');
     if (typeof r2.head === 'function') {
-      const h = await r2.head(v.source.key).catch((cause) => ({ status: 0, cause }));
+      const h = await checkObject(v.source.key).catch((cause) => ({ status: 0, cause }));
       if (h.status === 404) throw new HttpError(404, 'video_file_missing', 'This video isn’t available right now — please try again later.');
       if (h.status === 403) throw new HttpError(502, 'storage_access_denied', 'This video isn’t available right now — please try again later.');
       if (h.status === 0) throw new HttpError(502, 'storage_unreachable', 'This video isn’t available right now — please try again later.', { cause: h.cause });

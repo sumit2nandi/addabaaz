@@ -17,6 +17,28 @@ export default async function recover(ctx) {
   if (!u.supportsAuth) { ctx.setTitle('Account recovery'); shell(ctx, html`<div class="empty"><h2>Accounts aren’t enabled</h2><p>This copy of ADDABAAZ runs without the ADDABAAZ API.</p><a class="btn btn-primary" href="#/">Back to home</a></div>`); return; }
   const token = ctx.query.token || '';
 
+  if (ctx.path === '/reset' && ctx.query.parental === '1') {
+    ctx.setTitle('Reset parental PIN');
+    shell(ctx, html`<form class="auth-card form" id="pinResetForm"><h1>Reset parental PIN</h1><p class="muted">Choose a new 4–6 digit PIN. This replaces the old PIN without changing your password.</p>
+      <label>New PIN<input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,6}" minlength="4" maxlength="6" required autocomplete="off"></label>
+      <label>Confirm PIN<input name="confirm" type="password" inputmode="numeric" maxlength="6" required autocomplete="off"></label>
+      <div class="form-status" id="pinResetStatus" role="alert"></div><button type="submit" class="btn btn-primary" id="savePin">Save new PIN</button><a href="#/support">Help &amp; support</a></form>`);
+    $('#pinResetForm', ctx.root).addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget, pin = $('[name=pin]', form).value, status = $('#pinResetStatus', form), button = $('#savePin', form);
+      if (!/^\d{4,6}$/.test(pin)) { status.textContent = 'Enter 4–6 digits.'; return; }
+      if (pin !== $('[name=confirm]', form).value) { status.textContent = 'The PINs do not match.'; return; }
+      button.disabled = true;
+      try {
+        await u.remote.resetPin(token, pin);
+        u.pin = null;
+        if (u.account) await u.refreshAccount().catch(() => {});
+        shell(ctx, card('Parental PIN updated', html`<p class="muted">Use your new PIN to manage profiles and parental controls.</p><a class="btn btn-primary" href="#/account">Return to Account</a>`));
+      } catch (error) { status.textContent = friendly(error); button.disabled = false; }
+    });
+    return;
+  }
+
   if (ctx.path === '/verify') {
     const emailChange = ctx.query.emailChange === '1';
     ctx.setTitle(emailChange ? 'Confirm account email' : 'Confirm your email');
@@ -26,9 +48,9 @@ export default async function recover(ctx) {
       if (emailChange) await u.remote.verifyAccountEmail(token);
       else await u.remote.verifyEmail(token);
       if (u.account) await u.refreshAccount().catch(() => {});
-      shell(ctx, card(emailChange ? 'Contact email confirmed' : 'Email confirmed', html`<p class="muted">${icon('check', { size: 18 })} ${emailChange ? 'This address is now verified and connected to your account. SMS sign-in stays the same; account and billing emails can now be sent here.' : 'Your email address is confirmed. You can now use your account and receive account emails at this address.'}</p><a class="btn btn-primary btn-lg block" href="${u.account ? '#/account' : '#/signin'}">${u.account ? 'Go to your account' : 'Sign in'}</a>`));
+      shell(ctx, card(emailChange ? 'Contact email confirmed' : 'Email confirmed', html`<p class="muted">${icon('check', { size: 18 })} ${emailChange ? 'This address is now verified and connected to your account. Account and billing emails can now be sent here.' : 'Your email address is confirmed. You can now use your account and receive account emails at this address.'}</p><a class="btn btn-primary btn-lg block" href="${u.account ? '#/account' : '#/signin'}">${u.account ? 'Go to your account' : 'Sign in'}</a>`));
     } catch (e) {
-      shell(ctx, card('This link doesn’t work', html`<p class="muted">${friendly(e, 'It may have expired or been used already.')}</p>${emailChange ? u.account ? html`<a class="btn btn-primary btn-lg block" href="#/account">Return to Account</a>` : html`<a class="btn btn-primary btn-lg block" href="#/signin">Sign in by SMS to try again</a>` : u.account ? html`<button class="btn btn-primary btn-lg block" id="resend">Send me a new link</button><div class="form-status" id="rs" role="alert"></div>` : html`<a class="btn btn-primary btn-lg block" href="#/signin">Sign in to request a new link</a>`}`));
+      shell(ctx, card('This link doesn’t work', html`<p class="muted">${friendly(e, 'It may have expired or been used already.')}</p>${emailChange ? u.account ? html`<a class="btn btn-primary btn-lg block" href="#/account">Return to Account</a>` : html`<a class="btn btn-primary btn-lg block" href="#/signin">Sign in to try again</a>` : u.account ? html`<button class="btn btn-primary btn-lg block" id="resend">Send me a new link</button><div class="form-status" id="rs" role="alert"></div>` : html`<a class="btn btn-primary btn-lg block" href="#/signin">Sign in to request a new link</a>`}`));
       $('#resend', ctx.root)?.addEventListener('click', async () => { try { await u.remote.resendVerification(); $('#rs', ctx.root).classList.add('success'); $('#rs', ctx.root).textContent = 'Sent — check your inbox.'; } catch (err) { $('#rs', ctx.root).textContent = friendly(err); } });
     }
     return;

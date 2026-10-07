@@ -104,9 +104,9 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .icon-btn { display: inline-grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; border: 0; background: transparent; color: #fff; transition: background .2s, transform .2s; }
 .icon-btn:hover { background: rgba(255,255,255,.14); }
 .icon-btn.big { width: 52px; height: 52px; background: rgba(255,255,255,.14); backdrop-filter: blur(8px); }
-.avatar { --av: var(--accent); display: inline-grid; place-items: center; border-radius: 22%; background: var(--av); color: #fff; font-weight: 800; flex: none; user-select: none; }
-.avatar.xl { border-radius: 16px; }
-.avatar-btn { background: none; border: 2px solid transparent; padding: 0; border-radius: 26%; display: grid; }
+.avatar { --av: var(--accent); display: inline-grid; place-items: center; border-radius: 50%; background: var(--av); color: #fff; font-weight: 800; flex: none; user-select: none; }
+.avatar.xl { border-radius: 50%; }
+.avatar-btn { background: none; border: 2px solid transparent; padding: 0; border-radius: 50%; display: grid; }
 .avatar-btn:hover { border-color: rgba(255,255,255,.5); }
 .menu { position: absolute; top: calc(100% + 10px); left: 0; min-width: 220px; background: rgba(18,18,22,.98); border: 1px solid var(--border-2); border-radius: var(--radius); padding: 8px; box-shadow: 0 20px 50px rgba(0,0,0,.6); z-index: 120; }
 .menu[hidden] { display: none; }
@@ -330,6 +330,9 @@ img.img-failed { opacity: 0; }
   .home-release-arrow { width: 32px; height: 32px; background: rgba(0,0,0,.5); }
 }
 .see-all { display: inline-flex; align-items: center; gap: 2px; color: var(--text-2); font-weight: 700; font-size: 13.5px; white-space: nowrap; } .see-all:hover { color: var(--gold); }
+/* Circular bin at the end of the Continue Watching heading — clears this profile's watch history. */
+.rail-clear { flex: none; align-self: center; width: 36px; height: 36px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(245, 197, 24, .45); background: rgba(255, 255, 255, .05); color: var(--gold); transition: background .2s, border-color .2s, color .2s; }
+.rail-clear:hover { background: var(--gold); border-color: var(--gold); color: #141414; }
 .page .rail-head, .page-tight .rail-head { padding: 0; } .page-tight .rail-track { padding-left: 0; padding-right: 0; }
 .rail-wrap { position: relative; }
 .rail-track { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none; padding: 8px var(--pad) 14px; scroll-padding: 0 var(--pad); overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
@@ -602,13 +605,11 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .btn-light { background: #fff; color: #8f0000; border: 0; border-radius: 999px; padding: 9px 22px; font-size: 14px; font-weight: 800; white-space: nowrap; margin-left: auto; }
 .btn-light:hover { background: #ffe9e9; }
 .profile-head h2 .pill { margin-left: 8px; vertical-align: middle; }
-/* Sign out lives alone at the bottom of the page: quiet, centered, impossible to tap by accident. */
-/* Profile footer: blue Log Out, the legal links and the app version, all centered. */
-.profile-footer { display: grid; gap: 6px; justify-items: center; text-align: center; padding: 22px 0 10px; }
-.logout-link { background: none; border: 0; padding: 8px 20px; font-size: 16px; font-weight: 700; color: #4da3ff; cursor: pointer; }
-.profile-legal { display: flex; gap: 12px; align-items: center; margin: 0; font-size: 13.5px; color: var(--muted); }
-.profile-legal a { color: var(--muted); } .profile-legal .linklike { text-decoration: none; }
-.app-version { margin: 0; font-size: 13px; color: var(--muted); }
+/* Profile footer: a single centered, brand-red sign-out action. */
+.profile-footer { display: grid; justify-items: center; text-align: center; padding: 22px 0 10px; }
+.logout-link { background: none; border: 0; padding: 8px 20px; font-size: 16px; font-weight: 700; color: var(--accent-2); cursor: pointer; }
+.logout-link:hover { text-decoration: underline; }
+.footer .app-version { margin: 28px 0 0; text-align: center; font-size: 13px; color: var(--muted); }
 /* Inline notice ("Your plan is active until…"): the icon stays with the first line and never shrinks,
  * and the sentence is ONE text column. That column is the whole point: as bare flex children the words
  * before a <b>, the <b> itself and the words after it become three separate flex items, and flex items
@@ -642,11 +643,16 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
   body { padding-bottom: 0; } .tabbar { display: none; } .nav { display: flex; } .toasts { bottom: 28px; }
 }
 @media (max-width: 899px) {
+  /* Search is already available in the floating mobile navigation. */
+  .topbar .search-link { display: none; }
   .topbar { gap: 12px; } .brand-text { font-size: 17px; } #installBtn { display: none !important; }
   .hero { min-height: 74vh; min-height: 74svh; --hero-dock-bottom: 48px; } .hero-desc { -webkit-line-clamp: 3; font-size: 14.5px; }
   .hero-actions .btn-lg { padding: 11px 18px; font-size: 15px; } .hero-actions > .btn-glass:last-child { display: none; }
   /* The "Have a story to tell? / Start a project" band is for producers finding us on desktop — drop it on phones. */
   .cta-band { display: none; }
+  /* Without the producer CTA the last rail should meet the footer, not float above a dead band. */
+  .rails-lean .rail:last-child { margin-bottom: 12px; }
+  body[data-route="home"] .footer { margin-top: 12px; }
 }
 @media (max-width: 759px) {
   .hero-bg img { object-position: center 15%; }
@@ -936,3 +942,290 @@ body.player-settings-open { overflow: hidden; }
 .abm-note { margin: 0; color: var(--muted); font-size: 12.5px; max-width: 40ch; }
 @media (prefers-reduced-motion: reduce) { .maintenance-screen::before, .abm-glyph, .abm-bar i { animation: none } }
 fore, .abm-glyph, .abm-bar i { animation: none } }
+
+/* Match the premium plan branding on the locked player, including the raised gold word. */
+.locked-premium-heading .brand-lockup .premium-word { font-size: .6em; }
+
+/* Keep the profile sign-out close to the site footer without changing other settings pages. */
+.profile-page { padding-bottom: 8px; }
+body[data-route="account"]:has(.profile-page) #view { min-height: 0; }
+body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
+.deletion-actions { margin-top: 24px; }
+
+/* Account pages keep the single-column phone flow; desktop gets room to navigate and work. */
+.account-sidebar { display: none; }
+.account-content { min-width: 0; }
+.account-content .row-link > span, .account-content .row-switch > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.account-content .row-link > svg, .account-content .switch { flex-shrink: 0; }
+.profile-id { overflow-wrap: anywhere; }
+@media (min-width: 1024px) {
+  .profile-page, .settings-page, .support-page { max-width: 1200px; padding-top: 36px; }
+  .profile-page .profile-head { padding: 0 0 28px; gap: 18px; }
+  .profile-page .group-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 0; background: none; border: 0; box-shadow: none; }
+  .profile-page .group-list .row-link { min-height: 104px; padding: 24px; border: 1px solid var(--border); border-radius: 16px; background: var(--panel); transition: background .15s, border-color .15s; }
+  .profile-page .group-list .row-link:hover { background: var(--panel-2); border-color: var(--accent); }
+  .profile-page .group-list .row-link > span { min-width: 0; }
+  .profile-page .group-list .row-link > svg { flex-shrink: 0; }
+  .profile-page .group-list small { margin-top: 4px; line-height: 1.5; }
+  .profile-page .profile-footer { padding-top: 20px; }
+  .account-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 40px; align-items: start; }
+  .account-sidebar { display: grid; gap: 6px; position: sticky; top: calc(var(--topbar-h) + 24px); padding: 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--panel); }
+  .account-sidebar a { display: flex; align-items: center; gap: 12px; padding: 13px 12px; border-radius: 10px; color: var(--muted); font-size: 14px; font-weight: 600; }
+  .account-sidebar svg { flex-shrink: 0; }
+  .account-sidebar a:hover { background: var(--panel-2); color: var(--text); }
+  .account-sidebar a[aria-current="page"] { background: rgba(var(--accent-rgb), .14); color: #fff; box-shadow: inset 3px 0 var(--accent); }
+  .account-sidebar .account-overview { margin-bottom: 8px; color: var(--text); }
+  .settings-page .back-row { display: none; }
+  .account-content .sub-h:first-child { margin-top: 0; }
+  .account-content .account-section + .account-section { margin-top: 28px; }
+  .account-content .row-link, .account-content .row-switch { padding: 20px 24px; min-height: 76px; }
+  .account-content .row-link small, .account-content .row-switch small { line-height: 1.5; }
+  .account-content .form { max-width: 100%; }
+  .account-content .form .btn { justify-self: start; width: auto; min-width: 160px; }
+  .deletion-page { max-width: 960px; }
+  .deletion-page p { max-width: 78ch; line-height: 1.75; }
+  .profiles-page .profile-grid { gap: 32px; max-width: 1100px; }
+}
+
+/* Inline profile settings: animate intrinsic height so asynchronous notification content fits too. */
+.account-accordion { min-width: 0; }
+.group-list > .account-accordion + *, .group-list > a + .account-accordion { border-top: 1px solid var(--border); }
+.accordion-toggle .chev { transform: rotate(90deg); transition: transform .25s ease; }
+.is-open > .accordion-toggle .chev { transform: rotate(-90deg); }
+.accordion-panel { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows .28s ease, opacity .2s ease, visibility .28s; }
+.is-open > .accordion-panel { grid-template-rows: 1fr; opacity: 1; visibility: visible; }
+.accordion-clip { min-height: 0; overflow: hidden; }
+.accordion-body { padding: 0 12px 16px; }
+.accordion-body .account-section > .sub-h { display: none; }
+.accordion-body .account-section + .account-section { margin-top: 16px; }
+.accordion-body .row-link, .accordion-body .row-switch { gap: 12px; }
+.accordion-body .row-link > span, .accordion-body .row-switch > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.accordion-body .switch, .accordion-body svg { flex-shrink: 0; }
+@media (min-width: 1024px) {
+  .profile-page .group-list { align-items: start; }
+  .profile-page .group-list > .account-accordion { border: 1px solid var(--border); border-radius: 16px; background: var(--panel); }
+  .profile-page .group-list .account-accordion .row-link { border: 0; min-height: 76px; }
+  .profile-page .group-list .account-accordion > .accordion-toggle { min-height: 104px; }
+  .profile-page .group-list .account-accordion .card-panel { box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .accordion-panel, .accordion-toggle .chev { transition: none; }
+}
+
+/* Expanded controls belong to their parent group, not another card inside it. */
+.profile-page .accordion-body .card-panel {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+.profile-page .group-list .accordion-body .row-link,
+.profile-page .group-list .accordion-body .row-switch {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+@media (hover: hover) {
+  .profile-page .group-list .accordion-body button.row-link:hover,
+  .profile-page .group-list .accordion-body a.row-link:hover,
+  .profile-page .group-list .accordion-body .row-switch:hover { background: rgba(255,255,255,.035); }
+}
+
+/* Compact profile overview with a horizontally scrollable, circular profile picker. */
+.profile-page .profile-head h2 { font-size: 18px; }
+.profile-page .profile-head .muted { font-size: 12px; line-height: 1.5; }
+.profile-page .group-list .row-link, .profile-page .group-list .row-switch { font-size: 14px; }
+.profile-page .group-list .row-link b, .profile-page .group-list .row-switch b { font-weight: 600; }
+.profile-page .group-list small { font-size: 12px; line-height: 1.5; }
+.profile-page .logout-link { font-size: 14px; }
+.profile-selector { margin: 4px 0 24px; }
+.profile-selector-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.profile-selector-head h2 { font-size: 18px; font-weight: 600; }
+.profile-edit { display: inline-flex; align-items: center; gap: 7px; padding: 8px 0 8px 12px; font-size: 13px; }
+.profile-selector-list { display: flex; gap: 20px; overflow-x: auto; padding: 5px 4px 10px; }
+.profile-choice { display: flex; flex-direction: column; align-items: center; gap: 9px; flex: 0 0 76px; min-width: 0; padding: 0; border: 0; background: none; color: var(--text); cursor: pointer; text-align: center; }
+.profile-choice .avatar, .profile-add-icon { transition: outline-color .2s; outline: 1px solid transparent; outline-offset: 4px; }
+.profile-choice[aria-pressed="true"] .avatar { outline-color: var(--text); }
+.profile-choice:hover .avatar, .profile-choice:hover .profile-add-icon { outline-color: var(--accent-2); }
+.profile-choice-name { font-size: 13px; line-height: 1.4; max-width: 76px; overflow-wrap: anywhere; }
+.profile-kids-label { color: var(--muted); font-size: 10px; margin-top: -6px; }
+.profile-add-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--panel-2); display: grid; place-items: center; color: var(--text-2); }
+@media (min-width: 1024px) {
+  .profile-selector { margin-bottom: 28px; }
+  .profile-selector-list { gap: 28px; }
+  .profile-page .group-list > .row-link, .profile-page .group-list .account-accordion > .accordion-toggle { min-height: 92px; padding: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .profile-choice .avatar, .profile-add-icon { transition: none; }
+}
+
+/* Five swatches stay in one row, with generous tap targets even on small phones. */
+.swatches { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; width: 100%; max-width: 280px; margin-inline: auto; }
+.swatch { position: relative; width: 100%; height: 44px; border: 0; background: transparent; box-shadow: none; }
+.swatch::before { content: ''; position: absolute; width: 28px; height: 28px; left: 50%; top: 50%; transform: translate(-50%, -50%); background: var(--swatch); border: 2px solid transparent; border-radius: 50%; }
+.swatch.on { box-shadow: none; }
+.swatch.on::before { border-color: #fff; box-shadow: 0 0 0 2px var(--bg); }
+
+/* Guest account actions must not compete with identity text for a narrow flex row. */
+.profile-page .profile-head h2 .pill { white-space: nowrap; overflow-wrap: normal; }
+@media (max-width: 899px) {
+  .profile-page .profile-head { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .profile-page .profile-head .profile-id { grid-column: 2; }
+  .profile-page .profile-head .profile-id:only-child { grid-column: 1 / -1; }
+  .profile-page .profile-head .profile-actions { grid-column: 1 / -1; width: 100%; margin-left: 0; justify-content: flex-start; }
+  .profile-page .profile-head .profile-actions .btn { flex: 1 1 130px; white-space: nowrap; text-align: center; }
+}
+
+.profile-details-edit { display: inline-flex; vertical-align: middle; align-items: center; justify-content: center; width: 32px; height: 32px; margin-left: 6px; border-radius: 50%; color: var(--muted); }
+.profile-details-edit:hover { background: var(--panel-2); color: #fff; }
+
+/* Saved items sit below Profiles and scroll independently on phones and desktops. */
+.account-saved { margin: 0 0 24px; min-width: 0; }
+.account-saved .profile-selector-head { margin-bottom: 8px; }
+.account-saved-track { display: flex; align-items: flex-start; gap: 14px; overflow-x: auto; padding: 6px 3px 14px; scroll-snap-type: x proximity; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.account-saved-item { flex: 0 0 auto; scroll-snap-align: start; }
+.account-saved-item.saved-poster { width: 128px; }
+.account-saved-item.saved-video { width: 220px; }
+.account-saved .card-title { font-size: 13px; }
+@media (min-width: 1024px) {
+  .account-saved-item.saved-poster { width: 150px; }
+  .account-saved-item.saved-video { width: 260px; }
+}
+
+/* Account editor: quiet underlined fields rather than stacked cards. */
+.account-details-page { max-width: 720px; padding-top: 24px; }
+.account-edit-header { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 12px; margin-bottom: 32px; }
+.account-edit-header h1 { text-align: center; font-size: 20px; font-weight: 700; }
+.account-edit-back { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--border-2); border-radius: 50%; background: var(--panel-2); }
+.account-edit-form { display: grid; gap: 0; }
+.account-name-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-bottom: 30px; }
+.account-line-field, .account-field-label { font-size: 13px; color: var(--muted); font-weight: 400; }
+.account-line-field { display: grid; gap: 8px; min-width: 0; }
+.account-line-field input { width: 100%; min-width: 0; border: 0; border-bottom: 1px solid var(--muted); border-radius: 0; background: transparent; padding: 8px 0 14px; font-size: 16px; color: var(--text); box-shadow: none; }
+.account-line-field input:focus { outline: none; border-color: var(--accent-2); box-shadow: 0 1px var(--accent-2); }
+.account-contact-field { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--muted); padding: 16px 0 14px; margin-bottom: 16px; }
+.account-contact-field > div { min-width: 0; }
+.account-contact-field p { margin-top: 10px; font-size: 16px; overflow-wrap: anywhere; }
+.account-contact-field .icon-btn { flex-shrink: 0; }
+.account-field-help { font-size: 12px; line-height: 1.5; color: var(--muted); }
+.account-edit-form > .form-status { margin-top: 16px; }
+.account-save { width: 100%; margin-top: 24px; min-height: 48px; border-radius: 6px; font-size: 15px; }
+.account-save:disabled { background: var(--panel-2); background-image: none; color: var(--muted); box-shadow: none; opacity: .65; cursor: not-allowed; }
+.account-manage-link { margin-top: 18px; text-align: center; color: var(--muted); font-size: 13px; }
+@media (min-width: 900px) {
+  .account-details-page { padding-top: 40px; padding-bottom: 48px; }
+  .account-edit-header { margin-bottom: 40px; }
+  .account-name-fields { gap: 28px; }
+}
+
+/* Keep the edit icon's hit area without letting it inflate the name's text line. */
+.profile-page .profile-details-edit { position: relative; height: 20px; line-height: 1; }
+.profile-page .profile-details-edit::after { content: ''; position: absolute; inset: -6px 0; }
+.profile-page .profile-head .profile-email { margin-top: 0; line-height: 1.35; }
+
+/* Compact sign-in/sign-up only; recovery forms keep their existing layout. */
+.auth-page.auth-entry { min-height: 0; grid-template-columns: minmax(0, 440px); justify-content: center; align-content: start; background: none; padding: 28px var(--pad) 40px; }
+.auth-entry .auth-card { background: transparent; border: 0; box-shadow: none; }
+.auth-entry #af { gap: 12px; }
+.auth-entry #af #emailPane, .auth-entry #af #otpPane,
+.auth-entry #af #otpPhoneStep, .auth-entry #af #otpCodeStep { gap: 12px; }
+.auth-entry #af #asub, .auth-entry #af #otpSend, .auth-entry #af #otpVerify { margin-bottom: 0; }
+.auth-entry .forgot-link { margin-bottom: 0; padding: 4px 0; }
+.auth-entry .auth-footer-links { display: grid; gap: 8px; text-align: center; }
+.auth-entry .pw input { padding-right: 46px; }
+@media (max-width: 599px) {
+  .auth-page.auth-entry { min-height: 0; align-content: start; gap: 12px; padding: 20px var(--pad) 40px; }
+  .auth-entry .auth-card { width: 100%; padding: 8px 0; border-radius: 0; }
+  .auth-entry .auth-card h1 { font-size: 23px; padding-right: 36px; }
+  .auth-entry #authSub { font-size: 13px; line-height: 1.4; }
+  .auth-entry #af { gap: 10px; }
+  .auth-entry #af #emailPane, .auth-entry #af #otpPane,
+  .auth-entry #af #otpPhoneStep, .auth-entry #af #otpCodeStep { gap: 10px; }
+  .auth-entry .form label { gap: 4px; font-size: 11px; letter-spacing: .3px; }
+  /* Keep 16px inputs to prevent Safari zoom; trim padding rather than the text. */
+  .auth-entry .form input:not([type=checkbox]) { font-size: 16px; min-height: 44px; padding: 10px 12px; border-radius: 8px; }
+  .auth-entry .pw input:not([type=checkbox]) { padding-right: 46px; }
+  .auth-entry .btn-lg { font-size: 15px; min-height: 44px; padding: 11px 16px; }
+  .auth-entry .social { gap: 8px; margin: 0; }
+  .auth-entry .or { font-size: 10px; gap: 10px; }
+  .auth-entry .switch-auth { font-size: 12px; line-height: 1.5; }
+  .auth-entry .fine, .auth-entry .skip { font-size: 11px; line-height: 1.45; }
+  .auth-entry .auth-footer-links { gap: 4px; }
+  .auth-entry .auth-footer-links a { display: inline-block; padding-block: 5px; }
+  .auth-entry .auth-close { top: 12px; right: 12px; }
+  .auth-entry .seg button { min-height: 40px; font-size: 12px; }
+}
+
+/* Minimal underline inputs for both authentication forms, on mobile and desktop. */
+.auth-entry .form label { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12px; }
+.auth-entry .form input:not([type=checkbox]) {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--muted);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 9px 0;
+  min-height: 44px;
+  font-size: 16px;
+}
+.auth-entry .form input:not([type=checkbox]):focus {
+  outline: none;
+  border-bottom-color: var(--accent-2);
+  box-shadow: 0 1px 0 var(--accent-2);
+}
+.auth-entry .pw input:not([type=checkbox]) { padding-right: 46px; }
+.auth-entry .otp-phone { background: transparent; border: 0; border-bottom: 1px solid var(--muted); border-radius: 0; overflow: visible; }
+.auth-entry .otp-phone:focus-within { border-bottom-color: var(--accent-2); box-shadow: 0 1px 0 var(--accent-2); }
+.auth-entry .otp-phone .otp-cc { padding: 0 12px 0 0; border-right: 0; }
+.auth-entry .otp-phone input:not([type=checkbox]):focus { box-shadow: none; }
+
+/* Placeholder-led auth fields retain labels for assistive technology. */
+.auth-entry .auth-field-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.auth-entry .auth-icon-field { position: relative; }
+.auth-entry .auth-icon-field > svg { position: absolute; left: 0; top: 13px; color: var(--muted); pointer-events: none; }
+.auth-entry .form .auth-icon-field input:not([type=checkbox]) { padding-left: 30px; }
+.auth-entry .form input::placeholder { color: var(--muted); opacity: 1; }
+
+/* Compact provider choices; Google uses its official icon-only SDK button. */
+.auth-entry .social.social-compact { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
+.social-compact .btn-social { width: 44px; height: 44px; min-height: 44px; max-width: 44px; flex: 0 0 44px; padding: 0; border-radius: 50%; gap: 0; }
+.social-compact .social-g { width: 44px; min-height: 44px; flex: 0 0 44px; align-items: center; }
+.social-compact .btn-social:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+
+.account-current-plan { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; margin-bottom: 24px; border: 0; border-radius: var(--radius-lg); background-color: #d4a017; background-image: var(--gold-gradient); color: #201503; }
+.account-current-plan > div { min-width: 0; }
+.account-current-plan .account-field-label { font-size: 13px; line-height: 1.5; }
+.account-current-plan .account-plan-name { margin: 6px 0 4px; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.account-current-plan .icon-btn { flex-shrink: 0; }
+
+/* No saved titles: the account's My List slot must not reserve any space. */
+#accountSavedList:empty { display: none; }
+
+/* Same gold surface as Subscribe; dark supporting text remains legible on its highlights. */
+.account-current-plan .account-field-label, .account-current-plan .account-field-help { color: rgba(32,21,3,.82); }
+.account-current-plan .account-plan-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.account-current-plan .brand-lockup { font-size: clamp(16px, 4.5vw, 21px); letter-spacing: .5px; }
+.account-current-plan .brand-lockup b { filter: drop-shadow(0 1px 1px rgba(32,21,3,.6)); }
+.account-current-plan .premium-word { background: none; color: #5a430a; -webkit-text-fill-color: #5a430a; filter: none; animation: none; font-size: .6em; }
+.account-plan-period { font-size: 12px; font-weight: 600; }
+.account-current-plan .icon-btn { color: #201503; width: 32px; }
+
+/* ---------- split phone fields: country code button + national number ---------- */
+.phone-split { display: flex; align-items: center; gap: 10px; }
+.phone-split [data-phone-national] { flex: 1; min-width: 0; }
+.phone-cc { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 1px solid var(--border-2); border-radius: 10px; background: rgba(255,255,255,.04); color: var(--text-2); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; transition: border-color .2s, color .2s; }
+.phone-cc:hover, .phone-cc:focus-visible { border-color: var(--accent-2); color: var(--text); }
+/* The sign-in field keeps its underline look; the code button replaces the old static prefix. */
+.otp-phone .phone-cc { min-height: 0; padding: 0 10px 0 0; border: 0; border-right: 0; border-radius: 0; background: none; font-weight: 600; color: var(--text); }
+.otp-phone .phone-cc svg { color: var(--muted); }
+/* The "Select a country" sheet. */
+.country-picker .dlg-body { display: grid; gap: 12px; }
+.country-search { width: 100%; min-height: 44px; padding: 10px 14px; border: 1px solid var(--border-2); border-radius: 12px; background: rgba(255,255,255,.05); color: var(--text); font: inherit; font-size: 16px; }
+.country-search:focus { outline: none; border-color: var(--accent-2); }
+.country-list { display: grid; gap: 2px; max-height: 54vh; overflow: auto; overscroll-behavior: contain; }
+.country-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 10px; border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; font-size: 15px; text-align: left; cursor: pointer; }
+.country-row:hover { background: rgba(255,255,255,.06); }
+.country-row b { flex: none; color: var(--text-2); font-weight: 600; }
+.country-row.on, .country-row.on b { color: var(--gold); }

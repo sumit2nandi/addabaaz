@@ -68,6 +68,10 @@ function prewarmVideoAnchor(event) {
   const mayNeedYouTube = route.view === 'watch'
     ? (() => { const v = cat.video?.(route.params.id); return allowed(v) && v.source?.type === 'youtube'; })()
     : (() => { const v = route.params.id ? cat.video?.(route.params.id) : cat.reels?.()[0]; return allowed(v) && v.source?.type === 'youtube'; })();
+  const targetVideo = route.view === 'watch' ? cat.video?.(route.params.id) : null;
+  if (allowed(targetVideo) && ['r2', 'hls'].includes(targetVideo.source?.type)) {
+    import('./players/html5.js').then(({ prepareHtml5Player }) => prepareHtml5Player(targetVideo.source)).catch(() => {});
+  }
   if (mayNeedYouTube) import('./players/index.js').then(({ loadYouTube }) => loadYouTube()).catch(() => {});
 }
 

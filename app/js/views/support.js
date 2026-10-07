@@ -1,9 +1,14 @@
+import { pageBack } from '../ui/page-back.js';
+import { phoneSplit, wirePhoneSplits, splitValue } from '../ui/phone-field.js';
+import { splitInitial } from '../data/countries.js';
 // Support page (#/support): raise a ticket about anything that goes wrong in the app or on the website —
 // trouble signing in, registration, payments, playback, content — and follow the conversation.
 //
 // Signed-in viewers see their previous tickets and their replies in one place. Guests can still write in:
 // the form asks for a name and an e-mail, the reference is shown on screen and mailed to them, and the
 // ticket form is the only thing they need (the reply thread is reachable with the same e-mail).
+import { accountNav } from '../ui/account-nav.js';
+import { settingGroups } from './account-extra.js';
 import { app } from '../app.js';
 import { CONFIG } from '../config.js';
 import { html, $, timeAgo, fmtDate } from '../util.js';
@@ -34,19 +39,23 @@ const ref = (id) => `ADD-${String(id).slice(0, 8).toUpperCase()}`;
 export default async function support(ctx) {
   const u = app.user;
   ctx.setTitle('Support');
+  const backButton = pageBack(ctx);
   if (!u.supportsAuth) {
-    ctx.root.innerHTML = html`<div class="page page-narrow"><div class="empty">${icon('chat', { size: 44 })}
+    ctx.root.innerHTML = html`<div class="page page-narrow">${backButton}<div class="empty">${icon('chat', { size: 44 })}
       <h2>Support needs a connection</h2><p>This copy of ADDABAAZ runs without the server, so tickets can’t be sent from here. Please write to us once you’re back online.</p>
       <a class="btn btn-primary" href="#/contact">Contact us instead</a></div></div>`.s;
     return;
   }
   const acc = u.account;
   const isPhoneAccount = !!acc?.emailIsPlaceholder;
+  const phoneInit = splitInitial(acc?.phone || '');
   let tickets = [];
   if (acc) { try { tickets = (await u.myTickets({ limit: 25 })).tickets || []; } catch { /* the form still works */ } }
   if (ctx.stale?.()) return;   // see the sign-in page: an older shell may not have it yet
 
-  ctx.root.innerHTML = html`<div class="page page-narrow">
+  ctx.root.innerHTML = html`<div class="page page-narrow support-page">
+    ${backButton}
+    <div class="account-layout">${accountNav(settingGroups(), 'help')}<div class="account-content">
     ${sectionHeader({ tag: 'We’re here to help', title: 'Support', subtitle: 'Tell us what went wrong and we’ll get back to you by e-mail — usually within one working day.' })}
     ${acc ? html`<div class="card-panel notice"><div>${icon('mail', { size: 22 })}</div><div><b>Signed in as ${acc.name}</b>
       <p class="muted">${acc.emailIsPlaceholder ? `This account signs in with SMS. Enter a separate e-mail address below so we can reply to your ticket.` : `We’ll reply to ${acc.email}.`}</p></div></div>` : ''}
@@ -57,7 +66,7 @@ export default async function support(ctx) {
       <label>Describe the issue<textarea name="body" id="supBody" rows="6" maxlength="5000" required placeholder="What happened? What did you expect? Any error message you saw helps a lot."></textarea></label>
       ${!acc || isPhoneAccount ? html`<label>Your name<input name="name" maxlength="80" value="${acc?.name || ''}" required autocomplete="name"></label>
         <label>Email address<input name="email" type="email" maxlength="254" value="${acc && !isPhoneAccount ? acc.email : ''}" required autocomplete="email" placeholder="name@example.com"></label>` : ''}
-      <label>Phone / WhatsApp <small>(optional)</small><input name="phone" type="tel" maxlength="24" value="${acc?.phone || ''}" autocomplete="tel" placeholder="+91 90000 00000"></label>
+      <label>Phone / WhatsApp <small>(optional)</small>${phoneSplit({ dial: phoneInit.dial, value: phoneInit.rest, placeholder: '90000 00000' })}</label>
       <input type="text" name="website" id="supHp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px">
       <div class="form-status" id="supStatus" role="alert"></div>
       <button type="submit" class="btn btn-primary btn-lg block" id="supSend">Send to support</button>
@@ -73,8 +82,10 @@ export default async function support(ctx) {
         <div class="row-link static">${icon('play', { size: 22 })}<span><b>Video won’t play?</b><small>Try another network or the ADDABAAZ app, and mention the title you were watching.</small></span></div>
         <a class="row-link" href="#/contact">${icon('mail', { size: 22 })}<span><b>Business &amp; production enquiries</b><small>Use the contact page instead.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a>
       </div></section>
+    </div></div>
   </div>`.s;
 
+  ctx.onCleanup(wirePhoneSplits(ctx.root));
   const form = $('#supForm', ctx.root);
   const status = $('#supStatus', ctx.root);
   // The ticket carries where it was raised from: platform + app version make bug reports reproducible.
@@ -95,7 +106,7 @@ export default async function support(ctx) {
         category: String(f.get('category') || 'other'), subject, body,
         name: String(f.get('name') || acc?.name || '').trim() || undefined,
         email: String(f.get('email') || '').trim() || undefined,
-        phone: String(f.get('phone') || '').trim() || undefined,
+        phone: splitValue($('#supForm [data-phone-split]', ctx.root)) || undefined,
         website: String(f.get('website') || ''),
         ...context,
       });

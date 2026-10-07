@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { HttpError, bad, wrap, rateLimit, safeErrorUrl } from './http.js';
 import { isDuplicate } from './db-errors.js';
-import { hashPassword, verifyPassword, signToken } from './auth.js';
+import { hashPassword, verifyPassword, signToken, signJwt, verifyToken } from './auth.js';
 import { endpointHash } from './push.js';
 import { FREE_KINDS } from './catalog-schema.js';
 import { normalizeEmail } from './email-address.js';
@@ -130,6 +130,25 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         }
         res.status(202).json({ ok: true });                            // same answer whether or not the account exists
       }));
+      // Email possession, not the current session, authorizes parental PIN recovery.
+      api.post('/auth/pin/reset', authLimit, wrap(async (req, res) => {
+        const { token, pin } = req.body || {};
+        if (typeof pin !== 'string' || !/^\d{4,6}$/.test(pin)) throw bad('The PIN must be 4–6 digits.', 'invalid_pin');
+        const claims = typeof token === 'string' && token.length <= 2000 ? verifyToken(token, secret) : null;
+        const invalid = () => new HttpError(400, 'invalid_token', 'This PIN recovery link is invalid or expired. Request a new one.');
+        if (!claims || claims.aud !== 'parental-pin-reset') throw invalid();
+        const user = await db.users.byId(claims.uid);
+        if (!user) throw invalid();
+        notDisabled(user);
+        const state = await db.accounts.pin(user.id);
+        if (!user.emailVerifiedAt || claims.binding !== sha256(`${user.email}:${state?.hash || ''}`)) throw invalid();
+        const hash = await hashPassword(pin);
+        const uid = await db.authTokens.consume(sha256(token), 'pin_reset');
+        if (uid !== user.id) throw invalid();
+        await db.accounts.setPin(user.id, hash);
+        res.sendStatus(204);
+      }));
+
       // Password reset step 2: spends the one-time token, sets the new password and signs every other device out.
       api.post('/auth/reset', authLimit, wrap(async (req, res) => {
         const { token, password } = req.body || {};
@@ -268,9 +287,9 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
         if (last && Date.now() - last.getTime() < 60_000) throw new HttpError(429, 'too_soon', 'We just sent one — please wait a minute before asking again.');
         await sendVerification(req.user, { strict: true }); res.status(202).json({ ok: true });
       }));
-      // Phone-verified accounts can add or update a contact address; the current address remains active until the new one is confirmed.
+      // Accounts with a verified email or phone can update their email; the current address remains active until the new one is confirmed.
       api.post('/me/email', authLimit, wrap(async (req, res) => {
-        if (!req.user.phoneVerifiedAt) throw new HttpError(409, 'phone_signin_required', 'Add or update a contact email after verifying a mobile number on this account.');
+        if (!req.user.phoneVerifiedAt && !req.user.emailVerifiedAt) throw new HttpError(403, 'email_unverified', 'Verify your current email address before changing it.');
         const { email, ok } = normalizeEmail(req.body?.email);
         if (!ok) throw bad('Enter a valid email address.', 'invalid_email');
         if (isPhoneEmail(email)) throw bad('Use an email address you can receive mail at.', 'invalid_email');
@@ -303,6 +322,22 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       }));
       // "Sign out of all devices".
       api.post('/me/sessions/revoke', authLimit, wrap(async (req, res) => { const sv = await db.accounts.bumpSessions(req.user.id); res.json(sessionFor(req.user, sv)); }));
+
+      api.post('/me/pin/forgot', authLimit, wrap(async (req, res) => {
+        const user = req.user;
+        if (!user.emailVerifiedAt || isPhoneEmail(user.email)) throw new HttpError(403, 'verified_email_required', 'A verified account email is required. Contact support for help recovering your parental PIN.');
+        const state = await db.accounts.pin(user.id);
+        if (!state?.hash) throw bad('No parental PIN is set.');
+        const last = await db.authTokens.lastIssuedAt(user.id, 'pin_reset');
+        if (last && Date.now() - last.getTime() < 60_000) throw new HttpError(429, 'try_later', 'Please wait a minute before requesting another recovery email.');
+        requireDeliverableMail();
+        const token = signJwt({ aud: 'parental-pin-reset', uid: user.id, jti: newToken(), binding: sha256(`${user.email}:${state.hash}`) }, secret, 900);
+        const url = `${siteUrl}/reset?parental=1&token=${encodeURIComponent(token)}`;
+        await db.authTokens.issue(user.id, 'pin_reset', sha256(token), 15 * 60_000);
+        // Never log the recovery credential, including in development.
+        await sendMailStrict(user.email, mail.resetParentalPinEmail({ name: user.name, url, supportEmail: cfg.supportEmail }), 'Parental PIN recovery requested');
+        res.status(202).json({ ok: true });
+      }));
 
       /* --- parental PIN --- */
       // Set or change the parental PIN (4-6 digits, stored hashed). Changing needs the current PIN. Five wrong tries lock it for 15 minutes.

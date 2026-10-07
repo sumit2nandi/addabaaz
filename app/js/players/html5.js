@@ -5,9 +5,19 @@ let hlsPromise = null;
 const loadHls = () => hlsPromise || (hlsPromise = new Promise((res, rej) => {
   const s = document.createElement('script');
   s.src = 'https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js';
-  s.onload = () => res(window.Hls); s.onerror = () => rej(new Error('hls.js failed to load'));
+  s.onload = () => res(window.Hls); s.onerror = () => { hlsPromise = null; s.remove(); rej(new Error('hls.js failed to load')); };
   document.head.appendChild(s);
 }));
+
+// Warm the engine in parallel with URL authorization, without fetching protected media or taking a seat.
+export function prepareHtml5Player(source = {}) {
+  const hls = source.type === 'hls' || (source.type === 'r2' && (source.format === 'hls' || /\.m3u8$/i.test(source.key || '')));
+  if (!hls) return Promise.resolve();
+  const probe = document.createElement('video');
+  const chromium = /\b(?:Chrome|Chromium|Edg(?:A|iOS)?|OPR|SamsungBrowser)\//i.test(globalThis.navigator?.userAgent || '');
+  if (probe.canPlayType?.('application/vnd.apple.mpegurl') && !chromium) return Promise.resolve();
+  return loadHls();
+}
 
 // HLS error objects can contain signed media URLs. Keep only the diagnostic text and redact bearer material.
 function diagnosticText(value, limit = 180) {

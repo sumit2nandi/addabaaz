@@ -121,7 +121,7 @@ test('pending address is promoted only inside the single-use, unexpired token tr
   assert.match(statements[0].sql, /SELECT user_id FROM email_change_tokens/);
   assert.match(statements[1].sql, /SELECT id FROM users WHERE id = \? FOR UPDATE/);
   assert.match(statements[2].sql, /expires_at > UTC_TIMESTAMP\(3\) FOR UPDATE/);
-  assert.match(statements[3].sql, /phone_verified_at IS NOT NULL/, 'only an account with a verified phone can change its email');
+  assert.match(statements[3].sql, /phone_verified_at IS NOT NULL OR email_verified_at IS NOT NULL/, 'the account needs a verified phone or email');
   assert.deepEqual(statements[3].params, ['rina@example.com', 'rina@example.com', 'phone-user']);
   assert.match(statements[4].sql, /DELETE FROM email_change_tokens WHERE token_hash/);
 });
@@ -222,4 +222,20 @@ test('reserved, already-owned, and undeliverable addresses never replace the pla
   assert.equal(unavailable.status, 503);
   assert.equal(noSmtp.state.pending, null);
   assert.equal(noSmtp.state.sent.length, 0, 'development mode does not claim an email was sent when there is no SMTP transport');
+});
+
+
+test('verified email accounts can request a replacement, but unverified accounts cannot', async (t) => {
+  const { app, state } = apiFixture();
+  state.user.phoneVerifiedAt = null;
+  state.user.email = 'existing@example.com';
+  const base = await withServer(t, app);
+  const response = await post(base, '/me/email', { email: 'new@example.com' });
+  assert.equal(response.status, 202);
+  assert.equal(state.user.email, 'existing@example.com', 'current email is unchanged until confirmation');
+  assert.equal(state.pending.email, 'new@example.com');
+  state.user.emailVerifiedAt = null;
+  const rejected = await post(base, '/me/email', { email: 'other@example.com' });
+  assert.equal(rejected.status, 403);
+  assert.equal((await rejected.json()).error.code, 'email_unverified');
 });

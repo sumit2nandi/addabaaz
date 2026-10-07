@@ -34,6 +34,8 @@ function syncBrandPremium() { const s = $('#brandPremium'); if (s) s.hidden = !a
 
 // Draw the frame and hook up menus and the search box.
 export function renderShell() {
+  const version = $('#appVersion');
+  if (version) version.textContent = `App Version ${CONFIG.version}`;
   $('#topbar').innerHTML = html`
     <a class="brand" href="#/" aria-label="ADDABAAZ home"><img src="media/icons/logo-96.webp" alt="" width="36" height="36"><span class="brand-text"><b>ADDA</b><i>BAAZ</i><em class="premium-word premium-sup" id="brandPremium" aria-hidden="true" hidden>premium</em></span></a>
     <nav class="nav" aria-label="Primary">

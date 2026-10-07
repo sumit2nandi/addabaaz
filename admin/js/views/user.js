@@ -26,11 +26,14 @@ export default async function user(root, [id], ctx) {
             : html`<p><strong>Free</strong>${s.status === 'expired' ? html` <span class="muted">— plan expired ${fmtD(s.expiresAt)}</span>` : ''}</p>`}
           <p class="muted small">Total paid (net of refunds): <strong>${inr(spentPaise)}</strong></p>
           <div class="row wrap"><button class="btn primary" id="grant">${icon('crown', 16)} Give free access…</button>${paid ? html`<button class="btn danger" id="revoke">End plan now</button>` : ''}</div></section>
-        <section class="card"><div class="card-head"><h2>Profiles</h2></div>
+        <section class="card"><div class="card-head"><h2>Profiles</h2></div><p class="muted small">Parental PIN: ${u.hasPin ? 'Enabled' : 'Not set'}</p>${u.hasPin ? html`<button class="btn danger" id="removeParentalPin">Remove parental PIN</button>` : ''}
           <ul class="plain">${profiles.map((p) => html`<li><span class="dot c${p.color}"></span>${p.name}</li>`)}</ul></section>
       </div>
       <section class="card" id="creditCard"><div class="card-head"><h2>Credit &amp; referrals</h2></div><div class="spinner" style="margin:14px auto"></div></section>
       <section class="card"><div class="card-head"><h2>Payments</h2></div>${payments.length ? paymentTable(payments, { showUser: false }) : empty('No payments.')}</section>`.s;
+    $('#removeParentalPin', root)?.addEventListener('click', async (e) => {
+      if (await confirmBox({ title: 'Remove parental PIN?', text: 'Verify the account owner’s identity first. This removes parental protection for this account and is recorded in the audit log.', confirm: 'Remove PIN', danger: true })) await act(() => api.del(`/users/${encodeURIComponent(id)}/parental-pin`), 'Parental PIN removed')(e);
+    });
     wirePaymentActions(root, payments, load);
     // Promotional credit for this account (best effort: the card disappears when the offer is not running).
     $('#creditCard') && api.get(`/credits/user/${encodeURIComponent(id)}`)

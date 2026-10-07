@@ -13,6 +13,7 @@ import { go } from '../router.js';
 import { toast } from '../ui/components.js';
 import { mountSocialButtons } from '../social.js';
 import { friendly } from '../errors.js';
+import { wirePhoneSplits } from '../ui/phone-field.js';
 
 const RESEND_SECONDS = 60;   // matches the server's one-a-minute limit
 
@@ -23,14 +24,13 @@ export default async function auth(ctx) {
   // method is used, so both sides get their bonus (see server/src/promos.js).
   const ref = String(ctx.query.ref || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
   ctx.setTitle(signup ? 'Create account' : 'Sign in');
-  document.body.classList.add('bare'); ctx.onCleanup(() => document.body.classList.remove('bare'));
-  if (!u.supportsAuth) { ctx.root.innerHTML = html`<div class="auth-page"><div class="empty"><h2>Accounts aren’t enabled</h2><p>This copy of ADDABAAZ runs in local mode, so your list and progress are saved on this device. Connect the ADDABAAZ API to enable sign-in and cross-device sync.</p><a class="btn btn-primary" href="#/">Back to home</a></div></div>`.s; return; }
+  if (!u.supportsAuth) { ctx.root.innerHTML = html`<div class="page"><div class="empty"><h2>Accounts aren’t enabled</h2><p>This copy of ADDABAAZ runs in local mode, so your list and progress are saved on this device. Connect the ADDABAAZ API to enable sign-in and cross-device sync.</p><a class="btn btn-primary" href="#/">Back to home</a></div></div>`.s; return; }
   if (u.account) { go('/account', { replace: true }); return; }
 
   // Which methods the server offers. `/auth/providers` never throws; the email form is the floor.
   const providers = await u.providers().catch(() => ({ password: true }));
   const canOtp = !!providers.otp;
-  const country = String(providers.otpCountryCode || '91').replace(/\D/g, '') || '91';
+  let country = String(providers.otpCountryCode || '91').replace(/\D/g, '') || '91';
   let mode = canOtp ? 'otp' : 'email';        // OTP first whenever it is configured
   let phoneSent = '';
   let timer = null;
@@ -39,13 +39,12 @@ export default async function auth(ctx) {
   // with "ctx.stale is not a function".
   if (ctx.stale?.()) return;
 
-  ctx.root.innerHTML = html`<div class="auth-page">
-    <a href="#/" class="auth-brand"><img src="media/icons/icon-96.png" width="56" height="56" alt=""><span class="brand-text"><b>ADDA</b><i>BAAZ</i></span></a>
+  ctx.root.innerHTML = html`<div class="page auth-page auth-entry">
     <form class="auth-card form" id="af" novalidate>
       <button type="button" class="auth-close" id="authClose" aria-label="Close">${icon('x', { size: 16 })}</button>
-      <h1>${signup ? 'Create your account' : 'Welcome back'}</h1>
+      <h1>${signup ? 'Create account' : 'Welcome back'}</h1>
       ${ref ? html`<div class="notice ok" id="refNote">${icon('gift', { size: 18 })}<span>Invite code <b>${ref}</b> will be applied — you and your friend both get credit.</span></div>` : ''}
-      <p class="muted" id="authSub">${canOtp ? 'Sign in or create your account with your mobile number — we’ll text you a code.' : (signup ? 'Sync My List and Continue Watching across all your devices.' : 'Sign in to pick up where you left off.')}</p>
+      <p class="muted" id="authSub">${canOtp ? 'Use your mobile number to get started.' : (signup ? 'Save your favourites and watch across devices.' : 'Pick up where you left off.')}</p>
 
       ${canOtp ? html`<div class="seg seg-full" role="tablist" aria-label="Sign-in method">
         <button type="button" role="tab" class="on" id="tabOtp" aria-selected="true">${icon('phone', { size: 15 })} Mobile number</button>
@@ -54,14 +53,14 @@ export default async function auth(ctx) {
 
       ${canOtp ? html`<div id="otpPane">
         <div id="otpPhoneStep">
-          <label>Mobile number<span class="otp-phone"><b class="otp-cc">+${country}</b><input name="phone" type="tel" inputmode="numeric" autocomplete="tel-national" required placeholder="98765 43210" maxlength="14"></span></label>
+          <label><span class="auth-field-label">Mobile number</span><span class="otp-phone" data-phone-split data-dial="${country}"><button type="button" class="otp-cc" data-cc-btn aria-label="Select country code"><span data-cc-dial>+${country}</span>${icon('chev-down', { size: 13 })}</button><input name="phone" type="tel" inputmode="numeric" autocomplete="tel-national" required placeholder="Mobile number" maxlength="14"></span></label>
           <p class="fine fine-left">We’ll send a 6-digit code by SMS. Standard message rates may apply.</p>
           <button class="btn btn-primary btn-lg block" type="submit" id="otpSend">Send me a code</button>
         </div>
         <div id="otpCodeStep" hidden>
           <p class="muted" id="otpSentTo"></p>
-          <label>Enter the 6-digit code<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" class="pin-input" placeholder="••••••"></label>
-          <label>Your name <small>(new accounts only)</small><input name="name" maxlength="60" autocomplete="name" placeholder="Full name"></label>
+          <label><span class="auth-field-label">Enter the 6-digit code</span><input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" class="pin-input" placeholder="6-digit code"></label>
+          <label class="auth-icon-field"><span class="auth-field-label">Your name (new accounts only)</span>${icon('user', { size: 18 })}<input name="name" maxlength="60" autocomplete="name" placeholder="Full name"></label>
           <button class="btn btn-primary btn-lg block" type="submit" id="otpVerify">Verify &amp; continue</button>
           <div class="row between otp-links"><button type="button" class="linklike" id="otpResend" disabled>Resend code</button><button type="button" class="linklike" id="otpChange">Change number</button></div>
         </div>
@@ -70,9 +69,9 @@ export default async function auth(ctx) {
       <div id="emailPane" ${canOtp ? 'hidden' : ''}>
         <div class="social" id="social" hidden></div>
         <div class="or" id="or" hidden><span>or use your email</span></div>
-        ${signup ? html`<label>Your name<input name="name" autocomplete="name" required maxlength="60" placeholder="Full name"></label>` : ''}
-        <label>Email<input name="email" type="email" autocomplete="email" required placeholder="name@example.com" inputmode="email"></label>
-        <label>Password<span class="pw"><input name="password" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" required minlength="8" placeholder="${signup ? 'At least 8 characters' : 'Your password'}"><button type="button" class="icon-btn" id="pwt" aria-label="Show password">${icon('eye', { size: 18 })}</button></span></label>
+        ${signup ? html`<label class="auth-icon-field"><span class="auth-field-label">Your name</span>${icon('user', { size: 18 })}<input name="name" autocomplete="name" required maxlength="60" placeholder="Full name"></label>` : ''}
+        <label class="auth-icon-field"><span class="auth-field-label">Email</span>${icon('mail', { size: 18 })}<input name="email" type="email" autocomplete="email" required placeholder="Email address" inputmode="email"></label>
+        <label class="auth-icon-field"><span class="auth-field-label">Password</span>${icon('lock', { size: 18 })}<span class="pw"><input name="password" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" required minlength="8" placeholder="${signup ? 'Password (8+ characters)' : 'Password'}"><button type="button" class="icon-btn" id="pwt" aria-label="Show password">${icon('eye', { size: 18 })}</button></span></label>
         ${signup ? '' : html`<a class="forgot-link" href="#/forgot">Forgot password?</a>`}
         <button class="btn btn-primary btn-lg block" type="submit" id="asub">${signup ? 'Create account' : 'Sign in'}</button>
       </div>
@@ -81,8 +80,8 @@ export default async function auth(ctx) {
       <div class="form-status" id="as" role="alert"></div>
       ${signup ? html`<p class="fine">By creating an account you agree to our <a href="#/terms">Terms</a> and <a href="#/privacy">Privacy Policy</a>.</p>` : ''}
       <p class="switch-auth">${signup ? html`Already have an account? <a href="#/signin?next=${encodeURIComponent(next)}">Sign in</a>` : html`New to ADDABAAZ? <a href="#/signup?next=${encodeURIComponent(next)}">Create an account</a>`}</p>
-      <p class="fine">Trouble signing in? <a href="#/support">Get help</a></p>
-      <a class="skip" href="#/">Continue without an account</a>
+      <div class="auth-footer-links"><p class="fine">Trouble signing in? <a href="#/support">Get help</a></p>
+      <a class="skip" href="#/">Continue without an account</a></div>
     </form></div>`.s;
 
   const st = () => $('#as', ctx.root);
@@ -106,10 +105,11 @@ export default async function auth(ctx) {
     $('#tabOtp', ctx.root).setAttribute('aria-selected', String(m === 'otp'));
     $('#tabEmail', ctx.root).setAttribute('aria-selected', String(m === 'email'));
     $('#authSub', ctx.root).textContent = m === 'otp'
-      ? 'Sign in or create your account with your mobile number — we’ll text you a code.'
-      : (signup ? 'Sync My List and Continue Watching across all your devices.' : 'Sign in to pick up where you left off.');
+      ? 'Use your mobile number to get started.'
+      : (signup ? 'Save your favourites and watch across devices.' : 'Pick up where you left off.');
     setStatus('');
   };
+  if (canOtp) ctx.onCleanup(wirePhoneSplits(ctx.root, { onCountry: (c) => { country = c.dial; } }));
   $('#tabOtp', ctx.root)?.addEventListener('click', () => setMode('otp'));
   $('#tabEmail', ctx.root)?.addEventListener('click', () => setMode('email'));
 
@@ -130,7 +130,7 @@ export default async function auth(ctx) {
     if (shown) { box.hidden = false; $('#or', ctx.root).hidden = false; }
   });
   $('#pwt', ctx.root)?.addEventListener('click', () => { const i = $('[name=password]', ctx.root); i.type = i.type === 'password' ? 'text' : 'password'; });
-  $('#authClose', ctx.root).addEventListener('click', () => go(next));   // the × at the top-right closes the form
+  $('#authClose', ctx.root).addEventListener('click', () => go(!u.account && /^\/account(?:[/?]|$)/.test(next) ? '/' : next));   // the × at the top-right closes the form
 
   /* ---------- phone sign-in (SMS OTP) ---------- */
   // The number is sent to the server in the form people type it; the server normalizes it (country code,

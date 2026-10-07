@@ -210,7 +210,13 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   router.get('/users/:id', wrap(async (req, res) => {
     const u = await userOr404(req.params.id);
     const [profiles, subscription, providers, pays] = await Promise.all([db.profiles.list(u.id), db.subscriptions.get(u.id), db.identities.providersOf(u.id), db.payments.listRecent({ userId: u.id, limit: 50 })]);
-    res.json({ user: { ...u, providers }, profiles, subscription, payments: pays, spentPaise: pays.filter((p) => p.status === 'paid').reduce((n, p) => n + p.amountPaise - p.refundedPaise, 0) });
+    res.json({ user: { ...u, hasPin: !!(await db.accounts.pin(u.id))?.hash, providers }, profiles, subscription, payments: pays, spentPaise: pays.filter((p) => p.status === 'paid').reduce((n, p) => n + p.amountPaise - p.refundedPaise, 0) });
+  }));
+  router.delete('/users/:id/parental-pin', wrap(async (req, res) => {
+    const u = await userOr404(req.params.id);
+    await db.accounts.setPin(u.id, null);
+    await log(req, 'user.parental_pin.remove', u.id);
+    res.sendStatus(204);
   }));
   // Rename, promote/demote admin, enable/disable. Safety rules: you cannot lock yourself out, and the last administrator cannot be removed.
   router.patch('/users/:id', wrap(async (req, res) => {

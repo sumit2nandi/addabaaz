@@ -4,7 +4,7 @@ import { CONFIG } from '../config.js';
 import { html, $, $$ } from '../util.js';
 import { icon } from '../icons.js';
 import { avatar, toast } from '../ui/components.js';
-import { avatarColor, AVATAR_COUNT } from '../data/user.js';
+import { avatarColor } from '../data/user.js';
 import { openDialog, confirmDialog } from '../ui/dialog.js';
 import { go } from '../router.js';
 import { withPin, mayLeaveKids } from '../ui/parental.js';
@@ -32,19 +32,22 @@ export default async function profiles(ctx) {
   ctx.onCleanup(offProfile);
 
   const form = (p) => {
-    let color = p?.color ?? u.profiles.length;
+    let color = p?.color ?? 0;
+    // Five choices fit small screens; retain a legacy saved colour when editing it.
+    const colors = [0, 1, 2, 3, color >= 5 && color <= 7 ? color : 4];
+    const colorNames = ['Red', 'Gold', 'Blue', 'Green', 'Purple', 'Coral', 'Teal', 'Orange'];
     const { el, close } = openDialog(html`<h2>${p ? 'Edit profile' : 'Add profile'}</h2>
       <form id="pf" class="form" novalidate>
         <div class="avatar-preview" id="ap">${avatar({ name: p?.name || 'A', color }, { size: 84 })}</div>
+        <div class="swatches" role="group" aria-label="Choose a colour">${colors.map((i) => html`<button type="button" aria-pressed="${i === color}" class="swatch ${i === color ? 'on' : ''}" data-c="${i}" style="--swatch:${avatarColor(i)}" aria-label="${colorNames[i]}"></button>`)}</div>
         <label>Name<input name="name" maxlength="24" required value="${p?.name || ''}" autocomplete="off" placeholder="e.g. Rupa"></label>
         <label class="check"><input type="checkbox" name="kids" ${p?.kids ? 'checked' : ''}><span>Kids profile — shows only titles rated for children</span></label>
-        <div class="swatches" role="radiogroup" aria-label="Colour">${Array.from({ length: AVATAR_COUNT }, (_, i) => html`<button type="button" role="radio" aria-checked="${i === color}" class="swatch ${i === color ? 'on' : ''}" data-c="${i}" style="background:${avatarColor(i)}" aria-label="Colour ${i + 1}"></button>`)}</div>
         <div class="form-status" id="pfs" role="alert"></div>
         <div class="row end">${p && u.profiles.length > 1 ? html`<button type="button" class="btn btn-danger" id="del">Delete</button>` : ''}<button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" type="submit">Save</button></div>
       </form>`, { title: 'Profile', cls: 'dialog-sm' });
     const nameEl = $('[name=name]', el), preview = () => { $('#ap', el).innerHTML = avatar({ name: nameEl.value || 'A', color }, { size: 84 }).s; };
     nameEl.addEventListener('input', preview); nameEl.focus();
-    el.addEventListener('click', (e) => { const s = e.target.closest('[data-c]'); if (s) { color = +s.dataset.c; $$('.swatch', el).forEach((x) => { x.classList.toggle('on', x === s); x.setAttribute('aria-checked', x === s); }); preview(); } });
+    el.addEventListener('click', (e) => { const s = e.target.closest('[data-c]'); if (s) { color = +s.dataset.c; $$('.swatch', el).forEach((x) => { x.classList.toggle('on', x === s); x.setAttribute('aria-pressed', String(x === s)); }); preview(); } });
     $('#pf', el).addEventListener('submit', async (e) => {
       e.preventDefault(); const name = nameEl.value.trim();
       if (!name) { $('#pfs', el).textContent = 'Please enter a name.'; return; }
@@ -59,6 +62,8 @@ export default async function profiles(ctx) {
       }
     });
   };
+
+  if (ctx.query.add === '1' && u.profiles.length < CONFIG.maxProfiles) form(null);
 
   ctx.root.addEventListener('click', async (e) => {
     if (e.target.closest('[data-add]')) return form(null);

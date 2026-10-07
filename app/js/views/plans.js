@@ -1,3 +1,4 @@
+import { pageBack } from '../ui/page-back.js';
 // Plans and checkout page (#/plans).
 import { app } from '../app.js';
 import { html, fmtDate, raw } from '../util.js';
@@ -91,13 +92,16 @@ function celebrate() {
 export default async function plans(ctx) {
   const u = app.user;
   ctx.setTitle('Plans');
+  const backButton = pageBack(ctx, '/account');
   const next = /^\/(?!\/)/.test(ctx.query.next || '') ? ctx.query.next : '';
   if (!u.supportsAuth) {
-    ctx.root.innerHTML = html`<div class="page"><div class="empty">${icon('crown', { size: 44 })}<h2>Plans need the ADDABAAZ server</h2><p>This copy of ADDABAAZ is running without the API, so subscriptions aren’t available. Free episodes and reels work as usual.</p><a class="btn btn-primary" href="#/">Keep watching</a></div></div>`.s; return;
+    ctx.root.innerHTML = html`<div class="page">${backButton}<div class="empty">${icon('crown', { size: 44 })}<h2>Plans need the ADDABAAZ server</h2><p>This copy of ADDABAAZ is running without the API, so subscriptions aren’t available. Free episodes and reels work as usual.</p><a class="btn btn-primary" href="#/">Keep watching</a></div></div>`.s; return;
   }
   const { plans: list, payments, billing: bill } = await u.plans();
   const memo = {};
   const canBuy = !isNative && payments.provider !== 'none';
+  const guestWeb = !isNative && !u.account;
+  const signInUrl = '#/signin?next=' + encodeURIComponent('/plans' + (next ? '?next=' + encodeURIComponent(next) : ''));
   let busy = false;
   // Selected billing period for the duration tiles (website checkout only). Defaults to the current
   // paid plan when subscribed, otherwise to yearly (best value); tile taps update it and repaint.
@@ -135,6 +139,7 @@ export default async function plans(ctx) {
       : s.status === 'expired' ? html`<div class="notice">${icon('info', { size: 18 })}<span>Your plan expired on ${fmtDate(s.expiresAt)}.${isNative ? '' : ' Choose a plan to watch premium videos again.'}</span></div>` : '';
     const why = isNative
       ? html`<div class="notice">${icon('info', { size: 18 })}<span>This app does not offer purchases or payment links. Memberships and payments are managed separately on the ADDABAAZ website. If you already have access, sign in with the same account and it will appear here automatically.</span></div>`
+      : guestWeb ? html`<div class="notice">${icon('info', { size: 18 })}<span>Sign in to subscribe.</span></div>`
       : payments.provider === 'mock' ? html`<div class="notice">${icon('info', { size: 18 })}<span>Demo checkout — no real payment is taken. Add Razorpay keys on the API to go live (docs/PREMIUM.md).</span></div>`
       : payments.provider === 'none' ? html`<div class="notice">${icon('info', { size: 18 })}<span>Payments aren’t available right now. Please try again later.</span></div>` : '';
     const paid = list.filter((p) => p.id !== 'free');
@@ -142,16 +147,16 @@ export default async function plans(ctx) {
     const perks = (list.find((p) => p.id === 'plus-monthly') || paid[0] || { features: [] }).features;
     const sp = paid.find((p) => p.id === sel) || paid[0];
     const pr = sp ? priceOf(sp) : null;
-    // Duration tiles + one pay button (website with payments only — canBuy already implies !isNative).
+    // Guests can preview website pricing even before payment availability is known.
     const plusCard = html`<div class="plus-card">
       <h2><span class="brand-lockup"><b>ADDA</b><i>BAAZ</i> <em class="premium-word">premium</em></span></h2>
       <p class="muted small">Premium originals, early access &amp; ad-free viewing.</p>
       <ul class="perks">${perks.map((f) => html`<li>${icon('check', { size: 15 })} ${f}</li>`)}</ul>
       <div class="durs" role="radiogroup" aria-label="Billing period">${paid.map((p) => html`<button class="dur ${p.id === sel ? 'is-sel' : ''} ${p.id === cur ? 'is-current' : ''}" data-sel="${p.id}" role="radio" aria-checked="${p.id === sel}">${p.id === 'plus-yearly' ? html`<span class="dur-tag">Best Value</span>` : ''}${p.id === cur ? html`<span class="dur-tag cur">Current</span>` : ''}<b>₹${p.priceINR}</b><small>${p.interval === 'year' ? 'Year' : 'Month'}</small>${p.interval === 'year' ? html`<em>Just ₹${Math.round(p.priceINR / 12)}/month</em>` : ''}</button>`)}</div>
       ${creditPaise > 0 ? html`<label class="check credit-row"><input type="checkbox" name="usec" data-usec ${wantsCredit ? 'checked' : ''}> <span>Use my ${inr(creditPaise)} ADDABAAZ credit on this order</span></label>` : ''}
-      ${sp ? html`<button class="btn btn-primary btn-lg block paybar" data-pay>${pr.payPaise === 0 ? 'Activate for free' : `${sp.id === cur ? 'Extend' : active ? 'Switch to' : 'Pay'} ${pr.savePaise > 0 ? html`<s>${inr(pr.listPaise)}</s> ` : ''}${inr(pr.payPaise)}`}</button>` : ''}
-      ${coupon && quote?.coupon ? html`<p class="coupon-line"><b>${quote.coupon.code}</b> applied — you save ${inr(pr ? pr.savePaise : 0)}. <button class="linklike" data-uncoupon>Remove</button></p>` : html`<button class="linklike coupon-link" data-coupon>Apply Coupon</button>`}
-      <p class="free-line">Free · ${cur === 'free' ? 'your current plan' : 'included forever'}</p>
+      ${guestWeb ? html`<a class="btn btn-primary btn-lg block paybar" href="${signInUrl}">Sign in to subscribe</a>` : sp ? html`<button class="btn btn-primary btn-lg block paybar" data-pay>${pr.payPaise === 0 ? 'Activate for free' : `${sp.id === cur ? 'Extend' : active ? 'Switch to' : 'Pay'} ${pr.savePaise > 0 ? html`<s>${inr(pr.listPaise)}</s> ` : ''}${inr(pr.payPaise)}`}</button>` : ''}
+      ${guestWeb ? '' : coupon && quote?.coupon ? html`<p class="coupon-line"><b>${quote.coupon.code}</b> applied — you save ${inr(pr ? pr.savePaise : 0)}. <button class="linklike" data-uncoupon>Remove</button></p>` : html`<button class="linklike coupon-link" data-coupon>Apply Coupon</button>`}
+      <p class="free-line">Free · ${u.account && cur === 'free' ? 'your current plan' : 'included forever'}</p>
     </div>`;
     // Native apps and payment-less servers: read-only cards (no prices in native builds, no purchase buttons).
     const legacyCards = html`<div class="plans">${list.map((p) => html`<article class="plan ${p.id === cur ? 'current' : ''} ${!isNative && p.id === 'plus-yearly' ? 'best' : ''} ${p.id === 'free' ? 'free' : ''}">
@@ -164,12 +169,13 @@ export default async function plans(ctx) {
           : html`<button class="btn btn-primary block" data-plan="${p.id}">${p.id === cur ? 'Extend' : active ? 'Switch to' : 'Get'} ${p.interval === 'year' ? 'yearly' : 'monthly'} plan</button>`}
       </article>`)}</div>`;
     ctx.root.innerHTML = html`<div class="page">
+      ${backButton}
       ${sectionHeader(isNative
         ? { title: 'Your access', subtitle: 'View the access currently linked to your ADDABAAZ account.' }
         : { title: 'Choose your plan', subtitle: 'Pay once for the period — no auto-renewal, nothing to cancel.' })}
       ${status}${why}
       ${!isNative && creditPaise > 0 ? html`<div class="notice ok">${icon('gift', { size: 18 })}<span>You have <b>${inr(creditPaise)}</b> of ADDABAAZ credit${offer?.expiryDays ? html` — it expires ${offer.expiryDays} days after it was added` : ''}. Tick “use my credit” at checkout and it comes straight off the price.</span></div>` : ''}
-      ${canBuy ? plusCard : legacyCards}
+      ${canBuy || guestWeb ? plusCard : legacyCards}
       ${u.account ? html`<div class="card-panel list plans-bill"><a class="row-link" href="#/billing">${icon('download', { size: 22 })}<span><b>Billing &amp; invoices</b><small>GST invoices, credit notes and refunds</small></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>` : ''}
       ${s.demo ? html`<p class="muted" style="margin-top:18px"><button class="btn btn-ghost" data-cancel>End demo plan</button></p>` : ''}
       <p class="muted" style="margin-top:18px;font-size:13px">${isNative

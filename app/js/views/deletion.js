@@ -1,4 +1,7 @@
+import { pageBack } from '../ui/page-back.js';
 // Public account-deletion instructions, also linked from Google Play and the privacy policy.
+import { app } from '../app.js';
+import { wireAccountDeletion } from './account-extra.js';
 import { html } from '../util.js';
 import { studioData } from './studio.js';
 import { sectionHeader } from '../ui/components.js';
@@ -12,12 +15,14 @@ export default async function deletion(ctx) {
   const subject = encodeURIComponent(`${name} account deletion request`);
   const body = encodeURIComponent(`Hello,\n\nPlease delete my ${name} account.\n\nRegistered email or phone number:\nFull name (optional):\n\nI understand that limited billing and security records may be retained as described in the Privacy Policy.\n`);
   ctx.setTitle(`Delete your ${name} account`);
+  const backButton = pageBack(ctx);
   ctx.root.innerHTML = html`<article class="page page-narrow legal deletion-page">
+    ${backButton}
     ${sectionHeader({ tag: 'Account & privacy', title: 'Delete your account', subtitle: name })}
     <p class="lead">You can permanently delete your ADDABAAZ account and request deletion even if you can no longer sign in.</p>
 
     <section class="card-panel"><h2>Delete from the app</h2>
-      <p>Sign in, open <b>Account</b>, choose <b>Delete account</b>, and confirm. This removes the account and linked profiles, library, viewing activity, ratings, device registrations and support conversations from our service.</p>
+      <p>Sign in, read the details below, then use <b>Delete account</b> at the bottom of this page and confirm. This removes the account and linked profiles, library, viewing activity, ratings, device registrations and support conversations from our service.</p>
       <p>Account deletion is permanent and you will not be able to sign in again with that account.</p>
     </section>
 
@@ -33,5 +38,7 @@ export default async function deletion(ctx) {
     </section>
 
     <p class="muted small">Privacy contact: <a href="mailto:${email}">${email}</a><br>${address}</p>
+    ${app.user.account ? html`<div class="deletion-actions"><button type="button" class="btn btn-danger" id="delAcc">Delete account</button></div>` : html`<p><a class="btn btn-primary" href="#/signin?next=/delete-account">Sign in to delete your account</a></p>`}
   </article>`.s;
+  wireAccountDeletion(ctx.root);
 }

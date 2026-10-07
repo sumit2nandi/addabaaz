@@ -1,6 +1,7 @@
 /* The profile page's settings groups: each group draws on its own sub-page (app/js/views/settings.js)
  * behind /account/<group>; the profile page itself only lists them. Visibility follows the session:
  * local mode and guests see a shorter list, signed-in accounts the full one. */
+import { forgotParentalPin } from '../ui/parental.js';
 import { app } from '../app.js';
 import { html, $, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
@@ -15,11 +16,10 @@ import { isNative } from '../platform.js';
 const GROUPS = [
   ['playback', 'Playback', 'Autoplay and watch history', 'play', 'all'],
   ['security', 'Security', 'Password, sessions and devices', 'lock', 'account'],
-  ['kids', 'Kids & parental controls', 'Parental PIN and Kids profiles', 'user', 'account'],
-  ['refer', 'Refer & earn', 'Invite credit and rewards', 'gift', 'account'],
+  ['kids', 'Parental Control', 'Parental PIN and Kids profiles', 'user', 'account'],
   ['notify', 'Notifications', 'Episode, launch and announcement alerts', 'bell', 'auth'],
+  ['refer', 'Refer & earn', 'Invite credit and rewards', 'gift', 'account'],
   ['help', 'Help & support', 'Help Centre and contact us', 'chat', 'all', '#/support'],
-  ['danger', 'Delete account', 'Permanently remove your account', 'trash', 'account'],
 ];
 
 /** The rows the profile page lists for this viewer: [{ id, title, sub, ic, href }]. */
@@ -183,17 +183,12 @@ function kidsSection() {
   const u = app.user;
   if (!u.account) return '';
   return html`<section class="account-section">
-    <h2 class="sub-h">Kids &amp; parental controls</h2>
+    <h2 class="sub-h">Parental Control</h2>
     <div class="card-panel list">
       ${row('pinBtn', 'lock', u.hasPin ? 'Change or remove parental PIN' : 'Set a parental PIN', u.hasPin ? 'Needed to leave a Kids profile or change profiles.' : 'Keeps children on their Kids profile and stops profile changes.')}
       <a class="row-link" href="#/profiles?manage=1">${icon('user', { size: 22 })}<span><b>Kids profiles</b><small>Mark any profile as “Kids” to show only titles rated for children.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a>
     </div>
   </section>`;
-}
-
-function dangerSection() {
-  if (!app.user.account) return '';
-  return html`<section class="account-section"><h2 class="sub-h">Danger zone</h2><div class="card-panel list"><button class="row-link danger" id="delAcc">${icon('trash', { size: 22 })}<span><b>Delete account</b><small>Permanently deletes your account and linked data. Billing records may remain detached.</small></span></button><a class="row-link" href="#/delete-account">${icon('info', { size: 22 })}<span><b>Delete account</b><small>Delete your account or request deletion if you cannot sign in.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a></div></section>`;
 }
 
 /** The sub-page body for a group id, or '' when the id has no section (Help leaves the page). */
@@ -203,7 +198,6 @@ export function settingSection(id) {
   if (id === 'kids') return kidsSection();
   if (id === 'refer') return html`<div id="referSlot" class="account-section"></div>`;
   if (id === 'notify') return html`<div id="notifySlot" class="account-section"></div>`;
-  if (id === 'danger') return dangerSection();
   return '';
 }
 
@@ -274,18 +268,19 @@ function wireKids(root) {
       if (pin) { toast('Parental PIN set'); location.reload(); }
       return;
     }
-    const { el, close } = openDialog(html`<h2>Parental PIN</h2><div class="stack-sm"><button class="btn btn-ghost block" id="pinChange">Change PIN</button><button class="btn btn-danger block" id="pinRemove">Remove PIN</button></div>`, { cls: 'dialog-sm' });
+    const { el, close } = openDialog(html`<h2>Parental PIN</h2><div class="stack-sm"><button class="btn btn-ghost block" id="pinChange">Change PIN</button><button class="btn btn-danger block" id="pinRemove">Remove PIN</button><button class="linklike" id="pinForgot">Forgot PIN?</button></div>`, { cls: 'dialog-sm' });
+    $('#pinForgot', el).onclick = () => { close(); forgotParentalPin(u); };
     $('#pinChange', el).onclick = async () => {
-      close(); const cur = await pinPrompt({ title: 'Current PIN', check: (p) => u.verifyPin(p) }); if (!cur) return;
+      close(); const cur = await pinPrompt({ title: 'Current PIN', check: (p) => u.verifyPin(p), onForgot: () => forgotParentalPin(u) }); if (!cur) return;
       const pin = await pinPrompt({ title: 'New PIN', text: '4–6 digits.', confirm: 'Save', check: (p) => u.setPin(p) }); if (pin) toast('PIN changed');
     };
     $('#pinRemove', el).onclick = async () => {
-      close(); const cur = await pinPrompt({ title: 'Remove PIN', text: 'Enter your PIN to remove it.', confirm: 'Remove', check: (p) => u.removePin(p) }); if (cur) { toast('PIN removed'); location.reload(); }
+      close(); const cur = await pinPrompt({ title: 'Remove PIN', text: 'Enter your PIN to remove it.', confirm: 'Remove', check: (p) => u.removePin(p), onForgot: () => forgotParentalPin(u) }); if (cur) { toast('PIN removed'); location.reload(); }
     };
   });
 }
 
-function wireDanger(root) {
+export function wireAccountDeletion(root) {
   const u = app.user;
   $('#delAcc', root)?.addEventListener('click', async () => {
     if (await confirmDialog({ title: 'Delete your account?', text: 'This cannot be undone. Your account and linked data will be deleted. Payment and invoice records may be kept detached from your account; see the Privacy Policy.', confirm: 'Delete account', danger: true })) {
@@ -302,5 +297,4 @@ export function wireSetting(id, root, ctx) {
   if (id === 'refer') return wireReferral(root);
   if (id === 'notify' && !app.user.account) return wireNotifications(root, { guest: true, onCleanup: ctx?.onCleanup });
   if (id === 'notify') return wireNotifications(root, { onCleanup: ctx?.onCleanup });
-  if (id === 'danger') return wireDanger(root);
 }

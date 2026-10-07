@@ -48,7 +48,7 @@ test('phone sign-in talks to the OTP endpoints through the data layer', () => {
 });
 
 test('phone accounts keep SMS sign-in and never expose the internal placeholder as an inbox', () => {
-  assert.match(account, /emailIsPlaceholder\s*\n\s*\? `SMS sign-in/);
+  assert.match(account, /u.account && !u.account.emailIsPlaceholder \? html`<p class="muted profile-email">/);
   assert.match(accountExtras, /const signInMethod = acc\.phoneVerified[\s\S]*?SMS sign-in[\s\S]*?verified mobile number and one-time code/);
   assert.match(accountExtras, /acc\.emailIsPlaceholder \? '' : row\('chgPw'/,
     'email/password sign-in becomes available only after a contact email has been confirmed');

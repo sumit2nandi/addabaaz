@@ -17,14 +17,16 @@ export default async function billing(ctx) {
   const u = app.user;
   ctx.setTitle('Billing & invoices');
   if (!u.supportsAuth || !u.account) { go('/signin?next=' + encodeURIComponent('/billing'), { replace: true }); return; }
+  const backLink = html`<p class="back-row"><a class="account-edit-back" href="#/plans" aria-label="Back to plan details">${icon('left', { size: 24 })}</a></p>`;
   let items, rr = { requests: [], windowDays: 0 };
-  try { items = await u.billingHistory(); } catch (e) { ctx.root.innerHTML = html`<div class="page"><div class="empty"><h2>Couldn’t load your billing history</h2><p>${friendly(e)}</p></div></div>`.s; return; }
+  try { items = await u.billingHistory(); } catch (e) { ctx.root.innerHTML = html`<div class="page page-narrow">${backLink}<div class="empty"><h2>Couldn’t load your billing history</h2><p>${friendly(e)}</p></div></div>`.s; return; }
 
   try { rr = await u.remote.refundRequests(); } catch { /* older server: no self-service refunds */ }
   const pending = new Set(rr.requests.filter((r) => r.status === 'pending').map((r) => r.paymentId));
   const canAsk = (p) => rr.windowDays > 0 && p.provider === 'razorpay' && p.amountPaise > 0 && p.refundedPaise < p.amountPaise && !pending.has(p.id) && (Date.now() - Date.parse(p.paidAt)) / 864e5 <= rr.windowDays;
   const doc = (d, label) => html`<button class="btn btn-ghost" data-dl="${d.id}" data-name="${d.number}">${icon('download', { size: 16 })} ${label} ${d.number}</button>`;
   ctx.root.innerHTML = html`<div class="page page-narrow">
+    ${backLink}
     ${sectionHeader({ tag: 'Account', title: 'Billing & invoices', subtitle: u.account.emailIsPlaceholder ? 'Your payment documents and refunds. Add a verified contact email in Account to receive billing emails.' : 'Your payments, GST invoices and refunds.' })}
     ${items.length ? html`<div class="bill">${items.map((p) => html`<article class="bill-item">
       <div class="bill-head"><div><b>${p.planName}</b><div class="muted small">${fmtDate(p.paidAt)}${p.couponCode ? ` · coupon ${p.couponCode} (−${inr(p.discountPaise)})` : ''}</div></div><div class="bill-amt">${p.amountPaise ? inr(p.amountPaise) : 'Free'}</div></div>

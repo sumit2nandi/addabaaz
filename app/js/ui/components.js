@@ -117,9 +117,10 @@ export function reelCard(v) {
   </a>`;
 }
 // Fixed portrait card for upcoming rails. The dedicated upcoming page uses adaptive portrait frames and preserves full artwork.
-export function soonCard(u) {
+export function soonCard(u, { saved = false } = {}) {
   return html`<a class="card card-poster card-soon" href="#/soon/${u.id}" aria-label="${u.titleEn || u.title} — coming soon">
     <div class="poster poster-soon">${img(u.poster, 'Coming soon poster', { cls: 'poster-soon-image' })}<span class="chip chip-soon">Coming soon</span></div>
+    ${saved ? html`<div class="card-quick">${listBtn('upcoming', u.id, { cls: 'icon-btn' })}</div>` : ''}
   </a>`;
 }
 // Photo tile that opens the lightbox.
@@ -150,10 +151,11 @@ export function fitPoster(root) {
 
 /* ---------- rails ---------- */
 // A horizontal scrolling row with a heading and a "See all" link.
-export function rail({ title, subtitle = '', items = [], href = '', linkLabel = 'See all', cls = '', id = '', hideHeading = false }) {
+export function rail({ title, subtitle = '', items = [], href = '', linkLabel = 'See all', cls = '', id = '', hideHeading = false, headExtra = '' }) {
   if (!items.length) return html``;
   return html`<section class="rail ${cls}" ${id ? raw(`id="${esc(id)}"`) : ''} aria-label="${title}">
     ${hideHeading ? (href ? html`<div class="rail-head rail-head-minimal"><a class="see-all" href="${href}">${linkLabel} ${icon('right', { size: 16 })}</a></div>` : '') : html`<div class="rail-head"><div><h2>${title}</h2>${subtitle ? html`<p class="rail-sub">${subtitle}</p>` : ''}</div>
+      ${headExtra}
       ${href ? html`<a class="see-all" href="${href}">${linkLabel} ${icon('right', { size: 16 })}</a>` : ''}</div>`}
     <div class="rail-wrap">
       <button type="button" class="rail-arrow left" data-rail-dir="-1" aria-label="Scroll left" disabled>${icon('left', { size: 22 })}</button>

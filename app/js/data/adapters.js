@@ -155,6 +155,9 @@ export class RemoteAdapter {
   verifyEmail(token) { return this.api.post('/auth/verify', { token }); }
   verifyAccountEmail(token) { return this.api.post('/auth/email-change/verify', { token }); }
   resendVerification() { return this.api.post('/me/verify/resend'); }
+  requestPhoneLink(phone) { return this.api.post('/me/phone/request', { phone }); }
+  verifyPhoneLink(phone, code) { return this.api.post('/me/phone/verify', { phone, code }); }
+  updateAccountName(name) { return this.api.patch('/me', { name }); }
   requestAccountEmail(email) { return this.api.post('/me/email', { email }); }
   async changePassword(currentPassword, newPassword) { const r = await this.api.post('/me/password', { currentPassword, newPassword }); this.api.setToken(r.token); return r; }
   async signOutEverywhere() { const r = await this.api.post('/me/sessions/revoke'); this.api.setToken(r.token); return r; }
@@ -162,6 +165,8 @@ export class RemoteAdapter {
   /* ----- parental PIN & devices ----- */
   setPin(pin, currentPin) { return this.api.put('/me/pin', { pin, currentPin }); }
   removePin(pin) { return this.api.del('/me/pin', { pin }); }
+  forgotPin() { return this.api.post('/me/pin/forgot'); }
+  resetPin(token, pin) { return this.api.post('/auth/pin/reset', { token, pin }); }
   verifyPin(pin) { return this.api.post('/me/pin/verify', { pin }); }
   devices() { return this.api.get('/me/devices'); }
   forgetDevice(id) { return this.api.del(`/me/devices/${encodeURIComponent(id)}`); }

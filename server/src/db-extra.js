@@ -5,6 +5,7 @@
  */
 // Each `const x = {...}` below is one group of related queries, exposed as `db.x` (see the return statement at the end).
 import crypto from 'node:crypto';
+import { phoneLinkDb } from './db-phone-link.js';
 
 export function extraDb({ q, tx, iso }) {
   // ---- One-time tokens (password reset, e-mail verification). Only a hash is stored, never the token itself ----
@@ -61,7 +62,7 @@ export function extraDb({ q, tx, iso }) {
         if (!hint || !(await t.query('SELECT id FROM users WHERE id = ? FOR UPDATE', [hint.user_id]))[0]) return null;
         const row = (await t.query('SELECT user_id, email, email_norm FROM email_change_tokens WHERE token_hash = ? AND expires_at > UTC_TIMESTAMP(3) FOR UPDATE', [tokenHash]))[0];
         if (!row) return null;
-        const updated = await t.query('UPDATE users SET email = ?, email_norm = ?, email_verified_at = UTC_TIMESTAMP(3) WHERE id = ? AND phone_verified_at IS NOT NULL',
+        const updated = await t.query('UPDATE users SET email = ?, email_norm = ?, email_verified_at = UTC_TIMESTAMP(3) WHERE id = ? AND disabled_at IS NULL AND (phone_verified_at IS NOT NULL OR email_verified_at IS NOT NULL)',
           [row.email, row.email_norm, row.user_id]);
         // Once redeemed (or no longer applicable), remove the pending address and hash in this same transaction.
         await t.query('DELETE FROM email_change_tokens WHERE token_hash = ?', [tokenHash]);
@@ -312,7 +313,7 @@ export function extraDb({ q, tx, iso }) {
     },
     /** Spends a code (single use). Returns false when another request already used it. */
     async consume(id) { return (await q('UPDATE phone_otps SET consumed_at = UTC_TIMESTAMP(3) WHERE id = ? AND consumed_at IS NULL', [id])).affectedRows === 1; },
-    async purge() { await q('DELETE FROM phone_otps WHERE expires_at < UTC_TIMESTAMP(3) - INTERVAL 1 DAY'); },
+    async purge() { await q('DELETE FROM phone_otps WHERE expires_at < UTC_TIMESTAMP(3) - INTERVAL 1 DAY'); await q('DELETE FROM account_phone_otps WHERE expires_at < UTC_TIMESTAMP(3) - INTERVAL 1 DAY'); },
   };
 
   // ---- Accounts that carry a verified phone number (phone sign-in / sign-up) ----
@@ -823,5 +824,5 @@ export function extraDb({ q, tx, iso }) {
     async prune() { await q("DELETE FROM campaigns WHERE finished_at IS NOT NULL AND finished_at < UTC_TIMESTAMP(3) - INTERVAL 365 DAY"); },
   };
 
-  return { authTokens, emailChanges, accounts, ratings, push, devices, campaigns, playback, playStats, refundRequests, tickets, phoneOtps, phones, settings, errors, credits, referrals };
+  return { phoneLinks: phoneLinkDb({ q, tx }), authTokens, emailChanges, accounts, ratings, push, devices, campaigns, playback, playStats, refundRequests, tickets, phoneOtps, phones, settings, errors, credits, referrals };
 }

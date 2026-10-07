@@ -32,13 +32,30 @@ app.user = {
 const settings = (await import('../../app/js/views/settings.js')).default;
 
 test('every settings group renders a real section with a back link', async () => {
-  for (const id of ['playback', 'security', 'kids', 'refer', 'notify', 'danger']) {
+  for (const id of ['playback', 'security', 'kids', 'refer', 'notify']) {
     const root = document.createElement('div');
     const ctx = { root, params: { group: id }, query: {}, path: `/account/${id}`, title: '', setTitle(t) { ctx.title = t; }, onCleanup: () => {} };
     await settings(ctx); // must not throw (wiring runs against the freshly drawn section)
     await new Promise((r) => setTimeout(r, 30)); // async slots (referral, notifications) settle
     assert.ok(ctx.title, `${id} sets a tab title`);
-    assert.ok(root.querySelector('.back-link[href="#/account"]'), `${id} offers a way back`);
+    assert.ok(root.querySelector('button.account-edit-back[data-page-back]'), `${id} offers a way back`);
     assert.ok(root.querySelector('.account-section'), `${id} draws a real section, not escaped markup`);
+  }
+});
+
+test('the danger group bounces to the delete-account page without drawing a section', async () => {
+  const savedHistory = globalThis.history, savedHash = globalThis.HashChangeEvent;
+  let replaced = '';
+  globalThis.history = { length: 2, state: null, replaceState(_s, _t, url) { replaced = url; }, pushState() {} };
+  globalThis.HashChangeEvent = window.Event;
+  try {
+    const root = document.createElement('div');
+    const ctx = { root, params: { group: 'danger' }, query: {}, path: '/account/danger', title: '', setTitle() {}, onCleanup: () => {} };
+    await settings(ctx);
+    assert.equal(replaced, '#/delete-account', 'danger redirects to the delete-account page');
+    assert.equal(root.querySelector('.account-section'), null, 'nothing is drawn before the redirect');
+  } finally {
+    if (savedHistory === undefined) delete globalThis.history; else globalThis.history = savedHistory;
+    if (savedHash === undefined) delete globalThis.HashChangeEvent; else globalThis.HashChangeEvent = savedHash;
   }
 });

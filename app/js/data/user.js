@@ -152,7 +152,7 @@ export class User extends Emitter {
   }
   async createProfile({ name, color, kids = false }) {
     if (this.profiles.length >= CONFIG.maxProfiles) throw new Error(`You can have up to ${CONFIG.maxProfiles} profiles.`);
-    const p = await this.adapter.createProfile({ name: name.trim().slice(0, 24), color: color ?? this.profiles.length, kids }, this.pin);
+    const p = await this.adapter.createProfile({ name: name.trim().slice(0, 24), color: color ?? 0, kids }, this.pin);
     this.profiles.push(p); this.emit('profile'); return p;
   }
   async updateProfile(id, patch) {

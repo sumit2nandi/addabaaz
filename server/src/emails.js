@@ -118,7 +118,7 @@ export function verifyEmailEmail(o) {
 export function phoneAccountEmailVerification(o) {
   return layout({
     subject: 'Confirm the email for your ADDABAAZ account',
-    paragraphs: [hello(o.name), 'You asked to add this address to an account that signs in by SMS. Confirm it within 1 hour to use it for account and billing emails; SMS sign-in will continue to work as before.', 'If you didn’t make this request, ignore this email — the address will not be added.'],
+    paragraphs: [hello(o.name), 'You asked to use this email address for your ADDABAAZ account. Confirm it within 1 hour. Your current email stays active until you confirm the new one.', 'If you didn’t make this request, ignore this email — the address will not be added.'],
     button: { label: 'Confirm this email', url: o.url }, footer: help(o),
   });
 }
@@ -165,4 +165,11 @@ export function campaignEmail(o) {
   // The HTML version gets a clickable one-click unsubscribe link; the text version the bare URL (mail clients linkify it).
   const footerHtml = esc([line, help(o)].filter(Boolean).join(' ')) + (o.unsubscribeUrl ? ` <a href="${esc(o.unsubscribeUrl)}" style="color:#666">Unsubscribe</a>` : '');
   return layout({ subject: o.subject, paragraphs, footer, footerHtml, image: o.image || null, imageAlt: o.imageAlt || '', button: o.button?.url ? { label: o.button.label || 'Open ADDABAAZ', url: o.button.url } : (o.siteUrl ? { label: 'Open ADDABAAZ', url: o.siteUrl } : null) });
+}
+
+export function resetParentalPinEmail(o) {
+  return layout({ subject: 'Reset your ADDABAAZ parental PIN',
+    paragraphs: [hello(o.name), 'Use this single-use link to choose a new parental PIN. It expires in 15 minutes.', 'If you did not request this, ignore this email. Your current PIN stays unchanged.'],
+    button: { label: 'Reset parental PIN', url: o.url }, footer: help(o),
+  });
 }

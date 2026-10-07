@@ -23,18 +23,19 @@ test('Account is a compact profile header over a settings-group list', () => {
     'the header shows a small avatar next to the name');
   assert.match(account, /<nav class="card-panel list group-list" aria-label="Settings">/,
     'the groups render as one labelled list');
-  assert.match(account, /settingGroups\(\)\.map\(\(g\) => html`<a class="row-link\$\{g\.id === 'danger' \? ' danger' : ''\}" href="\$\{g\.href\}">/,
-    'every group is a link row, with the delete row in the danger style');
+  assert.match(account, /settingGroups\(\)\.map\(accountGroup\)/);
+  assert.match(account, /wireAccountAccordion\(ctx.root, settingSection, wireSetting, ctx\)/);
   assert.match(account, /<footer class="profile-footer">/,
     'the page ends in a footer, not another settings card');
-  assert.match(account, /<button class="logout-link" id="signout">Log Out<\/button>/,
-    'Log Out is a plain blue line, like the reference footer');
-  assert.match(account, /<a href="#\/privacy">Privacy Policy<\/a><span aria-hidden="true">•<\/span><a href="#\/terms">Terms of Use<\/a><span aria-hidden="true">•<\/span><button class="linklike" data-consent-open>Privacy choices<\/button>/,
-    'the footer links the Privacy Policy, Terms of Use and Privacy choices');
-  assert.match(account, /<p class="app-version">App Version \$\{CONFIG\.version\}<\/p>/,
-    'the footer shows the app version');
-  assert.match(css, /\.logout-link \{[^}]*color: #4da3ff/,
-    'Log Out is bright blue on the dark background');
+  assert.match(account, /<button class="logout-link" id="signout">Sign out<\/button>/);
+  assert.doesNotMatch(account, /profile-legal|app-version|Log Out/,
+    'duplicate legal links and the version are removed from the profile footer');
+  const index = read('index.html');
+  assert.match(index, /<\/nav>\s*<\/div>\s*<p class="app-version" id="appVersion"><\/p>\s*<\/footer>/,
+    'the version is below the main footer navigation');
+  assert.match(read('app/js/ui/shell.js'), /version.textContent = `App Version \$\{CONFIG.version\}`/);
+  assert.match(css, /\.logout-link \{[^}]*color: var\(--accent-2\)/,
+    'Sign out uses the brighter theme red');
   assert.doesNotMatch(account.match(/<section class="profile-head">[\s\S]*?<\/section>/)[0], /id="signout"/,
     'Log Out no longer crowds the profile header');
   assert.doesNotMatch(account, /account-grid/,
@@ -87,4 +88,26 @@ test('unsubscribed website viewers get a Subscribe banner above the profile head
     'the banner hugs the top of the page with breathing room above the profile header');
   assert.match(css, /\.pill\.free \{[^}]*color: #fff/,
     'the Free badge is bold white');
+});
+
+test('deletion action follows the public details and the profile footer stays compact', () => {
+  const deletion = read('app/js/views/deletion.js');
+  assert.doesNotMatch(read('app/js/views/account-extra.js'), /\['danger',/);
+  assert.ok(deletion.indexOf('id="delAcc"') > deletion.indexOf('Privacy contact:'));
+  assert.match(deletion, /app.user.account \? html`/);
+  assert.match(deletion, /wireAccountDeletion\(ctx.root\)/);
+  assert.match(read('app/js/views/account-extra.js'), /export function wireAccountDeletion[\s\S]*confirmDialog[\s\S]*u.deleteAccount\(\)/);
+  assert.doesNotMatch(read('index.html').match(/<footer[\s\S]*?<\/footer>/)[0], /Coming Soon/);
+  assert.match(read('app/css/styles.css'), /\.profile-page \{ padding-bottom: 8px; \}/);
+  assert.match(read('app/css/styles.css'), /:has\(\.profile-page\) \.footer \{ margin-top: 8px; \}/);
+});
+
+test('guest mobile identity and sign-in buttons occupy separate rows', () => {
+  const css = read('app/css/styles.css');
+  const mobile = css.slice(css.lastIndexOf('@media (max-width: 899px)'));
+  assert.match(mobile, /\.profile-page \.profile-head \{ display: grid; grid-template-columns: auto minmax\(0, 1fr\)/);
+  assert.match(mobile, /\.profile-actions \{ grid-column: 1 \/ -1; width: 100%; margin-left: 0;/);
+  assert.match(mobile, /\.profile-actions \.btn \{ flex: 1 1 130px; white-space: nowrap;/);
+  assert.match(css, /\.profile-head h2 \.pill \{ white-space: nowrap; overflow-wrap: normal; \}/);
+  assert.match(read('app/js/views/account.js'), /u.supportsAuth && !u.account \? html`<div class="profile-actions">/);
 });
