@@ -312,9 +312,6 @@ img.img-failed { opacity: 0; }
 /* ---------- rails ---------- */
 .rails { position: relative; z-index: 2; margin-top: 8px; padding-bottom: 8px; }
 .rail { margin: 0 0 30px; } .rail-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 0 var(--pad); margin-bottom: 12px; }
-/* The heading and any action that belongs to it (the Continue Watching bin) share one row, so the icon is
-   centred on the words and stays right beside them — see rail() in ui/components.js. */
-.rail-head-copy { min-width: 0; } .rail-title { display: flex; align-items: center; gap: 10px; }
 /* A rail that follows other content — on a details page that is "Trailers, Reels & Clips", sitting under the
    episode frame — needs air above its heading; a rail after another rail already has the 30px below it, so it
    is excluded. Pages that group their rails in `.rails`, or open with one, are unaffected. */
@@ -349,11 +346,13 @@ img.img-failed { opacity: 0; }
   .home-release-arrow { width: 32px; height: 32px; background: rgba(0,0,0,.5); }
 }
 .see-all { display: inline-flex; align-items: center; gap: 2px; color: var(--text-2); font-weight: 700; font-size: 13.5px; white-space: nowrap; } .see-all:hover { color: var(--gold); }
-/* Bin at the end of the Continue Watching heading — clears this profile's watch history. It sits INLINE
- * with the heading text (it is a child of .rail-title, so the header's space-between can never push it to
- * the far edge) and is a plain WHITE icon: no border, no background, no circle. The 32px box is only the
- * tap target around the 18px glyph. */
-.rail-clear { flex: none; width: 32px; height: 32px; padding: 0; display: grid; place-items: center; border: 0; background: none; color: #fff; transition: opacity .2s; }
+/* Bin at the far right of the Continue Watching heading row — the same slot a rail's "See all" link takes
+ * (the header is space-between, so its last flex child is pushed to the edge) — and it clears this
+ * profile's watch history. A plain WHITE icon: no border, no background, no circle. Its own box is exactly
+ * the glyph, so it costs the row no height and rides centred on the words; the ::after layer is only the
+ * larger tap target around it. */
+.rail-clear { position: relative; flex: none; align-self: center; width: 18px; height: 18px; padding: 0; display: grid; place-items: center; border: 0; background: none; color: #fff; transition: opacity .2s; }
+.rail-clear::after { content: ''; position: absolute; inset: -6px; }
 .rail-clear:hover { opacity: .65; }
 .page .rail-head, .page-tight .rail-head { padding: 0; } .page-tight .rail-track { padding-left: 0; padding-right: 0; }
 .rail-wrap { position: relative; }
