@@ -22,3 +22,15 @@ test('mobile compaction retains readable inputs, tap targets and page scrolling'
   assert.match(compact, /#otpVerify \{ margin-bottom: 0;/);
   assert.doesNotMatch(compact, /overflow: hidden|height: 100dvh/);
 });
+
+test('auth fields use minimalist underlines including the phone prefix group', () => {
+  const css = read('app/css/styles.css');
+  const minimal = css.slice(css.indexOf('/* Minimal underline inputs'));
+  assert.match(minimal, /\.auth-entry \.form input:not\(\[type=checkbox\]\) \{\s*background: transparent;\s*border: 0;\s*border-bottom: 1px solid var\(--muted\);\s*border-radius: 0;\s*box-shadow: none;/);
+  assert.match(minimal, /font-size: 16px/);
+  assert.match(minimal, /min-height: 44px/);
+  assert.match(minimal, /:focus \{[^}]*border-bottom-color: var\(--accent-2\)/);
+  assert.match(minimal, /\.otp-phone \{[^}]*border-bottom: 1px solid var\(--muted\); border-radius: 0/);
+  assert.match(minimal, /\.otp-phone:focus-within/);
+  assert.match(minimal, /\.pw input:not\(\[type=checkbox\]\) \{ padding-right: 46px;/);
+});

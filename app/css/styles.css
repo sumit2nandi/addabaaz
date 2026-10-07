@@ -1153,3 +1153,26 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
   .auth-entry .auth-close { top: 12px; right: 12px; }
   .auth-entry .seg button { min-height: 40px; font-size: 12px; }
 }
+
+/* Minimal underline inputs for both authentication forms, on mobile and desktop. */
+.auth-entry .form label { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12px; }
+.auth-entry .form input:not([type=checkbox]) {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--muted);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 9px 0;
+  min-height: 44px;
+  font-size: 16px;
+}
+.auth-entry .form input:not([type=checkbox]):focus {
+  outline: none;
+  border-bottom-color: var(--accent-2);
+  box-shadow: 0 1px 0 var(--accent-2);
+}
+.auth-entry .pw input:not([type=checkbox]) { padding-right: 46px; }
+.auth-entry .otp-phone { background: transparent; border: 0; border-bottom: 1px solid var(--muted); border-radius: 0; overflow: visible; }
+.auth-entry .otp-phone:focus-within { border-bottom-color: var(--accent-2); box-shadow: 0 1px 0 var(--accent-2); }
+.auth-entry .otp-phone .otp-cc { padding: 0 12px 0 0; border-right: 0; }
+.auth-entry .otp-phone input:not([type=checkbox]):focus { box-shadow: none; }
