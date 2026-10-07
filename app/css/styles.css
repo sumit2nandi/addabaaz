@@ -725,6 +725,8 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .brand-lockup b { font-weight: 800; background: linear-gradient(180deg, #fff, #a8a8b4); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .brand-lockup i { font-style: normal; color: var(--accent); }
 .brand-lockup .premium-word { font-size: 12.5px; line-height: 1; vertical-align: super; margin-left: 2px; }
+/* Standalone superscript exponent: the small raised premium word outside a brand lockup. */
+.premium-sup { font-size: 12.5px; line-height: 1; vertical-align: super; }
 
 /* ---------- accounts, legal, consent, engagement (v2.6) ---------- */
 .linklike { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; opacity: .85; } .linklike:hover { opacity: 1; }

@@ -49,8 +49,12 @@ test('unsubscribed website viewers get a Subscribe banner above the settings gri
     'the banner links to the plans page');
   assert.match(account, /\$\{extras\.banner\}\s*\$\{u\.supportsAuth && !u\.isPremium && !isNative \? html`<section class="card-panel subscribe-banner">/,
     'the banner sits above the profile card');
-  assert.match(account, /u\.isPremium \? html`<em class="pill"><span class="premium-word">premium<\/span><\/em>` : html`<em class="pill free">Free<\/em>`/,
-    'the profile name carries a Free/premium badge');
+  assert.match(account, /u\.isPremium \? html`<em class="premium-word premium-sup">premium<\/em>` : html`<em class="pill free">Free<\/em>`/,
+    'the profile name carries a Free pill or a superscript premium exponent');
+  assert.match(account, /html`ADDABAAZ <em class="premium-word premium-sup">premium<\/em>`/,
+    'the Access row raises premium as a superscript exponent');
+  assert.match(css, /\.premium-sup \{[^}]*font-size: 12\.5px[^}]*vertical-align: super/,
+    'premium exponents are small and raised');
   assert.match(account, /<h2>Subscribe to <em class="premium-word">premium<\/em><\/h2>/,
     'the banner brands it premium in glittery gold, with no ADDABAAZ prefix');
   assert.match(css, /\.subscribe-banner \{[^}]*display: flex[^}]*margin-top: 0; margin-bottom: 14px/,
