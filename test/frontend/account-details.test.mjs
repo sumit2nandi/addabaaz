@@ -43,3 +43,10 @@ test('profile email sits tightly below the name without the edit button inflatin
   assert.match(css, /\.profile-details-edit::after \{[^}]*inset: -6px 0;/);
   assert.match(css, /\.profile-page \.profile-head \.profile-email \{ margin-top: 0; line-height: 1.35; \}/);
 });
+
+test('profile email is plain text and Safari email auto-linking is disabled', () => {
+  assert.match(read('index.html'), /<meta name="format-detection" content="email=no">/);
+  const source = read('app/js/views/account.js');
+  assert.match(source, /<p class="muted profile-email">\$\{u.account.email\}<\/p>/);
+  assert.doesNotMatch(source, /mailto:/);
+});
