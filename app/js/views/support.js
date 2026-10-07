@@ -1,4 +1,6 @@
 import { pageBack } from '../ui/page-back.js';
+import { phoneSplit, wirePhoneSplits, splitValue } from '../ui/phone-field.js';
+import { splitInitial } from '../data/countries.js';
 // Support page (#/support): raise a ticket about anything that goes wrong in the app or on the website —
 // trouble signing in, registration, payments, playback, content — and follow the conversation.
 //
@@ -46,6 +48,7 @@ export default async function support(ctx) {
   }
   const acc = u.account;
   const isPhoneAccount = !!acc?.emailIsPlaceholder;
+  const phoneInit = splitInitial(acc?.phone || '');
   let tickets = [];
   if (acc) { try { tickets = (await u.myTickets({ limit: 25 })).tickets || []; } catch { /* the form still works */ } }
   if (ctx.stale?.()) return;   // see the sign-in page: an older shell may not have it yet
@@ -63,7 +66,7 @@ export default async function support(ctx) {
       <label>Describe the issue<textarea name="body" id="supBody" rows="6" maxlength="5000" required placeholder="What happened? What did you expect? Any error message you saw helps a lot."></textarea></label>
       ${!acc || isPhoneAccount ? html`<label>Your name<input name="name" maxlength="80" value="${acc?.name || ''}" required autocomplete="name"></label>
         <label>Email address<input name="email" type="email" maxlength="254" value="${acc && !isPhoneAccount ? acc.email : ''}" required autocomplete="email" placeholder="name@example.com"></label>` : ''}
-      <label>Phone / WhatsApp <small>(optional)</small><input name="phone" type="tel" maxlength="24" value="${acc?.phone || ''}" autocomplete="tel" placeholder="+91 90000 00000"></label>
+      <label>Phone / WhatsApp <small>(optional)</small>${phoneSplit({ dial: phoneInit.dial, value: phoneInit.rest, placeholder: '90000 00000' })}</label>
       <input type="text" name="website" id="supHp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px">
       <div class="form-status" id="supStatus" role="alert"></div>
       <button type="submit" class="btn btn-primary btn-lg block" id="supSend">Send to support</button>
@@ -82,6 +85,7 @@ export default async function support(ctx) {
     </div></div>
   </div>`.s;
 
+  ctx.onCleanup(wirePhoneSplits(ctx.root));
   const form = $('#supForm', ctx.root);
   const status = $('#supStatus', ctx.root);
   // The ticket carries where it was raised from: platform + app version make bug reports reproducible.
@@ -102,7 +106,7 @@ export default async function support(ctx) {
         category: String(f.get('category') || 'other'), subject, body,
         name: String(f.get('name') || acc?.name || '').trim() || undefined,
         email: String(f.get('email') || '').trim() || undefined,
-        phone: String(f.get('phone') || '').trim() || undefined,
+        phone: splitValue($('#supForm [data-phone-split]', ctx.root)) || undefined,
         website: String(f.get('website') || ''),
         ...context,
       });

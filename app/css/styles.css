@@ -650,6 +650,9 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
   .hero-actions .btn-lg { padding: 11px 18px; font-size: 15px; } .hero-actions > .btn-glass:last-child { display: none; }
   /* The "Have a story to tell? / Start a project" band is for producers finding us on desktop — drop it on phones. */
   .cta-band { display: none; }
+  /* Without the producer CTA the last rail should meet the footer, not float above a dead band. */
+  .rails-lean .rail:last-child { margin-bottom: 12px; }
+  body[data-route="home"] .footer { margin-top: 12px; }
 }
 @media (max-width: 759px) {
   .hero-bg img { object-position: center 15%; }
@@ -1208,3 +1211,21 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .account-current-plan .premium-word { background: none; color: #5a430a; -webkit-text-fill-color: #5a430a; filter: none; animation: none; font-size: .6em; }
 .account-plan-period { font-size: 12px; font-weight: 600; }
 .account-current-plan .icon-btn { color: #201503; width: 32px; }
+
+/* ---------- split phone fields: country code button + national number ---------- */
+.phone-split { display: flex; align-items: center; gap: 10px; }
+.phone-split [data-phone-national] { flex: 1; min-width: 0; }
+.phone-cc { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 1px solid var(--border-2); border-radius: 10px; background: rgba(255,255,255,.04); color: var(--text-2); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; transition: border-color .2s, color .2s; }
+.phone-cc:hover, .phone-cc:focus-visible { border-color: var(--accent-2); color: var(--text); }
+/* The sign-in field keeps its underline look; the code button replaces the old static prefix. */
+.otp-phone .phone-cc { min-height: 0; padding: 0 10px 0 0; border: 0; border-right: 0; border-radius: 0; background: none; font-weight: 600; color: var(--text); }
+.otp-phone .phone-cc svg { color: var(--muted); }
+/* The "Select a country" sheet. */
+.country-picker .dlg-body { display: grid; gap: 12px; }
+.country-search { width: 100%; min-height: 44px; padding: 10px 14px; border: 1px solid var(--border-2); border-radius: 12px; background: rgba(255,255,255,.05); color: var(--text); font: inherit; font-size: 16px; }
+.country-search:focus { outline: none; border-color: var(--accent-2); }
+.country-list { display: grid; gap: 2px; max-height: 54vh; overflow: auto; overscroll-behavior: contain; }
+.country-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 10px; border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; font-size: 15px; text-align: left; cursor: pointer; }
+.country-row:hover { background: rgba(255,255,255,.06); }
+.country-row b { flex: none; color: var(--text-2); font-weight: 600; }
+.country-row.on, .country-row.on b { color: var(--gold); }

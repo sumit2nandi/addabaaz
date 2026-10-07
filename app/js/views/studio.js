@@ -1,4 +1,5 @@
 import { pageBack } from '../ui/page-back.js';
+import { phoneSplit, wirePhoneSplits, splitValue } from '../ui/phone-field.js';
 // About, Services and Contact pages for the production house. Text comes from data/studio.json (or the API).
 import { app } from '../app.js';
 import { CONFIG } from '../config.js';
@@ -73,7 +74,7 @@ function contact(ctx, d) {
         <h2>Project inquiry</h2>
         <label>Your name<input name="name" required autocomplete="name" placeholder="Enter your full name"></label>
         <label>Email address<input name="email" type="email" required autocomplete="email" placeholder="name@company.com"></label>
-        <label>Phone / WhatsApp <small>(optional)</small><input name="phone" type="tel" autocomplete="tel" placeholder="+91 90000 00000"></label>
+        <label>Phone / WhatsApp <small>(optional)</small>${phoneSplit({ placeholder: '90000 00000', maxlength: 16 })}</label>
         <label>Project details / message<textarea name="message" rows="5" required placeholder="Describe your film, advertisement concept, or inquiry…"></textarea></label>
         <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
         <label>Verification — type the characters shown
@@ -107,6 +108,7 @@ function contact(ctx, d) {
     [...code].forEach((ch, i) => { c.save(); c.translate(16 + i * 28, H / 2); c.rotate((Math.random() - 0.5) * 0.5); c.fillStyle = `hsl(${Math.random() * 60 + 30},90%,70%)`; c.fillText(ch, 0, 0); c.restore(); });
   };
   draw(); $('#capr', ctx.root).addEventListener('click', draw); cv.addEventListener('click', draw);
+  ctx.onCleanup(wirePhoneSplits(ctx.root));
 
   $('#cf', ctx.root).addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -117,7 +119,7 @@ function contact(ctx, d) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) return fail('Please enter a valid email address.');
     if (f.captcha.trim().toUpperCase() !== code) { draw(); e.target.captcha.value = ''; return fail('Incorrect code — here is a new one.'); }
     btn.disabled = true; btn.textContent = 'Sending…'; fail('', '');
-    const payload = { name: f.name.trim(), email: f.email.trim(), phone: f.phone.trim(), message: f.message.trim() };
+    const payload = { name: f.name.trim(), email: f.email.trim(), phone: splitValue($('#cf [data-phone-split]', ctx.root)), message: f.message.trim() };
     try {
       if (app.api) await app.user.submitContact(payload);
       else if (CONFIG.googleForm?.action) {

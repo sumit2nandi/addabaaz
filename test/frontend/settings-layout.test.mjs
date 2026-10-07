@@ -22,19 +22,21 @@ test('every settings group opens its own sub-page', () => {
     'unknown groups — and groups hidden from this viewer — bounce back to the profile page');
   assert.match(view, /ctx\.setTitle\(meta\.title\)/,
     'the tab title names the group');
-  assert.match(view, /class="page page-narrow account-page"/,
+  assert.match(view, /class="page page-narrow account-page/,
     'sub-pages keep the account styling scope (red actions included)');
+  assert.match(view, /ctx\.params\.group === 'danger'\) \{ go\('\/delete-account', \{ replace: true \}\); return; \}/,
+    'danger is the delete-account page now, so the group redirects there');
   assert.match(view, /pageBack\(ctx/,
     'every sub-page offers a way back to the profile page');
   assert.match(view, /wireSetting\(meta\.id, ctx\.root, ctx\)/,
     'the sub-page wires its section once it is in the DOM');
   assert.match(css, /\.back-link \{ display: inline-flex; align-items: center;/,
     'the back link is a tap-friendly row');
-  for (const id of ['playback', 'security', 'kids', 'refer', 'notify', 'danger']) {
+  for (const id of ['playback', 'security', 'kids', 'refer', 'notify']) {
     assert.match(extras, new RegExp(`if \\(id === '${id}'\\) return `),
       `the ${id} group has a sub-page section`);
   }
-  for (const id of ['playback', 'security', 'kids', 'refer', 'notify', 'danger']) {
+  for (const id of ['playback', 'security', 'kids', 'refer', 'notify']) {
     assert.match(extras, new RegExp(`if \\(id === '${id}'\\) return wire`),
       `the ${id} group has its wiring hooked up`);
   }
@@ -54,6 +56,6 @@ test('every settings group opens its own sub-page', () => {
     'signed-out viewers are pointed at sign-in instead of a dead end');
   assert.match(extras, /\['notify', 'Notifications', '[^\]]*'auth'\]/,
     'guests keep their notifications group');
-  assert.match(extras, /\['danger', 'Delete account', '[^\]]*'account'\]/,
-    'the delete row stays account-only');
+  assert.doesNotMatch(extras, /\['danger',/,
+    'deletion lives on its own page now — the danger group redirects instead of listing a row');
 });

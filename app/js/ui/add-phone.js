@@ -1,17 +1,21 @@
 import { html, $ } from '../util.js';
 import { openDialog } from './dialog.js';
 import { friendly } from '../errors.js';
+import { phoneSplit, wirePhoneSplits, splitValue } from './phone-field.js';
 
 export function addPhone(user, onAdded) {
+  let unwire;
   const { el, close } = openDialog(html`<h2>Add mobile number</h2><p class="muted">Verify your number by SMS to add it to this account.</p>
     <form class="form" id="phoneLinkForm">
-      <label>Mobile number<input name="phone" type="tel" autocomplete="tel" inputmode="tel" required maxlength="24" placeholder="+91 98123 45678"></label>
+      <label>Mobile number${phoneSplit({ placeholder: '98123 45678', required: true })}</label>
       <button type="button" class="btn btn-ghost" id="sendPhoneCode">Send OTP</button>
       <label id="phoneCodeLabel" hidden>SMS code<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="6-digit OTP"></label>
       <p class="form-status" role="status" id="phoneLinkStatus"></p>
       <button type="submit" class="btn btn-primary" id="verifyPhoneCode" hidden>Verify &amp; add number</button>
-    </form>`, { title: 'Add mobile number', cls: 'dialog-sm' });
-  const form = $('#phoneLinkForm', el), phone = $('[name=phone]', el), code = $('[name=code]', el), send = $('#sendPhoneCode', el), verify = $('#verifyPhoneCode', el), status = $('#phoneLinkStatus', el);
+    </form>`, { title: 'Add mobile number', cls: 'dialog-sm', onClose: () => unwire?.() });
+  unwire = wirePhoneSplits(el);
+  const form = $('#phoneLinkForm', el), phone = $('[data-phone-national]', el), code = $('[name=code]', el), send = $('#sendPhoneCode', el), verify = $('#verifyPhoneCode', el), status = $('#phoneLinkStatus', el);
+  const fullNumber = () => splitValue($('[data-phone-split]', el));
   let requestedPhone = '', busy = false, nextSend = 0;
   phone.addEventListener('input', () => {
     requestedPhone = ''; code.value = ''; code.required = false;
@@ -21,7 +25,7 @@ export function addPhone(user, onAdded) {
     if (busy) return;
     if (!phone.value.trim()) { status.textContent = 'Enter your mobile number.'; phone.focus(); return; }
     if (Date.now() < nextSend) { status.textContent = `Wait ${Math.ceil((nextSend - Date.now()) / 1000)} seconds before resending.`; return; }
-    const target = phone.value.trim(); busy = true; send.disabled = true; phone.disabled = true; verify.disabled = true;
+    const target = fullNumber(); busy = true; send.disabled = true; phone.disabled = true; verify.disabled = true;
     try {
       await user.remote.requestPhoneLink(target); requestedPhone = target; nextSend = Date.now() + 60_000;
       $('#phoneCodeLabel', el).hidden = false; verify.hidden = false; code.required = true;
@@ -31,7 +35,7 @@ export function addPhone(user, onAdded) {
   });
   form.addEventListener('submit', async (event) => {
     event.preventDefault(); if (busy) return;
-    if (!requestedPhone || phone.value.trim() !== requestedPhone) { status.textContent = 'Send a code to this number first.'; return; }
+    if (!requestedPhone || fullNumber() !== requestedPhone) { status.textContent = 'Send a code to this number first.'; return; }
     if (!/^\d{6}$/.test(code.value)) { status.textContent = 'Enter the six-digit SMS code.'; return; }
     busy = true; verify.disabled = true; send.disabled = true; phone.disabled = true;
     try {

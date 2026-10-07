@@ -13,6 +13,7 @@ import { go } from '../router.js';
 import { toast } from '../ui/components.js';
 import { mountSocialButtons } from '../social.js';
 import { friendly } from '../errors.js';
+import { wirePhoneSplits } from '../ui/phone-field.js';
 
 const RESEND_SECONDS = 60;   // matches the server's one-a-minute limit
 
@@ -29,7 +30,7 @@ export default async function auth(ctx) {
   // Which methods the server offers. `/auth/providers` never throws; the email form is the floor.
   const providers = await u.providers().catch(() => ({ password: true }));
   const canOtp = !!providers.otp;
-  const country = String(providers.otpCountryCode || '91').replace(/\D/g, '') || '91';
+  let country = String(providers.otpCountryCode || '91').replace(/\D/g, '') || '91';
   let mode = canOtp ? 'otp' : 'email';        // OTP first whenever it is configured
   let phoneSent = '';
   let timer = null;
@@ -52,7 +53,7 @@ export default async function auth(ctx) {
 
       ${canOtp ? html`<div id="otpPane">
         <div id="otpPhoneStep">
-          <label><span class="auth-field-label">Mobile number</span><span class="otp-phone"><b class="otp-cc">+${country}</b><input name="phone" type="tel" inputmode="numeric" autocomplete="tel-national" required placeholder="Mobile number" maxlength="14"></span></label>
+          <label><span class="auth-field-label">Mobile number</span><span class="otp-phone" data-phone-split data-dial="${country}"><button type="button" class="otp-cc" data-cc-btn aria-label="Select country code"><span data-cc-dial>+${country}</span>${icon('chev-down', { size: 13 })}</button><input name="phone" type="tel" inputmode="numeric" autocomplete="tel-national" required placeholder="Mobile number" maxlength="14"></span></label>
           <p class="fine fine-left">We’ll send a 6-digit code by SMS. Standard message rates may apply.</p>
           <button class="btn btn-primary btn-lg block" type="submit" id="otpSend">Send me a code</button>
         </div>
@@ -108,6 +109,7 @@ export default async function auth(ctx) {
       : (signup ? 'Save your favourites and watch across devices.' : 'Pick up where you left off.');
     setStatus('');
   };
+  if (canOtp) ctx.onCleanup(wirePhoneSplits(ctx.root, { onCountry: (c) => { country = c.dial; } }));
   $('#tabOtp', ctx.root)?.addEventListener('click', () => setMode('otp'));
   $('#tabEmail', ctx.root)?.addEventListener('click', () => setMode('email'));
 
