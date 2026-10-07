@@ -6,9 +6,14 @@
 // with cache-busting (Admin edits show up immediately) and the current page is redrawn from it. No
 // reload → no launch screen, no blank frame, same URL, same history/back depth, same reading position.
 //
-// `location.reload()` survives only as the last-resort fallback (no soft refresh in the running
-// bundle, or it threw). Even that reload is flagged (sessionStorage `ab:refresh`, read by
-// app/refresh-flag.js) so it cannot replay the launch artwork either.
+// `softRefresh` reports what happened, and the gesture acts on it: 'refreshed' (done), 'stale' (nothing
+// could be read — the page is kept, the toast has already explained why) and 'restart' (the app is not
+// on the live catalog, so a fresh start is the only way — main.js only asks for that once the API
+// answers again).
+//
+// `location.reload()` survives as the last-resort fallback (no soft refresh in the running bundle, it
+// threw, or the app needs the restart). Even that reload is flagged (sessionStorage `ab:refresh`, read
+// by app/refresh-flag.js) so it cannot replay the launch artwork either.
 //
 // The browser-native pull-to-refresh gesture stays disabled; this custom gesture is the only one.
 // Run: node --test test/frontend/ptr-refresh.test.mjs
@@ -66,7 +71,7 @@ const pull = async () => { touch('touchstart', 20); touch('touchmove', 140); tou
 test('a completed pull refreshes the app in place — no reload, so no launch screen', async () => {
   const before = reloads;
   const calls = [];
-  app.softRefresh = async () => { calls.push('refresh'); return true; };
+  app.softRefresh = async () => { calls.push('refresh'); return 'refreshed'; };
   await pull();
   assert.deepEqual(calls, ['refresh'], 'the pull asked the app for a soft refresh');
   assert.equal(reloads - before, 0, 'the document was never reloaded — there is no launch screen to replay');
@@ -83,17 +88,26 @@ test('the indicator stays up while the refresh is running', async () => {
   const indicator = document.getElementById('ptr');
   assert.ok(indicator.classList.contains('on'), 'the spinner is visible while the catalog is being re-read');
   assert.equal(indicator.style.transform, 'translateY(0px)', 'held at the top of the screen');
-  resolveRefresh(true);
+  resolveRefresh('refreshed');
   await settle();
   assert.equal(indicator.classList.contains('on'), false, 'and slides away once the page has been refreshed');
 });
 
 test('a refresh that could not complete leaves the page alone instead of reloading it', async () => {
   const before = reloads;
-  app.softRefresh = async () => false;      // offline: softRefresh already told the viewer why
+  app.softRefresh = async () => 'stale';      // offline: softRefresh already told the viewer why
   await pull();
   assert.equal(reloads - before, 0, 'no reload: the page the viewer is looking at is not thrown away for nothing');
   assert.equal(document.getElementById('ptr').classList.contains('on'), false, 'the indicator still goes away');
+});
+
+test('an app that never reached the API reloads: a fresh start is the only way back onto the live catalog', async () => {
+  const before = reloads;
+  delete store['ab:refresh'];
+  app.softRefresh = async () => 'restart';    // main.js: the app is running off its bundled catalog
+  await pull();
+  assert.equal(reloads - before, 1, 'the pull restarts the app, which re-probes the API and re-reads the catalog');
+  assert.equal(store['ab:refresh'], '1', 'flagged like the other fallbacks, so no launch artwork is replayed');
 });
 
 test('without an in-place refresh the pull falls back to a flagged reload (never the launch artwork)', async () => {
@@ -112,13 +126,13 @@ test('a soft refresh that throws also falls back to the flagged reload', async (
   await pull();
   assert.equal(reloads - before, 1, 'an unexpected failure still ends in a fresh document');
   assert.equal(store['ab:refresh'], '1', 'flagged, so even that reload shows the compact loader');
-  app.softRefresh = async () => true;
+  app.softRefresh = async () => 'refreshed';
 });
 
 test('a short pull does nothing', async () => {
   const before = reloads;
   const calls = [];
-  app.softRefresh = async () => { calls.push('refresh'); return true; };
+  app.softRefresh = async () => { calls.push('refresh'); return 'refreshed'; };
   touch('touchstart', 20);
   touch('touchmove', 60);           // dy = 40 < 88
   touch('touchend');
@@ -129,7 +143,7 @@ test('a short pull does nothing', async () => {
 
 test('a wobbling finger still completes the pull once the gesture engaged', async () => {
   const calls = [];
-  app.softRefresh = async () => { calls.push('refresh'); return true; };
+  app.softRefresh = async () => { calls.push('refresh'); return 'refreshed'; };
   touch('touchstart', 20);
   touch('touchmove', 150);          // engage: dy = 130
   touch('touchmove', 26);           // finger wobbles back up to dy = 6 — the gesture is still ours
@@ -142,7 +156,7 @@ test('a wobbling finger still completes the pull once the gesture engaged', asyn
 test('the system taking the gesture (touchcancel) never refreshes', async () => {
   const before = reloads;
   const calls = [];
-  app.softRefresh = async () => { calls.push('refresh'); return true; };
+  app.softRefresh = async () => { calls.push('refresh'); return 'refreshed'; };
   touch('touchstart', 20);
   touch('touchmove', 160);          // well past the threshold…
   touch('touchcancel');             // …but the OS cancelled the gesture (scroll takeover, call, notification)
@@ -157,7 +171,7 @@ test('no pull-to-refresh while a video is playing', async () => {
   document.body.appendChild(box);
   const before = reloads;
   const calls = [];
-  app.softRefresh = async () => { calls.push('refresh'); return true; };
+  app.softRefresh = async () => { calls.push('refresh'); return 'refreshed'; };
   touch('touchstart', 20);
   touch('touchmove', 160);
   touch('touchend');
@@ -187,7 +201,8 @@ test('all app platforms use the gesture, while the browser-native PTR stays disa
   const fn = (name) => ptr.slice(ptr.indexOf(`async function ${name}(`), ptr.indexOf('\n}', ptr.indexOf(`async function ${name}(`)));
   const fallback = fn('reloadForRefresh');
   assert.match(fallback, /setItem\('ab:refresh', '1'\)[\s\S]*?location\.reload\(\)/, 'the fallback plants the refresh flag, then reloads');
-  assert.doesNotMatch(fn('refresh'), /location\.reload\(\)/, 'and the normal path never reloads the document');
+  assert.doesNotMatch(fn('refresh'), /location\.reload\(\)/, 'the normal path never reloads the document directly');
+  assert.match(fn('refresh'), /if \(result === 'restart'\) return reloadForRefresh\(since\);/, "only 'restart' (a bundle that cannot reach the live catalog) asks for the reload fallback");
 });
 
 /* ---------- the in-place refresh itself ---------- */
@@ -200,8 +215,14 @@ test('softRefresh re-reads the catalog (cache-busting) and redraws the current p
     'the same hand-off as start-up, so a Kids profile re-derives its filtered catalog from the fresh one (never a stale one)');
   assert.match(body, /app\.studio = null;/, 'the cached studio profile is dropped so About/Contact re-read it, like a reload would');
   assert.match(body, /await app\.router\.refresh\(\)/, 'the page on screen is redrawn from the new data');
-  assert.match(body, /return false;[\s\S]*?toast\(friendly\(/, 'a refresh that cannot complete keeps the page and says so');
-  assert.doesNotMatch(body, /location\.reload\(\)/, 'softRefresh never reloads the document');
+  assert.match(body, /const stale = \(message\) => \{ toast\(message\); return 'stale'; \};/,
+    'a refresh that cannot complete keeps the page and says so');
+  assert.match(body, /return stale\(friendly\(err/, 'the catalog fetch failure reports the real reason');
+  assert.match(body, /if \(!app\.api\) \{\s*\n\s*if \(navigator\.onLine === false\) return stale\(/,
+    "with no API the catalog being re-read is the app's own bundled copy, so a restart is asked for instead");
+  assert.match(body, /const reachable = await detectApi\(CONFIG\.apiBase\);\s*\n\s*return reachable \? 'restart' : stale\(/,
+    'and only once the API answers again — a restart must actually get somewhere (cold starts, flaky launches)');
+  assert.doesNotMatch(body, /location\.reload\(\)/, 'softRefresh never reloads the document itself');
   assert.match(main, /app\.softRefresh = softRefresh;/, 'the router app exposes it to the gesture');
 
   const router = fs.readFileSync(new URL('../../app/js/router.js', import.meta.url), 'utf8');

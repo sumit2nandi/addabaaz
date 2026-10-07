@@ -96,17 +96,34 @@ async function boot() {
  *  the catalog came down. Here nothing disappears: the app keeps the same history entry, the same
  *  back-button depth and the same reading position, and only the content is redrawn.
  *
- *  A refresh that cannot complete (offline, server down) changes nothing and says so, so a failed pull
- *  is never worse than not pulling at all. Resolves true when the page was refreshed. */
+ *  Resolves with what happened, so the gesture knows whether to fall back to a reload:
+ *    'refreshed' — the page was redrawn from the freshly read catalog
+ *    'stale'     — nothing could be read (offline, server down): the page is untouched and a toast
+ *                  explains why, so a failed pull is never worse than not pulling at all
+ *    'restart'   — this app is not on the live catalog: only a fresh start can help (see below) */
 export async function softRefresh() {
-  if (!app.router || !catalogSource) return false;
+  if (!app.router || !catalogSource) return 'stale';
+  // Nothing could be read. The page is left exactly as it was and the viewer is told — this is the
+  // "a failed pull is never worse than not pulling" path.
+  const stale = (message) => { toast(message); return 'stale'; };
+  // No API: the catalog being re-read here is the copy bundled with the app (data/catalog.json), so a
+  // title published since the app was built can never appear through it. A fresh start is what helps —
+  // boot() re-probes the API (detectApi) and comes up on the live catalog. But a restart must only
+  // happen when it would actually get somewhere: this is exactly the state an app is in when its
+  // launch happened while the server was unreachable (a cold start, a flaky connection), so the API is
+  // re-probed first. Reachable → restart onto the live catalog; still unreachable → keep the page and
+  // say so. Offline there is nothing to probe at all.
+  if (!app.api) {
+    if (navigator.onLine === false) return stale('You’re offline — connect and pull again.');
+    const reachable = await detectApi(CONFIG.apiBase);
+    return reachable ? 'restart' : stale('Couldn’t reach ADDABAAZ — try again in a moment.');
+  }
   let catalog;
   try {
     catalog = await loadCatalog(catalogSource.url, undefined, { mediaBase: catalogSource.mediaBase });
   } catch (err) {
     console.warn('[refresh]', err);
-    toast(friendly(err, 'Couldn’t refresh — check your connection and try again.'));
-    return false;
+    return stale(friendly(err, 'Couldn’t refresh — check your connection and try again.'));
   }
   // The same hand-off as start-up: the fresh catalog becomes the full one, and a Kids profile
   // re-derives its filtered view from it (applyKids reads app.catalog, so it cannot be left stale).
@@ -118,7 +135,7 @@ export async function softRefresh() {
   // reload would — while a page that does not use it is unaffected.
   app.studio = null;
   await app.router.refresh();                   // redraw the current page from the new catalog
-  return true;
+  return 'refreshed';
 }
 
 // The first-run "turn on notifications" prompt: once per installation, a few seconds after opening the

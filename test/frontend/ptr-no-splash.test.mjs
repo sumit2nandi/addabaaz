@@ -57,12 +57,17 @@ test('a pull-to-refresh redraws the page in place — the app never reloads and 
   /* ---------- the "server": the shipped catalog, then a changed one ---------- */
   const shipped = JSON.parse(read('data/catalog.json'));
   let served = shipped;
+  let apiDown = false;                       // flipped below to simulate the server being unreachable again
   const catalogRequests = [];
   globalThis.fetch = window.fetch = async (url) => {
     const target = String(url);
+    if (target.includes('/api/v1/health')) {
+      if (apiDown) throw new TypeError('fetch failed');                        // unreachable: no response at all
+      return { ok: true, status: 200, async json() { return { ok: true, service: 'addabaaz' }; } };
+    }
     if (target.includes('catalog')) { catalogRequests.push(target); return { ok: true, status: 200, async json() { return served; } }; }
     if (target.includes('studio')) return { ok: true, status: 200, async json() { return JSON.parse(read('data/studio.json')); } };
-    return { ok: false, status: 404, async json() { return {}; } };          // no API on this "device": local mode
+    return { ok: false, status: 404, async json() { return {}; } };
   };
 
   const until = async (check, ms = 5000) => {
@@ -112,4 +117,26 @@ test('a pull-to-refresh redraws the page in place — the app never reloads and 
   assert.match(page.textContent, /No results for/, 'redrawn from the new data, in place');
   assert.equal(globalThis.location.hash, `#/search?q=${term}`, 'the URL did not change: a refresh is not a navigation');
   assert.deepEqual(scrolls.at(-1), { top: 0, behavior: 'instant' }, 'and the page was not scrolled away from where it was');
+
+  /* ---------- an app that is NOT on the live catalog (its launch happened while the server was unreachable) ---------- */
+  // It runs off the catalog bundled with it, where a re-read can never show a newer title. The pull
+  // re-probes the API and only restarts when a restart would actually reach it — so the viewer is
+  // never handed a loading screen for nothing.
+  const apiClient = app.api;
+  app.api = null;
+  apiDown = true;
+
+  const reloadsBeforeStale = reloads;
+  touch('touchstart', 20); touch('touchmove', 150); touch('touchend');
+  assert.equal(await until(() => !document.getElementById('ptr').classList.contains('on')), true, 'the probe finished');
+  assert.equal(reloads, reloadsBeforeStale, 'the API is still unreachable: the page is kept, not reloaded');
+  assert.ok(document.querySelector('.search-page'), 'the viewer is still on their page');
+  assert.match(document.getElementById('toasts').textContent, /Couldn’t reach ADDABAAZ/, 'and is told why');
+
+  apiDown = false;                                   // the server came back (cold start finished)
+  const reloadsBeforeRestart = reloads;
+  touch('touchstart', 20); touch('touchmove', 150); touch('touchend');
+  assert.equal(await until(() => reloads > reloadsBeforeRestart), true, 'now a restart is worth it: the live catalog is within reach');
+  assert.equal(globalThis.sessionStorage.getItem('ab:refresh'), '1', 'the restart is flagged, so it shows the compact loader — not the launch artwork');
+  app.api = apiClient;
 });

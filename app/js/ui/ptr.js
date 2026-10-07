@@ -64,16 +64,22 @@ async function reloadForRefresh(since) {
 }
 
 /** A completed pull: refresh the app where it stands. `softRefresh` redraws the page in place (no
- *  reload → no splash); it reports its own failures (offline → a toast) and returns false, in which
- *  case the page is left exactly as it was. Without it, or if it throws, fall back to a reload. */
+ *  reload → no splash) and says what happened — see main.js:
+ *    'refreshed' the page now shows the latest catalog;
+ *    'stale'     nothing could be read (offline / server down): the page is kept, and it has already
+ *                told the viewer why — reloading would throw that page away for nothing;
+ *    'restart'   only a fresh start can help (the app is running off the catalog bundled with it, so
+ *                restarting is how it gets back onto the live one).
+ *  Without a soft refresh, or if it throws, the reload is the fallback. */
 async function refresh(since) {
   const soft = app?.softRefresh;
   if (!soft) return reloadForRefresh(since);
-  let refreshed = false;
-  try { refreshed = await soft(); }
+  let result = 'stale';
+  try { result = await soft(); }
   catch (err) { console.warn('[ptr] in-place refresh failed', err); return reloadForRefresh(since); }
+  if (result === 'restart') return reloadForRefresh(since);
   await settleSpin(since);
-  return refreshed;
+  return result === 'refreshed' || result === true;   // lenient on `true`: a cached mixed-version bundle still refreshes
 }
 
 export function initPullToRefresh() {
