@@ -87,6 +87,7 @@ export function createApp({
   social = socialFromEnv(),                                   // { config, verifiers: { google?, facebook? } }
   publicApiUrl = process.env.PUBLIC_API_URL || '',            // absolute base for HLS URLs when behind a proxy
   streamTtl = Number(process.env.STREAM_URL_TTL) || 6 * 3600, // seconds a signed video URL stays valid
+  signupMailWaitMs = Number(process.env.SIGNUP_EMAIL_WAIT_MS) || 5000, // how long sign-up waits for the confirmation mail before answering "still on its way"
   push: pushOption = null,                                   // Web Push (VAPID) + native app push (FCM); tests inject a fake sender
   features: featureOptions = {},                              // limits: { streamLimit, refundWindowDays … } (env defaults)
   seo = {},                                                    // search-engine options: { siteUrl, indexable, compress, googleVerification, bingVerification } (env defaults below)
@@ -159,7 +160,7 @@ export function createApp({
   const unsubscribeUrlFor = (u) => (siteUrl ? `${siteUrl}/api/v1/notifications/unsubscribe?u=${encodeURIComponent(u.id)}&t=${unsubSig(u.id)}` : '');
   const campaigns = createCampaigns({ db, push, mailer, email: campaignEmail, log: logger });
 
-  registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled, sms, promos, logger });
+  registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled, sms, promos, logger, signupMailWaitMs });
   // Phone sign-in (SMS OTP). With no MSG91 keys the routes answer 503 and the sign-in page keeps offering
   // email + password — the site never breaks because payments/SMS are missing.
   registerOtpRoutes(api, { db, sms, secret, publicUser, notDisabled, authLimit, promos, logger });

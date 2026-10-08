@@ -10,7 +10,7 @@ Accounts also give viewers My List / Continue Watching sync across devices and m
 
 | Method | Notes |
 |---|---|
-| **Email + password** | `POST /auth/signup`, `POST /auth/login`. Passwords are stored as scrypt hashes. |
+| **Email + password** | `POST /auth/signup`, `POST /auth/login`. Passwords are stored as scrypt hashes. Sign-up answers as soon as the account exists — the confirmation email never stalls it (see [ENGAGEMENT.md](ENGAGEMENT.md#accounts): `verificationEmailPending` while it is still sending, `verificationEmailSent=false` when it failed). |
 | **Google** | Web: Google Identity Services button. Apps: the system “Use your account for …” sheet (Android; iOS and fallback use the Custom Tab flow). The API verifies the Google **ID token** (RS256 signature against Google's published keys, issuer, audience, expiry). |
 | **Facebook** | Web: Facebook JS SDK popup. Apps: native Facebook SDK. The API verifies the **access token** with Facebook's `debug_token` (must be valid *and issued to your app*), then reads the profile. |
 

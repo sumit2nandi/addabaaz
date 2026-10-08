@@ -147,6 +147,42 @@ test('forgot/resend fail loudly instead of pretending an email was sent', async 
   } finally { sFlaky.close(); sNone.close(); }
 });
 
+// The sign-up screen must never sit behind a dead mail server. The verification mail gets a short budget
+// (SIGNUP_EMAIL_WAIT_MS, 100 ms here) inside the request: a hanging SMTP transport makes the endpoint answer
+// "still on its way" (`verificationEmailPending`) while the send finishes in the background — and the token it
+// issues afterwards still confirms the account when the mail arrives.
+test('signup answers while the confirmation mail is still in flight instead of waiting for SMTP', async () => {
+  const delivered = [];
+  const slow = createMailer({ transport: { sendMail: async (m) => { await new Promise((r) => setTimeout(r, 1200)); delivered.push(m); } } });
+  const srv = createApp({ db, jwtSecret: 'test-secret', rate: false, mailer: slow, signupMailWaitMs: 100 }).listen(0);
+  const callOn = async (method, p, body, token) => {
+    const r = await fetch(`http://127.0.0.1:${srv.address().port}/api/v1${p}`, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    const t = await r.text(); return { status: r.status, body: t ? JSON.parse(t) : null };
+  };
+  try {
+    const em = `slow${Date.now()}@example.com`;
+    const started = Date.now();
+    const su = await callOn('POST', '/auth/signup', { name: 'Slow Mail', email: em, password: 'password123' });
+    const elapsed = Date.now() - started;
+    assert.equal(su.status, 201, 'the account is created');
+    assert.ok(elapsed < 1000, `signup answered in ${elapsed}ms instead of waiting for the hanging SMTP server`);
+    assert.equal(su.body.verificationEmailSent, false, 'not confirmed as sent — it has not finished');
+    assert.equal(su.body.verificationEmailPending, true, 'the client is told the mail is still on its way');
+    assert.equal((await callOn('GET', '/me', null, su.body.token)).status, 200, 'the session works immediately');
+    // The background send completes and issues the verification token, so the link works when it arrives.
+    let verifyTokens = 0;
+    for (let i = 0; i < 100 && !verifyTokens; i++) {
+      [[{ verifyTokens }]] = await db.pool.query("SELECT COUNT(*) AS verifyTokens FROM auth_tokens WHERE user_id = ? AND purpose = 'verify'", [su.body.user.id]);
+      if (!verifyTokens) await new Promise((r) => setTimeout(r, 25));
+    }
+    const verifyMail = delivered.find((m) => /Confirm your email/.test(m.subject));
+    assert.ok(verifyMail, 'the verification mail finished in the background');
+    assert.equal(verifyTokens, 1, 'the token was issued once the send completed');
+    const token = linkFrom(verifyMail, '/verify');
+    assert.equal((await callOn('POST', '/auth/verify', { token })).body.verified, true, 'the link really confirms the account');
+  } finally { srv.close(); }
+});
+
 test('change password & sign out everywhere', async () => {
   const u = await signup(); const other = (await call('POST', '/auth/login', { email: u.email, password: u.password })).body.token;
   assert.equal((await call('POST', '/me/password', { currentPassword: 'wrong', newPassword: 'newpassword1' }, u.token)).status, 403);

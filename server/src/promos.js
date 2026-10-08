@@ -430,9 +430,12 @@ export function createPromos({ db, config = promosConfigFromEnv(), mailer = null
 
   /* ---------- e-mails (best effort: never block a signup or a payment) ---------- */
 
+  // Dispatch without waiting: a promo mail must never stall the request that earned it (sign-up awaits the
+  // bonuses). The send still STARTS before the caller continues — the mail is handed to the transport
+  // synchronously — so a failure is only ever observed in the background, where it is logged.
   const send = (to, built, note) => {
-    if (!to || !mailer || mailer.provider !== 'smtp' || !built) return Promise.resolve();
-    return Promise.resolve(mailer.send({ to, ...built })).catch((e) => log.warn?.(`[promos] ${note} e-mail failed:`, e));
+    if (!to || !mailer || mailer.provider !== 'smtp' || !built) return;
+    Promise.resolve(mailer.send({ to, ...built })).catch((e) => log.warn?.(`[promos] ${note} e-mail failed:`, e));
   };
   async function notifyCredit(user, { welcomePaise, inviteePaise, referral = false }) {
     const amount = (welcomePaise || 0) + (inviteePaise || 0);

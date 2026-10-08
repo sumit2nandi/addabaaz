@@ -265,6 +265,24 @@ test('credit never leaves by e-mail for phone-only accounts', async () => {
   assert.equal(sent.length, 0, 'a placeholder address is never mailed');
 });
 
+// Sign-up awaits the bonuses, so a promo mail must never wait on the mail transport: a hanging SMTP server
+// would otherwise freeze the sign-up screen exactly like the verification mail used to. The send is dispatched
+// (handed to the transport) but not awaited; the race guard fails fast instead of hanging if it ever is again.
+test('promo mails are dispatched without waiting for SMTP — a hanging provider cannot stall a sign-up', async () => {
+  const db = fakeDb();
+  const hanging = { provider: 'smtp', send: () => new Promise(() => {}) };   // a transport that never answers
+  const promos = createPromos({ db, config: promosConfigFromEnv({}), mailer: hanging, siteUrl: 'https://addabaaz.in' });
+  const u = db.addUser('slow');
+  let timer;
+  const guard = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('onSignup waited for the mail transport')), 1000); });
+  timer.unref?.();
+  try {
+    const out = await Promise.race([promos.onSignup({ user: u }), guard]);
+    assert.equal(out.welcomePaise, 10000, 'the welcome bonus is granted');
+  } finally { clearTimeout(timer); }
+  assert.equal(await db.credits.balance('slow'), 10000, 'the credit is in the account even though the mail never finished');
+});
+
 test('config comes from the environment and defaults to the ₹100 offer', () => {
   const c = promosConfigFromEnv({});
   assert.deepEqual([c.signupPaise, c.referralPaise, c.hold], [10000, 10000, 'verified']);
