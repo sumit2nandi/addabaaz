@@ -13,7 +13,7 @@ test('mobile app dialogs keep multiple actions in one equal-width row', () => {
     'buttons share the row evenly and long labels can wrap inside their buttons');
   assert.match(appCss, /\.dialog \.dlg-body \.row\.end > \.btn:only-child \{ flex: 0 1 auto; \}/,
     'single-action dialogs keep their existing compact button size');
-  assert.match(read('app/js/views/account-extra.js'), /Set a password[\s\S]*?class="row end"[\s\S]*?Email me the link/,
+  assert.match(read('app/js/views/account-extra.js'), /Set a Password[\s\S]*?class="row end"[\s\S]*?Email Me the Link/,
     'the Set a password popup uses the shared action-row layout');
   assert.match(read('app/js/ui/dialog.js'), /class="row end"[\s\S]*?Cancel[\s\S]*?id="ok"/,
     'shared confirmation popups use the same layout');

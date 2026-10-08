@@ -18,7 +18,7 @@ test('the settings screen shows the three switches on the app too', () => {
   // The old rule was `s.subscribed && !s.native`, which is exactly why the app showed one row.
   assert.doesNotMatch(view, /s\.subscribed && !s\.native/, 'the app is no longer excluded');
   assert.match(view, /const topics = s\.subscribed && \(!s\.native \|\| !s\.guest\);/, 'a signed-in app gets the topics; a guest app has no account to target them with');
-  for (const label of ['New episodes of shows I follow', 'When a Coming Soon title launches', 'Announcements &amp; offers']) {
+  for (const label of ['New Episodes of Shows I Follow', 'When a Coming Soon Title Launches', 'Announcements &amp; Offers']) {
     assert.match(view, new RegExp(label.replace(/&/g, '&')), `${label} is offered`);
   }
   assert.match(view, /data-pp="episodes"/); assert.match(view, /data-pp="launches"/); assert.match(view, /data-pp="news"/);
