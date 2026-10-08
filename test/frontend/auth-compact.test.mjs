@@ -46,12 +46,10 @@ test('placeholder-led fields retain accessible labels and full-width submit butt
   assert.match(read('app/css/styles.css'), /\.auth-entry \.auth-field-label \{[^}]*clip-path: inset\(50%\)/);
 });
 
-test('sign-in and sign-up fade in without sliding, and the Google slot keeps its size', () => {
+test('sign-in and sign-up do not slide in on load, and the Google slot keeps its size', () => {
   const css = read('app/css/styles.css');
-  assert.match(css, /\.view:has\(> \.auth-page\) \{ animation: authFade \.4s ease-out; \}/);
-  assert.match(css, /@keyframes authFade \{ from \{ opacity: 0; \} to \{ opacity: 1; \} \}/);
-  assert.doesNotMatch(css, /@keyframes authFade \{[^}]*translate/);
-  assert.match(css, /\.social-compact \.social-g \{ width: 100%; max-width: 400px;/);
+  assert.match(css, /\.view:has\(> \.auth-page\) \{ animation: none; \}/);
+  assert.match(css, /\.social-compact \.social-g \{ width: 44px; height: 44px;/);
 });
 
 test('pull-to-refresh does not redraw sign-in or sign-up (it rebuilds the Google button)', () => {
@@ -60,11 +58,8 @@ test('pull-to-refresh does not redraw sign-in or sign-up (it rebuilds the Google
   assert.ok(main.indexOf("return 'refreshed'") < main.indexOf('await app.router.refresh()'));
 });
 
-test('Google sign-in uses the large pill button, full width, as on the server sign-in page', () => {
-  const social = read('app/js/social.js');
-  assert.match(social, /renderButton\(el, \{ type: 'standard', theme: 'filled_black', size: 'large', shape: 'pill'/);
-  assert.doesNotMatch(social, /type: 'icon'/);
+test('the Google slot is fixed-size and contained, and Google\'s own button is left unsized', () => {
   const css = read('app/css/styles.css');
+  assert.match(css, /\.social-compact \.social-g \{ contain: layout paint size; \}/);
   assert.doesNotMatch(css, /social-g iframe/);
-  assert.doesNotMatch(css, /\.social-compact \.social-g \{ width: 44px/);
 });
