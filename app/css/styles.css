@@ -1329,3 +1329,30 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .auth-entry .switch-auth { color: var(--muted); }
 .auth-entry .switch-auth a { color: var(--accent-2); font-weight: 600; text-decoration: underline; }
 .auth-entry .guest-btn { display: flex; align-items: center; justify-content: center; min-height: 56px; border: 1px solid #4a4a52; border-radius: 16px; color: #fff; font-size: 16px; font-weight: 600; text-decoration: none; }
+
+/* Sign-in / sign-up fixes and compact spacing. */
+/* The lock/envelope icon must paint above the field background (the password wrapper is positioned, so it would cover it). */
+.auth-entry .auth-icon-field > svg { z-index: 1; }
+/* The footer-link rule (inline-block, 5px padding) must not override the centred guest button. */
+.auth-entry .auth-footer-links a.guest-btn { display: flex; padding-block: 0; justify-content: center; text-align: center; }
+/* Compact: less space around every element. */
+.auth-entry.auth-page { padding: 16px var(--pad) 24px; gap: 8px; }
+.auth-entry .auth-card { padding: 0; }
+.auth-entry .auth-card h1 { font-size: 22px; margin: 0 0 4px; }
+.auth-entry #af { gap: 8px; }
+.auth-entry #af #emailPane, .auth-entry #af #otpPane, .auth-entry #af #otpPhoneStep, .auth-entry #af #otpCodeStep { gap: 8px; }
+.auth-entry .form input:not([type=checkbox]) { min-height: 46px; padding: 11px 14px; border-radius: 14px; }
+.auth-entry .form .auth-icon-field input:not([type=checkbox]) { padding-left: 46px; }
+.auth-entry .auth-icon-field > svg { top: 50%; }
+.auth-entry .pw input:not([type=checkbox]) { padding-right: 48px; }
+.auth-entry .otp-phone { min-height: 46px; }
+.auth-entry .forgot-link { margin: 0; padding: 0; }
+.auth-entry #asub { min-height: 48px; font-size: 16px; }
+.auth-entry #asub > svg { right: 16px; }
+.auth-entry .switch-auth { font-size: 13px; margin: 0; }
+.auth-entry .auth-footer-links { gap: 6px; }
+.auth-entry .auth-footer-links a.guest-btn { min-height: 48px; border-radius: 14px; font-size: 15px; }
+.auth-entry .social { margin: 0; }
+.auth-entry .or { margin: 0; }
+.auth-entry .fine { margin: 0; }
+
