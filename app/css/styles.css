@@ -569,29 +569,27 @@ body.reels-mode { overflow: hidden; padding-bottom: 0; } body.reels-mode .footer
 }
 .toasts { position: fixed; z-index: 500; left: 50%; bottom: calc(var(--tabbar-h) + var(--sab) + 16px); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 24px); pointer-events: none; }
 /* Toast (ui/components.js `toast()`): the small status bar at the bottom of the screen — "Watch history
- * cleared", "Link copied", … An all-black capsule: black glass fill, a black hairline ring and WHITE text.
+ * cleared", "Link copied", … A WHITE capsule with DARK-RED text (the brand --accent, #b80000), so the
+ * message pops against the dark page instead of sinking into it.
  *
- * The capsule is THIN on purpose — about 60% of the height it used to be — because the old box was mostly
- * empty black above and below the words. It was 45px (21px line + 12px of padding twice); it is now 26.9px:
- * the message keeps its 14px size but sits in a 1.35 line box (18.9px) with only 4px of black above and
- * below instead of 12px. The 18px side padding and 14px gap are unchanged, so the words keep their size and
- * the toast keeps its width rhythm — only the empty black was trimmed. The ring is an INSET shadow rather
- * than a `border`, so it costs no size; it keeps a faint edge over bright artwork, while on the near-black
- * page the capsule reads as one dark shape by design. The fill is near-opaque black glass: the blurred
- * artwork tints only the last few percent. */
+ * Size: the message keeps its 14px/1.35 line (18.9px); the capsule carries 9.5px of white above and
+ * below it — 37.9px tall, about 40% more than the 26.9px black capsule it replaces, with ALL of the
+ * extra height added as breathing room at the top and bottom (4px → 9.5px), never by inflating the
+ * words. The 18px side padding and 14px gap are unchanged, so the width rhythm stays. The hairline is
+ * an INSET shadow rather than a `border` (a border would add 2px to the size); it keeps a faint edge
+ * where the white capsule crosses bright artwork. */
 .toast { display: flex; align-items: center; gap: 14px;
-  background: rgba(0,0,0,.9);
-  backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
-  color: var(--text);
-  padding: 4px 18px; border-radius: 999px; font-weight: 600; font-size: 14px; line-height: 1.35;
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,.95), 0 10px 40px rgba(0,0,0,.6);
+  background: #fff;
+  color: var(--accent);
+  padding: 9.5px 18px; border-radius: 999px; font-weight: 600; font-size: 14px; line-height: 1.35;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.08), 0 10px 40px rgba(0,0,0,.6);
   opacity: 0; transform: translateY(12px); transition: .25s var(--ease); pointer-events: auto; }
 .toast.show { opacity: 1; transform: none; }
-/* The optional action ("Restart", "Undo"): white text on a faint red-tinted chip — the one spot of
-   colour left, so it still reads as a button. 1px padding over a 12.5px/1.2 line = 17px — inside the
-   message's new 18.9px line box, so an action never thickens the thin capsule. */
-.toast button { background: rgba(var(--accent-rgb), .22); border: 0; border-radius: 999px; color: var(--text); font-weight: 800; font-size: 12.5px; line-height: 1.2; padding: 1px 9px; transition: background .2s, color .2s; }
-.toast button:hover, .toast button:focus-visible { background: rgba(var(--accent-rgb), .45); }
+/* The optional action ("Restart", "Undo"): white text on a solid dark-red chip — unmistakably a button
+   on the white capsule. 1px padding over a 12.5px/1.2 line = 17px — inside the message's 18.9px line
+   box, so an action never thickens the capsule beyond its padding. */
+.toast button { background: var(--accent); border: 0; border-radius: 999px; color: #fff; font-weight: 800; font-size: 12.5px; line-height: 1.2; padding: 1px 9px; transition: background .2s, color .2s; }
+.toast button:hover, .toast button:focus-visible { background: var(--accent-2); }
 
 /* ---------- forms ---------- */
 .form { display: grid; gap: 16px; } .form label { display: grid; gap: 7px; font-size: 12px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); } .form label small { text-transform: none; letter-spacing: 0; font-weight: 500; }
@@ -776,6 +774,9 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .btn-social { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; max-width: 400px; min-height: 44px; border-radius: 999px; font-weight: 600; font-size: 14px; cursor: pointer; border: 1px solid var(--border-2); background: #131314; color: #fff; padding: 0 20px; }
 .btn-social:hover:not(:disabled) { filter: brightness(1.15); } .btn-social:disabled { opacity: .55; cursor: default; }
 .btn-social.btn-facebook { background: #1877f2; border-color: #1877f2; }
+/* Official Google look: white rectangular button, multicolor "G" logo, dark grey label. */
+.btn-social.btn-google { background: #fff; border-color: #dadce0; color: #3c4043; gap: 10px; border-radius: 8px; }
+.btn-social.btn-google:hover:not(:disabled) { filter: none; background: #f7f8f8; border-color: #c6c6c6; }
 .or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; letter-spacing: .6px; text-transform: uppercase; }
 .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--border-2); }
 .premium-mark { position: absolute; z-index: 6; top: 8px; left: 8px; display: inline-flex; align-items: center; padding: 3px 11px 4px; border: 1px solid rgba(245,217,147,.45); border-radius: 999px; background: rgba(10,8,4,.62); box-shadow: 0 4px 14px rgba(0,0,0,.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-size: 12.5px; line-height: 1.25; pointer-events: none; transition: opacity .25s ease, transform .25s ease, visibility 0s linear 0s; }
@@ -1271,6 +1272,8 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 /* Compact provider choices; Google uses its official icon-only SDK button. */
 .auth-entry .social.social-compact { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
 .social-compact .btn-social { width: 44px; height: 44px; min-height: 44px; max-width: 44px; flex: 0 0 44px; padding: 0; border-radius: 50%; gap: 0; }
+/* Google keeps its full-width labelled button (native app / GIS-unavailable fallback). */
+.social-compact .btn-social.btn-google { width: 100%; max-width: 280px; flex: 0 0 100%; height: 44px; padding: 0 20px; border-radius: 8px; gap: 10px; }
 /* Google's rectangular button: the slot stays blank until Google has drawn it, then the button fades in. */
 .social-compact .social-g { position: relative; width: 100%; max-width: 280px; flex: 0 0 100%; height: 36px; min-height: 36px; }
 .social-compact .gsi-real { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .2s ease; }

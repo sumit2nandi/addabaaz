@@ -14,12 +14,12 @@ import { isNative } from '../platform.js';
 
 // [id, title, subtitle, icon, who sees it ('all' | 'auth' | 'account'), link override for rows that leave the page]
 const GROUPS = [
-  ['playback', 'Playback', 'Autoplay and watch history', 'play', 'all'],
-  ['security', 'Security', 'Password, sessions and devices', 'lock', 'account'],
-  ['kids', 'Parental Control', 'Parental PIN and Kids profiles', 'user', 'account'],
-  ['notify', 'Notifications', 'Episode, launch and announcement alerts', 'bell', 'auth'],
-  ['refer', 'Refer & earn', 'Invite credit and rewards', 'gift', 'account'],
-  ['help', 'Help & support', 'Help Centre and contact us', 'chat', 'all', '#/support'],
+  ['playback', 'Playback', 'Autoplay and Watch History', 'play', 'all'],
+  ['security', 'Security', 'Password, Sessions and Devices', 'lock', 'account'],
+  ['kids', 'Parental Control', 'Parental PIN and Kids Profiles', 'user', 'account'],
+  ['notify', 'Notifications', 'Episode, Launch and Announcement Alerts', 'bell', 'auth'],
+  ['refer', 'Refer & Earn', 'Invite Credit and Rewards', 'gift', 'account'],
+  ['help', 'Help & Support', 'Help Centre and Contact Us', 'chat', 'all', '#/support'],
 ];
 
 /** The rows the profile page lists for this viewer: [{ id, title, sub, ic, href }]. */
@@ -33,7 +33,7 @@ export function settingGroups() {
 export function verifyBanner() {
   const acc = app.user.account;
   if (!acc || acc.emailVerified !== false) return '';
-  return html`<section class="card-panel notice" id="verifyBanner"><div>${icon('mail', { size: 22 })}</div><div><b>Confirm your email</b><p class="muted">We sent a link to ${acc.email}. Confirming your email lets you buy a plan.</p></div><button class="btn btn-primary" id="resendVerify">Resend link</button></section>`;
+  return html`<section class="card-panel notice" id="verifyBanner"><div>${icon('mail', { size: 22 })}</div><div><b>Confirm Your Email</b><p class="muted">We sent a link to ${acc.email}. Confirming your email lets you buy a plan.</p></div><button class="btn btn-primary" id="resendVerify">Resend Link</button></section>`;
 }
 
 // Settings row markup (icon, label, sub-label) that opens a dialog when clicked.
@@ -50,10 +50,10 @@ function wireNotifications(root, { guest = false, onCleanup = null } = {}) {
     if (!s?.supported || !s.enabled) {
       const u = app.user;
       const state = !s?.supported && !pushSupported() && !isNative
-        ? { title: 'Notifications unavailable', text: 'This browser can’t receive push notifications — install the ADDABAAZ app to get episode, launch and announcement alerts.' }
+        ? { title: 'Notifications Unavailable', text: 'This browser can’t receive push notifications — install the ADDABAAZ app to get episode, launch and announcement alerts.' }
         : !s?.supported && !u?.account
-          ? { title: 'Sign in for notifications', text: 'Episode, launch and announcement alerts need an account to target.', action: html`<a class="btn btn-primary" href="#/signin">Sign in</a>` }
-          : { title: 'Notifications unavailable', text: 'Notifications aren’t switched on right now — check back later.' };
+          ? { title: 'Sign In for Notifications', text: 'Episode, launch and announcement alerts need an account to target.', action: html`<a class="btn btn-primary" href="#/signin">Sign In</a>` }
+          : { title: 'Notifications Unavailable', text: 'Notifications aren’t switched on right now — check back later.' };
       slot.innerHTML = emptyState({ iconName: 'bell', ...state }).s;
       return;
     }
@@ -64,10 +64,10 @@ function wireNotifications(root, { guest = false, onCleanup = null } = {}) {
     // account to link episode/launch notifications to, so it gets the master switch only.
     const topics = s.subscribed && (!s.native || !s.guest);
     slot.innerHTML = html`<h2 class="sub-h">Notifications</h2><div class="card-panel list">
-      <label class="row-switch"><span><b>Notify me on this device</b><small>${blocked}</small></span><span class="switch"><input type="checkbox" id="pushOn" ${s.subscribed ? 'checked' : ''} ${s.permission === 'denied' ? 'disabled' : ''}><span class="track"></span></span></label>
-      ${topics ? html`<label class="row-switch"><span><b>New episodes of shows I follow</b></span><span class="switch"><input type="checkbox" data-pp="episodes" ${s.prefs.episodes ? 'checked' : ''}><span class="track"></span></span></label>
-        <label class="row-switch"><span><b>When a Coming Soon title launches</b></span><span class="switch"><input type="checkbox" data-pp="launches" ${s.prefs.launches ? 'checked' : ''}><span class="track"></span></span></label>
-        <label class="row-switch"><span><b>Announcements &amp; offers</b></span><span class="switch"><input type="checkbox" data-pp="news" ${s.prefs.news ? 'checked' : ''}><span class="track"></span></span></label>` : ''}</div>`.s;
+      <label class="row-switch"><span><b>Notify Me on This Device</b><small>${blocked}</small></span><span class="switch"><input type="checkbox" id="pushOn" ${s.subscribed ? 'checked' : ''} ${s.permission === 'denied' ? 'disabled' : ''}><span class="track"></span></span></label>
+      ${topics ? html`<label class="row-switch"><span><b>New Episodes of Shows I Follow</b></span><span class="switch"><input type="checkbox" data-pp="episodes" ${s.prefs.episodes ? 'checked' : ''}><span class="track"></span></span></label>
+        <label class="row-switch"><span><b>When a Coming Soon Title Launches</b></span><span class="switch"><input type="checkbox" data-pp="launches" ${s.prefs.launches ? 'checked' : ''}><span class="track"></span></span></label>
+        <label class="row-switch"><span><b>Announcements &amp; Offers</b></span><span class="switch"><input type="checkbox" data-pp="news" ${s.prefs.news ? 'checked' : ''}><span class="track"></span></span></label>` : ''}</div>`.s;
   };
   const refresh = () => pushState().then(draw).catch(() => {});
   const unsubscribe = app.user.on('push', refresh);
@@ -90,12 +90,12 @@ function wireNotifications(root, { guest = false, onCleanup = null } = {}) {
 function wireReferral(root) {
   const u = app.user;
   const slot = $('#referSlot', root); if (!slot) return;
-  slot.innerHTML = html`<h2 class="sub-h">Refer &amp; earn</h2><div class="card-panel"><div class="spinner" style="margin:14px auto"></div></div>`.s;
+  slot.innerHTML = html`<h2 class="sub-h">Refer &amp; Earn</h2><div class="card-panel"><div class="spinner" style="margin:14px auto"></div></div>`.s;
   const draw = async () => {
     let data = null;
     try { data = await u.credits(); } catch { /* the section shows the empty state below */ }
     if (!data || !data.offer?.enabled || (!data.offer.referralPaise && !data.creditPaise)) {
-      slot.innerHTML = emptyState({ iconName: 'gift', title: 'Refer & earn is off', text: 'There is no invite offer running right now — check back later.' }).s;
+      slot.innerHTML = emptyState({ iconName: 'gift', title: 'Refer & Earn Is Off', text: 'There is no invite offer running right now — check back later.' }).s;
       return;
     }
     const inr = (p) => `₹${(p / 100).toFixed(p % 100 ? 2 : 0)}`;
@@ -103,19 +103,19 @@ function wireReferral(root) {
     try { share = await u.inviteLink(); } catch { /* the code alone is enough */ }
     const code = share?.code || '';
     const link = share?.link || '';
-    slot.innerHTML = html`<h2 class="sub-h">Refer &amp; earn</h2>
+    slot.innerHTML = html`<h2 class="sub-h">Refer &amp; Earn</h2>
       <div class="card-panel refer-card">
         <div class="refer-head">${icon('gift', { size: 22 })}<div><b>${inr(data.offer.referralPaise)} for you and ${inr(data.offer.referralPaise)} for your friend</b>
           <small>${data.offer.hold === 'signup' ? 'Credit lands as soon as they sign up.' : data.offer.hold === 'payment' ? 'Your reward unlocks after their first payment.' : 'Your reward unlocks when they confirm their email or phone.'}</small></div></div>
-        <div class="refer-bal">${inr(data.creditPaise)}${data.pendingPaise || data.heldPaise ? html` <small>+ ${inr((data.pendingPaise || 0) + (data.heldPaise || 0))} on hold</small>` : ''}<em>credit available</em></div>
+        <div class="refer-bal">${inr(data.creditPaise)}${data.pendingPaise || data.heldPaise ? html` <small>+ ${inr((data.pendingPaise || 0) + (data.heldPaise || 0))} on hold</small>` : ''}<em>Credit Available</em></div>
         ${data.heldPaise ? html`<p class="fine fine-left">${inr(data.heldPaise)} is held by an order that was not completed — it comes back automatically.</p>` : ''}
-        ${code ? html`<label>Your invite code<span class="co-row"><input id="refCode" readonly value="${code}"><button class="btn btn-ghost" type="button" data-copy="${code}">Copy</button></span></label>
-          <label>Your invite link<span class="co-row"><input id="refLink" readonly value="${link}"><button class="btn btn-ghost" type="button" data-copy="${link}">Copy</button></span></label>` : ''}
-        <div class="row"><button class="btn btn-ghost btn-sm" id="refShare" type="button">${icon('share', { size: 16 })} Share invite</button></div>
+        ${code ? html`<label>Your Invite Code<span class="co-row"><input id="refCode" readonly value="${code}"><button class="btn btn-ghost" type="button" data-copy="${code}">Copy</button></span></label>
+          <label>Your Invite Link<span class="co-row"><input id="refLink" readonly value="${link}"><button class="btn btn-ghost" type="button" data-copy="${link}">Copy</button></span></label>` : ''}
+        <div class="row"><button class="btn btn-ghost btn-sm" id="refShare" type="button">${icon('share', { size: 16 })} Share Invite</button></div>
         ${data.invited?.items?.length ? html`<ul class="dev-list">${data.invited.items.map((f) => html`<li><span>${icon('user', { size: 20 })}</span><div><b>${f.name}</b><small>${f.status === 'completed' ? `Reward unlocked · ${timeAgo(f.completedAt)}` : 'Waiting for them to confirm'}</small></div><b class="muted">+${inr(f.bonusPaise)}</b></li>`)}</ul>` : html`<p class="fine fine-left">Nobody has joined with your code yet — share your link on WhatsApp.</p>`}
-        ${data.canRedeem ? html`<label>Have a friend’s invite code?<span class="co-row"><input id="refRedeem" maxlength="12" autocapitalize="characters" placeholder="e.g. AB12CD34"><button class="btn btn-primary" type="button" id="refApply">Apply</button></span></label>` : ''}
+        ${data.canRedeem ? html`<label>Have a Friend’s Invite Code?<span class="co-row"><input id="refRedeem" maxlength="12" autocapitalize="characters" placeholder="e.g. AB12CD34"><button class="btn btn-primary" type="button" id="refApply">Apply</button></span></label>` : ''}
         ${data.referredBy ? html`<p class="fine fine-left">You joined with a friend’s invite — ${data.referredBy.status === 'completed' ? 'their reward is unlocked.' : 'your first confirmation unlocks their reward.'}</p>` : ''}
-        ${data.ledger?.length ? html`<details class="refer-ledger"><summary>Credit history</summary><ul>${data.ledger.map((r) => html`<li><span>${r.reason || r.label}</span><b class="${r.amountPaise < 0 ? 'muted' : ''}">${r.amountPaise < 0 ? '' : '+'}${inr(Math.abs(r.amountPaise))}</b></li>`)}</ul></details>` : ''}
+        ${data.ledger?.length ? html`<details class="refer-ledger"><summary>Credit History</summary><ul>${data.ledger.map((r) => html`<li><span>${r.reason || r.label}</span><b class="${r.amountPaise < 0 ? 'muted' : ''}">${r.amountPaise < 0 ? '' : '+'}${inr(Math.abs(r.amountPaise))}</b></li>`)}</ul></details>` : ''}
       </div>`.s;
   };
   const copy = async (text) => { try { await navigator.clipboard.writeText(text); toast('Copied'); } catch { toast('Copy the code from the box'); } };
@@ -144,8 +144,7 @@ function playbackSection() {
   return html`<section class="account-section">
     <h2 class="sub-h">Playback</h2>
     <div class="card-panel list">
-      <label class="row-switch"><span><b>Autoplay next episode</b><small>Keep watching without lifting a finger.</small></span><span class="switch"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span></span></label>
-      <button class="row-link" id="clearHist">${icon('trash', { size: 22 })}<span><b>Clear watch history</b><small>Removes Continue Watching for this profile.</small></span></button>
+      <label class="row-switch"><span><b>Autoplay Next Episode</b><small>Keep watching without lifting a finger.</small></span><span class="switch"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span></span></label>
     </div>
   </section>`;
 }
@@ -154,18 +153,18 @@ function securitySection() {
   const acc = app.user.account;
   if (!acc) return '';
   const signInMethod = acc.phoneVerified
-    ? html`<div class="row-link static">${icon('phone', { size: 22 })}<span><b>SMS sign-in</b><small>Use your verified mobile number and one-time code to sign in.</small></span></div>
-        ${acc.emailIsPlaceholder ? '' : row('chgPw', 'lock', acc.hasPassword === false ? 'Set a password' : 'Change password', acc.hasPassword === false ? 'Add a password to also sign in with your confirmed email.' : 'Signs you out on your other devices.')}`
-    : row('chgPw', 'lock', acc.hasPassword === false ? 'Set a password' : 'Change password', acc.hasPassword === false ? 'You signed up with a social account — add a password too.' : 'Signs you out on your other devices.');
+    ? html`<div class="row-link static">${icon('phone', { size: 22 })}<span><b>SMS Sign-In</b><small>Use your verified mobile number and one-time code to sign in.</small></span></div>
+        ${acc.emailIsPlaceholder ? '' : row('chgPw', 'lock', acc.hasPassword === false ? 'Set a Password' : 'Change Password', acc.hasPassword === false ? 'Add a password to also sign in with your confirmed email.' : 'Signs you out on your other devices.')}`
+    : row('chgPw', 'lock', acc.hasPassword === false ? 'Set a Password' : 'Change Password', acc.hasPassword === false ? 'You signed up with a social account — add a password too.' : 'Signs you out on your other devices.');
   const contactEmail = acc.phoneVerified ? html`
     <section class="account-section">
-      <h2 class="sub-h">${acc.emailIsPlaceholder ? 'Contact email' : 'Update contact email'}</h2>
+      <h2 class="sub-h">${acc.emailIsPlaceholder ? 'Contact Email' : 'Update Contact Email'}</h2>
       <div class="card-panel">
         <p class="muted">${acc.emailIsPlaceholder ? 'Add an email address you can access. We’ll send a one-time confirmation link. Your SMS sign-in stays the same, and this address won’t be used for billing or account emails until you confirm it.' : 'You can replace your confirmed contact email. Your current address remains active for account and billing emails until you confirm the replacement; SMS sign-in stays the same.'}</p>
         <form class="form" id="contactEmailForm" novalidate>
-          <label>Email address<input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"></label>
+          <label>Email Address<input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"></label>
           <div class="form-status" id="contactEmailStatus" role="status" aria-live="polite"></div>
-          <button class="btn btn-primary" type="submit">${acc.emailIsPlaceholder ? 'Send confirmation link' : 'Send email-change link'}</button>
+          <button class="btn btn-primary" type="submit">${acc.emailIsPlaceholder ? 'Send Confirmation Link' : 'Send Email-Change Link'}</button>
         </form>
       </div>
     </section>` : '';
@@ -173,8 +172,8 @@ function securitySection() {
     <h2 class="sub-h">Security</h2>
     <div class="card-panel list">
       ${signInMethod}
-      ${row('signOutAll', 'logout', 'Sign out of other devices', 'Signs out every other phone, TV and browser. This device stays signed in.')}
-      ${row('devices', 'tv', 'Your devices', 'See where you’re watching and how many screens your plan allows.')}
+      ${row('signOutAll', 'logout', 'Sign Out of Other Devices', 'Signs out every other phone, TV and browser. This device stays signed in.')}
+      ${row('devices', 'tv', 'Your Devices', 'See where you’re watching and how many screens your plan allows.')}
     </div>
   </section>`;
 }
@@ -185,8 +184,7 @@ function kidsSection() {
   return html`<section class="account-section">
     <h2 class="sub-h">Parental Control</h2>
     <div class="card-panel list">
-      ${row('pinBtn', 'lock', u.hasPin ? 'Change or remove parental PIN' : 'Set a parental PIN', u.hasPin ? 'Needed to leave a Kids profile or change profiles.' : 'Keeps children on their Kids profile and stops profile changes.')}
-      <a class="row-link" href="#/profiles?manage=1">${icon('user', { size: 22 })}<span><b>Kids profiles</b><small>Mark any profile as “Kids” to show only titles rated for children.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a>
+      ${row('pinBtn', 'lock', u.hasPin ? 'Change or Remove Parental PIN' : 'Set a Parental PIN', u.hasPin ? 'Needed to leave a Kids profile or change profiles.' : 'Keeps children on their Kids profile and stops profile changes.')}
     </div>
   </section>`;
 }
@@ -204,9 +202,6 @@ export function settingSection(id) {
 function wirePlayback(root) {
   const u = app.user;
   $('#autoNext', root).addEventListener('change', (e) => u.setPref('autoplayNext', e.target.checked));
-  $('#clearHist', root).addEventListener('click', async () => {
-    if (await confirmDialog({ title: 'Clear watch history?', text: 'This removes Continue Watching for this profile.', confirm: 'Clear', danger: true })) { u.clearHistory(); toast('Watch history cleared'); }
-  });
 }
 
 function wireSecurity(root) {
@@ -225,15 +220,15 @@ function wireSecurity(root) {
   });
   $('#chgPw', root)?.addEventListener('click', () => {
     if (acc.hasPassword === false) {
-      openDialog(html`<h2>Set a password</h2><p class="muted">We’ll email <b>${acc.email}</b> a link to choose a password. ${acc.phoneVerified ? 'You can keep signing in by SMS too.' : 'You can keep using your social sign-in too.'}</p><div class="row end"><button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" id="sendLink">Email me the link</button></div>`, { cls: 'dialog-sm' })
+      openDialog(html`<h2>Set a Password</h2><p class="muted">We’ll email <b>${acc.email}</b> a link to choose a password. ${acc.phoneVerified ? 'You can keep signing in by SMS too.' : 'You can keep using your social sign-in too.'}</p><div class="row end"><button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" id="sendLink">Email Me the Link</button></div>`, { cls: 'dialog-sm' })
         .el.querySelector('#sendLink').onclick = async (e) => { e.target.disabled = true; try { await u.remote.forgotPassword(acc.email); toast('Link sent — check your inbox.'); e.target.closest('dialog').close(); } catch (err) { toast(friendly(err)); e.target.disabled = false; } };
       return;
     }
-    const { el, close } = openDialog(html`<h2>Change password</h2><form class="form" id="pwf" novalidate>
-      <label>Current password<input name="cur" type="password" autocomplete="current-password" required></label>
-      <label>New password<input name="p1" type="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters"></label>
-      <label>Repeat new password<input name="p2" type="password" autocomplete="new-password" required minlength="8"></label>
-      <div class="form-status" id="pws" role="alert"></div><div class="row end"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" type="submit">Change password</button></div></form>`, { cls: 'dialog-sm' });
+    const { el, close } = openDialog(html`<h2>Change Password</h2><form class="form" id="pwf" novalidate>
+      <label>Current Password<input name="cur" type="password" autocomplete="current-password" required></label>
+      <label>New Password<input name="p1" type="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters"></label>
+      <label>Repeat New Password<input name="p2" type="password" autocomplete="new-password" required minlength="8"></label>
+      <div class="form-status" id="pws" role="alert"></div><div class="row end"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" type="submit">Change Password</button></div></form>`, { cls: 'dialog-sm' });
     $('#pwf', el).addEventListener('submit', async (e) => {
       e.preventDefault(); const f = new FormData(e.target), st = $('#pws', el);
       if (String(f.get('p1')).length < 8) { st.textContent = 'The new password must be at least 8 characters.'; return; }
@@ -242,20 +237,48 @@ function wireSecurity(root) {
     });
   });
   $('#signOutAll', root)?.addEventListener('click', async () => {
-    if (await confirmDialog({ icon: 'logout', title: 'Sign out of other devices?', text: 'Every other phone, TV and browser signed in to this account will need to sign in again. This device stays signed in.', confirm: 'Sign out other devices', danger: true })) {
+    if (await confirmDialog({ icon: 'logout', title: 'Sign out of other devices?', text: 'Every other phone, TV and browser signed in to this account will need to sign in again. This device stays signed in.', confirm: 'Sign Out Other Devices', danger: true })) {
       try { await u.signOutEverywhere(); toast('Signed out of your other devices'); } catch (err) { toast(friendly(err)); }
     }
   });
+  // The row icon follows what the label says the device IS: a phone/tablet (the app, iPhone/iPad,
+  // Android and the recognised handset brands), a computer (Windows/Mac/Linux browsers), or a TV.
+  const devIcon = (label) => {
+    const l = String(label || '');
+    if (/\btv\b|chromecast|firestick/i.test(l)) return 'tv';
+    if (/iphone|ipad|android|· app|oneplus|samsung|realme|oppo|vivo|iqoo|xiaomi|redmi|poco|motorola|nothing|pixel/i.test(l)) return 'smartphone';
+    return 'monitor';
+  };
   $('#devices', root)?.addEventListener('click', async () => {
-    const { el } = openDialog(html`<h2>Your devices</h2><div id="devBody"><div class="spinner" style="margin:20px auto"></div></div>`, { cls: 'dialog-sm' });
+    const { el } = openDialog(html`<h2>Your Devices</h2><div id="devBody"><div class="spinner" style="margin:20px auto"></div></div><div class="form-status" id="devStatus" role="alert"></div>`, { cls: 'dialog-sm' });
     const draw = async () => {
       try {
         const d = await u.remote.devices();
-        $('#devBody', el).innerHTML = html`<p class="muted">Your plan allows ${d.streamLimit} screen${d.streamLimit === 1 ? '' : 's'} watching premium titles at once.</p>
-          <ul class="dev-list">${d.devices.length ? d.devices.map((x) => html`<li><span>${icon('tv', { size: 22 })}</span><div><b>${x.label || 'Device'}${x.current ? html` <em class="pill">This device</em>` : ''}</b><small>${x.watching ? 'Watching now' : `Last active ${timeAgo(x.lastSeen)}`}</small></div>${x.current ? '' : html`<button class="btn btn-ghost btn-sm" data-forget="${x.deviceId}">Remove</button>`}</li>`) : html`<li class="muted">No devices yet — they appear after you watch a premium title.</li>`}</ul>`.s;
+        // One row per device NAME: the same phone accrues several device ids over time (new browser
+        // profile, cleared storage, app reinstall), which showed as confusing duplicates. The list
+        // arrives newest-first, so the first row of a group carries the freshest "last active";
+        // Remove clears every id behind the row so a duplicate never resurfaces.
+        const groups = [];
+        const byLabel = new Map();
+        for (const x of d.devices) {
+          const key = x.label || 'Device';
+          const g = byLabel.get(key);
+          if (!g) { const fresh = { ...x, ids: [x.deviceId] }; byLabel.set(key, fresh); groups.push(fresh); }
+          else { g.ids.push(x.deviceId); g.current = g.current || x.current; g.watching = g.watching || x.watching; }
+        }
+        $('#devBody', el).innerHTML = html`${d.streamLimit > 0 ? html`<p class="muted">Your plan allows ${d.streamLimit} screen${d.streamLimit === 1 ? '' : 's'} watching premium titles at once.</p>` : ''}
+          <ul class="dev-list">${groups.length ? groups.map((x) => html`<li><span>${icon(devIcon(x.label), { size: 22 })}</span><div><b>${x.label || 'Device'}${x.current ? html` <em class="pill">This device</em>` : ''}</b><small>${x.watching ? 'Watching now' : `Last active ${timeAgo(x.lastSeen)}`}</small></div>${x.current ? '' : html`<button class="btn btn-ghost btn-sm" type="button" data-forget="${x.ids.join(',')}">Remove</button>`}</li>`) : html`<li class="muted">No devices yet — they appear after you watch a premium title.</li>`}</ul>`.s;
       } catch (err) { $('#devBody', el).textContent = friendly(err); }
     };
-    el.addEventListener('click', async (e) => { const b = e.target.closest('[data-forget]'); if (!b) return; b.disabled = true; try { await u.remote.forgetDevice(b.dataset.forget); await draw(); } catch (err) { toast(friendly(err)); } });
+    // Errors surface INSIDE the dialog: a toast would be hidden behind the modal (top layer), and the
+    // button re-enables on failure so a network blip never leaves Remove permanently dead.
+    el.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-forget]'); if (!b) return;
+      b.disabled = true;
+      const status = $('#devStatus', el); if (status) status.textContent = '';
+      try { for (const id of b.dataset.forget.split(',').filter(Boolean)) await u.remote.forgetDevice(id); await draw(); }
+      catch (err) { b.disabled = false; const m = friendly(err); if (status) status.textContent = m; else toast(m); }
+    });
     draw();
   });
 }
@@ -264,7 +287,7 @@ function wireKids(root) {
   const u = app.user;
   $('#pinBtn', root)?.addEventListener('click', async () => {
     if (!u.hasPin) {
-      const pin = await pinPrompt({ title: 'Set a parental PIN', text: 'Choose 4–6 digits. You’ll need it to leave a Kids profile or change profiles.', confirm: 'Set PIN', check: (p) => u.setPin(p) });
+      const pin = await pinPrompt({ title: 'Set a Parental PIN', text: 'Choose 4–6 digits. You’ll need it to leave a Kids profile or change profiles.', confirm: 'Set PIN', check: (p) => u.setPin(p) });
       if (pin) { toast('Parental PIN set'); location.reload(); }
       return;
     }

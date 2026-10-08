@@ -20,15 +20,15 @@ export default async function account(ctx) {
   const p = u.profile;
   const identity = u.supportsAuth ? 'Browsing as a guest — sign in to sync across devices.' : 'Your list and progress are saved on this device.';
   ctx.root.innerHTML = html`<div class="page page-narrow account-page profile-page">
-    ${!u.supportsAuth ? html`<section class="card-panel notice" role="status"><div>${icon('info', { size: 22 })}</div><div><b>Local-only mode</b><p class="muted">This app isn’t connected to ADDABAAZ cloud. Profiles and settings stay on this phone; sign-in, sync, and push notifications need a cloud connection.</p></div></section>` : ''}
+    ${!u.supportsAuth ? html`<section class="card-panel notice" role="status"><div>${icon('info', { size: 22 })}</div><div><b>Local-Only Mode</b><p class="muted">This app isn’t connected to ADDABAAZ cloud. Profiles and settings stay on this phone; sign-in, sync, and push notifications need a cloud connection.</p></div></section>` : ''}
     ${verifyBanner()}
-    ${u.supportsAuth && !u.isPremium && !isNative ? html`<section class="card-panel subscribe-banner"><div><h2>Subscribe to <em class="premium-word">premium</em></h2><p>Premium originals, early access</p></div><a class="btn btn-light" href="#/plans">Subscribe</a></section>` : ''}
+    ${u.supportsAuth && !u.isPremium && !isNative ? html`<section class="card-panel subscribe-banner"><div><h2>Subscribe to <em class="premium-word">premium</em></h2><p>Premium Originals, Early Access</p></div><a class="btn btn-light" href="#/plans">Subscribe</a></section>` : ''}
     <section class="profile-head">
       ${p ? avatar(p, { size: 48 }) : ''}
       <div class="profile-id"><h2>${u.account ? u.account.name : p ? p.name : 'Guest'} ${u.isPremium ? html`<em class="premium-word premium-sup">premium</em>` : html`<em class="pill free">Free</em>`}${u.account ? html`<a class="profile-details-edit" href="#/account/details" aria-label="Edit account details" title="Edit account details">${icon('edit', { size: 16 })}</a>` : ''}</h2>
         ${u.account && !u.account.emailIsPlaceholder ? html`<p class="muted profile-email">${u.account.email}</p>` : ''}
         ${!u.account ? html`<p class="muted">${identity}</p>` : ''}</div>
-      ${u.supportsAuth && !u.account ? html`<div class="profile-actions"><a class="btn btn-primary" href="#/signin">Sign in</a><a class="btn btn-ghost" href="#/signup">Create account</a></div>` : ''}
+      ${u.supportsAuth && !u.account ? html`<div class="profile-actions"><a class="btn btn-primary" href="#/signin">Sign In</a><a class="btn btn-ghost" href="#/signup">Create Account</a></div>` : ''}
     </section>
     ${profileStrip(u)}
     <div id="accountSavedList">${savedListStrip(savedEntries(u, app.catalog))}</div>
@@ -36,7 +36,7 @@ export default async function account(ctx) {
       ${settingGroups().map(accountGroup)}
     </nav>
     <footer class="profile-footer">
-      ${u.account ? html`<button class="logout-link" id="signout">Sign out</button>` : ''}
+      ${u.account ? html`<button class="logout-link" id="signout">Sign Out</button>` : ''}
     </footer>
   </div>`.s;
 

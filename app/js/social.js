@@ -236,9 +236,14 @@ export function mountSocialButtons(box, providers, { signup = false, onCredentia
   const wanted = ['google', 'facebook', 'apple'].filter((p) => providers?.[p]);
   if (!wanted.length) return false;
   box.classList.add('social-compact');
+  // Google always renders as the official white button with the multicolor "G" and a text label;
+  // Facebook / Apple stay as compact round icon buttons.
+  const gLabel = signup ? 'Sign up with Google' : 'Sign in with Google';
   box.innerHTML = wanted.map((p) => (p === 'google' && !isNative
     ? '<div class="social-g" id="gBtn"><div class="gsi-real"></div></div>'
-    : html`<button type="button" class="btn-social btn-${p}" data-p="${p}" aria-label="Continue with ${p === 'google' ? 'Google' : p === 'apple' ? 'Apple' : 'Facebook'}" title="Continue with ${p === 'google' ? 'Google' : p === 'apple' ? 'Apple' : 'Facebook'}">${p === 'google' ? G_LOGO : p === 'apple' ? APPLE_LOGO : FB_LOGO}</button>`.s)).join('');
+    : p === 'google'
+      ? html`<button type="button" class="btn-social btn-google" data-p="google" aria-label="${gLabel}" title="${gLabel}">${G_LOGO}<span>${gLabel}</span></button>`.s
+      : html`<button type="button" class="btn-social btn-${p}" data-p="${p}" aria-label="Continue with ${p === 'apple' ? 'Apple' : 'Facebook'}" title="Continue with ${p === 'apple' ? 'Apple' : 'Facebook'}">${p === 'apple' ? APPLE_LOGO : FB_LOGO}</button>`.s)).join('');
   const run = async (provider, get) => {
     try { const cred = await get(); if (cred) await onCredential(provider, cred); }
     catch (e) {
@@ -262,11 +267,13 @@ export function mountSocialButtons(box, providers, { signup = false, onCredentia
       // Google's button is the only thing in this slot: it stays blank until Google has drawn it, then fades in.
       // A fixed numeric width means Google never re-measures it.
       const real = $('.gsi-real', el);
-      gid.renderButton(real, { type: 'standard', theme: 'filled_black', size: 'medium', shape: 'pill', text: signup ? 'signup_with' : 'continue_with', logo_alignment: 'left', width: Math.max(200, Math.min(280, Math.round(real.clientWidth || el.clientWidth || 260))) });
+      // White Google button with the official multicolor "G" logo (theme: 'outline'), matching
+      // Google's own "Sign in with Google" branding.
+      gid.renderButton(real, { type: 'standard', theme: 'outline', size: 'large', shape: 'rectangular', text: signup ? 'signup_with' : 'signin_with', logo_alignment: 'left', width: Math.max(200, Math.min(280, Math.round(real.clientWidth || el.clientWidth || 260))) });
       const reveal = () => el.classList.add('ready');
       real.querySelector('iframe')?.addEventListener('load', reveal, { once: true });
       setTimeout(reveal, 1500);
-    }).catch(() => { const el = $('#gBtn', box); if (el) el.outerHTML = html`<button type="button" class="btn-social btn-google" disabled aria-label="Google sign-in unavailable" title="Google sign-in unavailable">${G_LOGO}</button>`.s; });
+    }).catch(() => { const el = $('#gBtn', box); if (el) el.outerHTML = html`<button type="button" class="btn-social btn-google" disabled aria-label="Google sign-in unavailable" title="Google sign-in unavailable">${G_LOGO}<span>${gLabel}</span></button>`.s; });
   }
   // Facebook's SDK must already be loaded when the user taps (popup blockers), so preload it now.
   if (wanted.includes('facebook') && !isNative) initFacebook(providers.facebook).catch(() => {});

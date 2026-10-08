@@ -69,10 +69,10 @@ test('checkout shows the balance and only spends it when the viewer asks', () =>
 test('Account → Refer & earn shows the code, the balance and the people who joined', () => {
   assert.match(account, /wireReferral\(root\)/, 'the account page wires the section');
   assert.match(account, /<div id="referSlot" class="account-section"><\/div>/, 'and has a place for it in the responsive Account grid');
-  assert.match(account, /Refer &amp; earn/, 'named plainly');
-  assert.match(account, /Your invite code/, 'the code is shown');
+  assert.match(account, /Refer &amp; Earn/, 'named plainly');
+  assert.match(account, /Your Invite Code/, 'the code is shown');
   assert.match(account, /data-copy="\$\{code\}"/, 'with a copy button');
-  assert.match(account, /Have a friend’s invite code\?/, 'and a box to add someone else’s code');
+  assert.match(account, /Have a Friend’s Invite Code\?/, 'and a box to add someone else’s code');
   assert.match(account, /u\.redeemInvite\(code\)/, 'which reaches the API');
   assert.match(account, /held by an order that was not completed/, 'credit held by an unfinished order is explained');
   assert.match(user, /promos\(\) \{ return \(this\.remote \|\| this\.local\)\.promo\(\); \}/, 'user.promos');

@@ -189,7 +189,9 @@ export class RemoteAdapter {
   removeDevice(token) { return this.api.del('/devices', { token }); }
   registerGuestDevice(token, platform = 'android', label = null, prefs = null) { return this.api.post('/devices/guest', { token, platform, label, prefs }); }
   removeGuestDevice(token) { return this.api.del('/devices/guest', { token }); }
-  devices() { return this.api.get('/devices'); }
+  // NOTE: no `devices()` here — that name belongs to the playback list above (GET /me/devices).
+  // A duplicate `devices()` for GET /devices (push registrations) used to shadow it, which broke the
+  // "Your Devices" dialog: no deviceId → Remove called DELETE /me/devices/ → 404 "Unknown endpoint."
   deviceStatus(token) { return this.api.post('/devices/status', { token }); }
   devicePrefs(token, prefs) { return this.api.patch('/devices/prefs', { token, ...prefs }); }
   requestRefund(paymentId, reason) { return this.api.post(`/payments/${encodeURIComponent(paymentId)}/refund-request`, { reason }); }

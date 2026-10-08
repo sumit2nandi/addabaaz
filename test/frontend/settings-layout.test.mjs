@@ -46,13 +46,13 @@ test('every settings group opens its own sub-page', () => {
     'Refer & earn keeps its asynchronous slot');
   assert.match(extras, /<div id="notifySlot" class="account-section"><\/div>/,
     'notifications keep their asynchronous slot');
-  assert.match(extras, /title: 'Refer & earn is off'/,
+  assert.match(extras, /title: 'Refer & Earn Is Off'/,
     'an empty Refer & earn page explains itself instead of rendering blank');
-  assert.match(extras, /title: 'Notifications unavailable'/,
+  assert.match(extras, /title: 'Notifications Unavailable'/,
     'an empty Notifications page explains itself instead of rendering blank');
   assert.match(extras, /install the ADDABAAZ app to get episode, launch and announcement alerts/,
     'browsers without push (iPhone Safari tabs) get an honest explanation, not a dead toggle');
-  assert.match(extras, /title: 'Sign in for notifications'/,
+  assert.match(extras, /title: 'Sign In for Notifications'/,
     'signed-out viewers are pointed at sign-in instead of a dead end');
   assert.match(extras, /\['notify', 'Notifications', '[^\]]*'auth'\]/,
     'guests keep their notifications group');

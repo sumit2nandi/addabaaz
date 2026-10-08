@@ -27,7 +27,7 @@ test('Account is a compact profile header over a settings-group list', () => {
   assert.match(account, /wireAccountAccordion\(ctx.root, settingSection, wireSetting, ctx\)/);
   assert.match(account, /<footer class="profile-footer">/,
     'the page ends in a footer, not another settings card');
-  assert.match(account, /<button class="logout-link" id="signout">Sign out<\/button>/);
+  assert.match(account, /<button class="logout-link" id="signout">Sign Out<\/button>/);
   assert.doesNotMatch(account, /profile-legal|app-version|Log Out/,
     'duplicate legal links and the version are removed from the profile footer');
   const index = read('index.html');
@@ -50,9 +50,9 @@ test('Account is a compact profile header over a settings-group list', () => {
     'profile management lives in the profile menu, not on this page');
   assert.doesNotMatch(account, /<h2 class="sub-h">Explore<\/h2>/,
     'the Explore link list is gone (Studio pages stay in the Studio menu)');
-  assert.match(extras, /\['security', 'Security', 'Password, sessions and devices', 'lock', 'account'\]/,
+  assert.match(extras, /\['security', 'Security', 'Password, Sessions and Devices', 'lock', 'account'\]/,
     'the group table keeps every setting, with per-group visibility');
-  assert.match(extras, /\['help', 'Help & support', 'Help Centre and contact us', 'chat', 'all', '#\/support'\]/,
+  assert.match(extras, /\['help', 'Help & Support', 'Help Centre and Contact Us', 'chat', 'all', '#\/support'\]/,
     'Help & support stays one tap away, leaving the page for the Support page');
   assert.match(account, /resendVerification/,
     'the email-confirm banner still offers a resend from this page');

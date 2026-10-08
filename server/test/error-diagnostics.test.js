@@ -307,7 +307,7 @@ test('SMS provider network failures preserve their cause without storing the pho
   assert.doesNotMatch(JSON.stringify(saved), /919812345678|654321|private-auth-key/);
 });
 
-test('HTTP provider failures are persisted with a request ID; expected 4xx responses are not errors', async () => {
+test('HTTP provider failures are persisted with a request ID; authored 4xx are warnings; auth chatter is skipped', async () => {
   const { db, mailer, payments, sms, secret } = fakeDeps();
   const saved = [];
   db.errors.add = async (record) => { saved.push(record); };
@@ -337,7 +337,18 @@ test('HTTP provider failures are persisted with a request ID; expected 4xx respo
     const unauthorized = await fetch(`${base}/me`);
     assert.equal(unauthorized.status, 401);
     await app.locals.errorLogger.flush();
-    assert.equal(saved.length, 1, 'expected 4xx authentication failures do not flood the application error log');
+    assert.equal(saved.length, 1, 'routine 401 sign-in prompts never flood the application error log');
+
+    // Any other authored 4xx IS captured (severity warning) so Admin → Errors shows the full
+    // picture — a silent 404 once hid the broken DELETE /me/devices/ call for days.
+    const broken = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{oops' });
+    assert.equal(broken.status, 400);
+    await app.locals.errorLogger.flush();
+    assert.equal(saved.length, 2, 'authored 4xx responses reach the admin error log');
+    assert.equal(saved[1].severity, 'warning');
+    assert.equal(saved[1].status, 400);
+    assert.equal(saved[1].code, 'invalid_json');
+    assert.equal(saved[1].method, 'POST');
   } finally {
     await new Promise((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
   }
