@@ -1315,3 +1315,20 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .country-row:hover { background: rgba(255,255,255,.06); }
 .country-row b { flex: none; color: var(--text-2); font-weight: 600; }
 .country-row.on, .country-row.on b { color: var(--gold); }
+
+/* Sign-in / sign-up, reference design: boxed fields with icons, red action button with an arrow, red
+   "Create an account" link and an outlined "Browse as Guest" button. This layer overrides the earlier underline style. */
+.auth-entry .form input:not([type=checkbox]) { background: #111114; border: 1px solid #2c2c33; border-radius: 16px; box-shadow: none; padding: 14px 16px; min-height: 54px; font-size: 16px; color: #fff; }
+.auth-entry .form .auth-icon-field input:not([type=checkbox]) { padding-left: 50px; }
+.auth-entry .form input:not([type=checkbox]):focus { outline: none; border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .18); }
+.auth-entry .auth-icon-field > svg { left: 17px; top: 50%; transform: translateY(-50%); }
+.auth-entry .pw input:not([type=checkbox]) { padding-right: 52px; }
+.auth-entry .pw .icon-btn { right: 14px; }
+.auth-entry .otp-phone { background: #111114; border: 1px solid #2c2c33; border-radius: 16px; min-height: 54px; }
+.auth-entry .otp-phone input:not([type=checkbox]) { border: 0; border-radius: 0; background: transparent; box-shadow: none; padding-left: 8px; }
+.auth-entry .forgot-link { color: var(--muted); font-size: 14px; font-weight: 500; }
+.auth-entry #asub { position: relative; min-height: 56px; border-radius: 16px; font-size: 17px; font-weight: 700; justify-content: center; }
+.auth-entry #asub > svg { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); }
+.auth-entry .switch-auth { color: var(--muted); }
+.auth-entry .switch-auth a { color: var(--accent-2); font-weight: 600; text-decoration: underline; }
+.auth-entry .guest-btn { display: flex; align-items: center; justify-content: center; min-height: 56px; border: 1px solid #4a4a52; border-radius: 16px; color: #fff; font-size: 16px; font-weight: 600; text-decoration: none; }

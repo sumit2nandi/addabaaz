@@ -73,15 +73,15 @@ export default async function auth(ctx) {
         <label class="auth-icon-field"><span class="auth-field-label">Email</span>${icon('mail', { size: 18 })}<input name="email" type="email" autocomplete="email" required placeholder="Email address" inputmode="email"></label>
         <label class="auth-icon-field"><span class="auth-field-label">Password</span>${icon('lock', { size: 18 })}<span class="pw"><input name="password" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" required minlength="8" placeholder="${signup ? 'Password (8+ characters)' : 'Password'}"><button type="button" class="icon-btn" id="pwt" aria-label="Show password">${icon('eye', { size: 18 })}</button></span></label>
         ${signup ? '' : html`<a class="forgot-link" href="#/forgot">Forgot password?</a>`}
-        <button class="btn btn-primary btn-lg block" type="submit" id="asub">${signup ? 'Create account' : 'Sign in'}</button>
+        <button class="btn btn-primary btn-lg block" type="submit" id="asub">${signup ? 'Create account' : 'Sign in'}${icon('arrow-right', { size: 18 })}</button>
       </div>
 
       <div class="auth-busy" id="asBusy" hidden><div class="spinner"></div><p id="asBusyMsg">Signing you in…</p></div>
       <div class="form-status" id="as" role="alert"></div>
       ${signup ? html`<p class="fine">By creating an account you agree to our <a href="#/terms">Terms</a> and <a href="#/privacy">Privacy Policy</a>.</p>` : ''}
-      <p class="switch-auth">${signup ? html`Already have an account? <a href="#/signin?next=${encodeURIComponent(next)}">Sign in</a>` : html`New to ADDABAAZ? <a href="#/signup?next=${encodeURIComponent(next)}">Create an account</a>`}</p>
+      <p class="switch-auth">${signup ? html`Already have an account? <a href="#/signin?next=${encodeURIComponent(next)}">Sign in</a>` : html`Don’t have an account? <a href="#/signup?next=${encodeURIComponent(next)}">Create an account</a>`}</p>
       <div class="auth-footer-links"><p class="fine">Trouble signing in? <a href="#/support">Get help</a></p>
-      <a class="skip" href="#/">Continue without an account</a></div>
+      <a class="skip guest-btn" href="#/">Browse as Guest</a></div>
     </form></div>`.s;
 
   const st = () => $('#as', ctx.root);
