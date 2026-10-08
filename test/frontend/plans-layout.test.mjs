@@ -96,3 +96,10 @@ test('read-only plan cards stay for native apps and payment-less servers', () =>
   assert.match(plans, /<span class="badge cur">Current plan<\/span>/,
     'the current plan gets a badge there too');
 });
+
+test('the pay button shows the struck-through list price as markup, not as escaped tags', async () => {
+  const { readFileSync } = await import('node:fs');
+  const plans = readFileSync(new URL('../../app/js/views/plans.js', import.meta.url), 'utf8');
+  assert.match(plans, /: html`\$\{sp\.id === cur \? 'Extend'/, 'the label is built with html`` so <s> is not escaped');
+  assert.doesNotMatch(plans, /'Activate for free' : `/);
+});
