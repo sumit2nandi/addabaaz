@@ -134,6 +134,9 @@ export async function softRefresh() {
   // views/studio.js; dropping it makes the pages re-read it while they are redrawn, exactly as a
   // reload would — while a page that does not use it is unaffected.
   app.studio = null;
+  // The sign-in and sign-up pages show no catalog data. Redrawing them rebuilds the Google button, which
+  // Google draws in only after its script loads, so the viewer saw it jump on every pull. Leave them as they are.
+  if (/^\/(signin|signup)\/?$/.test(parseLocation().path)) return 'refreshed';
   await app.router.refresh();                   // redraw the current page from the new catalog
   return 'refreshed';
 }
