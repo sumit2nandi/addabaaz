@@ -569,29 +569,27 @@ body.reels-mode { overflow: hidden; padding-bottom: 0; } body.reels-mode .footer
 }
 .toasts { position: fixed; z-index: 500; left: 50%; bottom: calc(var(--tabbar-h) + var(--sab) + 16px); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 24px); pointer-events: none; }
 /* Toast (ui/components.js `toast()`): the small status bar at the bottom of the screen — "Watch history
- * cleared", "Link copied", … An all-black capsule: black glass fill, a black hairline ring and WHITE text.
+ * cleared", "Link copied", … A WHITE capsule with DARK-RED text (the brand --accent, #b80000), so the
+ * message pops against the dark page instead of sinking into it.
  *
- * The capsule is THIN on purpose — about 60% of the height it used to be — because the old box was mostly
- * empty black above and below the words. It was 45px (21px line + 12px of padding twice); it is now 26.9px:
- * the message keeps its 14px size but sits in a 1.35 line box (18.9px) with only 4px of black above and
- * below instead of 12px. The 18px side padding and 14px gap are unchanged, so the words keep their size and
- * the toast keeps its width rhythm — only the empty black was trimmed. The ring is an INSET shadow rather
- * than a `border`, so it costs no size; it keeps a faint edge over bright artwork, while on the near-black
- * page the capsule reads as one dark shape by design. The fill is near-opaque black glass: the blurred
- * artwork tints only the last few percent. */
+ * Size: the message keeps its 14px/1.35 line (18.9px); the capsule carries 9.5px of white above and
+ * below it — 37.9px tall, about 40% more than the 26.9px black capsule it replaces, with ALL of the
+ * extra height added as breathing room at the top and bottom (4px → 9.5px), never by inflating the
+ * words. The 18px side padding and 14px gap are unchanged, so the width rhythm stays. The hairline is
+ * an INSET shadow rather than a `border` (a border would add 2px to the size); it keeps a faint edge
+ * where the white capsule crosses bright artwork. */
 .toast { display: flex; align-items: center; gap: 14px;
-  background: rgba(0,0,0,.9);
-  backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
-  color: var(--text);
-  padding: 4px 18px; border-radius: 999px; font-weight: 600; font-size: 14px; line-height: 1.35;
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,.95), 0 10px 40px rgba(0,0,0,.6);
+  background: #fff;
+  color: var(--accent);
+  padding: 9.5px 18px; border-radius: 999px; font-weight: 600; font-size: 14px; line-height: 1.35;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.08), 0 10px 40px rgba(0,0,0,.6);
   opacity: 0; transform: translateY(12px); transition: .25s var(--ease); pointer-events: auto; }
 .toast.show { opacity: 1; transform: none; }
-/* The optional action ("Restart", "Undo"): white text on a faint red-tinted chip — the one spot of
-   colour left, so it still reads as a button. 1px padding over a 12.5px/1.2 line = 17px — inside the
-   message's new 18.9px line box, so an action never thickens the thin capsule. */
-.toast button { background: rgba(var(--accent-rgb), .22); border: 0; border-radius: 999px; color: var(--text); font-weight: 800; font-size: 12.5px; line-height: 1.2; padding: 1px 9px; transition: background .2s, color .2s; }
-.toast button:hover, .toast button:focus-visible { background: rgba(var(--accent-rgb), .45); }
+/* The optional action ("Restart", "Undo"): white text on a solid dark-red chip — unmistakably a button
+   on the white capsule. 1px padding over a 12.5px/1.2 line = 17px — inside the message's 18.9px line
+   box, so an action never thickens the capsule beyond its padding. */
+.toast button { background: var(--accent); border: 0; border-radius: 999px; color: #fff; font-weight: 800; font-size: 12.5px; line-height: 1.2; padding: 1px 9px; transition: background .2s, color .2s; }
+.toast button:hover, .toast button:focus-visible { background: var(--accent-2); }
 
 /* ---------- forms ---------- */
 .form { display: grid; gap: 16px; } .form label { display: grid; gap: 7px; font-size: 12px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); } .form label small { text-transform: none; letter-spacing: 0; font-weight: 500; }
