@@ -9,23 +9,45 @@ export const deviceId = () => { try { let d = localStorage.getItem('ab.device');
 const MODEL_KEY = 'ab.deviceModel';
 export const deviceModel = () => { try { return localStorage.getItem(MODEL_KEY) || ''; } catch { return ''; } };
 const rememberModel = (m) => { try { if (m) localStorage.setItem(MODEL_KEY, String(m).slice(0, 60)); } catch { /* private mode */ } };
+// Many Androids report only a bare model code ("EB2101", "RMX3081", "SM-M326B"): the app shell has
+// no Device plugin and Chromium's UA-CH `model` carries no manufacturer. Recognisable code prefixes
+// get their brand back, so the device list reads "OnePlus EB2101" instead of a code nobody knows.
+const MODEL_BRANDS = [
+  [/^SM-[A-Z]\d/i, 'Samsung'],
+  [/^RMX\d{4}/i, 'Realme'],
+  [/^CPH\d{4}/i, 'OPPO'],                                             // BBK code — OPPO and recent global OnePlus units
+  [/^(AC|BE|DE|DN|EB|GM|HD|IN|IV|KB|LE|MT|NE)\d{4}$/i, 'OnePlus'],    // EB2101 (Nord CE), LE2121 (9 Pro) …
+  [/^P[HJ][A-Z]\d{3}$/i, 'OnePlus'],                                  // PHB110 (11 5G), PJD110 (12) …
+  [/^[VI]2\d{3}[A-Z]*$/i, 'Vivo'],                                    // V2xxx vivo, I2xxx iQOO
+  [/^XT\d{4}/i, 'Motorola'],
+  [/^(M2\d{3}|2\d{3}[0-9A-Z]{4,})/i, 'Xiaomi'],                       // M2101K6G, 2201117TI …
+  [/^A0\d{2}$/i, 'Nothing'],
+];
+export const brandedModel = (raw) => {
+  const m = String(raw || '').trim();
+  if (!m || m.includes(' ')) return m;             // "OnePlus LE2121", "Pixel 7" already read fine
+  const hit = MODEL_BRANDS.find(([re]) => re.test(m));
+  return hit ? `${hit[1]} ${m}` : m;
+};
 export async function resolveDeviceModel() {
   if (deviceModel()) return deviceModel();
   try {
     const info = await window.Capacitor?.Plugins?.Device?.getInfo?.();
-    const named = info && `${info.manufacturer || ''} ${info.model || ''}`.trim();
+    const named = info && brandedModel(`${info.manufacturer || ''} ${info.model || ''}`.trim());
     if (named) { rememberModel(named); return named; }
   } catch { /* plugin missing — fall through to UA-CH */ }
   try {
-    const model = (await navigator.userAgentData?.getHighEntropyValues?.(['model']))?.model;
+    const model = brandedModel((await navigator.userAgentData?.getHighEntropyValues?.(['model']))?.model);
     if (model) { rememberModel(model); return model; }
   } catch { /* browsers without client hints */ }
   return '';
 }
 export const deviceLabel = () => {
   const ua = navigator.userAgent;
-  if (window.Capacitor?.isNativePlatform?.()) { const m = deviceModel(); if (m) return `${m} · app`; }
-  const os = /iPhone|iPad/.test(ua) ? 'iPhone / iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'Device';
+  // brandedModel also upgrades a bare code cached by an older build the moment this one runs.
+  if (window.Capacitor?.isNativePlatform?.()) { const m = brandedModel(deviceModel()); if (m) return `${m} · app`; }
+  // Android browsers use the resolved model when there is one ("OnePlus EB2101 · Chrome").
+  const os = /iPhone|iPad/.test(ua) ? 'iPhone / iPad' : /Android/.test(ua) ? (brandedModel(deviceModel()) || 'Android') : /Windows/.test(ua) ? 'Windows' : /Mac OS/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'Device';
   const app = window.Capacitor?.isNativePlatform?.() ? 'app' : /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'browser';
   return `${os} · ${app}`;
 };
