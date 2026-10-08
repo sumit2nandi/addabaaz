@@ -262,7 +262,7 @@ export function mountSocialButtons(box, providers, { signup = false, onCredentia
       // Google's button is the only thing in this slot: it stays blank until Google has drawn it, then fades in.
       // A fixed numeric width means Google never re-measures it.
       const real = $('.gsi-real', el);
-      gid.renderButton(real, { type: 'standard', theme: 'filled_black', size: 'medium', shape: 'rectangular', text: signup ? 'signup_with' : 'continue_with', logo_alignment: 'left', width: Math.max(200, Math.min(280, Math.round(real.clientWidth || el.clientWidth || 260))) });
+      gid.renderButton(real, { type: 'standard', theme: 'filled_black', size: 'medium', shape: 'pill', text: signup ? 'signup_with' : 'continue_with', logo_alignment: 'left', width: Math.max(200, Math.min(280, Math.round(real.clientWidth || el.clientWidth || 260))) });
       const reveal = () => el.classList.add('ready');
       real.querySelector('iframe')?.addEventListener('load', reveal, { once: true });
       setTimeout(reveal, 1500);
