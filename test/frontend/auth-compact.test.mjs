@@ -58,8 +58,8 @@ test('pull-to-refresh does not redraw sign-in or sign-up (it rebuilds the Google
   assert.ok(main.indexOf("return 'refreshed'") < main.indexOf('await app.router.refresh()'));
 });
 
-test('the Google slot is fixed-size and contained so its late-loading button cannot move', () => {
+test('the Google slot is fixed-size and contained, and Google\'s own button is left unsized', () => {
   const css = read('app/css/styles.css');
   assert.match(css, /\.social-compact \.social-g \{ contain: layout paint size; \}/);
-  assert.match(css, /\.social-compact \.social-g iframe \{ display: block; width: 44px !important; height: 44px !important; \}/);
+  assert.doesNotMatch(css, /social-g iframe/);
 });

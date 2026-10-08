@@ -1272,8 +1272,6 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 /* Google draws its button into this slot after its script loads. Fix the slot and the button's frame so a late or
    re-measured Google button cannot change its own position or the height of the sign-in block around it. */
 .social-compact .social-g { contain: layout paint size; }
-.social-compact .social-g > * { flex: 0 0 auto; }
-.social-compact .social-g iframe { display: block; width: 44px !important; height: 44px !important; }
 .social-compact .btn-social:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
 
 .account-current-plan { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; margin-bottom: 24px; border: 0; border-radius: var(--radius-lg); background-color: #d4a017; background-image: var(--gold-gradient); color: #201503; }
