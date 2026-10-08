@@ -128,3 +128,15 @@ test('Admin Errors renders verified client context and safely handles missing di
     if (old.fetch === undefined) delete globalThis.fetch; else globalThis.fetch = old.fetch;
   }
 });
+
+test('repeated errors show only the top 5 by count, with a copy-all button carrying full details', async () => {
+  const { readFileSync } = await import('node:fs');
+  const view = readFileSync(new URL('../../admin/js/views/errors.js', import.meta.url), 'utf8');
+  const db = readFileSync(new URL('../../server/src/db-extra.js', import.meta.url), 'utf8');
+  assert.match(db, /ORDER BY n DESC, last_at DESC LIMIT 5/, 'the server returns the five most frequent groups');
+  assert.match(db, /MAX\(id\) AS sample_id/, 'each group points at one full example');
+  assert.match(view, /groups = groups\.slice\(0, 5\);/, 'the table shows at most five');
+  assert.match(view, /id="copyTopErrors"[^>]*disabled>\$\{icon\('copy', 14\)\} Copy top 5/, 'a copy button for the five');
+  assert.match(view, /function topErrorsText\(groups\)/, 'one text block for all five');
+  assert.match(view, /group\.sample \? errorText\(group\.sample\)/, 'each block includes the full error details');
+});
