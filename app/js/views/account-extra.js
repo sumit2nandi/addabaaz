@@ -242,15 +242,23 @@ function wireSecurity(root) {
     }
   });
   $('#devices', root)?.addEventListener('click', async () => {
-    const { el } = openDialog(html`<h2>Your Devices</h2><div id="devBody"><div class="spinner" style="margin:20px auto"></div></div>`, { cls: 'dialog-sm' });
+    const { el } = openDialog(html`<h2>Your Devices</h2><div id="devBody"><div class="spinner" style="margin:20px auto"></div></div><div class="form-status" id="devStatus" role="alert"></div>`, { cls: 'dialog-sm' });
     const draw = async () => {
       try {
         const d = await u.remote.devices();
         $('#devBody', el).innerHTML = html`${d.streamLimit > 0 ? html`<p class="muted">Your plan allows ${d.streamLimit} screen${d.streamLimit === 1 ? '' : 's'} watching premium titles at once.</p>` : ''}
-          <ul class="dev-list">${d.devices.length ? d.devices.map((x) => html`<li><span>${icon('tv', { size: 22 })}</span><div><b>${x.label || 'Device'}${x.current ? html` <em class="pill">This device</em>` : ''}</b><small>${x.watching ? 'Watching now' : `Last active ${timeAgo(x.lastSeen)}`}</small></div>${x.current ? '' : html`<button class="btn btn-ghost btn-sm" data-forget="${x.deviceId}">Remove</button>`}</li>`) : html`<li class="muted">No devices yet — they appear after you watch a premium title.</li>`}</ul>`.s;
+          <ul class="dev-list">${d.devices.length ? d.devices.map((x) => html`<li><span>${icon('tv', { size: 22 })}</span><div><b>${x.label || 'Device'}${x.current ? html` <em class="pill">This device</em>` : ''}</b><small>${x.watching ? 'Watching now' : `Last active ${timeAgo(x.lastSeen)}`}</small></div>${x.current ? '' : html`<button class="btn btn-ghost btn-sm" type="button" data-forget="${x.deviceId}">Remove</button>`}</li>`) : html`<li class="muted">No devices yet — they appear after you watch a premium title.</li>`}</ul>`.s;
       } catch (err) { $('#devBody', el).textContent = friendly(err); }
     };
-    el.addEventListener('click', async (e) => { const b = e.target.closest('[data-forget]'); if (!b) return; b.disabled = true; try { await u.remote.forgetDevice(b.dataset.forget); await draw(); } catch (err) { toast(friendly(err)); } });
+    // Errors surface INSIDE the dialog: a toast would be hidden behind the modal (top layer), and the
+    // button re-enables on failure so a network blip never leaves Remove permanently dead.
+    el.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-forget]'); if (!b) return;
+      b.disabled = true;
+      const status = $('#devStatus', el); if (status) status.textContent = '';
+      try { await u.remote.forgetDevice(b.dataset.forget); await draw(); }
+      catch (err) { b.disabled = false; const m = friendly(err); if (status) status.textContent = m; else toast(m); }
+    });
     draw();
   });
 }
