@@ -158,7 +158,8 @@ export class Catalog {
     if (v.kind === 'episode') return v.episode ? `EP ${String(v.episode).padStart(2, '0')}` : 'Episode';
     return { trailer: 'Trailer', reel: 'Reel', clip: 'Clip' }[v.kind] || 'Video';
   }
-  thumb(v, q = 'hqdefault') {
+  // Best rendition by default (maxresdefault, 1280x720). Callers that need a fallback pass hqdefault explicitly and set data-fb.
+  thumb(v, q = 'maxresdefault') {
     // A synced YouTube video stores its thumbnail URL (usually hqdefault.jpg): ask for the requested rendition instead.
     const yt = /^(https:\/\/i\.ytimg\.com\/vi\/[^/]+\/)(?:maxresdefault|sddefault|hqdefault|mqdefault|default)\.jpg$/.exec(v.thumbnail || '');
     if (yt) return `${yt[1]}${q}.jpg`;

@@ -301,7 +301,7 @@ test('locked premium shows the video artwork behind the lock wall instead of a b
     const ytRoot = await mountLocked('vpy');
     const ytBox = ytRoot.querySelector('#playerBox');
     assert.match(ytBox.querySelector('.player-wall-bg').getAttribute('style'), /media\/shows\/s1\.webp/);
-    assert.equal(ytBox.querySelector('img.player-wall-art').getAttribute('src'), 'https://i.ytimg.com/vi/zzz/hqdefault.jpg');
+    assert.equal(ytBox.querySelector('img.player-wall-art').getAttribute('src'), 'https://i.ytimg.com/vi/zzz/maxresdefault.jpg');
   } finally {
     app.user.gateFor = originalGate;
   }

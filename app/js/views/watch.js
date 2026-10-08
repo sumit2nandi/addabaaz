@@ -104,7 +104,7 @@ export default async function watch(ctx) {
   // artwork (poster/backdrop) is painted as a CSS background - no image element, nothing that can fail or be
   // hidden - and when the video has a remote thumbnail (YouTube/R2) it is layered on top as a real image that
   // simply drops out if the viewer's network can't fetch it, revealing the background underneath.
-  const thumb = v.thumbnail || cat.thumb(v);
+  const thumb = cat.thumb(v);
   const localArt = v.poster || (show || soon)?.backdrop || (show || soon)?.poster || '';
   const wall = (kind) => {
     msg.hidden = false; slot.innerHTML = '';
@@ -220,7 +220,7 @@ export default async function watch(ctx) {
     let n = CONFIG.autoplayCountdown;
     // Render once: replacing the markup each second reloads the thumbnail and makes it blink.
     box.innerHTML = html`<div class="next-card">
-      ${img(cat.thumb(target, 'hqdefault'), '')}
+      ${img(cat.thumb(target, 'maxresdefault'), '', { fallback: cat.thumb(target, 'hqdefault') })}
       <div class="next-card-copy"><div class="eyebrow" data-next-countdown>Next in ${n}s</div>
         <strong>${cat.displayTitle(target)}</strong>
         <button type="button" class="btn btn-primary btn-sm" id="nuPlay">${icon('play', { size: 16 })} Play now</button>
