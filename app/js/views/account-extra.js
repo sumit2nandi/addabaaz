@@ -145,7 +145,6 @@ function playbackSection() {
     <h2 class="sub-h">Playback</h2>
     <div class="card-panel list">
       <label class="row-switch"><span><b>Autoplay Next Episode</b><small>Keep watching without lifting a finger.</small></span><span class="switch"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span></span></label>
-      <button class="row-link" id="clearHist">${icon('trash', { size: 22 })}<span><b>Clear Watch History</b><small>Removes Continue Watching for this profile.</small></span></button>
     </div>
   </section>`;
 }
@@ -186,7 +185,6 @@ function kidsSection() {
     <h2 class="sub-h">Parental Control</h2>
     <div class="card-panel list">
       ${row('pinBtn', 'lock', u.hasPin ? 'Change or Remove Parental PIN' : 'Set a Parental PIN', u.hasPin ? 'Needed to leave a Kids profile or change profiles.' : 'Keeps children on their Kids profile and stops profile changes.')}
-      <a class="row-link" href="#/profiles?manage=1">${icon('user', { size: 22 })}<span><b>Kids Profiles</b><small>Mark any profile as “Kids” to show only titles rated for children.</small></span>${icon('right', { size: 18, cls: 'chev' })}</a>
     </div>
   </section>`;
 }
@@ -204,9 +202,6 @@ export function settingSection(id) {
 function wirePlayback(root) {
   const u = app.user;
   $('#autoNext', root).addEventListener('change', (e) => u.setPref('autoplayNext', e.target.checked));
-  $('#clearHist', root).addEventListener('click', async () => {
-    if (await confirmDialog({ title: 'Clear watch history?', text: 'This removes Continue Watching for this profile.', confirm: 'Clear', danger: true })) { u.clearHistory(); toast('Watch history cleared'); }
-  });
 }
 
 function wireSecurity(root) {
