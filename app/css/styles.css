@@ -54,7 +54,10 @@ ul { margin: 0; padding: 0; list-style: none; }
    with main's cubic-bezier(0.16, 1, 0.3, 1) easing (its .animate-row / .tab-content.show). */
 .view { animation: viewIn .7s cubic-bezier(.16, 1, .3, 1); }
 /* Sign-in / sign-up appear in place: no slide-up when the page is drawn (it read as a jump on mobile). */
-.view:has(> .auth-page) { animation: none; }
+/* Sign-in / sign-up fade in without moving: the bottom bar and footer appear as the page is drawn, and a plain
+   fade hides that change without the slide that read as a jump. */
+.view:has(> .auth-page) { animation: authFade .4s ease-out; }
+@keyframes authFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes viewIn { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }

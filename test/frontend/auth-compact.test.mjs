@@ -46,9 +46,11 @@ test('placeholder-led fields retain accessible labels and full-width submit butt
   assert.match(read('app/css/styles.css'), /\.auth-entry \.auth-field-label \{[^}]*clip-path: inset\(50%\)/);
 });
 
-test('sign-in and sign-up do not slide in on load, and the Google slot keeps its size', () => {
+test('sign-in and sign-up fade in without sliding, and the Google slot keeps its size', () => {
   const css = read('app/css/styles.css');
-  assert.match(css, /\.view:has\(> \.auth-page\) \{ animation: none; \}/);
+  assert.match(css, /\.view:has\(> \.auth-page\) \{ animation: authFade \.4s ease-out; \}/);
+  assert.match(css, /@keyframes authFade \{ from \{ opacity: 0; \} to \{ opacity: 1; \} \}/);
+  assert.doesNotMatch(css, /@keyframes authFade \{[^}]*translate/);
   assert.match(css, /\.social-compact \.social-g \{ width: 100%; max-width: 400px;/);
 });
 
