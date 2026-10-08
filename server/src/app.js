@@ -196,9 +196,11 @@ export function createApp({
   app.use('/api/v1', api);
 
   mountWebsite(app, { serveStatic, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg, maintenance, r2, logger });
-  // FINAL ERROR HANDLER: turn route/parser failures into the stable JSON contract. Expected,
-  // deliberately-authored 4xx responses are not application faults; every 5xx (including provider
-  // HttpErrors) and every unexpected exception is persisted with request/runtime/error diagnostics.
+  // FINAL ERROR HANDLER: turn route/parser failures into the stable JSON contract. EVERYTHING is
+  // persisted for Admin → Errors — deliberately-authored 4xx as 'warning' (skipping them entirely
+  // once buried a real bug: a DELETE to /me/devices/ with an empty id 404-ed invisibly), every 5xx
+  // and unexpected exception as 'error'. Only routine chatter that would drown the log stays out:
+  // sign-in prompts (401), rate limiting and maintenance mode.
   app.use((err, req, res, next) => {
     if (err.type === 'entity.parse.failed') err = bad('Invalid JSON body.', 'invalid_json');
     if (err.type === 'entity.too.large') err = new HttpError(413, 'too_large', 'Request too large.');
@@ -206,11 +208,13 @@ export function createApp({
     const status = Number.isInteger(err.status) && err.status >= 400 && err.status <= 599 ? err.status : 500;
     const authored = err instanceof HttpError || (Number.isInteger(err?.status) && typeof err?.code === 'string');
     const expectedClientError = err instanceof HttpError && status < 500 && !err.cause;
-    if (!expectedClientError && err.code !== 'maintenance') {
-      try { app.locals.captureError?.(err, req); } catch { /* optional monitoring must never break error handling */ }
+    const routineNoise = err.code === 'maintenance' || status === 401 || err.code === 'rate_limited';
+    if (!routineNoise) {
+      // External monitoring keeps its narrower scope (faults only); the admin error log gets both.
+      if (!expectedClientError) { try { app.locals.captureError?.(err, req); } catch { /* optional monitoring must never break error handling */ } }
       const userId = req.user?.id || req.admin?.id || null;
       errorLogger.capture(err, {
-        source: 'server', severity: 'error', kind: 'http-request', status, method: req.method,
+        source: 'server', severity: expectedClientError ? 'warning' : 'error', kind: 'http-request', status, method: req.method,
         requestId: req.requestId, url: req.originalUrl, userAgent: req.get('user-agent'), userId,
         details: {
           route: req.route?.path || null,
