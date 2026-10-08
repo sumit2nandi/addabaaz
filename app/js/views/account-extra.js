@@ -246,8 +246,20 @@ function wireSecurity(root) {
     const draw = async () => {
       try {
         const d = await u.remote.devices();
+        // One row per device NAME: the same phone accrues several device ids over time (new browser
+        // profile, cleared storage, app reinstall), which showed as confusing duplicates. The list
+        // arrives newest-first, so the first row of a group carries the freshest "last active";
+        // Remove clears every id behind the row so a duplicate never resurfaces.
+        const groups = [];
+        const byLabel = new Map();
+        for (const x of d.devices) {
+          const key = x.label || 'Device';
+          const g = byLabel.get(key);
+          if (!g) { const fresh = { ...x, ids: [x.deviceId] }; byLabel.set(key, fresh); groups.push(fresh); }
+          else { g.ids.push(x.deviceId); g.current = g.current || x.current; g.watching = g.watching || x.watching; }
+        }
         $('#devBody', el).innerHTML = html`${d.streamLimit > 0 ? html`<p class="muted">Your plan allows ${d.streamLimit} screen${d.streamLimit === 1 ? '' : 's'} watching premium titles at once.</p>` : ''}
-          <ul class="dev-list">${d.devices.length ? d.devices.map((x) => html`<li><span>${icon('tv', { size: 22 })}</span><div><b>${x.label || 'Device'}${x.current ? html` <em class="pill">This device</em>` : ''}</b><small>${x.watching ? 'Watching now' : `Last active ${timeAgo(x.lastSeen)}`}</small></div>${x.current ? '' : html`<button class="btn btn-ghost btn-sm" type="button" data-forget="${x.deviceId}">Remove</button>`}</li>`) : html`<li class="muted">No devices yet — they appear after you watch a premium title.</li>`}</ul>`.s;
+          <ul class="dev-list">${groups.length ? groups.map((x) => html`<li><span>${icon('tv', { size: 22 })}</span><div><b>${x.label || 'Device'}${x.current ? html` <em class="pill">This device</em>` : ''}</b><small>${x.watching ? 'Watching now' : `Last active ${timeAgo(x.lastSeen)}`}</small></div>${x.current ? '' : html`<button class="btn btn-ghost btn-sm" type="button" data-forget="${x.ids.join(',')}">Remove</button>`}</li>`) : html`<li class="muted">No devices yet — they appear after you watch a premium title.</li>`}</ul>`.s;
       } catch (err) { $('#devBody', el).textContent = friendly(err); }
     };
     // Errors surface INSIDE the dialog: a toast would be hidden behind the modal (top layer), and the
@@ -256,7 +268,7 @@ function wireSecurity(root) {
       const b = e.target.closest('[data-forget]'); if (!b) return;
       b.disabled = true;
       const status = $('#devStatus', el); if (status) status.textContent = '';
-      try { await u.remote.forgetDevice(b.dataset.forget); await draw(); }
+      try { for (const id of b.dataset.forget.split(',').filter(Boolean)) await u.remote.forgetDevice(id); await draw(); }
       catch (err) { b.disabled = false; const m = friendly(err); if (status) status.textContent = m; else toast(m); }
     });
     draw();
