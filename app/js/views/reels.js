@@ -96,13 +96,29 @@ export default async function reels(ctx) {
   };
   keepWindow(startIdx);
 
+  // While a reel plays, warm what the next ones will need so a swipe starts them without waiting: the cover image,
+  // the signed stream address (R2), and the HLS engine. The next reel gets everything; the one after gets its cover.
+  const warmed = new Set();
+  const warmReel = (j, full) => {
+    if (j < 0 || j >= list.length || warmed.has(j)) return;
+    const v = list[j];
+    const cover = reelCover(cat, v);
+    if (cover.src) { const pic = new Image(); pic.decoding = 'async'; pic.src = cover.src; }
+    if (!full) return;
+    warmed.add(j);
+    if (app.user.gateFor(v, cat) !== 'ok') return;
+    if (v.source?.type === 'r2') prepareMedia(v).then((media) => import('../players/html5.js').then((m) => m.prepareHtml5Player(media.source))).catch(() => {});
+    else if (v.source?.type === 'hls') import('../players/html5.js').then((m) => m.prepareHtml5Player(v.source)).catch(() => {});
+  };
   let active = -1, ctl = null, host = null, token = 0, hasPlayed = false;
   const setIcon = (sec) => { const b = $('[data-reel-sound]', sec); if (b) b.innerHTML = icon(soundOn ? 'volume' : 'mute', { size: 26 }).s; };
   async function activate(i) {
     if (i === active || i < 0 || i >= sections.length) return;
     keepWindow(i);
+    warmReel(i + 1, true);
+    warmReel(i + 2, false);
     active = i; hasPlayed = false; const my = ++token;
-    if (ctl) { ctl.destroy(); host?.remove(); ctl = null; sections.forEach((s) => s.classList.remove('playing', 'paused')); }
+    if (ctl) { ctl.destroy(); host?.remove(); ctl = null; sections.forEach((s) => s.classList.remove('playing', 'paused', 'video-on')); }
     const sec = sections[i], slot = $('.reel-slot', sec), frame = $('.reel-frame', sec); const v = list[i];
     if (!slot || !frame) return;   // section shell lost its content (window pruned mid-scroll): ignore this activation
     const access = app.user.gateFor(v, cat);
@@ -124,6 +140,7 @@ export default async function reels(ctx) {
           if (st === 'playing') {
             hasPlayed = true;
             sec.classList.remove('paused');
+            sec.classList.add('video-on');   // first frame: the video replaces the thumbnail
             if (!started) { started = true; app.user?.remote?.playEvent(v.id, 'start'); }
           } else if (st === 'paused' && hasPlayed) sec.classList.add('paused'); // Ignore an initial PAUSED event before autoplay starts.
         },

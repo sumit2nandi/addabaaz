@@ -184,3 +184,14 @@ test('the initially selected R2 reel starts signing before the player activation
     globalThis.requestAnimationFrame = realRequestAnimationFrame;
   }
 });
+
+test('reels keep the thumbnail visible until the first frame, and warm the next reel in the background', async () => {
+  const { readFileSync } = await import('node:fs');
+  const reels = readFileSync(new URL('../../app/js/views/reels.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
+  assert.match(reels, /sec\.classList\.add\('video-on'\)/, 'the video is shown only once a frame plays');
+  assert.match(css, /\.reel-player \{ opacity: 0;/, 'the player is transparent until then, so the thumbnail shows');
+  assert.match(css, /\.reel\.video-on \.reel-player \{ opacity: 1; \}/);
+  assert.match(reels, /warmReel\(i \+ 1, true\);/, 'the next reel is warmed while the current one plays');
+  assert.match(reels, /warmReel\(i \+ 2, false\);/, 'and the one after its cover');
+});

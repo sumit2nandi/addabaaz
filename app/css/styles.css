@@ -526,6 +526,9 @@ body.reels-mode { overflow: hidden; padding-bottom: 0; } body.reels-mode .footer
 .reel-slot { position: absolute; inset: 0; } .reel-slot > img { width: 100%; height: 100%; object-fit: cover; }
 .reel-player, .reel-player iframe, .reel-player > div { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
 .reel-loading { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.35); pointer-events: none; } .reel.playing .reel-loading { display: none; }
+/* The thumbnail shows until the first video frame: the player stays transparent until it is playing. */
+.reel-player { opacity: 0; transition: opacity .3s ease; }
+.reel.video-on .reel-player { opacity: 1; }
 .reel-caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 60px 16px 16px; background: linear-gradient(0deg, rgba(0,0,0,.85), transparent); display: grid; gap: 4px; pointer-events: none; z-index: 2; } .reel-caption a { pointer-events: auto; color: var(--gold); font-weight: 700; font-size: 13px; } .reel-caption strong { font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .reel.playing .reel-caption { padding-bottom: 54px; }
 .reel-gate { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; padding: 22px; text-align: center; background: rgba(0,0,0,.72); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px); }
