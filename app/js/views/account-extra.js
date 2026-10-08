@@ -173,7 +173,7 @@ function securitySection() {
     <h2 class="sub-h">Security</h2>
     <div class="card-panel list">
       ${signInMethod}
-      ${row('signOutAll', 'logout', 'Sign out everywhere', 'Ends your session on every phone, TV and browser.')}
+      ${row('signOutAll', 'logout', 'Sign out of other devices', 'Signs out every other phone, TV and browser. This device stays signed in.')}
       ${row('devices', 'tv', 'Your devices', 'See where you’re watching and how many screens your plan allows.')}
     </div>
   </section>`;
@@ -242,8 +242,8 @@ function wireSecurity(root) {
     });
   });
   $('#signOutAll', root)?.addEventListener('click', async () => {
-    if (await confirmDialog({ icon: 'logout', title: 'Sign out everywhere?', text: 'Every device signed in to this account — including this one, after you confirm — will need to sign in again.', confirm: 'Sign out everywhere', danger: true })) {
-      try { await u.signOutEverywhere(); toast('Signed out on your other devices'); } catch (err) { toast(friendly(err)); }
+    if (await confirmDialog({ icon: 'logout', title: 'Sign out of other devices?', text: 'Every other phone, TV and browser signed in to this account will need to sign in again. This device stays signed in.', confirm: 'Sign out other devices', danger: true })) {
+      try { await u.signOutEverywhere(); toast('Signed out of your other devices'); } catch (err) { toast(friendly(err)); }
     }
   });
   $('#devices', root)?.addEventListener('click', async () => {
