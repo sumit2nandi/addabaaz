@@ -259,7 +259,7 @@ export function mountSocialButtons(box, providers, { signup = false, onCredentia
   if (wanted.includes('google') && !isNative) {
     initGoogle(providers.google.clientId, (cred) => run('google', async () => cred)).then((gid) => {
       const el = $('#gBtn', box); if (!el) return;
-      gid.renderButton(el, { type: 'icon', theme: 'filled_black', size: 'large', shape: 'circle', text: signup ? 'signup_with' : 'continue_with' });
+      gid.renderButton(el, { type: 'standard', theme: 'filled_black', size: 'large', shape: 'pill', text: signup ? 'signup_with' : 'continue_with', logo_alignment: 'left' });
     }).catch(() => { const el = $('#gBtn', box); if (el) el.outerHTML = html`<button type="button" class="btn-social btn-google" disabled aria-label="Google sign-in unavailable" title="Google sign-in unavailable">${G_LOGO}</button>`.s; });
   }
   // Facebook's SDK must already be loaded when the user taps (popup blockers), so preload it now.

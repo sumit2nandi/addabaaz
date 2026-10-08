@@ -1268,10 +1268,7 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 /* Compact provider choices; Google uses its official icon-only SDK button. */
 .auth-entry .social.social-compact { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
 .social-compact .btn-social { width: 44px; height: 44px; min-height: 44px; max-width: 44px; flex: 0 0 44px; padding: 0; border-radius: 50%; gap: 0; }
-.social-compact .social-g { width: 44px; height: 44px; min-height: 44px; flex: 0 0 44px; align-items: center; }
-/* Google draws its button into this slot after its script loads. Fix the slot and the button's frame so a late or
-   re-measured Google button cannot change its own position or the height of the sign-in block around it. */
-.social-compact .social-g { contain: layout paint size; }
+.social-compact .social-g { width: 100%; max-width: 400px; flex: 0 0 100%; }
 .social-compact .btn-social:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
 
 .account-current-plan { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; margin-bottom: 24px; border: 0; border-radius: var(--radius-lg); background-color: #d4a017; background-image: var(--gold-gradient); color: #201503; }
