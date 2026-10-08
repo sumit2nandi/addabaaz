@@ -32,6 +32,19 @@ const settings = (await import('../../app/js/views/settings.js')).default;
 const tick = (ms = 20) => new Promise((r) => setTimeout(r, ms));
 const click = (el) => el.dispatchEvent(new window.Event('click', { bubbles: true }));
 
+test('the dialog lists PLAYBACK devices: exactly one devices() on the adapter, and it calls /me/devices', async () => {
+  // A second `devices()` (GET /devices, push registrations) once shadowed the playback one — the
+  // class silently keeps the LAST definition — so the list had no deviceId and Remove called
+  // DELETE /me/devices/ (empty id) → 404 "Unknown endpoint."
+  const { readFileSync } = await import('node:fs');
+  const adapters = readFileSync(new URL('../../app/js/data/adapters.js', import.meta.url), 'utf8');
+  const remote = adapters.slice(adapters.indexOf('class RemoteAdapter'));
+  const defs = [...remote.matchAll(/^\s*devices\(\)\s*\{[^}]*\}/gm)].map((m) => m[0]);
+  assert.equal(defs.length, 1, 'exactly one devices() method on RemoteAdapter');
+  assert.match(defs[0], /\/me\/devices/, 'and it fetches the playback device list');
+  assert.match(remote, /forgetDevice\(id\) \{ return this\.api\.del\(`\/me\/devices\/\$\{encodeURIComponent\(id\)\}`\); \}/);
+});
+
 test('a failed Remove shows its error inside the dialog and stays clickable; the retry succeeds', async () => {
   const root = document.createElement('div');
   const ctx = { root, params: { group: 'security' }, query: {}, path: '/account/security', title: '', setTitle(t) { ctx.title = t; }, onCleanup: () => {} };
