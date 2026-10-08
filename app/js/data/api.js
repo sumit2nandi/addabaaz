@@ -3,6 +3,22 @@ import { storage, store } from '../util.js';
 /** A random id for this browser/app install: lets the server count how many screens are watching and list "your devices". */
 // Identifies this browser/app install to the server (used for the "screens at once" limit and the device list).
 export const deviceId = () => { try { let d = localStorage.getItem('ab.device'); if (!d) { d = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join(''); localStorage.setItem('ab.device', d); } return d; } catch { return 'anon'; } };
+/**
+ * Native apps adopt the OS-provided device identifier when the Device plugin is in the build
+ * (ANDROID_ID on Android, identifierForVendor on iOS): unlike the random install id it survives a
+ * reinstall and cleared storage, so the same phone keeps ONE row in "Your Devices". That is the
+ * strongest identity apps are allowed: IMEI is off-limits (iOS never exposes it; Android reserves
+ * it for system apps since Android 10, and the stores forbid asking), and browsers offer nothing
+ * durable at all by design — the web keeps the stored random id, like every other streaming site.
+ */
+export async function resolveDeviceId() {
+  if (!window.Capacitor?.isNativePlatform?.()) return;
+  try {
+    const { identifier } = await window.Capacitor?.Plugins?.Device?.getId?.() || {};
+    const id = String(identifier || '').replace(/[^\w.-]/g, '').slice(0, 64);
+    if (id) localStorage.setItem('ab.device', id);
+  } catch { /* plugin missing in this build — the stored random id keeps working */ }
+}
 // Best-effort device model ("OnePlus LE2121", "Pixel 7") for the "Your devices" list: the Capacitor
 // Device plugin when the native shell includes it, else the Chromium UA-CH model. Cached, so the
 // stored label upgrades on the next heartbeat after first resolve.

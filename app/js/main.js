@@ -7,7 +7,7 @@ import { app } from './app.js';
 import { CONFIG } from './config.js';
 import { $, $$ } from './util.js';
 import { loadCatalog } from './data/catalog.js';
-import { ApiClient, detectApi, resolveDeviceModel } from './data/api.js';
+import { ApiClient, detectApi, resolveDeviceModel, resolveDeviceId } from './data/api.js';
 import { LocalAdapter, RemoteAdapter } from './data/adapters.js';
 import { User } from './data/user.js';
 import { Router, parseLocation, currentPath, replaceUrl, go } from './router.js';
@@ -33,6 +33,8 @@ initPlatform();
 initErrorReporting();
 // Best-effort device name for the "Your devices" list (cached; heartbeat reads stay synchronous).
 resolveDeviceModel();
+// Native apps swap the random install id for the OS device identifier (one row per phone in "Your Devices").
+resolveDeviceId();
 
 // Start-up sequence. Any failure ends in the friendly error box at the bottom of this file.
 async function boot() {
