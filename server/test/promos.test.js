@@ -272,3 +272,9 @@ test('config comes from the environment and defaults to the ₹100 offer', () =>
   assert.deepEqual([custom.signupPaise, custom.referralPaise, custom.hold, custom.enabled, custom.expiryDays], [5000, 25000, 'payment', false, 90]);
   assert.equal(promosConfigFromEnv({ PROMO_REFERRAL_HOLD: 'nonsense' }).hold, 'verified', 'an unknown rule falls back to the safe default');
 });
+
+test('pending credit lookup never mixes a plain column with SUM (MySQL ONLY_FULL_GROUP_BY rejects it)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../src/db-extra.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /SELECT id, COALESCE\(SUM\(-amount_paise\)/);
+});

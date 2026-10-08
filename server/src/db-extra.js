@@ -528,8 +528,9 @@ export function extraDb({ q, tx, iso }) {
     },
     /** What a pending spend holds (used to give the value back when an order is abandoned). */
     async pendingSpend(refType, refId) {
-      const r = (await q(`SELECT id, COALESCE(SUM(-amount_paise),0) AS n FROM user_credit WHERE ref_type = ? AND ref_id = ? AND kind = 'spend' AND status = 'pending'`, [refType, refId]))[0];
-      return { amountPaise: Number(r?.n || 0), id: r?.id || null };
+      // A bare SUM: MySQL's ONLY_FULL_GROUP_BY mode rejects selecting a plain column next to an aggregate.
+      const r = (await q(`SELECT COALESCE(SUM(-amount_paise),0) AS n FROM user_credit WHERE ref_type = ? AND ref_id = ? AND kind = 'spend' AND status = 'pending'`, [refType, refId]))[0];
+      return { amountPaise: Number(r?.n || 0) };
     },
     /** Undoes a pending spend: books a `refund` grant so the viewer keeps the value. */
     async returnPending(refType, refId, { reason = 'Order not completed' } = {}) {
