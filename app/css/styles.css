@@ -776,8 +776,8 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .btn-social { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; max-width: 400px; min-height: 44px; border-radius: 999px; font-weight: 600; font-size: 14px; cursor: pointer; border: 1px solid var(--border-2); background: #131314; color: #fff; padding: 0 20px; }
 .btn-social:hover:not(:disabled) { filter: brightness(1.15); } .btn-social:disabled { opacity: .55; cursor: default; }
 .btn-social.btn-facebook { background: #1877f2; border-color: #1877f2; }
-/* Official Google look: white pill, multicolor "G" logo, dark grey label. */
-.btn-social.btn-google { background: #fff; border-color: #dadce0; color: #3c4043; gap: 10px; }
+/* Official Google look: white rectangular button, multicolor "G" logo, dark grey label. */
+.btn-social.btn-google { background: #fff; border-color: #dadce0; color: #3c4043; gap: 10px; border-radius: 8px; }
 .btn-social.btn-google:hover:not(:disabled) { filter: none; background: #f7f8f8; border-color: #c6c6c6; }
 .or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; letter-spacing: .6px; text-transform: uppercase; }
 .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--border-2); }
@@ -1275,7 +1275,7 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .auth-entry .social.social-compact { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
 .social-compact .btn-social { width: 44px; height: 44px; min-height: 44px; max-width: 44px; flex: 0 0 44px; padding: 0; border-radius: 50%; gap: 0; }
 /* Google keeps its full-width labelled button (native app / GIS-unavailable fallback). */
-.social-compact .btn-social.btn-google { width: 100%; max-width: 280px; flex: 0 0 100%; height: 44px; padding: 0 20px; border-radius: 999px; gap: 10px; }
+.social-compact .btn-social.btn-google { width: 100%; max-width: 280px; flex: 0 0 100%; height: 44px; padding: 0 20px; border-radius: 8px; gap: 10px; }
 /* Google's rectangular button: the slot stays blank until Google has drawn it, then the button fades in. */
 .social-compact .social-g { position: relative; width: 100%; max-width: 280px; flex: 0 0 100%; height: 36px; min-height: 36px; }
 .social-compact .gsi-real { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .2s ease; }

@@ -269,7 +269,7 @@ export function mountSocialButtons(box, providers, { signup = false, onCredentia
       const real = $('.gsi-real', el);
       // White Google button with the official multicolor "G" logo (theme: 'outline'), matching
       // Google's own "Sign in with Google" branding.
-      gid.renderButton(real, { type: 'standard', theme: 'outline', size: 'large', shape: 'pill', text: signup ? 'signup_with' : 'signin_with', logo_alignment: 'left', width: Math.max(200, Math.min(280, Math.round(real.clientWidth || el.clientWidth || 260))) });
+      gid.renderButton(real, { type: 'standard', theme: 'outline', size: 'large', shape: 'rectangular', text: signup ? 'signup_with' : 'signin_with', logo_alignment: 'left', width: Math.max(200, Math.min(280, Math.round(real.clientWidth || el.clientWidth || 260))) });
       const reveal = () => el.classList.add('ready');
       real.querySelector('iframe')?.addEventListener('load', reveal, { once: true });
       setTimeout(reveal, 1500);
