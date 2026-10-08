@@ -104,7 +104,7 @@ export default async function watch(ctx) {
   // artwork (poster/backdrop) is painted as a CSS background - no image element, nothing that can fail or be
   // hidden - and when the video has a remote thumbnail (YouTube/R2) it is layered on top as a real image that
   // simply drops out if the viewer's network can't fetch it, revealing the background underneath.
-  const thumb = v.thumbnail || cat.thumb(v);
+  const thumb = cat.thumb(v);
   const localArt = v.poster || (show || soon)?.backdrop || (show || soon)?.poster || '';
   const wall = (kind) => {
     msg.hidden = false; slot.innerHTML = '';
@@ -130,6 +130,9 @@ export default async function watch(ctx) {
   const prog = u.progressOf(v.id);
   const start = prog && prog.position >= CONFIG.resumeMinSeconds && !u.isFinished(v.id, v.duration) ? prog.position : 0;
   let ctl = null, lastSaved = 0, dead = false, countdown = null, lastT = start, lastD = v.duration;
+  // A failed start is retried while the viewer is still on this page (same schedule as Reels), before the error message is shown.
+  const RETRY_MS = [1500, 4000, 9000];
+  let tries = 0, retryTimer = null;
   $('#autoNext', ctx.root).addEventListener('change', (e) => {
     u.setPref('autoplayNext', e.target.checked);
     if (!e.target.checked) { clearInterval(countdown); countdown = null; $('#nextUp', ctx.root).hidden = true; }
@@ -151,7 +154,7 @@ export default async function watch(ctx) {
     const yt = v.source.type === 'youtube' ? `https://www.youtube.com/watch?v=${encodeURIComponent(v.source.id)}` : '';
     const reason = code === 101 || code === 150 || code === 153 ? 'The owner restricted embedded playback.' : 'Check your connection and try again.';
     msg.innerHTML = html`${icon('wifioff', { size: 40 })}<h2>Can't play this video here</h2><p>${reason}</p><div class="row"><button class="btn btn-primary" id="retry">Try again</button>${yt ? html`<a class="btn btn-ghost" href="${yt}" target="_blank" rel="noopener">Open on YouTube</a>` : ''}</div>`.s;
-    $('#retry', msg).onclick = () => { msg.hidden = true; startPlayer(); };
+    $('#retry', msg).onclick = () => { msg.hidden = true; tries = 0; startPlayer(); };
   };
   // Shown when the plan's simultaneous-screens limit is reached.
   const limitWall = (text) => {
@@ -217,7 +220,7 @@ export default async function watch(ctx) {
     let n = CONFIG.autoplayCountdown;
     // Render once: replacing the markup each second reloads the thumbnail and makes it blink.
     box.innerHTML = html`<div class="next-card">
-      ${img(cat.thumb(target, 'hqdefault'), '')}
+      ${img(cat.thumb(target, 'maxresdefault'), '', { fallback: cat.thumb(target, 'hqdefault') })}
       <div class="next-card-copy"><div class="eyebrow" data-next-countdown>Next in ${n}s</div>
         <strong>${cat.displayTitle(target)}</strong>
         <button type="button" class="btn btn-primary btn-sm" id="nuPlay">${icon('play', { size: 16 })} Play now</button>
@@ -265,6 +268,7 @@ export default async function watch(ctx) {
         },
         onState: (s, code) => {
           if (s === 'playing') {
+            tries = 0;
             markPlaying(true);
             $('#playPill', ctx.root)?.remove();
             if (!lastSaved) persist( Math.max(1, ctl?.time() || lastT || 1), ctl?.duration() || lastD || v.duration, true);
@@ -292,6 +296,7 @@ export default async function watch(ctx) {
       if (e instanceof ApiError && e.status === 401) return wall('login');       // session expired or never signed in
       if (e instanceof ApiError && e.status === 402) return wall('plan');
       if (e instanceof ApiError && e.code === 'stream_limit') return limitWall(e.message);
+      if (tries < RETRY_MS.length) { retryTimer = setTimeout(() => { retryTimer = null; if (!dead) startPlayer(); }, RETRY_MS[tries++]); return; }
       failed();
     }
   }
@@ -309,7 +314,7 @@ export default async function watch(ctx) {
   document.addEventListener('visibilitychange', onHide);
   window.addEventListener('pagehide', onHide);
   ctx.onCleanup(() => {
-    dead = true; clearInterval(countdown); onIdle(true);
+    dead = true; clearInterval(countdown); clearTimeout(retryTimer); onIdle(true);
     lockPortrait();   // even if a fullscreen video was open, leaving the page lands back in portrait
     document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', onHide);
     if (ctl) { const t = ctl.time() || lastT; if (t > 0) u.saveProgress(v.id, t, ctl.duration() || lastD || v.duration, { flush: true }); ctl.destroy(); }

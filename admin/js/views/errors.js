@@ -55,6 +55,26 @@ const errorText = (e) => [
   'Stack:', e.stack || 'No stack trace.',
 ].join('\n');
 
+// One copyable block for the top repeated errors: each group's count and first/last seen, then its full example.
+function topErrorsText(groups) {
+  const when = (value) => (value ? fmtDT(value) : '—');
+  const parts = [`ADDABAAZ top ${groups.length} repeated error${groups.length === 1 ? '' : 's'} (last 7 days)`, `Copied: ${fmtDT(new Date().toISOString())}`, ''];
+  groups.forEach((group, index) => {
+    parts.push(`=== #${index + 1} · ${Number(group.count || 0).toLocaleString('en-IN')} occurrence(s) · first seen ${when(group.firstAt)} · last seen ${when(group.lastAt)} ===`);
+    parts.push(group.sample ? errorText(group.sample) : [
+      'No full example is stored for this error.',
+      `Message: ${group.message}`,
+      `Source: ${sourceLabel(group.source)}`,
+      `Severity: ${group.severity || 'error'}`,
+      `Error: ${group.errorName || 'Error'}${group.errorCode ? ` · ${group.errorCode}` : ''}`,
+      `HTTP status: ${display(group.status)}`,
+      `URL: ${group.url || '(not recorded)'}`,
+    ].join('\n'));
+    parts.push('');
+  });
+  return parts.join('\n');
+}
+
 function detail(label, value, fallback = '—') {
   if (value === null || value === undefined || value === '') return '';
   return html`<div class="error-runtime-item"><span>${label}</span><strong>${display(value, fallback)}</strong></div>`;
@@ -91,6 +111,7 @@ function renderClientContext(error) {
 }
 
 function renderGroups(groups) {
+  groups = groups.slice(0, 5);
   return groups.length ? html`<div class="card flush"><table class="tbl compact error-groups"><thead><tr><th>Repeated error</th><th>Source / status</th><th class="num">Times</th><th>Last seen</th></tr></thead><tbody>
     ${groups.map((group) => html`<tr>
       <td class="error-group-message"><strong>${group.errorName || 'Error'}</strong> ${group.errorCode ? html`<code>${group.errorCode}</code>` : ''}<div>${group.message}</div></td>
@@ -134,7 +155,7 @@ export default async function errors(root, _p, ctx) {
   const state = {
     q: String(ctx.query?.get('q') || '').slice(0, 120),
     source: ['client', 'server'].includes(ctx.query?.get('source')) ? ctx.query.get('source') : '',
-    offset: 0, revision: 0,
+    offset: 0, revision: 0, topGroups: [],
   };
   root.innerHTML = html`${pageHead('Errors', 'Search recent browser, mobile, playback and server reports. Client details are privacy-filtered; database SQL values are never stored.', html`<button class="btn danger" id="clearErrors" type="button">Clear all</button>`)}
     <form class="toolbar error-toolbar" id="errorFilters">
@@ -142,7 +163,7 @@ export default async function errors(root, _p, ctx) {
       <select id="errorSource" aria-label="Filter errors by source">${SOURCES.map(([value, label]) => html`<option value="${value}" ${state.source === value ? 'selected' : ''}>${label}</option>`)}</select>
       <button class="btn sm" type="submit">Search</button>
     </form>
-    <section class="card flush error-group-section"><div class="card-head pad"><h2>Last 7 days · repeated errors</h2><span class="muted small">Grouped by source, severity, code, status and message</span></div><div id="errorGroups">${loadingTable(4, 4)}</div></section>
+    <section class="card flush error-group-section"><div class="card-head pad"><h2>Top 5 repeated errors · last 7 days</h2><span class="muted small">Grouped by source, severity, code, status and message</span><button class="btn sm" id="copyTopErrors" type="button" disabled>${icon('copy', 14)} Copy top 5</button></div><div id="errorGroups">${loadingTable(4, 4)}</div></section>
     <div class="error-recent-heading"><h2>Recent reports</h2><span id="errorCount" class="muted small"></span></div>
     <div id="errorRecent">${loadingTable(5, 2)}</div>`.s;
 
@@ -152,7 +173,9 @@ export default async function errors(root, _p, ctx) {
     try {
       const result = await api.get(`/errors?${params}`);
       if (ctx.stale() || revision !== state.revision) return;
-      $('#errorGroups', root).innerHTML = renderGroups(result.groups || []).s;
+      state.topGroups = (result.groups || []).slice(0, 5);
+      $('#errorGroups', root).innerHTML = renderGroups(state.topGroups).s;
+      $('#copyTopErrors', root).disabled = !state.topGroups.length;
       $('#errorCount', root).textContent = `${Number(result.total || 0).toLocaleString('en-IN')} report${Number(result.total) === 1 ? '' : 's'} · last 30 days`;
       $('#errorRecent', root).innerHTML = html`${result.recent?.length ? html`${result.recent.map(renderRecent)}` : empty('No recent reports match this filter.')}
         ${pager({ total: Number(result.total || 0), offset: Number(result.offset || 0), limit: Number(result.limit || LIMIT) })}`.s;
@@ -170,6 +193,8 @@ export default async function errors(root, _p, ctx) {
       }));
     } catch (error) {
       if (ctx.stale() || revision !== state.revision) return;
+      state.topGroups = [];
+      $('#copyTopErrors', root).disabled = true;
       $('#errorGroups', root).innerHTML = empty('The grouped errors could not be loaded.').s;
       $('#errorRecent', root).innerHTML = html`<div class="card form-err">${errMsg(error)}</div>`.s;
       $('#errorCount', root).textContent = '';
@@ -194,6 +219,15 @@ export default async function errors(root, _p, ctx) {
     state.offset = 0;
     load();
   }, 300));
+  $('#copyTopErrors', root).addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    const groups = state.topGroups || [];
+    if (!groups.length) return;
+    button.disabled = true;
+    try { await copyText(topErrorsText(groups)); toast(`Copied ${groups.length} repeated error${groups.length === 1 ? '' : 's'}`); }
+    catch { toast('Could not copy. Select the details and copy them manually.', 'err'); }
+    finally { if (button.isConnected) button.disabled = !(state.topGroups || []).length; }
+  });
   $('#clearErrors', root).addEventListener('click', async () => {
     if (!await confirmBox({ title: 'Clear the error log?', text: 'This removes all stored error reports, regardless of the current filters.', confirm: 'Clear all', danger: true })) return;
     try {

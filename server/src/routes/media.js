@@ -74,7 +74,9 @@ export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, 
     if (/\.m3u8$/i.test(target)) {
       const text = await r2.getText(target);
       if (text == null) throw new HttpError(404, 'not_found', 'Not found.');
-      return res.set({ 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'no-store' }).send(text);
+      // Playlists of an encoded video don't change, and the token URL is private to this viewer: let the browser reuse them for a few minutes
+      // (replays, re-opening a reel) instead of two server-to-R2 trips every time.
+      return res.set({ 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'private, max-age=300' }).send(text);
     }
     // Capacitor WebViews can fail XHR on the cross-origin 302 to R2 even when the bucket CORS rule is correct.
     // Stream only native-app fragments through the API; desktop browsers keep the bandwidth-saving direct redirect.

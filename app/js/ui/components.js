@@ -31,15 +31,13 @@ export function bannerArtMode({ poster = '', backdrop = '' } = {}) {
   if (!backdrop || backdrop === poster) return 'backdrop';
   return typeof window !== 'undefined' && window.matchMedia?.(HERO_POSTER_MQ)?.matches ? 'poster' : 'backdrop';
 }
-/** Card thumbnail. YouTube's default hqdefault is only 480x360 — upscaled into a card on a 2x phone that
- *  is visibly soft, which reads as "less vibrant" than the same frame on Facebook. So cards ask for
- *  sddefault (640x480, 78% more pixels) and data-fb drops them back to hqdefault when a video has no
- *  sddefault (YouTube omits it for some uploads). `object-fit: cover` turns either 4:3 rendition into a
+/** Card thumbnail. Cards ask for YouTube's best rendition (maxresdefault, 1280x720) so they stay sharp on 2x phones;
+ *  data-fb drops them back to hqdefault when a video has no maxresdefault (YouTube omits it for some uploads). `object-fit: cover` turns either 4:3 rendition into a
  *  clean 16:9 or 9:16 crop. Falls back to video/show artwork for R2 videos without a separate thumbnail. */
 export function ytImg(v, alt = '', { cls = '' } = {}) {
   const show = v?.showId ? app.catalog.show(v.showId) || app.catalog.soon(v.showId) : null;
   const hq = app.catalog.thumb(v, 'hqdefault');
-  const src = app.catalog.thumb(v, 'sddefault') || hq || v?.poster || show?.backdrop || show?.posterLg || show?.poster || 'media/logo.webp';
+  const src = app.catalog.thumb(v, 'maxresdefault') || hq || v?.poster || show?.backdrop || show?.posterLg || show?.poster || 'media/logo.webp';
   return img(src, alt, { cls, fallback: hq && hq !== src ? hq : '' });
 }
 // Small golden "premium" word used as the Premium mark on artwork, instead of the old crown medallion.

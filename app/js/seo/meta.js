@@ -66,7 +66,7 @@ const crumbs = (origin, items) => ({ '@type': 'BreadcrumbList', itemListElement:
 const itemList = (origin, items) => ({ '@type': 'ItemList', numberOfItems: items.length, itemListElement: items.map(([name, p], i) => ({ '@type': 'ListItem', position: i + 1, name, url: absUrl(origin, p) })) });
 const video = (origin, v, cat, show, { url, full = true } = {}) => ({
   '@type': 'VideoObject', name: full ? clip(`${cat.displayTitle(v)}${show && !cat.displayTitle(v).includes(showName(show)) ? ` — ${showName(show)}` : ''}`, 110) : cat.displayTitle(v),
-  description: videoDescription(v, show, cat), thumbnailUrl: [absUrl(origin, cat.thumb(v, 'hqdefault'))].filter(Boolean),
+  description: videoDescription(v, show, cat), thumbnailUrl: [absUrl(origin, cat.thumb(v, 'maxresdefault'))].filter(Boolean),
   uploadDate: v.publishedAt, inLanguage: 'bn', isFamilyFriendly: true,
   ...(url ? { url } : {}),
   ...(v.source?.type === 'youtube' ? { embedUrl: `https://www.youtube.com/embed/${v.source.id}` } : {}),
@@ -126,7 +126,7 @@ export function pageMeta({ path, query = {}, cat, studio = null, origin, plans =
     const lead = v.kind === 'episode' && v.episode ? `${dt}${dt.includes(nm) ? '' : ` — ${nm}`} EP ${v.episode}` : `${dt}${dt.includes(nm) ? '' : ` — ${nm}`}`;
     out.title = `${clip(lead, 58)} | ${SITE}`; out.canonical = `/watch/${v.id}`;
     out.description = clip(videoDescription(v, s, cat), 158);
-    out.image = absUrl(origin, cat.thumb(v, 'hqdefault')); out.imageAlt = dt; out.ogType = v.kind === 'episode' ? 'video.episode' : 'video.other';
+    out.image = absUrl(origin, cat.thumb(v, 'maxresdefault')); out.imageAlt = dt; out.ogType = v.kind === 'episode' ? 'video.episode' : 'video.other';
     if (!videoIndexable(v)) out.robots = 'noindex,follow';
     out.jsonld = [video(origin, v, cat, s, { url: `${origin}${out.canonical}` }),
       crumbs(origin, [home, ...(s ? [['Shows', '/shows'], [showName(s), `/show/${s.id}`]] : []), [dt, out.canonical]])];

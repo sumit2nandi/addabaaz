@@ -528,8 +528,9 @@ export function extraDb({ q, tx, iso }) {
     },
     /** What a pending spend holds (used to give the value back when an order is abandoned). */
     async pendingSpend(refType, refId) {
-      const r = (await q(`SELECT id, COALESCE(SUM(-amount_paise),0) AS n FROM user_credit WHERE ref_type = ? AND ref_id = ? AND kind = 'spend' AND status = 'pending'`, [refType, refId]))[0];
-      return { amountPaise: Number(r?.n || 0), id: r?.id || null };
+      // A bare SUM: MySQL's ONLY_FULL_GROUP_BY mode rejects selecting a plain column next to an aggregate.
+      const r = (await q(`SELECT COALESCE(SUM(-amount_paise),0) AS n FROM user_credit WHERE ref_type = ? AND ref_id = ? AND kind = 'spend' AND status = 'pending'`, [refType, refId]))[0];
+      return { amountPaise: Number(r?.n || 0) };
     },
     /** Undoes a pending spend: books a `refund` grant so the viewer keeps the value. */
     async returnPending(refType, refId, { reason = 'Order not completed' } = {}) {
@@ -695,29 +696,41 @@ export function extraDb({ q, tx, iso }) {
       }
       const recentFilter = where.length ? ` AND ${where.join(' AND ')}` : '';
       const groupFilter = recentFilter.replaceAll('e.', '');
-      const [groups, recent, [{ n: total }]] = await Promise.all([
-        q(`SELECT source, severity, error_name, error_code, http_status, message, COUNT(*) AS n, MAX(created_at) AS last_at, MIN(created_at) AS first_at, MAX(url) AS url
-           FROM error_log WHERE created_at > UTC_TIMESTAMP(3) - INTERVAL 7 DAY${groupFilter}
-           GROUP BY source, severity, error_name, error_code, http_status, message ORDER BY last_at DESC LIMIT 100`, params),
-        q(`SELECT e.id, e.source, e.severity, e.message, e.error_name, e.error_code, e.http_status, e.http_method, e.request_id,
+      const RECENT_COLUMNS = `e.id, e.source, e.severity, e.message, e.error_name, e.error_code, e.http_status, e.http_method, e.request_id,
                   e.release_id, e.environment, e.instance_id, e.details, e.stack, e.sql_query, e.sql_param_count, e.sql_exception,
-                  e.url, e.user_agent, e.user_id, u.name AS account_name, u.email AS account_email, e.created_at
+                  e.url, e.user_agent, e.user_id, u.name AS account_name, u.email AS account_email, e.created_at`;
+      const toRecent = (r) => ({
+        id: r.id, source: r.source, severity: r.severity || 'error', message: r.message, errorName: r.error_name || null,
+        errorCode: r.error_code || null, status: r.http_status == null ? null : Number(r.http_status), method: r.http_method || null,
+        requestId: r.request_id || null, release: r.release_id || null, environment: r.environment || null, instanceId: r.instance_id || null,
+        details: parseErrorJson(r.details), stack: r.stack, sqlQuery: r.sql_query || null,
+        sqlParamCount: r.sql_param_count == null ? null : Number(r.sql_param_count), sqlException: parseErrorJson(r.sql_exception),
+        url: r.url, userAgent: r.user_agent, userId: r.user_id || null, accountName: r.account_name || null,
+        accountEmail: r.account_email || null, at: iso(r.created_at),
+      });
+      const [groups, recent, [{ n: total }]] = await Promise.all([
+        // The five most frequent repeated errors of the last 7 days. MAX(id) points at one full example per group.
+        q(`SELECT source, severity, error_name, error_code, http_status, message, COUNT(*) AS n, MAX(created_at) AS last_at, MIN(created_at) AS first_at, MAX(url) AS url, MAX(id) AS sample_id
+           FROM error_log WHERE created_at > UTC_TIMESTAMP(3) - INTERVAL 7 DAY${groupFilter}
+           GROUP BY source, severity, error_name, error_code, http_status, message ORDER BY n DESC, last_at DESC LIMIT 5`, params),
+        q(`SELECT ${RECENT_COLUMNS}
            FROM error_log e LEFT JOIN users u ON u.id = e.user_id
            WHERE e.created_at > UTC_TIMESTAMP(3) - INTERVAL 30 DAY${recentFilter}
            ORDER BY e.created_at DESC, e.id DESC LIMIT ? OFFSET ?`, [...params, pageLimit, pageOffset]),
         q(`SELECT COUNT(*) AS n FROM error_log e WHERE e.created_at > UTC_TIMESTAMP(3) - INTERVAL 30 DAY${recentFilter}`, params),
       ]);
+      const sampleIds = groups.map((r) => Number(r.sample_id)).filter((id) => id > 0);
+      const samples = sampleIds.length
+        ? await q(`SELECT ${RECENT_COLUMNS} FROM error_log e LEFT JOIN users u ON u.id = e.user_id WHERE e.id IN (${sampleIds.map(() => '?').join(',')})`, sampleIds)
+        : [];
+      const sampleById = new Map(samples.map((r) => [Number(r.id), toRecent(r)]));
       return {
-        groups: groups.map((r) => ({ source: r.source, severity: r.severity || 'error', errorName: r.error_name || null, errorCode: r.error_code || null, status: r.http_status == null ? null : Number(r.http_status), message: r.message, count: Number(r.n), lastAt: iso(r.last_at), firstAt: iso(r.first_at), url: r.url })),
-        recent: recent.map((r) => ({
-          id: r.id, source: r.source, severity: r.severity || 'error', message: r.message, errorName: r.error_name || null,
-          errorCode: r.error_code || null, status: r.http_status == null ? null : Number(r.http_status), method: r.http_method || null,
-          requestId: r.request_id || null, release: r.release_id || null, environment: r.environment || null, instanceId: r.instance_id || null,
-          details: parseErrorJson(r.details), stack: r.stack, sqlQuery: r.sql_query || null,
-          sqlParamCount: r.sql_param_count == null ? null : Number(r.sql_param_count), sqlException: parseErrorJson(r.sql_exception),
-          url: r.url, userAgent: r.user_agent, userId: r.user_id || null, accountName: r.account_name || null,
-          accountEmail: r.account_email || null, at: iso(r.created_at),
+        groups: groups.map((r) => ({
+          source: r.source, severity: r.severity || 'error', errorName: r.error_name || null, errorCode: r.error_code || null,
+          status: r.http_status == null ? null : Number(r.http_status), message: r.message, count: Number(r.n),
+          lastAt: iso(r.last_at), firstAt: iso(r.first_at), url: r.url, sample: sampleById.get(Number(r.sample_id)) || null,
         })),
+        recent: recent.map(toRecent),
         total: Number(total || 0), limit: pageLimit, offset: pageOffset, source: selectedSource, search: text,
       };
     },

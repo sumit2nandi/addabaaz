@@ -23,7 +23,7 @@ test('video cards ask for a bigger YouTube thumbnail, with the default as the fa
   const src = read('app/js/ui/components.js');
   const fn = src.match(/export function ytImg\([\s\S]*?\n\}/)?.[0] || '';
   assert.ok(fn, 'ytImg is exported');
-  assert.match(fn, /catalog\.thumb\(v, 'sddefault'\)/, 'cards ask for sddefault (640x480) instead of the 480x360 default');
+  assert.match(fn, /catalog\.thumb\(v, 'maxresdefault'\)/, 'cards ask for the best rendition (maxresdefault, 1280x720)');
   assert.match(fn, /const hq = app\.catalog\.thumb\(v, 'hqdefault'\);/, 'the default rendition is kept as the fallback');
   assert.match(fn, /fallback: hq && hq !== src \? hq : ''/, 'data-fb drops back to it, never to the same URL');
   // The hero already uses maxresdefault; that must not regress either.

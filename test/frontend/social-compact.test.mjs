@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const read = (p) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
 test('social buttons use official Google icon mode and accessible logo-only custom controls', () => {
   const source = read('app/js/social.js');
-  assert.match(source, /renderButton\(el, \{ type: 'icon'.*shape: 'circle'/);
+  assert.match(source, /renderButton\(real, \{ type: 'standard'.*shape: 'pill'/);
   assert.match(source, /data-p="\$\{p\}" aria-label="Continue with/);
   assert.doesNotMatch(source, /<span>Continue with|<span>Google unavailable/);
   assert.match(source, /disabled aria-label="Google sign-in unavailable"/);

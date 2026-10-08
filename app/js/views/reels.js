@@ -96,15 +96,44 @@ export default async function reels(ctx) {
   };
   keepWindow(startIdx);
 
+  // While a reel plays, warm what the next ones will need so a swipe starts them without waiting: the cover image,
+  // the signed stream address (R2), and the HLS engine. The next reel gets everything; the one after gets its cover.
+  const warmed = new Set();
+  const warmReel = (j, full) => {
+    if (j < 0 || j >= list.length || warmed.has(j)) return;
+    const v = list[j];
+    const cover = reelCover(cat, v);
+    if (cover.src) { const pic = new Image(); pic.decoding = 'async'; pic.src = cover.src; }
+    if (!full) return;
+    warmed.add(j);
+    if (app.user.gateFor(v, cat) !== 'ok') return;
+    if (v.source?.type === 'r2') prepareMedia(v).then((media) => import('../players/html5.js').then((m) => m.prepareHtml5Player(media.source))).catch(() => {});
+    else if (v.source?.type === 'hls') import('../players/html5.js').then((m) => m.prepareHtml5Player(v.source)).catch(() => {});
+  };
+  // A reel that fails to start is retried while it is still on screen. The feed only re-activates a reel when it
+  // scrolls back into view, so without this a single failed start left the reel stuck until a page refresh.
+  const RETRY_MS = [1500, 4000, 9000];
+  const tries = new Map();
+  const retryLater = (i, my) => {
+    const n = tries.get(i) || 0;
+    if (n >= RETRY_MS.length) return false;
+    tries.set(i, n + 1);
+    setTimeout(() => { if (active === i && token === my) activate(i, true); }, RETRY_MS[n]);
+    return true;
+  };
   let active = -1, ctl = null, host = null, token = 0, hasPlayed = false;
   const setIcon = (sec) => { const b = $('[data-reel-sound]', sec); if (b) b.innerHTML = icon(soundOn ? 'volume' : 'mute', { size: 26 }).s; };
-  async function activate(i) {
-    if (i === active || i < 0 || i >= sections.length) return;
+  async function activate(i, force = false) {
+    if (!force && i === active) return;
+    if (i < 0 || i >= sections.length) return;
     keepWindow(i);
+    warmReel(i + 1, true);
+    warmReel(i + 2, false);
     active = i; hasPlayed = false; const my = ++token;
-    if (ctl) { ctl.destroy(); host?.remove(); ctl = null; sections.forEach((s) => s.classList.remove('playing', 'paused')); }
+    if (ctl) { ctl.destroy(); host?.remove(); ctl = null; sections.forEach((s) => s.classList.remove('playing', 'paused', 'video-on')); }
     const sec = sections[i], slot = $('.reel-slot', sec), frame = $('.reel-frame', sec); const v = list[i];
     if (!slot || !frame) return;   // section shell lost its content (window pruned mid-scroll): ignore this activation
+    sec.querySelector('.reel-gate')?.remove(); sec.classList.remove('locked');   // re-checked: clear an earlier lock
     const access = app.user.gateFor(v, cat);
     if (access !== 'ok') {
       sec.classList.add('locked');
@@ -123,7 +152,9 @@ export default async function reels(ctx) {
           if (my !== token) return;
           if (st === 'playing') {
             hasPlayed = true;
+            tries.delete(i);
             sec.classList.remove('paused');
+            sec.classList.add('video-on');   // first frame: the video replaces the thumbnail
             if (!started) { started = true; app.user?.remote?.playEvent(v.id, 'start'); }
           } else if (st === 'paused' && hasPlayed) sec.classList.add('paused'); // Ignore an initial PAUSED event before autoplay starts.
         },
@@ -157,6 +188,7 @@ export default async function reels(ctx) {
         sec.classList.add('paused');   // shows the big play glyph: one tap starts it with sound
         return;
       }
+      if (!locked && retryLater(i, my)) return;   // try again shortly while this reel is still on screen
       toast(e?.status === 401 ? 'Sign in to watch this premium reel.' : e?.status === 402 ? 'This reel needs an active plan.' : 'Could not load this reel. Check connection.');
       if (locked) sec.classList.add('paused');
     }
@@ -165,12 +197,16 @@ export default async function reels(ctx) {
     entries.forEach((en) => { if (en.isIntersecting && en.intersectionRatio > 0.65) activate(+en.target.dataset.i); });
   }, { root: feed, threshold: [0.65] });
   sections.forEach((s) => io.observe(s));
-  ctx.onCleanup(() => { io.disconnect(); token++; ctl?.destroy(); host?.remove(); });
+  // Account and plan data can arrive after the first reel was checked: a reel locked before then unlocks now.
+  const unlockWhenAccountChanges = () => { if (active >= 0 && sections[active]?.classList.contains('locked')) activate(active, true); };
+  const offAccount = [app.user.on('account', unlockWhenAccountChanges), app.user.on('subscription', unlockWhenAccountChanges)];
+  ctx.onCleanup(() => { io.disconnect(); token++; ctl?.destroy(); host?.remove(); offAccount.forEach((off) => off()); });
 
   feed.addEventListener('click', async (e) => {
     if (e.target.closest('[data-reel-tap]')) {
       // Tap = play/pause (the tap layer also lets a swipe scroll the feed even when the finger starts on the video).
-      const sec = e.target.closest('.reel'); if (!ctl || sections[active] !== sec) return;
+      const sec = e.target.closest('.reel'); if (sections[active] !== sec) return;
+      if (!ctl) { activate(active, true); return; }   // the player never started: a tap tries again
       if (!hasPlayed || sec.classList.contains('paused')) { Promise.resolve(ctl.play()).catch(() => {}); sec.classList.remove('paused'); } else { ctl.pause(); sec.classList.add('paused'); }
       return;
     }

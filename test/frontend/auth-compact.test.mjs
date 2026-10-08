@@ -45,3 +45,21 @@ test('placeholder-led fields retain accessible labels and full-width submit butt
   assert.doesNotMatch(source, /auth-submit-circle|auth-submit-row/);
   assert.match(read('app/css/styles.css'), /\.auth-entry \.auth-field-label \{[^}]*clip-path: inset\(50%\)/);
 });
+
+test('sign-in and sign-up do not slide in on load, and the Google slot keeps its size', () => {
+  const css = read('app/css/styles.css');
+  assert.match(css, /\.view:has\(> \.auth-page\) \{ animation: none; \}/);
+  assert.match(css, /\.social-compact \.social-g \{ position: relative; width: 100%; max-width: 280px;/);
+});
+
+test('pull-to-refresh does not redraw sign-in or sign-up (it rebuilds the Google button)', () => {
+  const main = read('app/js/main.js');
+  assert.match(main, /if \(\/\^\\\/\(signin\|signup\)\\\/\?\$\/\.test\(parseLocation\(\)\.path\)\) return 'refreshed';/);
+  assert.ok(main.indexOf("return 'refreshed'") < main.indexOf('await app.router.refresh()'));
+});
+
+test('the Google slot is fixed-size and contained, and Google\'s own button is left unsized', () => {
+  const css = read('app/css/styles.css');
+  assert.match(css, /\.social-compact \.social-g \{ contain: layout paint size; \}/);
+  assert.doesNotMatch(css, /social-g iframe/);
+});

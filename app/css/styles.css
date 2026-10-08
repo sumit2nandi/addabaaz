@@ -53,6 +53,8 @@ ul { margin: 0; padding: 0; list-style: none; }
 /* Page entrance matches the main branch's load animation: content rises 40px into place over 0.7s
    with main's cubic-bezier(0.16, 1, 0.3, 1) easing (its .animate-row / .tab-content.show). */
 .view { animation: viewIn .7s cubic-bezier(.16, 1, .3, 1); }
+/* Sign-in / sign-up appear in place: no slide-up when the page is drawn (it read as a jump on mobile). */
+.view:has(> .auth-page) { animation: none; }
 @keyframes viewIn { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
@@ -524,6 +526,9 @@ body.reels-mode { overflow: hidden; padding-bottom: 0; } body.reels-mode .footer
 .reel-slot { position: absolute; inset: 0; } .reel-slot > img { width: 100%; height: 100%; object-fit: cover; }
 .reel-player, .reel-player iframe, .reel-player > div { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
 .reel-loading { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.35); pointer-events: none; } .reel.playing .reel-loading { display: none; }
+/* The thumbnail shows until the first video frame: the player stays transparent until it is playing. */
+.reel-player { opacity: 0; transition: opacity .3s ease; }
+.reel.video-on .reel-player { opacity: 1; }
 .reel-caption { position: absolute; left: 0; right: 0; bottom: 0; padding: 60px 16px 16px; background: linear-gradient(0deg, rgba(0,0,0,.85), transparent); display: grid; gap: 4px; pointer-events: none; z-index: 2; } .reel-caption a { pointer-events: auto; color: var(--gold); font-weight: 700; font-size: 13px; } .reel-caption strong { font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .reel.playing .reel-caption { padding-bottom: 54px; }
 .reel-gate { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; padding: 22px; text-align: center; background: rgba(0,0,0,.72); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px); }
@@ -1266,7 +1271,13 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 /* Compact provider choices; Google uses its official icon-only SDK button. */
 .auth-entry .social.social-compact { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
 .social-compact .btn-social { width: 44px; height: 44px; min-height: 44px; max-width: 44px; flex: 0 0 44px; padding: 0; border-radius: 50%; gap: 0; }
-.social-compact .social-g { width: 44px; min-height: 44px; flex: 0 0 44px; align-items: center; }
+/* Google's rectangular button: the slot stays blank until Google has drawn it, then the button fades in. */
+.social-compact .social-g { position: relative; width: 100%; max-width: 280px; flex: 0 0 100%; height: 36px; min-height: 36px; }
+.social-compact .gsi-real { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .2s ease; }
+.social-compact .social-g.ready .gsi-real { opacity: 1; }
+/* Google draws its button into this slot after its script loads. Fix the slot and the button's frame so a late or
+   re-measured Google button cannot change its own position or the height of the sign-in block around it. */
+.social-compact .social-g { contain: layout paint size; }
 .social-compact .btn-social:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
 
 .account-current-plan { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; margin-bottom: 24px; border: 0; border-radius: var(--radius-lg); background-color: #d4a017; background-image: var(--gold-gradient); color: #201503; }
@@ -1304,3 +1315,47 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .country-row:hover { background: rgba(255,255,255,.06); }
 .country-row b { flex: none; color: var(--text-2); font-weight: 600; }
 .country-row.on, .country-row.on b { color: var(--gold); }
+
+/* Sign-in / sign-up, reference design: boxed fields with icons, red action button with an arrow, red
+   "Create an account" link and an outlined "Browse as Guest" button. This layer overrides the earlier underline style. */
+.auth-entry .form input:not([type=checkbox]) { background: #111114; border: 1px solid #2c2c33; border-radius: 16px; box-shadow: none; padding: 14px 16px; min-height: 54px; font-size: 16px; color: #fff; }
+.auth-entry .form .auth-icon-field input:not([type=checkbox]) { padding-left: 50px; }
+.auth-entry .form input:not([type=checkbox]):focus { outline: none; border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .18); }
+.auth-entry .auth-icon-field > svg { left: 17px; top: 50%; transform: translateY(-50%); }
+.auth-entry .pw input:not([type=checkbox]) { padding-right: 52px; }
+.auth-entry .pw .icon-btn { right: 14px; }
+.auth-entry .otp-phone { background: #111114; border: 1px solid #2c2c33; border-radius: 16px; min-height: 54px; }
+.auth-entry .otp-phone input:not([type=checkbox]) { border: 0; border-radius: 0; background: transparent; box-shadow: none; padding-left: 8px; }
+.auth-entry .forgot-link { color: var(--muted); font-size: 14px; font-weight: 500; }
+.auth-entry #asub { position: relative; min-height: 56px; border-radius: 16px; font-size: 17px; font-weight: 700; justify-content: center; }
+.auth-entry #asub > svg { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); }
+.auth-entry .switch-auth { color: var(--muted); }
+.auth-entry .switch-auth a { color: var(--accent-2); font-weight: 600; text-decoration: underline; }
+.auth-entry .guest-btn { display: flex; align-items: center; justify-content: center; min-height: 56px; border: 1px solid #4a4a52; border-radius: 16px; color: #fff; font-size: 16px; font-weight: 600; text-decoration: none; }
+
+/* Sign-in / sign-up fixes and compact spacing. */
+/* The lock/envelope icon must paint above the field background (the password wrapper is positioned, so it would cover it). */
+.auth-entry .auth-icon-field > svg { z-index: 1; }
+/* The footer-link rule (inline-block, 5px padding) must not override the centred guest button. */
+.auth-entry .auth-footer-links a.guest-btn { display: flex; padding-block: 0; justify-content: center; text-align: center; }
+/* Compact: less space around every element. */
+.auth-entry.auth-page { padding: 16px var(--pad) 24px; gap: 8px; }
+.auth-entry .auth-card { padding: 0; }
+.auth-entry .auth-card h1 { font-size: 22px; margin: 0 0 4px; }
+.auth-entry #af { gap: 8px; }
+.auth-entry #af #emailPane, .auth-entry #af #otpPane, .auth-entry #af #otpPhoneStep, .auth-entry #af #otpCodeStep { gap: 8px; }
+.auth-entry .form input:not([type=checkbox]) { min-height: 46px; padding: 11px 14px; border-radius: 14px; }
+.auth-entry .form .auth-icon-field input:not([type=checkbox]) { padding-left: 46px; }
+.auth-entry .auth-icon-field > svg { top: 50%; }
+.auth-entry .pw input:not([type=checkbox]) { padding-right: 48px; }
+.auth-entry .otp-phone { min-height: 46px; }
+.auth-entry .forgot-link { margin: 0; padding: 0; }
+.auth-entry #asub { min-height: 48px; font-size: 16px; }
+.auth-entry #asub > svg { right: 16px; }
+.auth-entry .switch-auth { font-size: 13px; margin: 0; }
+.auth-entry .auth-footer-links { gap: 6px; }
+.auth-entry .auth-footer-links a.guest-btn { min-height: 48px; border-radius: 14px; font-size: 15px; }
+.auth-entry .social { margin: 0; }
+.auth-entry .or { margin: 0; }
+.auth-entry .fine { margin: 0; }
+

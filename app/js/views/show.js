@@ -14,7 +14,7 @@ export function epRow(v, { current = false } = {}) {
   const cat = app.catalog; const frac = app.user.fraction(v.id, v.duration);
   return html`<a class="ep-row ${current ? 'current' : ''}" href="#/watch/${v.id}" ${current ? html`aria-current="true"` : ''}>
     <span class="ep-num">${v.episode || '•'}</span>
-    <span class="ep-thumb">${img(cat.thumb(v), '')}${cat.isPremium(v) ? premiumMark({ cls: 'premium-mark-compact' }) : ''}${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}<span class="play-overlay">${icon('play', { size: 18 })}</span></span>
+    <span class="ep-thumb">${img(cat.thumb(v, 'maxresdefault'), '', { fallback: cat.thumb(v, 'hqdefault') })}${cat.isPremium(v) ? premiumMark({ cls: 'premium-mark-compact' }) : ''}${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}<span class="play-overlay">${icon('play', { size: 18 })}</span></span>
     <span class="ep-info"><span class="ep-title">${cat.displayTitle(v)}</span>
       <span class="ep-meta">${fmtDate(v.publishedAt)} ${frac >= 0.94 ? html`<em class="watched">${icon('check', { size: 12 })} Watched</em>` : ''}</span></span>
   </a>`;
