@@ -159,6 +159,9 @@ export class Catalog {
     return { trailer: 'Trailer', reel: 'Reel', clip: 'Clip' }[v.kind] || 'Video';
   }
   thumb(v, q = 'hqdefault') {
+    // A synced YouTube video stores its thumbnail URL (usually hqdefault.jpg): ask for the requested rendition instead.
+    const yt = /^(https:\/\/i\.ytimg\.com\/vi\/[^/]+\/)(?:maxresdefault|sddefault|hqdefault|mqdefault|default)\.jpg$/.exec(v.thumbnail || '');
+    if (yt) return `${yt[1]}${q}.jpg`;
     if (v.thumbnail) return v.thumbnail;
     if (v.source?.type === 'youtube') return `https://i.ytimg.com/vi/${v.source.id}/${q}.jpg`;
     return '';
