@@ -241,6 +241,14 @@ function wireSecurity(root) {
       try { await u.signOutEverywhere(); toast('Signed out of your other devices'); } catch (err) { toast(friendly(err)); }
     }
   });
+  // The row icon follows what the label says the device IS: a phone/tablet (the app, iPhone/iPad,
+  // Android and the recognised handset brands), a computer (Windows/Mac/Linux browsers), or a TV.
+  const devIcon = (label) => {
+    const l = String(label || '');
+    if (/\btv\b|chromecast|firestick/i.test(l)) return 'tv';
+    if (/iphone|ipad|android|· app|oneplus|samsung|realme|oppo|vivo|iqoo|xiaomi|redmi|poco|motorola|nothing|pixel/i.test(l)) return 'smartphone';
+    return 'monitor';
+  };
   $('#devices', root)?.addEventListener('click', async () => {
     const { el } = openDialog(html`<h2>Your Devices</h2><div id="devBody"><div class="spinner" style="margin:20px auto"></div></div><div class="form-status" id="devStatus" role="alert"></div>`, { cls: 'dialog-sm' });
     const draw = async () => {
@@ -259,7 +267,7 @@ function wireSecurity(root) {
           else { g.ids.push(x.deviceId); g.current = g.current || x.current; g.watching = g.watching || x.watching; }
         }
         $('#devBody', el).innerHTML = html`${d.streamLimit > 0 ? html`<p class="muted">Your plan allows ${d.streamLimit} screen${d.streamLimit === 1 ? '' : 's'} watching premium titles at once.</p>` : ''}
-          <ul class="dev-list">${groups.length ? groups.map((x) => html`<li><span>${icon('tv', { size: 22 })}</span><div><b>${x.label || 'Device'}${x.current ? html` <em class="pill">This device</em>` : ''}</b><small>${x.watching ? 'Watching now' : `Last active ${timeAgo(x.lastSeen)}`}</small></div>${x.current ? '' : html`<button class="btn btn-ghost btn-sm" type="button" data-forget="${x.ids.join(',')}">Remove</button>`}</li>`) : html`<li class="muted">No devices yet — they appear after you watch a premium title.</li>`}</ul>`.s;
+          <ul class="dev-list">${groups.length ? groups.map((x) => html`<li><span>${icon(devIcon(x.label), { size: 22 })}</span><div><b>${x.label || 'Device'}${x.current ? html` <em class="pill">This device</em>` : ''}</b><small>${x.watching ? 'Watching now' : `Last active ${timeAgo(x.lastSeen)}`}</small></div>${x.current ? '' : html`<button class="btn btn-ghost btn-sm" type="button" data-forget="${x.ids.join(',')}">Remove</button>`}</li>`) : html`<li class="muted">No devices yet — they appear after you watch a premium title.</li>`}</ul>`.s;
       } catch (err) { $('#devBody', el).textContent = friendly(err); }
     };
     // Errors surface INSIDE the dialog: a toast would be hidden behind the modal (top layer), and the

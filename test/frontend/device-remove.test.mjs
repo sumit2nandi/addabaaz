@@ -110,3 +110,24 @@ test('the same device name appears once, and Remove clears every id behind it', 
   await tick();
   assert.deepEqual(forgotten, ['s1', 's2', 's3'], 'all duplicates were forgotten — none can resurface');
 });
+
+test('each row wears the icon of what the device IS: phone, computer or TV', async () => {
+  app.user.remote.devices = async () => ({ streamLimit: 2, devices: [
+    { deviceId: 'a', label: 'iPhone / iPad · Safari', current: false, watching: false, lastSeen: new Date().toISOString() },
+    { deviceId: 'b', label: 'OnePlus EB2101 · app', current: false, watching: false, lastSeen: new Date().toISOString() },
+    { deviceId: 'c', label: 'Windows · Edge', current: false, watching: false, lastSeen: new Date().toISOString() },
+    { deviceId: 'd', label: 'Android TV · app', current: false, watching: false, lastSeen: new Date().toISOString() },
+  ] });
+  const root = document.createElement('div');
+  const ctx = { root, params: { group: 'security' }, query: {}, path: '/account/security', title: '', setTitle(t) { ctx.title = t; }, onCleanup: () => {} };
+  await settings(ctx);
+  click(root.querySelector('#devices'));
+  await tick();
+  const dlg = [...document.querySelectorAll('dialog')].pop();
+  const rowIcon = (text) => [...dlg.querySelectorAll('.dev-list li')].find((r) => r.textContent.includes(text)).querySelector('svg').innerHTML;
+  const SMARTPHONE = 'x="5" y="2"', MONITOR = 'x="2" y="3"', TV = 'x="2" y="7"';
+  assert.match(rowIcon('Safari'), new RegExp(SMARTPHONE), 'iPhone/iPad reads as a phone');
+  assert.match(rowIcon('OnePlus'), new RegExp(SMARTPHONE), 'the app on a handset reads as a phone');
+  assert.match(rowIcon('Windows'), new RegExp(MONITOR), 'a desktop browser reads as a computer');
+  assert.match(rowIcon('Android TV'), new RegExp(TV), 'a TV keeps the TV icon');
+});
