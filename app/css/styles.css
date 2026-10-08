@@ -53,6 +53,8 @@ ul { margin: 0; padding: 0; list-style: none; }
 /* Page entrance matches the main branch's load animation: content rises 40px into place over 0.7s
    with main's cubic-bezier(0.16, 1, 0.3, 1) easing (its .animate-row / .tab-content.show). */
 .view { animation: viewIn .7s cubic-bezier(.16, 1, .3, 1); }
+/* Sign-in / sign-up appear in place: no slide-up when the page is drawn (it read as a jump on mobile). */
+.view:has(> .auth-page) { animation: none; }
 @keyframes viewIn { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
@@ -1266,7 +1268,7 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 /* Compact provider choices; Google uses its official icon-only SDK button. */
 .auth-entry .social.social-compact { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
 .social-compact .btn-social { width: 44px; height: 44px; min-height: 44px; max-width: 44px; flex: 0 0 44px; padding: 0; border-radius: 50%; gap: 0; }
-.social-compact .social-g { width: 44px; min-height: 44px; flex: 0 0 44px; align-items: center; }
+.social-compact .social-g { width: 44px; height: 44px; min-height: 44px; flex: 0 0 44px; align-items: center; }
 .social-compact .btn-social:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
 
 .account-current-plan { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; margin-bottom: 24px; border: 0; border-radius: var(--radius-lg); background-color: #d4a017; background-image: var(--gold-gradient); color: #201503; }

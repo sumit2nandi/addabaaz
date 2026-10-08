@@ -45,3 +45,9 @@ test('placeholder-led fields retain accessible labels and full-width submit butt
   assert.doesNotMatch(source, /auth-submit-circle|auth-submit-row/);
   assert.match(read('app/css/styles.css'), /\.auth-entry \.auth-field-label \{[^}]*clip-path: inset\(50%\)/);
 });
+
+test('sign-in and sign-up do not slide in on load, and the Google slot keeps its size', () => {
+  const css = read('app/css/styles.css');
+  assert.match(css, /\.view:has\(> \.auth-page\) \{ animation: none; \}/);
+  assert.match(css, /\.social-compact \.social-g \{ width: 44px; height: 44px;/);
+});
