@@ -237,7 +237,7 @@ export function mountSocialButtons(box, providers, { signup = false, onCredentia
   if (!wanted.length) return false;
   box.classList.add('social-compact');
   box.innerHTML = wanted.map((p) => (p === 'google' && !isNative
-    ? '<div class="social-g" id="gBtn"></div>'
+    ? html`<div class="social-g" id="gBtn"><div class="gsi-static" aria-hidden="true">${G_LOGO}<span class="gsi-label">${signup ? 'Sign up with Google' : 'Continue with Google'}</span></div><div class="gsi-real"></div></div>`.s
     : html`<button type="button" class="btn-social btn-${p}" data-p="${p}" aria-label="Continue with ${p === 'google' ? 'Google' : p === 'apple' ? 'Apple' : 'Facebook'}" title="Continue with ${p === 'google' ? 'Google' : p === 'apple' ? 'Apple' : 'Facebook'}">${p === 'google' ? G_LOGO : p === 'apple' ? APPLE_LOGO : FB_LOGO}</button>`.s)).join('');
   const run = async (provider, get) => {
     try { const cred = await get(); if (cred) await onCredential(provider, cred); }
@@ -259,7 +259,13 @@ export function mountSocialButtons(box, providers, { signup = false, onCredentia
   if (wanted.includes('google') && !isNative) {
     initGoogle(providers.google.clientId, (cred) => run('google', async () => cred)).then((gid) => {
       const el = $('#gBtn', box); if (!el) return;
-      gid.renderButton(el, { type: 'icon', theme: 'filled_black', size: 'large', shape: 'circle', text: signup ? 'signup_with' : 'continue_with' });
+      // Google's real button goes on top of the static one, at a fixed numeric width so it is never re-measured.
+      // It fades in once its frame has loaded, so the logo does not flicker while Google draws it.
+      const real = $('.gsi-real', el);
+      gid.renderButton(real, { type: 'standard', theme: 'filled_black', size: 'large', shape: 'rectangular', text: signup ? 'signup_with' : 'continue_with', logo_alignment: 'left', width: Math.max(200, Math.min(400, Math.round(real.clientWidth || el.clientWidth || 320))) });
+      const reveal = () => el.classList.add('ready');
+      real.querySelector('iframe')?.addEventListener('load', reveal, { once: true });
+      setTimeout(reveal, 1500);
     }).catch(() => { const el = $('#gBtn', box); if (el) el.outerHTML = html`<button type="button" class="btn-social btn-google" disabled aria-label="Google sign-in unavailable" title="Google sign-in unavailable">${G_LOGO}</button>`.s; });
   }
   // Facebook's SDK must already be loaded when the user taps (popup blockers), so preload it now.

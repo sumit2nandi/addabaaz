@@ -49,7 +49,7 @@ test('placeholder-led fields retain accessible labels and full-width submit butt
 test('sign-in and sign-up do not slide in on load, and the Google slot keeps its size', () => {
   const css = read('app/css/styles.css');
   assert.match(css, /\.view:has\(> \.auth-page\) \{ animation: none; \}/);
-  assert.match(css, /\.social-compact \.social-g \{ width: 44px; height: 44px;/);
+  assert.match(css, /\.social-compact \.social-g \{ position: relative; width: 100%; max-width: 400px;/);
 });
 
 test('pull-to-refresh does not redraw sign-in or sign-up (it rebuilds the Google button)', () => {
