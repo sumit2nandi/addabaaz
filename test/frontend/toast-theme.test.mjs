@@ -35,7 +35,7 @@ test('the toast is a dark panel capsule with white text', () => {
   assert.equal(token('accent'), '#b80000', 'the brand red is unchanged');
   // The ring is an INSET shadow, never a border (a border would add 2px to height and width): a faint
   // dark hairline so the white capsule keeps an edge over bright artwork.
-  assert.match(toast, /box-shadow:\s*inset 0 0 0 1px rgba\(0,0,0,\s*\.08\),\s*0 10px 40px rgba\(0,0,0,\.6\)/, 'a faint light hairline INSIDE the box, plus the drop shadow');
+  assert.match(toast, /box-shadow:\s*inset 0 0 0 1px rgba\(255,255,255,\s*\.12\),\s*0 10px 40px rgba\(0,0,0,\.6\)/, 'a faint light hairline INSIDE the box, plus the drop shadow');
   assert.doesNotMatch(toast, /(?:^|[;\s])border:/, 'no border property: it would grow the capsule by 2px');
   assert.doesNotMatch(toast, /backdrop-filter/, 'a solid white fill needs no glass blur');
   // Capsule shape, like the floating menu.
