@@ -62,10 +62,10 @@ export default async function watch(ctx) {
             ${next ? html`<a class="btn btn-ghost" href="#/watch/${next.id}">${icon('next', { size: 18 })} Next: ${cat.label(next)}</a>` : ''}
             ${!isR2 ? html`<button type="button" class="btn btn-ghost" id="castBtn" hidden>${icon('cast', { size: 18 })} Cast</button>` : ''}
             <button type="button" class="btn btn-ghost" id="shareBtn">${icon('share', { size: 18 })} Share</button>
-            <label class="switch" title="Play the next episode or a related recommendation automatically"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span><span>Autoplay next</span></label>
+            <label class="switch" title="Play the next episode or a related recommendation automatically"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span><span>Autoplay Next</span></label>
           </div>
           ${show ? html`<p class="watch-desc">${show.description}</p>` : ''}
-          <details class="orig-title"><summary>Original title</summary><p class="bn">${v.title}</p></details>
+          <details class="orig-title"><summary>Original Title</summary><p class="bn">${v.title}</p></details>
         </div>
       </div>
       <aside class="watch-side" id="watchSide" aria-busy="true" aria-label="${v.kind === 'episode' ? 'Episodes' : 'Up next'}"></aside>
@@ -77,7 +77,7 @@ export default async function watch(ctx) {
     const episodes = v.kind === 'episode' && show ? cat.episodes(show.id) : null;
     const sideList = episodes
       ? html`<div class="section-bar"><h2>Episodes</h2><span class="count">${episodes.length}</span></div><div class="ep-list compact" id="sideEps">${episodes.map((e) => epRow(e, { current: e.id === v.id }))}</div>`
-      : html`<div class="section-bar"><h2>Up next</h2></div><div class="stack">${cat.relatedVideos(v, 12).map((x) => videoCard(x, { showName: false }))}</div>`;
+      : html`<div class="section-bar"><h2>Up Next</h2></div><div class="stack">${cat.relatedVideos(v, 12).map((x) => videoCard(x, { showName: false }))}</div>`;
     $('#watchSide', ctx.root).innerHTML = sideList.s;
     $('#watchSide', ctx.root).removeAttribute('aria-busy');
     $('#watchMore', ctx.root).innerHTML = rail({ title: 'More from ADDABAAZ', items: cat.latestEpisodes(10).filter((x) => x.id !== v.id).map((x) => videoCard(x)), cls: 'r-video mobile-only' }).s;
@@ -94,7 +94,7 @@ export default async function watch(ctx) {
 
   $('#shareBtn', ctx.root).addEventListener('click', async () => {
     const r = await shareOrCopy({ title, text: `${title} — ADDABAAZ`, url: shareUrl('/watch/' + v.id) });
-    if (r === 'copied') toast('Link copied');
+    if (r === 'copied') toast('Link Copied');
   });
 
   // Rating UI remains intentionally unmounted; keep it separate from playback behavior.
@@ -115,12 +115,12 @@ export default async function watch(ctx) {
       box.insertAdjacentHTML('afterbegin', html`<div class="player-wall-bg" style="background-image:url('${base}')"></div>${thumb && thumb !== base ? img(thumb, '', { cls: 'player-wall-art', lazy: false }) : ''}`.s);
     }
     msg.innerHTML = kind === 'login'
-      ? html`${icon('lock', { size: 40 })}<h2>Sign in to watch</h2><div class="row"><a class="btn btn-primary btn-lg" href="#/signin?next=${here}">Sign in</a><a class="btn btn-ghost btn-lg" href="#/signup?next=${here}">Create account</a></div>`.s
+      ? html`${icon('lock', { size: 40 })}<h2>Sign In to Watch</h2><div class="row"><a class="btn btn-primary btn-lg" href="#/signin?next=${here}">Sign In</a><a class="btn btn-ghost btn-lg" href="#/signup?next=${here}">Create Account</a></div>`.s
       : kind === 'plan'
         // Signed in but no active plan: always offer the subscribe path (the plans page works in
         // the app too), with the old escape hatch as the secondary action.
-        ? html`${icon('lock', { size: 40 })}<h2 class="locked-premium-heading"><span class="brand-lockup"><b>ADDA</b><i>BAAZ</i> <em class="premium-word">premium</em></span> exclusive</h2><div class="row"><a class="btn btn-primary btn-lg" href="#/plans?next=${here}">${icon('crown', { size: 20 })} See plans</a><a class="btn btn-ghost btn-lg" href="#/">Back to home</a></div>`.s
-        : html`${icon('lock', { size: 40 })}<h2>Premium video needs an account</h2><a class="btn btn-ghost btn-lg" href="#/">Back to home</a>`.s;
+        ? html`${icon('lock', { size: 40 })}<h2 class="locked-premium-heading"><span class="brand-lockup"><b>ADDA</b><i>BAAZ</i> <em class="premium-word">premium</em></span> exclusive</h2><div class="row"><a class="btn btn-primary btn-lg" href="#/plans?next=${here}">${icon('crown', { size: 20 })} See plans</a><a class="btn btn-ghost btn-lg" href="#/">Back to Home</a></div>`.s
+        : html`${icon('lock', { size: 40 })}<h2>Premium Video Needs an Account</h2><a class="btn btn-ghost btn-lg" href="#/">Back to Home</a>`.s;
   };
   // Locked: show the wall and stop; no player is created.
   if (gate !== 'ok') { wall(gate); renderSecondary(); return; }
@@ -153,14 +153,14 @@ export default async function watch(ctx) {
     msg.hidden = false;
     const yt = v.source.type === 'youtube' ? `https://www.youtube.com/watch?v=${encodeURIComponent(v.source.id)}` : '';
     const reason = code === 101 || code === 150 || code === 153 ? 'The owner restricted embedded playback.' : 'Check your connection and try again.';
-    msg.innerHTML = html`${icon('wifioff', { size: 40 })}<h2>Can't play this video here</h2><p>${reason}</p><div class="row"><button class="btn btn-primary" id="retry">Try again</button>${yt ? html`<a class="btn btn-ghost" href="${yt}" target="_blank" rel="noopener">Open on YouTube</a>` : ''}</div>`.s;
+    msg.innerHTML = html`${icon('wifioff', { size: 40 })}<h2>Can't Play This Video Here</h2><p>${reason}</p><div class="row"><button class="btn btn-primary" id="retry">Try Again</button>${yt ? html`<a class="btn btn-ghost" href="${yt}" target="_blank" rel="noopener">Open on YouTube</a>` : ''}</div>`.s;
     $('#retry', msg).onclick = () => { msg.hidden = true; tries = 0; startPlayer(); };
   };
   // Shown when the plan's simultaneous-screens limit is reached.
   const limitWall = (text) => {
     if (ctl) { try { ctl.pause(); } catch { /* ignore */ } }
     msg.hidden = false;
-    msg.innerHTML = html`${icon('tv', { size: 40 })}<h2>Too many screens</h2><p>${text || 'Your plan allows a limited number of screens at once. Stop playback on another device to continue here.'}</p><div class="row"><button class="btn btn-primary" id="retry">Try again</button><a class="btn btn-ghost" href="#/account">Manage devices</a></div>`.s;
+    msg.innerHTML = html`${icon('tv', { size: 40 })}<h2>Too Many Screens</h2><p>${text || 'Your plan allows a limited number of screens at once. Stop playback on another device to continue here.'}</p><div class="row"><button class="btn btn-primary" id="retry">Try Again</button><a class="btn btn-ghost" href="#/account">Manage Devices</a></div>`.s;
     $('#retry', msg).onclick = () => { msg.hidden = true; startPlayer(); };
   };
   /* Screens-at-once seat (premium only) and first-party play statistics (plays and watch time, no personal data). */
@@ -257,7 +257,7 @@ export default async function watch(ctx) {
         onAutoplayBlocked: () => {
           if (dead || $('#playPill', ctx.root)) return;
           const b = document.createElement('button'); b.type = 'button'; b.id = 'playPill'; b.className = 'unmute-pill';
-          b.innerHTML = icon('play', { size: 18 }).s + '<span>Tap to play</span>';
+          b.innerHTML = icon('play', { size: 18 }).s + '<span>Tap to Play</span>';
           b.onclick = () => { Promise.resolve(ctl?.play?.()).catch(() => {}); b.remove(); };
           $('#playerBox', ctx.root).appendChild(b);
         },

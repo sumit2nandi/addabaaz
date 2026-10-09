@@ -18,15 +18,15 @@ export default async function accountDetails(ctx) {
     <div id="accountPlanSummary">${accountPlan(u)}</div>
     <form class="account-edit-form" id="accountNameForm">
       <div class="account-name-fields">
-        <label class="account-line-field">First name<input name="firstName" autocomplete="given-name" maxlength="60" required value="${parts[0] || ''}"></label>
-        <label class="account-line-field">Last name<input name="lastName" autocomplete="family-name" maxlength="60" value="${parts.slice(1).join(' ')}"></label>
+        <label class="account-line-field">First Name<input name="firstName" autocomplete="given-name" maxlength="60" required value="${parts[0] || ''}"></label>
+        <label class="account-line-field">Last Name<input name="lastName" autocomplete="family-name" maxlength="60" value="${parts.slice(1).join(' ')}"></label>
       </div>
       <div class="account-contact-field"><div><span class="account-field-label">Email ID</span><p>${account.emailIsPlaceholder ? 'Not added' : account.email}</p></div><button type="button" class="icon-btn" id="editEmail" aria-label="Edit email address">${icon('edit', { size: 20 })}</button></div>
-      <div class="account-contact-field"><div><span class="account-field-label">Mobile number</span><p id="accountPhoneValue">${account.phone ? `+${account.phone}` : 'Not added'}</p></div><span id="accountPhoneAction">${account.phone ? html`<a class="icon-btn" href="#/support" aria-label="Request a phone-number change" title="Contact support to change your number">${icon('edit', { size: 20 })}</a>` : html`<button type="button" class="icon-btn" id="addAccountPhone" aria-label="Add mobile number">${icon('plus', { size: 20 })}</button>`}</span></div>
+      <div class="account-contact-field"><div><span class="account-field-label">Mobile Number</span><p id="accountPhoneValue">${account.phone ? `+${account.phone}` : 'Not added'}</p></div><span id="accountPhoneAction">${account.phone ? html`<a class="icon-btn" href="#/support" aria-label="Request a phone-number change" title="Contact support to change your number">${icon('edit', { size: 20 })}</a>` : html`<button type="button" class="icon-btn" id="addAccountPhone" aria-label="Add mobile number">${icon('plus', { size: 20 })}</button>`}</span></div>
       <p class="account-field-help" id="accountPhoneHelp">${account.phone ? 'Phone-number changes currently require support verification.' : 'Add a mobile number using SMS verification.'}</p>
       <p class="form-status" id="accountSaveStatus" role="status"></p>
       <button class="btn btn-primary account-save" type="submit" id="saveAccount" disabled>Save Changes</button>
-      <a class="account-manage-link" href="#/profiles?manage=1">Manage viewing profiles</a>
+      <a class="account-manage-link" href="#/profiles?manage=1">Manage Viewing Profiles</a>
     </form>
   </div>`.s;
   ctx.onCleanup(u.on('subscription', () => {
@@ -54,11 +54,11 @@ export default async function accountDetails(ctx) {
     $('#accountPhoneAction', ctx.root).innerHTML = html`<a class="icon-btn" href="#/support" aria-label="Request a phone-number change">${icon('edit', { size: 20 })}</a>`.s;
   }));
   $('#editEmail', ctx.root).addEventListener('click', () => {
-    const { el } = openDialog(html`<h2>Edit email address</h2><form class="form" id="accountEmailForm">
-      <label>New email address<input name="email" type="email" autocomplete="email" maxlength="254" required value="${account.emailIsPlaceholder ? '' : account.email}"></label>
+    const { el } = openDialog(html`<h2>Edit Email Address</h2><form class="form" id="accountEmailForm">
+      <label>New Email Address<input name="email" type="email" autocomplete="email" maxlength="254" required value="${account.emailIsPlaceholder ? '' : account.email}"></label>
       <p class="muted small">We’ll send a confirmation link. Your current address stays active until you confirm the new one.</p>
-      <p class="form-status" role="status"></p><button class="btn btn-primary" type="submit">Send confirmation link</button>
-      ${account.emailVerified === false && !account.phoneVerified ? html`<button type="button" class="btn btn-ghost" id="verifyCurrentEmail">Verify current email first</button>` : ''}
+      <p class="form-status" role="status"></p><button class="btn btn-primary" type="submit">Send Confirmation Link</button>
+      ${account.emailVerified === false && !account.phoneVerified ? html`<button type="button" class="btn btn-ghost" id="verifyCurrentEmail">Verify Current Email First</button>` : ''}
     </form>`, { title: 'Edit email address', cls: 'dialog-sm' });
     const emailForm = $('#accountEmailForm', el), emailStatus = $('[role=status]', emailForm);
     emailForm.addEventListener('submit', async (event) => {

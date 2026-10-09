@@ -11,7 +11,7 @@ export function accountPlan(user) {
   const validDate = subscription.expiresAt && Number.isFinite(Date.parse(subscription.expiresAt));
   const expired = !active && (subscription.status === 'expired' || (subscription.planId !== 'free' && validDate && Date.parse(subscription.expiresAt) <= Date.now()));
   return html`<section class="account-current-plan" aria-labelledby="currentPlanTitle">
-    <div><h2 class="account-field-label" id="currentPlanTitle">Current plan</h2><p class="account-plan-name">${title}</p>
+    <div><h2 class="account-field-label" id="currentPlanTitle">Current Plan</h2><p class="account-plan-name">${title}</p>
       <p class="account-field-help">${active ? validDate ? `Active until ${fmtDate(subscription.expiresAt)}` : 'Active' : expired ? validDate ? `Premium expired on ${fmtDate(subscription.expiresAt)}` : 'Premium expired' : 'Free access'}</p>
     </div><a class="icon-btn" href="#/plans" aria-label="View plan details" title="View plan details">${icon('right', { size: 20 })}</a>
   </section>`;

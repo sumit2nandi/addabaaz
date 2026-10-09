@@ -23,14 +23,14 @@ test('the sign-in page leads with the mobile number, and only when the server of
   assert.match(auth, /const providers = await u\.providers\(\)/, 'the page asks the server which methods exist');
   assert.match(auth, /const canOtp = !!providers\.otp/, 'OTP is offered only when /auth/providers says so');
   assert.match(auth, /let mode = canOtp \? 'otp' : 'email'/, 'mobile number is the default method, email is the fallback');
-  assert.match(auth, /Mobile number<\/button>/, 'the method switch has a Mobile number tab');
+  assert.match(auth, /Mobile Number<\/button>/, 'the method switch has a Mobile number tab');
   assert.match(auth, /Email<\/button>/, 'and an Email tab');
-  assert.match(auth, /Send me a code/, 'step one sends the code');
-  assert.match(auth, /Verify &amp; continue/, 'step two verifies it');
+  assert.match(auth, /Send Me a Code/, 'step one sends the code');
+  assert.match(auth, /Verify &amp; Continue/, 'step two verifies it');
   assert.match(auth, /autocomplete="one-time-code"/, 'the code field is offered the SMS code by the OS keyboard');
   assert.match(auth, /pattern="\[0-9\]\*" maxlength="6"/, 'the code field is numeric and six digits');
   assert.match(auth, /Resend code in \$\{left\}s/, 'resending waits out the server’s one-a-minute limit');
-  assert.match(auth, /Trouble signing in\? <a href="#\/support">Get help<\/a>/, 'the sign-in page points at Support');
+  assert.match(auth, /Trouble Signing In\? <a href="#\/support">Get Help<\/a>/, 'the sign-in page points at Support');
   // The email + password form is unchanged when OTP is unavailable — and still present when it is.
   assert.match(auth, /id="emailPane"/);
   assert.match(auth, /signup \? u\.signUp\(body\) : u\.signIn\(body\)/);
@@ -81,7 +81,7 @@ test('the sign-in page styles exist for the phone-first form', () => {
     assert.ok(css.includes(cls), `${cls} is styled`);
   assert.match(css, /\.auth-busy\[hidden\] \{ display: none; \}/, 'the busy state stays hidden until it is used');
   // The e-mail and mobile panes are plain block containers in the markup, so nothing spaced their rows: the
-  // field labels touched each other and "Forgot password?" — an inline <a> — had no margin box at all, so its
+  // field labels touched each other and "Forgot Password?" — an inline <a> — had no margin box at all, so its
   // margin and `justify-self` were inert however large they were made. The panes are grids now, so every row
   // gets the form's 16px rhythm and the link is a real, right-aligned grid item.
   const panes = css.match(/#af #emailPane[^{]*\{[^}]*\}/)?.[0] || '';
@@ -89,7 +89,7 @@ test('the sign-in page styles exist for the phone-first form', () => {
   assert.match(panes, /display: grid; gap: 16px;/, 'the panes lay their rows out on the form’s 16px rhythm');
   assert.match(panes, /#af #otpPane, #af #otpPhoneStep, #af #otpCodeStep/, 'the mobile-number panes and steps are covered too');
   // …and the grid has to actually reach the two rows whose spacing is asserted below: both live inside the
-  // pane. (When "Forgot password?" was an inline box in a block pane, no margin could ever move the button.)
+  // pane. (When "Forgot Password?" was an inline box in a block pane, no margin could ever move the button.)
   const pane = auth.slice(auth.indexOf('id="emailPane"'), auth.indexOf('</div>', auth.indexOf('id="asub"')));
   assert.match(pane, /class="forgot-link"/, 'the forgot link is a child of the e-mail pane, so the grid spaces it');
   assert.match(pane, /id="asub"/, 'and so is the submit button');

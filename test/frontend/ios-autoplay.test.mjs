@@ -300,7 +300,7 @@ test('YouTube embeds keep native controls and offer app-owned settings for speed
     assert.ok(sheet);
     assert.equal(container.contains(sheet), false, 'the settings sheet is portalled outside the embedded player');
     assert.match(sheet.querySelector('.ytp-settings-title').textContent, /^Settings$/, 'the full Settings title is displayed');
-    assert.match(sheet.textContent, /Playback speed/);
+    assert.match(sheet.textContent, /Playback Speed/);
     assert.match(sheet.textContent, /Loop/);
     assert.match(sheet.textContent, /Tap the video to reveal YouTube’s controls for quality and subtitles/);
     sheet.querySelector('[data-nav="speed"]').click();

@@ -88,10 +88,10 @@ export async function initNotifyPrompt({ path = location.pathname || '/' } = {})
     live = true;
     const { el, close } = openDialog(html`
       <div class="dlg-icon">${icon('bell', { size: 26 })}</div>
-      <h2>Never miss a new episode</h2>
+      <h2>Never Miss a New Episode</h2>
       <p class="muted">Turn on notifications and we’ll tell you when a new episode of a show you follow is out, when a launch you set a reminder for goes live, and — if you want — when something big arrives on ADDABAAZ. No spam, and you can switch each type off any time.</p>
       <div class="form-status" id="npStatus" role="alert"></div>
-      <div class="row end"><button type="button" class="btn btn-ghost" data-close id="npLater">Not now</button><button type="button" class="btn btn-primary" id="npOn">Turn on notifications</button></div>`,
+      <div class="row end"><button type="button" class="btn btn-ghost" data-close id="npLater">Not Now</button><button type="button" class="btn btn-primary" id="npOn">Turn On Notifications</button></div>`,
       { title: 'Notifications', cls: 'dialog-sm dlg-centered', onClose: () => { if (!done) { stop(); done = true; live = null; remember(); resolve(false); } } });
     // Closing also when notifications were turned on elsewhere: the prompt has nothing left to ask.
     const finish = (v) => { stop(); done = true; live = null; remember(); close(); resolve(v); };

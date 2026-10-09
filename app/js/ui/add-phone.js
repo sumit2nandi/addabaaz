@@ -5,13 +5,13 @@ import { phoneSplit, wirePhoneSplits, splitValue } from './phone-field.js';
 
 export function addPhone(user, onAdded) {
   let unwire;
-  const { el, close } = openDialog(html`<h2>Add mobile number</h2><p class="muted">Verify your number by SMS to add it to this account.</p>
+  const { el, close } = openDialog(html`<h2>Add Mobile Number</h2><p class="muted">Verify your number by SMS to add it to this account.</p>
     <form class="form" id="phoneLinkForm">
       <label>Mobile number${phoneSplit({ placeholder: '98123 45678', required: true })}</label>
       <button type="button" class="btn btn-ghost" id="sendPhoneCode">Send OTP</button>
-      <label id="phoneCodeLabel" hidden>SMS code<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="6-digit OTP"></label>
+      <label id="phoneCodeLabel" hidden>SMS Code<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="6-digit OTP"></label>
       <p class="form-status" role="status" id="phoneLinkStatus"></p>
-      <button type="submit" class="btn btn-primary" id="verifyPhoneCode" hidden>Verify &amp; add number</button>
+      <button type="submit" class="btn btn-primary" id="verifyPhoneCode" hidden>Verify &amp; Add Number</button>
     </form>`, { title: 'Add mobile number', cls: 'dialog-sm', onClose: () => unwire?.() });
   unwire = wirePhoneSplits(el);
   const form = $('#phoneLinkForm', el), phone = $('[data-phone-national]', el), code = $('[name=code]', el), send = $('#sendPhoneCode', el), verify = $('#verifyPhoneCode', el), status = $('#phoneLinkStatus', el);

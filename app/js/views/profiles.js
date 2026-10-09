@@ -24,7 +24,7 @@ export default async function profiles(ctx) {
         ${u.profiles.map((p) => html`<button type="button" class="profile-tile" data-pid="${p.id}">${avatar(p, { size: 116, cls: 'xl' })}${manage ? html`<span class="edit-badge">${icon('edit', { size: 18 })}</span>` : ''}<span>${p.name}${p.kids ? html` <em class="pill">Kids</em>` : ''}</span></button>`)}
         ${u.profiles.length < CONFIG.maxProfiles ? html`<button type="button" class="profile-tile add" data-add><span class="avatar xl add-av" style="width:116px;height:116px">${icon('plus', { size: 44 })}</span><span>Add profile</span></button>` : ''}
       </div>
-      ${manage ? html`<a class="btn btn-ghost btn-lg" href="#/account">Done</a>` : html`<a class="btn btn-ghost" href="#/profiles?manage=1">Manage profiles</a>`}
+      ${manage ? html`<a class="btn btn-ghost btn-lg" href="#/account">Done</a>` : html`<a class="btn btn-ghost" href="#/profiles?manage=1">Manage Profiles</a>`}
     </div>`.s;
   };
   draw();
@@ -36,7 +36,7 @@ export default async function profiles(ctx) {
     // Five choices fit small screens; retain a legacy saved colour when editing it.
     const colors = [0, 1, 2, 3, color >= 5 && color <= 7 ? color : 4];
     const colorNames = ['Red', 'Gold', 'Blue', 'Green', 'Purple', 'Coral', 'Teal', 'Orange'];
-    const { el, close } = openDialog(html`<h2>${p ? 'Edit profile' : 'Add profile'}</h2>
+    const { el, close } = openDialog(html`<h2>${p ? 'Edit Profile' : 'Add Profile'}</h2>
       <form id="pf" class="form" novalidate>
         <div class="avatar-preview" id="ap">${avatar({ name: p?.name || 'A', color }, { size: 84 })}</div>
         <div class="swatches" role="group" aria-label="Choose a colour">${colors.map((i) => html`<button type="button" aria-pressed="${i === color}" class="swatch ${i === color ? 'on' : ''}" data-c="${i}" style="--swatch:${avatarColor(i)}" aria-label="${colorNames[i]}"></button>`)}</div>
@@ -52,13 +52,13 @@ export default async function profiles(ctx) {
       e.preventDefault(); const name = nameEl.value.trim();
       if (!name) { $('#pfs', el).textContent = 'Please enter a name.'; return; }
       const kids = $('[name=kids]', el).checked;
-      try { await withPin(u, () => (p ? u.updateProfile(p.id, { name, color, kids }) : u.createProfile({ name, color, kids }))); close(); toast(p ? 'Profile updated' : 'Profile added'); }
+      try { await withPin(u, () => (p ? u.updateProfile(p.id, { name, color, kids }) : u.createProfile({ name, color, kids }))); close(); toast(p ? 'Profile Updated' : 'Profile Added'); }
       catch (err) { if (!err.cancelled) $('#pfs', el).textContent = friendly(err); }
     });
     $('#del', el)?.addEventListener('click', async () => {
       close();
       if (await confirmDialog({ title: `Delete “${p.name}”?`, text: 'Their My List and watch history will be removed.', confirm: 'Delete', danger: true })) {
-        try { await withPin(u, () => u.deleteProfile(p.id)); toast('Profile deleted'); } catch (err) { if (!err.cancelled) toast(friendly(err)); }
+        try { await withPin(u, () => u.deleteProfile(p.id)); toast('Profile Deleted'); } catch (err) { if (!err.cancelled) toast(friendly(err)); }
       }
     });
   };

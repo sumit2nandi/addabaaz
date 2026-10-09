@@ -17,7 +17,7 @@ export default async function browse(ctx) {
         <div id="showsResults"></div>
       </section>
       <section aria-labelledby="episodesHeading">
-        <h2 class="sub-h" id="episodesHeading">All episodes</h2>
+        <h2 class="sub-h" id="episodesHeading">All Episodes</h2>
         <div class="filters" id="episodeFilters"></div>
         <div id="episodesResults"></div>
       </section>
@@ -40,19 +40,19 @@ export default async function browse(ctx) {
     showFilters.innerHTML = html`<div class="filter-group">${chip('All', 'genre', '')}${chip('Premium', 'access', 'premium')}${chip('Free', 'access', 'free')}${cat.genres.map((g) => chip(g, 'genre', g))}</div>`.s;
     const shows = cat.shows.filter((s) => (!st.genre || (s.genres || []).includes(st.genre)) && (!st.access || (s.access || 'free') === st.access));
     showResults.innerHTML = shows.length ? html`<div class="grid grid-shows">${shows.map((s) => html`<div class="show-tile">${showCard(s)}<div class="show-tile-info"><a href="#/show/${s.id}">${s.title}</a>${showMeta(s)}</div></div>`)}</div>
-      ${cat.upcoming.length ? html`<h3 class="sub-h">Coming soon</h3><div class="grid grid-shows">${cat.upcoming.map((u) => html`<a class="show-tile" href="#/soon/${u.id}"><div class="card card-poster"><div class="poster"><img src="${u.poster}" alt="${u.title}" loading="lazy"><span class="chip chip-soon">Coming soon</span></div></div><div class="show-tile-info"><span>${u.title}</span></div></a>`)}</div>` : ''}`.s
+      ${cat.upcoming.length ? html`<h3 class="sub-h">Coming Soon</h3><div class="grid grid-shows">${cat.upcoming.map((u) => html`<a class="show-tile" href="#/soon/${u.id}"><div class="card card-poster"><div class="poster"><img src="${u.poster}" alt="${u.title}" loading="lazy"><span class="chip chip-soon">Coming Soon</span></div></div><div class="show-tile-info"><span>${u.title}</span></div></a>`)}</div>` : ''}`.s
       : emptyState({ title: 'No shows match these filters' }).s;
 
     const episodeShows = cat.shows.filter((s) => cat.episodes(s.id).length);
     episodeFilters.innerHTML = html`<div class="filter-group">${chip('All shows', 'show', '')}${episodeShows.map((s) => chip(s.titleEn || s.title, 'show', s.id))}</div>
-      <label class="select-wrap"><span class="sr-only">Sort episodes</span><select id="sortSel"><option value="new">Newest first</option><option value="popular">Most watched</option><option value="old">Oldest first</option></select></label>`.s;
+      <label class="select-wrap"><span class="sr-only">Sort Episodes</span><select id="sortSel"><option value="new">Newest First</option><option value="popular">Most Watched</option><option value="old">Oldest First</option></select></label>`.s;
     $('#sortSel', ctx.root).value = st.sort;
     let episodes = cat.allEpisodes().filter((v) => !st.show || v.showId === st.show);
     episodes = episodes.sort(st.sort === 'popular' ? (a, b) => b.views - a.views : st.sort === 'old' ? (a, b) => a.publishedAt.localeCompare(b.publishedAt) : (a, b) => b.publishedAt.localeCompare(a.publishedAt));
     const page = episodes.slice(0, st.n);
     episodeResults.innerHTML = episodes.length ? html`<div class="grid grid-videos">${page.map((v) => videoCard(v))}</div>
       <p class="grid-count">Showing ${page.length} of ${episodes.length} episodes</p>
-      ${episodes.length > page.length ? html`<div class="center"><button class="btn btn-ghost" id="more">Load more</button></div>` : ''}`.s
+      ${episodes.length > page.length ? html`<div class="center"><button class="btn btn-ghost" id="more">Load More</button></div>` : ''}`.s
       : emptyState({ title: 'No episodes for this show yet' }).s;
     sync();
   };

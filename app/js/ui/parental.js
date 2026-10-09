@@ -22,9 +22,9 @@ export async function mayLeaveKids(u, target) {
 }
 
 export function forgotParentalPin(u) {
-  const { el } = openDialog(html`<h2>Forgot parental PIN?</h2><p class="muted">We’ll send a single-use recovery link to your verified account email. It expires in 15 minutes. Your existing PIN stays active until you choose a new one.</p>
-    <p class="muted">No access to that email? <a href="#/support" data-close>Contact support</a>.</p>
-    <div class="form-status" id="pinRecoveryStatus" role="status"></div><button type="button" class="btn btn-primary" id="sendPinRecovery">Email recovery link</button>`, { title: 'Recover parental PIN', cls: 'dialog-sm' });
+  const { el } = openDialog(html`<h2>Forgot Parental PIN?</h2><p class="muted">We’ll send a single-use recovery link to your verified account email. It expires in 15 minutes. Your existing PIN stays active until you choose a new one.</p>
+    <p class="muted">No access to that email? <a href="#/support" data-close>Contact Support</a>.</p>
+    <div class="form-status" id="pinRecoveryStatus" role="status"></div><button type="button" class="btn btn-primary" id="sendPinRecovery">Email Recovery Link</button>`, { title: 'Recover parental PIN', cls: 'dialog-sm' });
   $('#sendPinRecovery', el).addEventListener('click', async (e) => {
     const button = e.currentTarget; button.disabled = true;
     try { await u.remote.forgotPin(); $('#pinRecoveryStatus', el).textContent = 'Recovery email sent. Check your inbox and spam folder.'; }

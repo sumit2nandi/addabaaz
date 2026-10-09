@@ -193,7 +193,7 @@ test('createHtml5Player renders a uniform YouTube-style player (.ytp) with a vie
     gear.click();
     assert.equal(menu.hidden, false, 'Clicking gear opens Settings sheet');
     assert.equal(document.body.classList.contains('player-settings-open'), true, 'the page is scroll-locked while settings are open');
-    assert.match(menu.textContent, /Playback speed/);
+    assert.match(menu.textContent, /Playback Speed/);
     assert.match(menu.textContent, /Quality/);
     assert.doesNotMatch(menu.textContent, /Subtitles\/CC/, 'Subtitles/CC is omitted when there are no tracks');
     assert.match(menu.textContent, /Loop/);

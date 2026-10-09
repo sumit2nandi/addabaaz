@@ -1,5 +1,5 @@
 // Every phone input is split into a tappable country code and the national number, with the shared
-// searchable "Select a country" sheet — sign-in (SMS code), support, project inquiry, add-number.
+// searchable "Select a Country" sheet — sign-in (SMS code), support, project inquiry, add-number.
 // Run: node --test test/frontend/phone-split.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -41,7 +41,7 @@ test('the picker sheet searches and the split field remembers the chosen code', 
   cc.click();
   await tick();
   const dlg = document.querySelector('dialog.country-picker');
-  assert.match(dlg.textContent, /Select a country/);
+  assert.match(dlg.textContent, /Select a Country/);
   const search = dlg.querySelector('.country-search');
   const firstRow = dlg.querySelector('.country-row');
   assert.equal(firstRow.dataset.name, 'India', 'popular entries lead the list');

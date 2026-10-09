@@ -23,8 +23,8 @@ export default async function search(ctx) {
     const recent = storage(RECENT, []);
     out.innerHTML = html`
       ${recent.length ? html`<div class="chips-block"><div class="section-bar"><h2>Recent</h2><button class="btn btn-ghost btn-sm" id="clearRecent">Clear</button></div><div class="filter-group">${recent.map((r) => html`<button class="chip-btn" data-q="${r}">${icon('clock', { size: 14 })} ${r}</button>`)}</div></div>` : ''}
-      <div class="chips-block"><div class="section-bar"><h2>Popular searches</h2></div><div class="filter-group">${SUGGEST.map((r) => html`<button class="chip-btn" data-q="${r}">${r}</button>`)}</div></div>
-      <div class="section-bar"><h2>Trending now</h2></div><div class="grid grid-videos">${cat.trending(6).map((v, i) => videoCard(v, { rank: i + 1 }))}</div>`.s;
+      <div class="chips-block"><div class="section-bar"><h2>Popular Searches</h2></div><div class="filter-group">${SUGGEST.map((r) => html`<button class="chip-btn" data-q="${r}">${r}</button>`)}</div></div>
+      <div class="section-bar"><h2>Trending Now</h2></div><div class="grid grid-videos">${cat.trending(6).map((v, i) => videoCard(v, { rank: i + 1 }))}</div>`.s;
   };
   const run = () => {
     const term = q.value.trim(); clr.hidden = !term;
@@ -35,9 +35,9 @@ export default async function search(ctx) {
     const total = r.shows.length + r.videos.length + r.upcoming.length;
     out.innerHTML = !total ? emptyState({ iconName: 'search', title: `No results for “${term}”`, text: 'Try a show name, a comedian or a different spelling.' }).s : html`
       ${r.shows.length ? html`<h2 class="sub-h">Shows</h2><div class="grid grid-shows">${r.shows.map((s) => showCard(s))}</div>` : ''}
-      ${r.upcoming.length ? html`<h2 class="sub-h">Coming soon</h2><div class="grid grid-shows">${r.upcoming.map(soonCard)}</div>` : ''}
+      ${r.upcoming.length ? html`<h2 class="sub-h">Coming Soon</h2><div class="grid grid-shows">${r.upcoming.map(soonCard)}</div>` : ''}
       ${eps.length ? html`<h2 class="sub-h">Episodes <span class="count">${eps.length}</span></h2><div class="grid grid-videos">${eps.map((v) => videoCard(v))}</div>` : ''}
-      ${reels.length ? html`<h2 class="sub-h">Reels & clips <span class="count">${reels.length}</span></h2><div class="grid grid-reels">${reels.map((v) => (v.kind === 'reel' ? reelCard(v) : videoCard(v)))}</div>` : ''}`.s;
+      ${reels.length ? html`<h2 class="sub-h">Reels & Clips <span class="count">${reels.length}</span></h2><div class="grid grid-reels">${reels.map((v) => (v.kind === 'reel' ? reelCard(v) : videoCard(v)))}</div>` : ''}`.s;
   };
   const remember = () => { const t = q.value.trim(); if (t.length > 1) store(RECENT, [t, ...storage(RECENT, []).filter((x) => x !== t)].slice(0, 8)); };
   const debounced = debounce(run, 180);

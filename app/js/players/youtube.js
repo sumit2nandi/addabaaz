@@ -120,7 +120,7 @@ function createYouTubeSettingsSheet(shell, { getPlayer, getLoop, setLoop }) {
     if (view === 'main') {
       body.innerHTML = `
         ${availableRates.length > 1 ? `<button type="button" class="ytp-menu-item" data-nav="speed">
-          <span class="ytp-menu-lead">${YT_SETTINGS_ICONS.speed}<span>Playback speed</span></span>
+          <span class="ytp-menu-lead">${YT_SETTINGS_ICONS.speed}<span>Playback Speed</span></span>
           <span class="ytp-menu-val"><span>${youtubeSpeedLabel(selectedRate)}</span>${YT_SETTINGS_ICONS.chevRight}</span>
         </button>` : ''}
         <button type="button" class="ytp-menu-item" data-act="loop">

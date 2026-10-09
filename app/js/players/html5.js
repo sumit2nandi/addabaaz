@@ -770,7 +770,7 @@ function buildYouTubeUI(container, v, video, { getHls, getNativeLevels, getSelec
     if (view === 'main') {
       settingsBody.innerHTML = `
         <button type="button" class="ytp-menu-item" data-nav="speed">
-          <span class="ytp-menu-lead">${YT_ICONS.speed}<span>Playback speed</span></span>
+          <span class="ytp-menu-lead">${YT_ICONS.speed}<span>Playback Speed</span></span>
           <span class="ytp-menu-val"><span>${speedLabel(v.playbackRate || 1)}</span>${YT_ICONS.chevRight}</span>
         </button>
         <button type="button" class="ytp-menu-item" data-nav="quality">

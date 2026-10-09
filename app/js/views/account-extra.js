@@ -134,7 +134,7 @@ function wireReferral(root) {
     const input = $('#refRedeem', slot), code = String(input?.value || '').trim();
     if (!code) return;
     b.disabled = true;
-    try { const r = await u.redeemInvite(code); toast(r.message || 'Invite applied'); await draw(); }
+    try { const r = await u.redeemInvite(code); toast(r.message || 'Invite Applied'); await draw(); }
     catch (err) { toast(friendly(err)); b.disabled = false; }
   });
   draw();
@@ -239,7 +239,7 @@ function wireSecurity(root) {
   });
   $('#signOutAll', root)?.addEventListener('click', async () => {
     if (await confirmDialog({ icon: 'logout', title: 'Sign out of other devices?', text: 'Every other phone, TV and browser signed in to this account will need to sign in again. This device stays signed in.', confirm: 'Sign Out Other Devices', danger: true })) {
-      try { await u.signOutEverywhere(); toast('Signed out of your other devices'); } catch (err) { toast(friendly(err)); }
+      try { await u.signOutEverywhere(); toast('Signed Out of Your Other Devices'); } catch (err) { toast(friendly(err)); }
     }
   });
   // The row icon follows what the label says the device IS: a phone/tablet (the app, iPhone/iPad,
@@ -268,7 +268,7 @@ function wireSecurity(root) {
           else { g.ids.push(x.deviceId); g.current = g.current || x.current; g.watching = g.watching || x.watching; }
         }
         $('#devBody', el).innerHTML = html`${d.streamLimit > 0 ? html`<p class="muted">Your plan allows ${d.streamLimit} screen${d.streamLimit === 1 ? '' : 's'} watching premium titles at once.</p>` : ''}
-          <ul class="dev-list">${groups.length ? groups.map((x) => html`<li><span>${icon(devIcon(x.label), { size: 22 })}</span><div><b>${x.label || 'Device'}${x.current ? html` <em class="pill">This device</em>` : ''}</b><small>${x.watching ? 'Watching now' : `Last active ${timeAgo(x.lastSeen)}`}</small></div>${x.current ? '' : html`<button class="btn btn-ghost btn-sm" type="button" data-forget="${x.ids.join(',')}">Remove</button>`}</li>`) : html`<li class="muted">No devices yet — they appear after you watch a premium title.</li>`}</ul>`.s;
+          <ul class="dev-list">${groups.length ? groups.map((x) => html`<li><span>${icon(devIcon(x.label), { size: 22 })}</span><div><b>${x.label || 'Device'}${x.current ? html` <em class="pill">This Device</em>` : ''}</b><small>${x.watching ? 'Watching now' : `Last active ${timeAgo(x.lastSeen)}`}</small></div>${x.current ? '' : html`<button class="btn btn-ghost btn-sm" type="button" data-forget="${x.ids.join(',')}">Remove</button>`}</li>`) : html`<li class="muted">No devices yet — they appear after you watch a premium title.</li>`}</ul>`.s;
       } catch (err) { $('#devBody', el).textContent = friendly(err); }
     };
     // Errors surface INSIDE the dialog: a toast would be hidden behind the modal (top layer), and the
@@ -289,7 +289,7 @@ function wireKids(root) {
   $('#pinBtn', root)?.addEventListener('click', async () => {
     if (!u.hasPin) {
       const pin = await pinPrompt({ title: 'Set a Parental PIN', text: 'Choose 4–6 digits. You’ll need it to leave a Kids profile or change profiles.', confirm: 'Set PIN', check: (p) => u.setPin(p) });
-      if (pin) { toast('Parental PIN set'); location.reload(); }
+      if (pin) { toast('Parental PIN Set'); location.reload(); }
       return;
     }
     const { el, close } = openDialog(html`<h2>Parental PIN</h2><div class="stack-sm"><button class="btn btn-ghost block" id="pinChange">Change PIN</button><button class="btn btn-danger block" id="pinRemove">Remove PIN</button><button class="linklike" id="pinForgot">Forgot PIN?</button></div>`, { cls: 'dialog-sm' });
@@ -307,8 +307,8 @@ function wireKids(root) {
 export function wireAccountDeletion(root) {
   const u = app.user;
   $('#delAcc', root)?.addEventListener('click', async () => {
-    if (await confirmDialog({ title: 'Delete your account?', text: 'This cannot be undone. Your account and linked data will be deleted. Payment and invoice records may be kept detached from your account; see the Privacy Policy.', confirm: 'Delete account', danger: true })) {
-      try { await u.deleteAccount(); toast('Account deleted'); go('/', { replace: true }); } catch (e) { toast(friendly(e)); }
+    if (await confirmDialog({ title: 'Delete Your Account?', text: 'This cannot be undone. Your account and linked data will be deleted. Payment and invoice records may be kept detached from your account; see the Privacy Policy.', confirm: 'Delete account', danger: true })) {
+      try { await u.deleteAccount(); toast('Account Deleted'); go('/', { replace: true }); } catch (e) { toast(friendly(e)); }
     }
   });
 }

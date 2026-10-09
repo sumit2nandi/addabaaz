@@ -370,7 +370,7 @@ export default async function home(ctx) {
   ctx.root.innerHTML = html`
     ${slides.length ? heroHtml(slides) : ''}
     <div class="rails rails-lean">
-      ${rail({ title: 'Continue Watching', items: cw.map(({ video }) => videoCard(video)), cls: 'r-video', id: 'cw-rail', headExtra: html`<button type="button" class="rail-clear" data-clear-history aria-label="Clear watch history">${icon('trash', { size: 18 })}</button>` })}
+      ${rail({ title: 'Continue Watching', items: cw.map(({ video }) => videoCard(video)), cls: 'r-video', id: 'cw-rail', headExtra: html`<button type="button" class="rail-clear" data-clear-history aria-label="Clear Watch History">${icon('trash', { size: 18 })}</button>` })}
       ${rec ? rail({ title: `Because you watched ${rec.because.titleEn || rec.because.title}`, items: rec.items.map((x) => showCard(x)), cls: 'r-poster', id: 'byw-rail' }) : ''}
       ${rail({ title: 'My List', items: mine, href: '#/list', cls: 'r-poster' })}
       ${comingSoonSection(cat)}
@@ -380,8 +380,8 @@ export default async function home(ctx) {
       ${cat.shows.map((s) => rail({ title: s.titleEn && s.titleEn !== s.title ? `${s.title} · ${s.titleEn}` : s.title, items: cat.episodes(s.id).slice().reverse().map((v) => videoCard(v, { showName: false })), href: `#/show/${s.id}`, linkLabel: 'Open show', cls: 'r-video' }))}
     </div>
     <section class="cta-band">
-      <div><h2>Have a story to tell?</h2><p>ADDABAAZ produces films, web series and ad films from Kolkata. Let’s make something great together.</p></div>
-      <a class="btn btn-primary btn-lg" href="#/contact">Start a project</a>
+      <div><h2>Have a Story to Tell?</h2><p>ADDABAAZ produces films, web series and ad films from Kolkata. Let’s make something great together.</p></div>
+      <a class="btn btn-primary btn-lg" href="#/contact">Start a Project</a>
     </section>`.s;
 
   mountHero(ctx.root, ctx);
@@ -390,9 +390,9 @@ export default async function home(ctx) {
   // The bin beside the Continue Watching heading clears this profile's watch history (with a confirm).
   const onClear = async (e) => {
     if (!e.target.closest('[data-clear-history]')) return;
-    if (!(await confirmDialog({ title: 'Clear watch history?', text: 'This removes Continue Watching for this profile.', confirm: 'Clear', danger: true }))) return;
+    if (!(await confirmDialog({ title: 'Clear Watch History?', text: 'This removes Continue Watching for this profile.', confirm: 'Clear', danger: true }))) return;
     u.clearHistory();
-    toast('Watch history cleared');
+    toast('Watch History Cleared');
     $('#cw-rail', ctx.root)?.remove();
     $('#byw-rail', ctx.root)?.remove();
   };

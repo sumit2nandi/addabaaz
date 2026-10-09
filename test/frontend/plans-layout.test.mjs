@@ -20,14 +20,14 @@ test('website checkout is one Plus card with duration tiles and a single pay but
     'a single pay button buys the selected tile');
   assert.match(plans, /const b = pay \? \{ dataset: \{ plan: sel \} \} : e\.target\.closest\('\[data-plan\]'\)/,
     'paying reuses the existing purchase flow with the selected plan');
-  // Guests on the website see the same selector (prices plus a "Sign in to subscribe" CTA) — see
+  // Guests on the website see the same selector (prices plus a "Sign In to Subscribe" CTA) — see
   // plans-guest.test.mjs; only the native apps fall back to the legacy cards.
   assert.match(plans, /\$\{canBuy \|\| guestWeb \? plusCard : legacyCards\}/,
     'the selector renders whenever there is something to show');
   assert.match(plans, /\$\{canBuy \|\| guestWeb \? plusCard : legacyCards\}\s*\$\{u\.account \? html`<div class="card-panel list plans-bill">/,
     'a billing shortcut sits directly below the plan options for signed-in viewers');
-  assert.match(plans, /<a class="row-link" href="#\/billing">.*Billing &amp; invoices/,
-    '...leading to Billing & invoices');
+  assert.match(plans, /<a class="row-link" href="#\/billing">.*Billing &amp; Invoices/,
+    '...leading to Billing & Invoices');
   assert.match(css, /\.plans-bill \{[^}]*max-width: 680px/,
     '...at the same width as the cards');
   assert.match(css, /\.dur\.is-sel \{[^}]*box-shadow/,
@@ -56,7 +56,7 @@ test('buying skips straight to payment: coupon popup, cancel screen, celebration
     'success shows a full-screen celebration');
   assert.match(plans, /<div class="confetti">\$\{raw\(bits\)\}<\/div>/,
     'confetti markup is injected unescaped (plain interpolation would print as text)');
-  assert.match(plans, /data-cel>Start watching<\//,
+  assert.match(plans, /data-cel>Start Watching<\//,
     '...with a way forward');
   assert.match(plans, /name="usec" data-usec/,
     'credit is a checkbox on the page, not in a dialog');
@@ -93,7 +93,7 @@ test('read-only plan cards stay for native apps and payment-less servers', () =>
 
   assert.match(plans, /const legacyCards = html`<div class="plans">/,
     'the legacy cards still exist');
-  assert.match(plans, /<span class="badge cur">Current plan<\/span>/,
+  assert.match(plans, /<span class="badge cur">Current Plan<\/span>/,
     'the current plan gets a badge there too');
 });
 

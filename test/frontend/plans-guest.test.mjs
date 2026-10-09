@@ -24,7 +24,7 @@ test('web guests see premium pricing and a sign-in CTA, not unavailable payments
       assert.match(root.textContent, /₹799/);
       assert.doesNotMatch(root.textContent, /Payments aren’t available|Demo checkout|your current plan/);
       const cta = root.querySelector('a.paybar');
-      assert.equal(cta.textContent, 'Sign in to subscribe');
+      assert.equal(cta.textContent, 'Sign In to Subscribe');
       assert.equal(cta.getAttribute('href'), '#/signin?next=' + encodeURIComponent('/plans?next=' + encodeURIComponent('/watch/demo')));
       assert.equal(root.querySelector('[data-pay], [data-coupon]'), null);
     }

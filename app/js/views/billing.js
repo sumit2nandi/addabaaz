@@ -50,13 +50,13 @@ export default async function billing(ctx) {
     ${sectionHeader({ tag: 'Account', title: 'Billing & invoices', subtitle: u.account.emailIsPlaceholder ? 'Your payment documents and refunds. Add a verified contact email in Account to receive billing emails.' : 'Your payments, GST invoices and refunds.' })}
     ${items.length ? html`<div class="bill">${items.map((p) => html`<article class="bill-item">
       <div class="bill-head"><div><b>${p.planName}</b><div class="muted small">${fmtDate(p.paidAt)}${p.couponCode ? ` · coupon ${p.couponCode} (−${inr(p.discountPaise)})` : ''}</div></div><div class="bill-amt">${p.amountPaise ? inr(p.amountPaise) : 'Free'}</div></div>
-      ${p.refundedPaise ? html`<div><span class="pill ok">Refunded ${inr(p.refundedPaise)}</span></div>` : p.refunds.some((r) => r.status === 'pending') ? html`<div><span class="pill">Refund in progress</span></div>` : pending.has(p.id) ? html`<div><span class="pill">${u.account.emailIsPlaceholder ? 'Refund requested — check this page for updates' : 'Refund requested — we’ll email you'}</span></div>` : ''}
+      ${p.refundedPaise ? html`<div><span class="pill ok">Refunded ${inr(p.refundedPaise)}</span></div>` : p.refunds.some((r) => r.status === 'pending') ? html`<div><span class="pill">Refund in Progress</span></div>` : pending.has(p.id) ? html`<div><span class="pill">${u.account.emailIsPlaceholder ? 'Refund requested — check this page for updates' : 'Refund requested — we’ll email you'}</span></div>` : ''}
       <div class="bill-docs">
         ${p.invoice ? doc(p.invoice, p.invoice.title === 'TAX INVOICE' ? 'Tax invoice' : 'Receipt') : p.amountPaise ? '' : html`<span class="muted small">Nothing was charged, so there is no invoice.</span>`}
         ${p.creditNotes.map((c) => doc(c, 'Credit note'))}
         ${canAsk(p) ? html`<button class="btn btn-ghost" data-refund="${p.id}">${icon('info', { size: 16 })} Request a refund</button>` : ''}
         ${p.invoice ? u.account.emailIsPlaceholder ? html`<span class="muted small">Confirm an email in Account to send documents by email.</span>` : html`<button class="btn btn-ghost" data-mail="${p.invoice.id}">${icon('mail', { size: 16 })} Email me the invoice</button>` : ''}
-      </div></article>`)}</div>` : html`<div class="empty">${icon('crown', { size: 44 })}<h2>No payments yet</h2><p>${isNative ? 'There are no website payment records linked to this account.' : html`When you subscribe to ADDABAAZ <em class="premium-word">premium</em>, your invoices will appear here.`}</p>${isNative ? '' : html`<a class="btn btn-primary" href="#/plans">See plans</a>`}</div>`}
+      </div></article>`)}</div>` : html`<div class="empty">${icon('crown', { size: 44 })}<h2>No Payments Yet</h2><p>${isNative ? 'There are no website payment records linked to this account.' : html`When you subscribe to ADDABAAZ <em class="premium-word">premium</em>, your invoices will appear here.`}</p>${isNative ? '' : html`<a class="btn btn-primary" href="#/plans">See Plans</a>`}</div>`}
   </div>`.s;
 
   ctx.root.addEventListener('click', async (e) => {
@@ -76,9 +76,9 @@ export default async function billing(ctx) {
 
   function refundDialog(paymentId) {
     const hasVerifiedEmail = !u.account.emailIsPlaceholder;
-    const { el, close } = openDialog(html`<h2>Request a refund</h2><p class="muted">You can ask within ${rr.windowDays} days of buying. We review every request and ${hasVerifiedEmail ? 'email you the outcome' : 'show the outcome on this Billing page'}; approved refunds go back to your original payment method (5–7 working days) and premium access ends.</p>
-      <form class="form" id="rfForm" novalidate><label>Why are you asking? <small class="muted">(optional)</small><textarea name="reason" rows="3" maxlength="500" placeholder="Tell us what went wrong"></textarea></label>
-      <div class="form-status" role="alert"></div><div class="row end"><button type="button" class="btn btn-ghost" data-close>Not now</button><button class="btn btn-primary" type="submit">Send request</button></div></form>`, { cls: 'dialog-sm' });
+    const { el, close } = openDialog(html`<h2>Request a Refund</h2><p class="muted">You can ask within ${rr.windowDays} days of buying. We review every request and ${hasVerifiedEmail ? 'email you the outcome' : 'show the outcome on this Billing page'}; approved refunds go back to your original payment method (5–7 working days) and premium access ends.</p>
+      <form class="form" id="rfForm" novalidate><label>Why Are You Asking? <small class="muted">(optional)</small><textarea name="reason" rows="3" maxlength="500" placeholder="Tell us what went wrong"></textarea></label>
+      <div class="form-status" role="alert"></div><div class="row end"><button type="button" class="btn btn-ghost" data-close>Not Now</button><button class="btn btn-primary" type="submit">Send Request</button></div></form>`, { cls: 'dialog-sm' });
     $('#rfForm', el).addEventListener('submit', async (e) => {
       e.preventDefault(); const st = $('.form-status', el); e.submitter && (e.submitter.disabled = true);
       try { await u.remote.requestRefund(paymentId, new FormData(e.target).get('reason')); close(); cache = null; toast(hasVerifiedEmail ? 'Request sent — we’ll email you the outcome.' : 'Request sent — check Billing for updates.'); go('/billing', { replace: true }); location.reload(); }
