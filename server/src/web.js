@@ -1,26 +1,54 @@
 // Browser delivery (static assets, SEO rendering, uploads cache and admin shell).
 import express from 'express';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createSeo } from './seo.js';
-import { wrap } from './http.js';
+import { wrap, safeRedirectLocation } from './http.js';
+import { SITE_CSP } from './middleware/security.js';
 import { UPLOAD_NAME, uploadType, cacheUpload } from './uploads.js';
+
+// Every `<script>` without a src, i.e. the inline blocks that need a CSP hash to run at all.
+const INLINE_SCRIPT = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
+
+/**
+ * The site CSP allows only `'self'` for scripts, so the one page that ships an inline script — the
+ * maintenance page, deliberately self-contained because it is shown while the API is offline — would have
+ * its script silently blocked by the browser. Rather than weakening the whole site with `'unsafe-inline'`,
+ * allow exactly the script blocks present in this response, by hash.
+ * @returns {string} the Content-Security-Policy for a page containing `html`
+ */
+export function cspForInlineScripts(html, base = SITE_CSP) {
+  const hashes = [...String(html).matchAll(INLINE_SCRIPT)]
+    .map((m) => `'sha256-${crypto.createHash('sha256').update(m[1], 'utf8').digest('base64')}'`);
+  if (!hashes.length) return base;
+  // script-src is present in SITE_CSP by construction; the guarded replace keeps this from ever emitting a
+  // policy that silently drops the directive (which would mean "no inline script allowed" again).
+  return /script-src/.test(base) ? base.replace(/script-src([^;]*)/, (_all, list) => `script-src${list} ${hashes.join(' ')}`) : base;
+}
 
 export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg, maintenance = null, r2 = null, logger = console }) {
   // Maintenance mode (docs/MAINTENANCE.md): while the switch is on, viewers get the branded page with a real
   // 503 and the API refuses viewer calls — but the consoles, the API allow-list and /maintenance itself keep
   // working so the operator can finish the job and turn it back off.
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const maintenancePage = (req, res, state) => {
+  /**
+   * maintenance.html with the operator's message and the end time filled in, plus the CSP that lets its
+   * inline script run. The replacements use a function so a `$&`-style sequence typed by the operator in
+   * the message is inserted literally instead of being treated as a replace() pattern.
+   */
+  const maintenanceBody = (state) => {
     let body = '';
     try { body = fs.readFileSync(path.join(ROOT, 'maintenance.html'), 'utf8'); }
-    catch { body = '<!doctype html><html lang="en"><meta charset="utf-8"><title>We’ll be right back</title><h1>We’ll be right back</h1>'; }
-    // Fill the two placeholders so the page is complete even with JavaScript disabled (the script refreshes
-    // them from /api/v1/status when it can).
-    body = body.replace('{{message}}', esc(state.message)).replace('{{until}}', state.until ? JSON.stringify(state.until) : 'null');
+    catch { return { body: '<!doctype html><html lang="en"><meta charset="utf-8"><title>We’ll be right back</title><h1>We’ll be right back</h1>', csp: SITE_CSP }; }
+    body = body.replace('{{message}}', () => esc(state.message)).replace('{{until}}', () => esc(JSON.stringify(state.until ?? null)));
+    return { body, csp: cspForInlineScripts(body) };
+  };
+  const maintenancePage = (req, res, state) => {
+    const { body, csp } = maintenanceBody(state);
     // A client that cannot take HTML (an API client, a scraper) gets a sentence instead of a page.
     if (!req.accepts('html')) return res.status(503).type('text/plain').set({ 'Cache-Control': 'no-store', 'Retry-After': String(maintenance.retryAfter(state)) }).send(state.message);
-    res.status(503).set({ 'Cache-Control': 'no-store', 'Retry-After': String(maintenance.retryAfter(state)) }).type('html').send(body);
+    res.status(503).set({ 'Cache-Control': 'no-store', 'Retry-After': String(maintenance.retryAfter(state)), 'Content-Security-Policy': csp }).type('html').send(body);
   };
   // Broadcast-photo URLs are stable even though the bucket is private: issue a fresh signed GET redirect
   // on each fetch, so push notifications and old e-mails keep working beyond the signature lifetime.
@@ -111,10 +139,11 @@ export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS
     app.get(['/maintenance', '/maintenance.html'], wrap(async (_q, res) => {
       const state = maintenance ? await maintenance.state() : { active: false, message: '', until: null };
       if (!maintenance || !state.active) {
-        let body = '';
-        try { body = fs.readFileSync(path.join(ROOT, 'maintenance.html'), 'utf8'); } catch { return res.status(404).type('text/plain').send('Not found'); }
-        return res.set('Cache-Control', 'no-store').type('html')
-          .send(body.replace('{{message}}', esc(state.message)).replace('{{until}}', state.until ? JSON.stringify(state.until) : 'null'));
+        // Preview of the same page while the switch is off — identical delivery, so the hashed inline
+        // script can be tested without putting the site into maintenance.
+        if (!fs.existsSync(path.join(ROOT, 'maintenance.html'))) return res.status(404).type('text/plain').send('Not found');
+        const { body, csp } = maintenanceBody(state);
+        return res.set({ 'Cache-Control': 'no-store', 'Content-Security-Policy': csp }).type('html').send(body);
       }
       maintenancePage(_q, res, state);
     }));
@@ -133,7 +162,13 @@ export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS
       // Render the requested page (or redirect, or a real 404 status for unknown URLs).
       try {
         const r = await seoSvc.render(req);
-        if (r.redirect) return res.redirect(r.status || 301, r.redirect);
+        // The renderer already sanitises its targets; re-check here so no future redirect source can turn
+        // this sink into an open redirect (`Location: ///evil.com` leaves the origin).
+        if (r.redirect) {
+          const to = safeRedirectLocation(r.redirect, '');
+          if (!to) return res.status(404).type('text/plain').send('Not found');
+          return res.redirect(r.status || 301, to);
+        }
         res.status(r.status).set(r.headers).send(r.body);
       } catch (e) {
         logger.error('[seo] page render failed:', e);

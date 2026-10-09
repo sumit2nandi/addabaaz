@@ -134,9 +134,19 @@ async function openBackup(file, passphrase) {
     const src = fs.createReadStream(file); src.on('error', (e) => gz.destroy(e)); src.pipe(gz); return gz;
   }
   if (!passphrase) { fs.closeSync(fd); throw new Error('This backup is encrypted — set BACKUP_PASSPHRASE.'); }
-  const hdr = Buffer.alloc(MAGIC.length + 28); fs.readSync(fd, hdr, 0, hdr.length, 0);
+  // Header = MAGIC + 16-byte salt + 12-byte IV; trailer = the 16-byte GCM tag. Anything shorter cannot be
+  // a complete encrypted backup, and reading a tag out of the header of a truncated file would only waste a
+  // scrypt derivation before reporting "damaged".
+  const HDR = MAGIC.length + 28;
+  if (size < HDR + 16) { fs.closeSync(fd); throw new Error('This backup file is truncated — it is shorter than an encrypted backup can be.'); }
+  const hdr = Buffer.alloc(HDR); fs.readSync(fd, hdr, 0, hdr.length, 0);
   const tag = Buffer.alloc(16); fs.readSync(fd, tag, 0, 16, size - 16); fs.closeSync(fd);
-  const decipher = crypto.createDecipheriv('aes-256-gcm', deriveKey(passphrase, hdr.subarray(5, 21)), hdr.subarray(21, 33)); decipher.setAuthTag(tag);
+  const decipher = crypto.createDecipheriv('aes-256-gcm', deriveKey(passphrase, hdr.subarray(5, 21)), hdr.subarray(21, 33));
+  // The tag is the last 16 bytes of the file, so its length is known here (matching what createBackup
+  // writes) and node verifies it when the decipher ends. There is deliberately no setAuthTagLength(): that
+  // method does not exist on node's Cipher/Decipher (only WebCrypto's AES-GCM takes a tagLength), and
+  // calling it throws and would make every encrypted backup impossible to restore.
+  decipher.setAuthTag(tag);
   const src = fs.createReadStream(file, { start: hdr.length, end: size - 17 });
   gz.friendly = 'Wrong passphrase, or the backup is damaged.';
   src.on('error', (e) => gz.destroy(e)); decipher.on('error', (e) => gz.destroy(e));

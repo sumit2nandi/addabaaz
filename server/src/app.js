@@ -160,7 +160,10 @@ export function createApp({
   r2 = createR2(),                                            // Cloudflare R2 (private storage for video files)
   social = socialFromEnv(),                                   // { config, verifiers: { google?, facebook? } }
   publicApiUrl = process.env.PUBLIC_API_URL || '',            // absolute base for HLS URLs when behind a proxy
-  streamTtl = Number(process.env.STREAM_URL_TTL) || 6 * 3600, // seconds a signed video URL stays valid
+  // Seconds a signed video URL stays valid. Clamped: a huge value would let a playback link outlive a
+  // cancelled subscription or a deleted video (the token is what grants access to the HLS gateway, and it
+  // is never re-checked per segment), and a tiny one would break playback. 6 h covers a feature-length film.
+  streamTtl = Math.min(Math.max(Number(process.env.STREAM_URL_TTL) || 6 * 3600, 300), 12 * 3600),
   signupMailWaitMs = Number(process.env.SIGNUP_EMAIL_WAIT_MS) || 5000, // how long sign-up waits for the confirmation mail before answering "still on its way"
   push: pushOption = null,                                   // Web Push (VAPID) + native app push (FCM); tests inject a fake sender
   features: featureOptions = {},                              // limits: { streamLimit, refundWindowDays … } (env defaults)
@@ -201,7 +204,7 @@ export function createApp({
     res.setHeader('X-Request-ID', req.requestId);
     next();
   });
-  const seoCfg = installSecurityMiddleware(app, { corsOrigins, production, seo });
+  const seoCfg = installSecurityMiddleware(app, { corsOrigins, production, seo, log: logger });
   const applicationMonitor = createApplicationMonitor();
   app.use(applicationMonitor.middleware);
   // All JSON endpoints hang off this router, mounted at /api/v1 near the bottom.

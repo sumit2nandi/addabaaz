@@ -355,15 +355,23 @@ export function createBilling({ db, payments, mailer, config = billingConfigFrom
   /** CSV sales register (invoices positive, credit notes negative) for [from, to) — hand it to your accountant / use for GSTR-1. */
   async function registerCsv(from, to) {
     const rows = await db.invoices.register(from, to);
+    // Spreadsheet formula injection (CWE-1236): the customer name and GSTIN are typed by the buyer, and
+    // Excel/Sheets/Numbers evaluate a cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return.
+    // A leading apostrophe (the spreadsheet's own "literal text" marker, not shown in the cell) keeps such
+    // a value inert. Only text cells pass through here — the money columns are built from numbers and must
+    // keep their leading '-' so credit notes still net out when the accountant totals a column.
+    const text = (v) => { const s = String(v ?? ''); return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s; };
     // CSV escaping: quote any value containing a comma, quote or newline.
     const cell = (v) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    // A cell is neutralised first, then quoted, so a hostile prefix can never hide behind the quoting step.
+    const txt = (v) => cell(text(v));
     // Credit notes are written as negative numbers so column totals net out correctly.
     const r2 = (p, k) => ((k === 'credit_note' ? -p : p) / 100).toFixed(2);
     const head = ['Document', 'Number', 'Date (IST)', 'Against', 'Customer', 'Customer GSTIN', 'Place of supply', 'Taxable value', 'CGST', 'SGST', 'IGST', 'Total', 'GST rate %'];
-    const lines = rows.map((i) => [i.kind === 'credit_note' ? 'Credit note' : i.doc.title === 'TAX INVOICE' ? 'Tax invoice' : 'Receipt', i.number,
-      new Date(Date.parse(i.issuedAt) + 5.5 * 3600_000).toISOString().slice(0, 10), i.doc.refers?.number || '', i.doc.buyer.name, i.doc.buyer.gstin || '', i.doc.placeOfSupply || '',
-      r2(i.taxable, i.kind), r2(i.cgst, i.kind), r2(i.sgst, i.kind), r2(i.igst, i.kind), r2(i.total, i.kind), i.gstRate]);
-    return [head, ...lines].map((l) => l.map(cell).join(',')).join('\r\n') + '\r\n';
+    const lines = rows.map((i) => [txt(i.kind === 'credit_note' ? 'Credit note' : i.doc.title === 'TAX INVOICE' ? 'Tax invoice' : 'Receipt'), txt(i.number),
+      txt(new Date(Date.parse(i.issuedAt) + 5.5 * 3600_000).toISOString().slice(0, 10)), txt(i.doc.refers?.number || ''), txt(i.doc.buyer.name), txt(i.doc.buyer.gstin || ''), txt(i.doc.placeOfSupply || ''),
+      cell(r2(i.taxable, i.kind)), cell(r2(i.cgst, i.kind)), cell(r2(i.sgst, i.kind)), cell(r2(i.igst, i.kind)), cell(r2(i.total, i.kind)), cell(Number(i.gstRate) || 0)]);
+    return [head.map(cell), ...lines].map((l) => l.join(',')).join('\r\n') + '\r\n';
   }
 
   // Public surface of the billing module.

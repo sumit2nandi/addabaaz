@@ -16,6 +16,32 @@ export function safeErrorUrl(value) {
 // Wraps an async route handler so a rejected promise reaches Express's error middleware (Express 4 does not do this itself).
 export const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
+/**
+ * Neutralises a redirect target built from a request path so it can never leave this site.
+ *
+ * The SEO renderer canonicalises URLs (`/show/x/` → `/show/x`) by echoing part of the request path into
+ * `Location`. A path is not automatically same-origin: WHATWG URL parsing (browsers, and `new URL()`)
+ * treats `//host` *and* `///host` as "same scheme, this authority", so `Location: ///evil.com` lands the
+ * visitor on `https://evil.com`. Backslashes are collapsed to slashes by the same parser, and a CR/LF
+ * would let a target write extra response headers.
+ *
+ * So only a single-slash absolute path made of ordinary characters is accepted; anything else returns
+ * `fallback` (empty string by default, which means "do not redirect").
+ */
+export function safeRedirectLocation(target, fallback = '') {
+  const s = String(target ?? '');
+  if (!s.startsWith('/') || s.startsWith('//')) return fallback;                    // must be a path on this origin, never "//host" or a URL
+  if (/[\\\s\u0000-\u001f\u007f]/.test(s)) return fallback;                          // no backslash, whitespace, CRLF or other control character
+  return s;
+}
+
+/** Outbound-request budget shared by every provider call, so one hung upstream cannot pin a request handler. */
+export const OUTBOUND_TIMEOUT_MS = Number(process.env.HTTP_TIMEOUT_MS) || 15_000;
+/** `fetch` init with an abort timer; `signal` from the caller wins (it may already combine several reasons). */
+export function withTimeout(init = {}, ms = OUTBOUND_TIMEOUT_MS) {
+  return init.signal || !Number.isFinite(ms) || ms <= 0 ? init : { ...init, signal: AbortSignal.timeout(Math.max(100, Math.round(ms))) };
+}
+
 /** Sliding-window in-memory rate limiter (per IP + bucket). Use Redis/edge limits when running multiple nodes. */
 export function rateLimit(bucket, max, windowMs) {
   const hits = new Map();

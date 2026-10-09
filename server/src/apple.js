@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { SocialError } from './social-errors.js';
+import { withTimeout, OUTBOUND_TIMEOUT_MS } from './http.js';
 
 /**
  * Sign in with Apple. The client (Apple JS on the web, the native SDK through Capacitor in the iOS app) obtains an
@@ -13,12 +14,12 @@ const APPLE_KEYS = 'https://appleid.apple.com/auth/keys';
 const b64json = (s) => JSON.parse(Buffer.from(s, 'base64url').toString('utf8'));
 
 // Returns a key lookup by `kid` with a one-hour cache.
-export function appleJwks(fetchImpl = fetch) {
+export function appleJwks(fetchImpl = fetch, { timeoutMs = OUTBOUND_TIMEOUT_MS } = {}) {
   let keys = null, at = 0;
   return async (kid) => {
     if (!keys || Date.now() - at > 3_600_000 || (kid && !keys.some((k) => k.kid === kid) && Date.now() - at > 10_000)) {
       let r;
-      try { r = await fetchImpl(APPLE_KEYS); }
+      try { r = await fetchImpl(APPLE_KEYS, withTimeout({}, timeoutMs)); }
       catch (cause) { throw new SocialError('provider_unavailable', 'Could not reach Apple to verify your sign-in.', { cause }); }
       if (!r?.ok) throw new SocialError('provider_unavailable', 'Could not reach Apple to verify your sign-in.', { cause: new Error(`Apple JWKS returned HTTP ${r?.status || 'unknown'}.`) });
       keys = (await r.json()).keys || []; at = Date.now();

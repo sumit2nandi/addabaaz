@@ -109,11 +109,16 @@
   </p>
 </main>
 
-<script>
+<script id="mScript" data-until="{{until}}">
   /* No build step, no dependencies: read the switch from /api/v1/status and reload the moment it is off.
-     Everything here is progressive — with JavaScript off, the page above (filled in by the server) is final. */
+     Everything here is progressive — with JavaScript off, the page above (filled in by the server) is final.
+     The server-supplied end time is read from data-until, never interpolated into this block: the script
+     must be byte-identical for every response so its CSP sha256 hash (see server/src/web.js) stays valid,
+     which is what lets the site keep 'unsafe-inline' out of its Content-Security-Policy. */
   (function () {
-    var until = {{until}} || null;                 // ISO string or null
+    var script = document.getElementById('mScript');
+    var until = null;
+    try { until = JSON.parse(script.getAttribute('data-until') || 'null') || null; } catch (e) { until = null; }   // ISO string or null
     var left = document.getElementById('mLeft'), eta = document.getElementById('mEta');
     var check = document.getElementById('mCheck'), message = document.getElementById('mMessage');
 
