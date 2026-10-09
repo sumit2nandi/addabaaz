@@ -148,32 +148,7 @@ test('YouTube autoplay explicitly mutes the iOS iframe before asking it to play 
   } finally { restore(); }
 });
 
-test('Reels recover if YouTube URL autoplay stays cued without starting', async () => {
-  const restore = saveGlobals(['document', 'location', 'window']);
-  const actions = [];
-  class FakePlayer {
-    constructor(_mount, options) { setTimeout(() => options.events.onReady({ target: this }), 0); }
-    getPlayerState() { return 5; } // YouTube remains cued after the URL autoplay request.
-    mute() { actions.push('mute'); }
-    playVideo() { actions.push('play'); }
-    getCurrentTime() { return 0; }
-    getDuration() { return 30; }
-    destroy() {}
-  }
-  globalThis.document = { createElement() { return {}; } };
-  globalThis.location = { protocol: 'https:', origin: 'https://addabaaz.example' };
-  globalThis.window = { YT: { Player: FakePlayer, PlayerState: { PLAYING: 1, PAUSED: 2, ENDED: 0, BUFFERING: 3, CUED: 5 } } };
-  try {
-    const container = { innerHTML: '', appendChild() {} };
-    const ctl = await createYouTubePlayer(container, 'reel-video', { autoplay: true, muted: false, controls: false, reel: true });
-    assert.deepEqual(actions, [], 'let URL-based muted autoplay work without waking the pause overlay');
-    await new Promise((resolve) => setTimeout(resolve, 1250));
-    assert.deepEqual(actions, ['play'], 'issue one muted play command only after the reel stayed cued');
-    ctl.destroy();
-  } finally { restore(); }
-});
-
-test('YouTube iframe fallback starts muted for autoplay when the API script fails', async () => {
+test('YouTube iframe fallback honors the requested sound-first mode when the API script fails', async () => {
   const restore = saveGlobals(['document', 'location', 'window']);
   globalThis.document = {
     createElement() { return { appendChild() {} }; },
@@ -186,65 +161,12 @@ test('YouTube iframe fallback starts muted for autoplay when the API script fail
     const ctl = await createYouTubePlayer(container, 'test-video', { autoplay: true, muted: false, controls: true });
     assert.equal(ctl.engine, 'iframe', 'slow/blocked API does not hold the video behind its 8-second timeout');
     assert.match(container.innerHTML, /autoplay=1/);
-    assert.match(container.innerHTML, /mute=1/, 'muted autoplay works on mobile even when the API cannot retry sound-first playback');
-    assert.equal(ctl.isMuted(), true);
+    assert.match(container.innerHTML, /mute=0/, 'fallback does not force the viewer into muted autoplay');
     assert.match(container.innerHTML, /playsinline=1/);
-    assert.match(container.innerHTML, /controls=1/, 'the fallback keeps YouTube controls available for unmuting');
+    assert.match(container.innerHTML, /controls=1/, 'the fallback keeps YouTube controls available');
     assert.match(container.innerHTML, /fs=1/, 'the fallback keeps YouTube fullscreen enabled');
     assert.match(container.innerHTML, /allowfullscreen/, 'the fallback iframe is permitted to enter fullscreen');
     ctl.destroy();
-
-    const manual = await createYouTubePlayer(container, 'manual-video', { autoplay: false, muted: false, controls: true });
-    assert.match(container.innerHTML, /autoplay=0/);
-    assert.match(container.innerHTML, /mute=0/, 'manual playback preserves the selected sound mode');
-    assert.equal(manual.isMuted(), false);
-    manual.destroy();
-  } finally { restore(); }
-});
-
-test('API-less YouTube iframe fallback reports state so Reels and Watch can reveal/autoplay it', async () => {
-  const restore = saveGlobals(['document', 'location', 'window']);
-  const frameListeners = {}, windowListeners = {}, commands = [], states = [];
-  let progress, ended = 0;
-  const frame = {
-    contentWindow: { postMessage(line) { commands.push(JSON.parse(line)); } },
-    addEventListener(name, fn) { frameListeners[name] = fn; },
-    removeEventListener(name) { delete frameListeners[name]; },
-  };
-  globalThis.document = {
-    createElement() { return {}; },
-    head: { appendChild(script) { setTimeout(() => script.onerror?.(), 0); } },
-  };
-  globalThis.location = { protocol: 'https:', origin: 'https://addabaaz.example' };
-  globalThis.window = {
-    addEventListener(name, fn) { windowListeners[name] = fn; },
-    removeEventListener(name) { delete windowListeners[name]; },
-  };
-  try {
-    const container = { innerHTML: '', appendChild() {}, querySelector() { return frame; } };
-    const ctl = await createYouTubePlayer(container, 'reel-video', {
-      autoplay: true, muted: false, controls: false, reel: true,
-      onState: (state) => states.push(state),
-      onProgress: (time, duration) => { progress = [time, duration]; },
-      onEnded: () => { ended++; },
-    });
-    assert.equal(ctl.engine, 'iframe');
-    assert.match(container.innerHTML, /mute=1/, 'the fallback embeds a muted autoplay URL');
-    frameListeners.load();
-    const send = (message) => windowListeners.message({ source: frame.contentWindow, data: JSON.stringify(message) });
-    send({ event: 'onReady' });
-    assert.ok(commands.some((command) => command.func === 'addEventListener' && command.args[0] === 'onStateChange'));
-    send({ event: 'onStateChange', info: 1 });
-    send({ event: 'infoDelivery', info: { currentTime: 4, duration: 45, playerState: 1 } });
-    assert.deepEqual(states, ['playing']);
-    assert.equal(ctl.state(), 1);
-    assert.deepEqual(progress, [4, 45]);
-    send({ event: 'onStateChange', info: 2 });
-    send({ event: 'onStateChange', info: 0 });
-    assert.deepEqual(states, ['playing', 'paused', 'ended']);
-    assert.equal(ended, 1);
-    ctl.destroy();
-    assert.equal(windowListeners.message, undefined, 'the fallback message listener is cleaned up');
   } finally { restore(); }
 });
 
@@ -263,7 +185,7 @@ test('YouTube does not wait for the API network timeout before using its iframe 
     const container = { innerHTML: '', appendChild() {}, querySelector() { return null; } };
     const ctl = await createYouTubePlayer(container, 'slow-api-video', { autoplay: true, muted: false, controls: false });
     assert.equal(ctl.engine, 'iframe', 'the playback budget expires while the API script request is still pending');
-    assert.match(container.innerHTML, /mute=1/, 'autoplay falls back to muted so a slow API cannot strand mobile playback');
+    assert.match(container.innerHTML, /mute=0/, 'fallback honors the requested unmuted mode when the API is still loading');
     ctl.destroy();
   } finally { restore(); }
 });
