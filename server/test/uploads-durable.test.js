@@ -1,7 +1,5 @@
-// Admin uploads (posters, thumbnails, subtitles) are stored in MySQL; the upload folder is only a cache. On a host with a throw-away
-// disk (Render's free plan wipes it on every deploy and restart) an image that was uploaded from one device used to vanish for everybody
-// else: the catalog row survived in MySQL but the file did not. These tests cover the serving side - a file missing from disk is served from
-// MySQL - and the image hotlink guard that also has to let the website, the native app and listed hosts show those images.
+// Legacy admin images/subtitles still read from MySQL, while all new catalog/Broadcast photo bytes go to private R2.
+// These tests use an in-memory database and an R2 fake to exercise uploads, validation, durable URL serving and hotlink protection.
 // Needs no MySQL: the database is an in-memory stub (just enough of `uploads`, `catalog` and `audit`) driven through the real Express routes;
 // the MySQL-backed twin of the admin flow lives in admin.test.js.
 import test from 'node:test';
@@ -17,6 +15,17 @@ const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a
 const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP'), crypto.randomBytes(32)]);
 const NAME = describeImage(PNG).name;
 const VTT = describeSubtitle('WEBVTT\n\n00:00.000 --> 00:01.000\nহ্যালো\n');
+const r2Fixture = (host = 'r2.example.test') => {
+  const objects = new Map();
+  const r2 = {
+    configured: true, bucket: 'media',
+    async putObject(key, data, metadata) { objects.set(key, { data: Buffer.from(data), ...metadata }); return { status: 200 }; },
+    async head(key) { const object = objects.get(key); return object ? { status: 200, size: object.data.length, type: object.contentType } : { status: 404, size: null, type: null }; },
+    presignGet(key, { ttl = 3600 } = {}) { return `https://${host}/${key}?ttl=${ttl}`; },
+    presignHead(key, { ttl = 3600 } = {}) { return `https://${host}/${key}?method=HEAD&ttl=${ttl}`; },
+  };
+  return { r2, objects };
+};
 
 // Stub database: `uploads`, `catalog` (the admin's catalog writes + the public catalog) and `audit` are real in-memory fakes; every other method answers null.
 const stored = new Map();
@@ -105,8 +114,9 @@ test('an image that is missing from the disk is served from MySQL, cached for a 
   assert.equal(head.headers.get('content-type'), 'image/png');
 });
 
-test('new catalog image uploads save a compact WebP rendition beside the durable high-quality original', async () => {
-  const { dir, base } = await start();
+test('new catalog image uploads store both renditions in R2, never MySQL, and validate through their stable URL', async () => {
+  const { r2, objects } = r2Fixture();
+  const { dir, base } = await start({ r2 });
   const highBytes = Buffer.concat([PNG, crypto.randomBytes(4096)]);
   const lowBytes = Buffer.concat([WEBP, crypto.randomBytes(8)]);
   const upload = (body, headers = {}) => fetch(`${base}/api/v1/admin/uploads/image`, {
@@ -116,35 +126,51 @@ test('new catalog image uploads save a compact WebP rendition beside the durable
   const highResponse = await upload(highBytes, { 'X-Image-Renditions': 'progressive' });
   assert.equal(highResponse.status, 201, await highResponse.clone().text());
   const high = await highResponse.json();
-  assert.match(high.path, /^uploads\/[0-9a-f]{24}-hq\.png$/);
-  assert.deepEqual(stored.get(path.basename(high.path)).data, highBytes);
+  assert.match(high.path, /^r2-assets\/catalog\/[0-9a-f]{24}-hq\.png$/);
+  const highName = path.basename(high.path);
+  assert.deepEqual(objects.get(`catalog/${highName}`).data, highBytes);
+  assert.equal(objects.get(`catalog/${highName}`).contentType, 'image/png');
+  assert.match(objects.get(`catalog/${highName}`).cacheControl, /immutable/);
+  assert.equal(stored.has(highName), false, 'new catalog photo bytes never enter MySQL');
+  assert.equal(fs.existsSync(path.join(dir, highName)), false, 'new catalog photos are not copied to UPLOAD_DIR');
 
-  const badVariant = await upload(Buffer.concat([WEBP, crypto.randomBytes(highBytes.length)]), { 'X-Image-Variant-Of': path.basename(high.path) });
+  const badVariant = await upload(Buffer.concat([WEBP, crypto.randomBytes(highBytes.length)]), { 'X-Image-Variant-Of': highName });
   assert.equal(badVariant.status, 400, 'a compact variant may not be larger than its original');
-  const compactResponse = await upload(lowBytes, { 'Content-Type': 'image/webp', 'X-Image-Variant-Of': path.basename(high.path) });
+  const compactResponse = await upload(lowBytes, { 'Content-Type': 'image/webp', 'X-Image-Variant-Of': highName });
   assert.equal(compactResponse.status, 201, await compactResponse.clone().text());
   const compact = await compactResponse.json();
-  assert.equal(compact.path, `uploads/${path.basename(high.path).slice(0, 24)}-low.webp`);
+  const compactName = path.basename(compact.path);
+  assert.equal(compact.path, `r2-assets/catalog/${highName.slice(0, 24)}-low.webp`);
   assert.equal(compact.variant, 'low');
-  assert.deepEqual(stored.get(path.basename(compact.path)).data, lowBytes);
-  assert.equal(stored.get(path.basename(compact.path)).type, 'image/webp');
+  assert.deepEqual(objects.get(`catalog/${compactName}`).data, lowBytes);
+  assert.equal(objects.get(`catalog/${compactName}`).contentType, 'image/webp');
+  assert.equal(stored.has(compactName), false, 'the compact rendition is also R2-only');
+
   const createTitle = await fetch(`${base}/api/v1/admin/catalog/upcoming`, {
     method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: 'rendition-poster', title: 'Rendition Poster', poster: high.path, backdrop: high.path }),
   });
   assert.equal(createTitle.status, 201, await createTitle.clone().text());
   const publicTitle = ((await (await fetch(`${base}/api/v1/catalog`)).json()).upcoming || []).find((item) => item.id === 'rendition-poster');
-  assert.equal(publicTitle.poster, high.path, 'the content catalog references the full-quality upload');
-  assert.equal(fs.existsSync(path.join(dir, path.basename(high.path))), true);
-  assert.equal(fs.existsSync(path.join(dir, path.basename(compact.path))), true);
+  assert.equal(publicTitle.poster, high.path, 'the content catalog references the full-quality R2 URL');
+  assert.equal(fs.existsSync(path.join(dir, highName)), false);
 
-  fs.rmSync(dir, { recursive: true, force: true });
-  const lowFetch = await fetch(`${base}/${compact.path}`);
-  assert.equal(lowFetch.status, 200, 'the compact variant is served from MySQL after a disk wipe');
-  assert.equal(lowFetch.headers.get('content-type'), 'image/webp');
-  assert.match(lowFetch.headers.get('cache-control'), /immutable/);
-  assert.deepEqual(Buffer.from(await lowFetch.arrayBuffer()), lowBytes);
-  assert.equal(fs.existsSync(path.join(dir, path.basename(compact.path))), true, 'the cache is repopulated');
+  const lowFetch = await fetch(`${base}/${compact.path}`, { redirect: 'manual' });
+  assert.equal(lowFetch.status, 302, 'the stable compact URL redirects to its private R2 object');
+  assert.equal(lowFetch.headers.get('location'), `https://r2.example.test/catalog/${compactName}?ttl=3600`);
+  assert.match(lowFetch.headers.get('cache-control'), /max-age=60/);
+  assert.deepEqual(objects.get(`catalog/${compactName}`).data, lowBytes);
+});
+
+test('catalog photo uploads fail clearly when R2 is not configured, without falling back to MySQL', async () => {
+  const priorLegacy = stored.get(NAME);
+  const { base } = await start({ r2: { configured: false } });
+  const response = await fetch(`${base}/api/v1/admin/uploads/image`, {
+    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'image/png' }, body: PNG,
+  });
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error.message, /photo uploads require R2/);
+  assert.equal(stored.get(NAME), priorLegacy, 'the rejected photo is not written to the existing MySQL upload row');
 });
 
 test('subtitles are served from MySQL with the right type, and a stored file survives the loss of the whole folder', async () => {
@@ -170,12 +196,7 @@ test('unknown or malformed names are a plain 404, and odd names never reach MySQ
 });
 
 test('Broadcast photos upload to private R2, avoid the MySQL uploads store, and resolve through a stable URL', async () => {
-  const objects = new Map();
-  const r2 = {
-    configured: true,
-    async putObject(key, data, metadata) { objects.set(key, { data: Buffer.from(data), ...metadata }); },
-    presignGet(key, { ttl }) { return `https://r2.example.test/${key}?ttl=${ttl}`; },
-  };
+  const { r2, objects } = r2Fixture();
   const { base } = await start({ r2 });
   const image = Buffer.concat([PNG, crypto.randomBytes(32)]);
   const upload = await fetch(`${base}/api/v1/admin/uploads/broadcast-image`, {
@@ -250,51 +271,59 @@ test('hotlink guard: CORS_ORIGINS entries and IMAGE_ALLOWED_HOSTS are allowed to
   }
 });
 
-// The reported bug, end to end through the real admin routes: upload on one device, the disk is wiped by a redeploy, the title is created and
-// edited afterwards, and another device (no sign-in, nothing cached) loads the public catalog and the artwork.
-test('Releasing This Month: an upload survives a disk wipe, can be used and edited afterwards, and shows on another device', async () => {
-  const { dir, base } = await start();
+// End-to-end: new catalog photos go to R2, survive local disk wipes, and remain verifiable/editable through the stable app path.
+test('new catalog photos stay in R2 across disk wipes, validate for catalog edits, and use a guarded stable URL', async () => {
+  const { r2, objects } = r2Fixture();
+  const { dir, base } = await start({ r2 });
   const admin = (method, p, body, headers = {}) => fetch(`${base}/api/v1/admin${p}`, { method, headers: { Authorization: `Bearer ${TOKEN}`, ...headers }, body });
   const json = (method, p, doc) => admin(method, p, JSON.stringify(doc), { 'Content-Type': 'application/json' });
   const art = Buffer.concat([PNG, crypto.randomBytes(4096)]);
-  const wipeDisk = () => fs.rmSync(dir, { recursive: true, force: true });   // a restart / redeploy on a host with a throw-away disk
+  const lowBytes = Buffer.concat([WEBP, crypto.randomBytes(8)]);
 
-  const up = await admin('POST', '/uploads/image', art, { 'Content-Type': 'image/png' });
+  const up = await admin('POST', '/uploads/image', art, { 'Content-Type': 'image/png', 'X-Image-Renditions': 'progressive' });
   assert.equal(up.status, 201);
   const uploaded = await up.json();
   const name = path.basename(uploaded.path);
-  assert.match(uploaded.path, /^uploads\/[0-9a-f]{24}\.png$/);
+  assert.match(uploaded.path, /^r2-assets\/catalog\/[0-9a-f]{24}-hq\.png$/);
   assert.equal(uploaded.bytes, art.length);
-  assert.deepEqual(stored.get(name).data, art, 'the durable copy is stored in the database');
-  assert.equal(stored.get(name).type, 'image/png');
-  assert.equal(fs.existsSync(path.join(dir, name)), true, 'and a cache copy sits in the upload folder');
+  assert.deepEqual(objects.get(`catalog/${name}`).data, art, 'high-quality bytes are stored in R2');
+  assert.equal(stored.has(name), false, 'new photo bytes are not stored in MySQL');
+  assert.equal(fs.existsSync(path.join(dir, name)), false, 'new photos do not use UPLOAD_DIR as a cache');
+
+  const low = await admin('POST', '/uploads/image', lowBytes, { 'Content-Type': 'image/webp', 'X-Image-Variant-Of': name });
+  assert.equal(low.status, 201, await low.clone().text());
+  const compact = await low.json();
+  const lowName = path.basename(compact.path);
+  assert.equal(compact.path, `r2-assets/catalog/${name.slice(0, 24)}-low.webp`);
+  assert.deepEqual(objects.get(`catalog/${lowName}`).data, lowBytes, 'compact bytes are stored in R2 too');
+  assert.equal(stored.has(lowName), false);
+
+  const wipeDisk = () => fs.rmSync(dir, { recursive: true, force: true });
+  wipeDisk();
+  const created = await json('POST', '/catalog/upcoming', { id: 'release-r2', title: 'Release R2', category: 'releasing-this-month', poster: uploaded.path, backdrop: uploaded.path });
+  assert.equal(created.status, 201, 'the validator verifies catalog objects in R2: ' + await created.clone().text());
+  const ghost = await json('POST', '/catalog/upcoming', { id: 'release-ghost', title: 'Ghost', poster: 'r2-assets/catalog/ffffffffffffffffffffffff.png' });
+  assert.equal(ghost.status, 400, 'an object missing from R2 is refused');
+  assert.match((await ghost.json()).error.message, /does not exist/);
+  const traversal = await json('POST', '/catalog/upcoming', { id: 'release-evil', title: 'Evil', poster: 'r2-assets/catalog/../package.json' });
+  assert.equal(traversal.status, 400, 'path traversal stays refused');
+
+  const seen = ((await (await fetch(`${base}/api/v1/catalog`)).json()).upcoming || []).find((u) => u.id === 'release-r2');
+  assert.ok(seen, 'the new title is in the public catalog');
+  assert.equal(seen.backdrop, uploaded.path);
+  const img = await fetch(`${base}/${seen.backdrop}`, { redirect: 'manual' });
+  assert.equal(img.status, 302);
+  assert.equal(img.headers.get('location'), `https://r2.example.test/catalog/${name}?ttl=3600`);
+  assert.deepEqual(objects.get(`catalog/${name}`).data, art);
+  assert.equal((await fetch(`${base}/${seen.backdrop}`, { redirect: 'manual', headers: { Referer: 'https://evil.example/' } })).status, 403, 'R2 catalog URLs retain the image hotlink guard');
 
   wipeDisk();
-  const created = await json('POST', '/catalog/upcoming', { id: 'release-1', title: 'Release One', category: 'releasing-this-month', poster: uploaded.path, backdrop: uploaded.path });
-  assert.equal(created.status, 201, 'the validator accepts an upload that exists only in the database: ' + await created.clone().text());
-  const ghost = await json('POST', '/catalog/upcoming', { id: 'release-ghost', title: 'Ghost', poster: 'uploads/ffffffffffffffffffffffff.png' });
-  assert.equal(ghost.status, 400, 'an upload that exists nowhere is still refused');
-  assert.match((await ghost.json()).error.message, /does not exist/);
-  const traversal = await json('POST', '/catalog/upcoming', { id: 'release-evil', title: 'Evil', poster: 'uploads/../package.json' });
-  assert.equal(traversal.status, 400, 'a path trick is still refused');
-
-  // Another device: public catalog, no credentials.
-  const seen = ((await (await fetch(`${base}/api/v1/catalog`)).json()).upcoming || []).find((u) => u.id === 'release-1');
-  assert.ok(seen, 'the new title is in the public catalog');
-  assert.equal(seen.category, 'releasing-this-month');
-  assert.equal(seen.backdrop, uploaded.path);
-  const img = await fetch(`${base}/${seen.backdrop}`);
-  assert.equal(img.status, 200, 'the artwork loads');
-  assert.equal(img.headers.get('content-type'), 'image/png');
-  assert.deepEqual(Buffer.from(await img.arrayBuffer()), art);
-
-  wipeDisk();   // wiped again: editing the title (which still points at the upload) used to fail with "file ... does not exist"
-  const edited = await json('PUT', '/catalog/upcoming/release-1', { ...seen, title: 'Release One (edited)' });
+  const edited = await json('PUT', '/catalog/upcoming/release-r2', { ...seen, title: 'Release R2 (edited)' });
   assert.equal(edited.status, 200, await edited.clone().text());
-  const after = ((await (await fetch(`${base}/api/v1/catalog`)).json()).upcoming || []).find((u) => u.id === 'release-1');
-  assert.equal(after.title, 'Release One (edited)');
+  const after = ((await (await fetch(`${base}/api/v1/catalog`)).json()).upcoming || []).find((u) => u.id === 'release-r2');
+  assert.equal(after.title, 'Release R2 (edited)');
 
-  // Subtitles take the same path.
+  // Subtitle uploads are not photos and remain in MySQL.
   const sub = await admin('POST', '/uploads/subtitle', '1\n00:00:01,000 --> 00:00:02,000\nHello\n', { 'Content-Type': 'text/plain' });
   assert.equal(sub.status, 201);
   const subtitle = await sub.json();
@@ -305,7 +334,6 @@ test('Releasing This Month: an upload survives a disk wipe, can be used and edit
   assert.match(vtt.headers.get('content-type'), /^text\/vtt/);
   assert.match(await vtt.text(), /^WEBVTT/);
 
-  // Not an image / not signed in.
   assert.equal((await admin('POST', '/uploads/image', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'), { 'Content-Type': 'image/svg+xml' })).status, 400);
   assert.equal((await fetch(`${base}/api/v1/admin/uploads/image`, { method: 'POST', body: art })).status, 401);
 });

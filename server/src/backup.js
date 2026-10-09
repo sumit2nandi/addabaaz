@@ -2,7 +2,7 @@
  * Backup & restore in pure Node — no mysqldump, tar or cloud SDK needed.
  *
  * A backup is one gzipped NDJSON file: a header line, then one line per table row and one per uploaded file
- * (admin-uploaded images and subtitles, base64). Optionally encrypted with AES-256-GCM (passphrase → scrypt key), because the
+ * (legacy MySQL-backed admin image blobs and subtitles, base64). New catalog/Broadcast photo objects live in R2 and are not part of this backup. Optionally encrypted with AES-256-GCM (passphrase → scrypt key), because the
  * file contains customers' emails and password hashes.
  *
  *   {"t":"meta","format":1,"createdAt":…,"migrations":[…],"tables":{"users":123,…}}
@@ -50,7 +50,7 @@ export async function* lines(stream) {
 const q = (id) => `\`${String(id).replace(/`/g, '')}\``;
 // Rows inserted per statement when restoring.
 const BATCH = 500;
-// Tables whose rows carry large binary values (uploaded images) are paged in small steps, so a page never needs hundreds of megabytes ...
+// Tables with large binary values (legacy MySQL image blobs) are paged in small steps, so a page never needs hundreds of megabytes ...
 const PAGE_ROWS = { uploaded_files: 20 };
 // ... and a restore INSERT is also cut once its binary values add up to about this much, to stay well under MySQL's max_allowed_packet.
 const BATCH_BYTES = 4 * 1024 * 1024;

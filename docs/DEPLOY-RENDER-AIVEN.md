@@ -4,7 +4,7 @@
 
 | | Free | Good for a real site |
 |---|---|---|
-| Render web service | Sleeps after 15 min without visits (first visit then takes ~1 min). The disk is wiped on every deploy and restart, which is fine: admin-uploaded images are stored in the Aiven database. Outbound mail ports (25/465/587) are blocked. | **Starter** (about $7/month): always on, SMTP works. |
+| Render web service | Sleeps after 15 min without visits (first visit then takes ~1 min). The disk is wiped on every deploy and restart; new catalog/Broadcast photos are stored in R2, and legacy image blobs/subtitles remain in the Aiven database. Outbound mail ports (25/465/587) are blocked. | **Starter** (about $7/month): always on, SMTP works. |
 | Aiven MySQL | Free plan: 1 CPU, 1 GB RAM, 1 GB storage, no credit card. Powers off after a long period of inactivity (Aiven emails you first). | A paid plan (more storage, high availability). |
 
 Prices and limits change: check the two pricing pages before you commit.
@@ -70,7 +70,7 @@ ADDABAAZ running on ...
 Then open `https://<your-service>.onrender.com/api/v1/health/ready`. It should show `{"ok":true,"db":"up"}`, and the home page should load.
 
 ## 5. Keep files and mail working (optional but important)
-* **Admin-uploaded images and subtitles** are stored in the database (table `uploaded_files`), so they survive deploys, restarts and a sleeping service, and every device sees them. Render's disk is only used as a cache and is rebuilt from the database whenever it is empty — no Disk is needed. Images uploaded *before* this behaviour existed were only on the old disk and are gone: open Admin → edit the title → upload the image again → Save (once). Video objects stored in Cloudflare R2 are separate.
+* **New catalog and Broadcast photos** are stored in private Cloudflare R2; MySQL stores only their stable paths, so a Render deploy or restart does not remove them. R2 credentials and a bucket are required for new photo uploads. **Legacy catalog image blobs and subtitle files** remain in MySQL (`uploaded_files`); Render's disk is only their cache and can be empty. Existing legacy photos continue to work and are not migrated automatically. Video objects stored in R2 are separate.
 * **Email.** Render Free blocks outbound SMTP on the usual ports (25, 465 and 587), so a valid-looking `SMTP_URL` can still time out. Either use a paid Render instance, or choose an SMTP provider that supports port **2525** and set `SMTP_URL=smtp://USERNAME:PASSWORD@SMTP_HOST:2525` (STARTTLS; URL-encode special characters in the credentials). Do not use `smtps://...:465` on Render Free. After deploying, open `/admin` → Dashboard → System status → **Send test email** to check delivery; the server log shows the SMTP error code if it fails.
 * **Sleeping.** A free service sleeps when idle, so reminders and scheduled jobs wait for the next visit. A free uptime monitor (for example UptimeRobot) calling `/api/v1/health/ready` every 5 minutes keeps it awake. One always-on free service fits inside Render's 750 free hours a month; check this in your dashboard. The same pings also keep the Aiven free database active.
 
@@ -103,4 +103,4 @@ With `autoDeploy: true` (the Blueprint default) every push to the branch deploys
 | Deploy fails on the health check | Open the Logs: usually a missing environment variable, or the database could not be reached. |
 | `[auth] ... JWT_SECRET` error at start | `JWT_SECRET` is missing, shorter than 32 bytes, or still an example placeholder while `NODE_ENV=production`. Generate a random value (64 hex characters) and keep it stable between deploys. |
 | First visit is very slow | Free plan waking up. Normal; see the sleeping note in step 5. |
-| An uploaded poster shows on one device but not on others | It was uploaded before images were stored in the database (or the file was lost with the disk). Upload it again in Admin and save the title; new uploads are permanent. See step 5. |
+| An uploaded poster shows on one device but not on others | It may be an old local-only upload or a legacy file lost from the disk cache. New catalog/Broadcast photos are stored in R2; check the R2 credentials and bucket, then re-upload the photo in Admin and save the title. Legacy MySQL-backed images remain supported. See step 5. |

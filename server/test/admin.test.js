@@ -26,8 +26,19 @@ const uploadDir = path.join(tmp, 'uploads');
 const seed = JSON.parse(fs.readFileSync(new URL('data/catalog.json', ROOT), 'utf8'));
 fs.writeFileSync(path.join(tmp, 'catalog.json'), JSON.stringify(seed));
 fs.copyFileSync(new URL('data/studio.json', ROOT), path.join(tmp, 'studio.json'));
-const puts = [];
-const fakeR2 = { configured: true, bucket: 'b', presignGet: (key) => `https://r2.test/${key}`, presignPut: (key) => { puts.push(key); return `https://r2.test/put/${key}?sig=1`; }, getText: async () => null };
+const puts = [], r2Objects = new Map();
+const fakeR2 = {
+  configured: true, bucket: 'b',
+  presignGet: (key) => `https://r2.test/${key}`,
+  presignPut: (key) => { puts.push(key); return `https://r2.test/put/${key}?sig=1`; },
+  async putObject(key, data, metadata) { r2Objects.set(key, { data: Buffer.from(data), ...metadata }); return { status: 200 }; },
+  async head(key) {
+    const object = r2Objects.get(key);
+    if (object) return { status: 200, size: object.data.length, type: object.contentType };
+    return key.startsWith('catalog/') ? { status: 404, size: null, type: null } : { status: 200, size: 1, type: 'video/mp4' };
+  },
+  getText: async () => null,
+};
 const sent = [];
 const mailer = createMailer({ transport: { sendMail: async (m) => { sent.push(m); } } });
 
@@ -271,13 +282,19 @@ test('catalog: upcoming, gallery, reordering and the studio profile', async () =
   assert.equal(((await audit('catalog.')).length) >= 8, true);
 });
 
-test('uploads: images are sniffed, stored by content hash and served; videos get a presigned R2 PUT', async () => {
-  const up = await A('POST', '/uploads/image', null, { raw: PNG, headers: { 'Content-Type': 'image/png' } }); assert.equal(up.status, 201); assert.match(up.body.path, /^uploads\/[0-9a-f]{24}\.png$/);
-  const again = await A('POST', '/uploads/image', null, { raw: PNG, headers: { 'Content-Type': 'image/png' } }); assert.equal(again.body.path, up.body.path, 'same bytes → same file');
-  const file = await fetch(`${root}/${up.body.path}`); assert.equal(file.status, 200); assert.equal(file.headers.get('content-type'), 'image/png'); assert.match(file.headers.get('cache-control'), /immutable/);
-  assert.equal(file.headers.get('x-content-type-options'), 'nosniff'); assert.deepEqual(Buffer.from(await file.arrayBuffer()), PNG);
-  for (const [name, body, type] of [['svg', '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>', 'image/svg+xml'], ['html', '<script>alert(1)</script>', 'image/png'], ['empty', '', 'image/png']]) {
-    const r = await A('POST', '/uploads/image', null, { raw: body, headers: { 'Content-Type': type } }); assert.equal(r.status, 400, name);
+test('uploads: images are sniffed and stored in R2; videos still get a presigned R2 PUT', async () => {
+  const up = await A('POST', '/uploads/image', null, { raw: PNG, headers: { 'Content-Type': 'image/png' } });
+  assert.equal(up.status, 201); assert.match(up.body.path, /^r2-assets\/catalog\/[0-9a-f]{24}\.png$/);
+  const name = path.basename(up.body.path);
+  const again = await A('POST', '/uploads/image', null, { raw: PNG, headers: { 'Content-Type': 'image/png' } }); assert.equal(again.body.path, up.body.path, 'same bytes → same R2 object');
+  assert.deepEqual(r2Objects.get(`catalog/${name}`).data, PNG);
+  assert.equal(r2Objects.get(`catalog/${name}`).contentType, 'image/png');
+  assert.equal(await db.uploads.get(name), null, 'new photo bytes are not persisted in uploaded_files');
+  const file = await fetch(`${root}/${up.body.path}`, { redirect: 'manual' });
+  assert.equal(file.status, 302); assert.equal(file.headers.get('location'), `https://r2.test/catalog/${name}`);
+  assert.match(file.headers.get('cache-control'), /max-age=60/);
+  for (const [badName, body, type] of [['svg', '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>', 'image/svg+xml'], ['html', '<script>alert(1)</script>', 'image/png'], ['empty', '', 'image/png']]) {
+    const r = await A('POST', '/uploads/image', null, { raw: body, headers: { 'Content-Type': type } }); assert.equal(r.status, 400, badName);
   }
   const fiveMbImage = Buffer.concat([PNG, Buffer.alloc(5 * 1024 * 1024)]);
   const fiveMbUpload = await A('POST', '/uploads/image', null, { raw: fiveMbImage, headers: { 'Content-Type': 'image/png' } });
@@ -285,7 +302,7 @@ test('uploads: images are sniffed, stored by content hash and served; videos get
   assert.equal(fiveMbUpload.body.bytes, fiveMbImage.length);
   assert.equal((await A('POST', '/uploads/image', null, { raw: Buffer.concat([PNG, Buffer.alloc(11 * 1024 * 1024)]), headers: { 'Content-Type': 'image/png' } })).status, 413);
   assert.equal((await call('POST', '/admin/uploads/image', null, viewer.token, { raw: PNG })).status, 403);
-  // an uploaded image can be used in the catalog (and a made-up uploads/ path cannot)
+  // An R2 image can be used in the catalog (and made-up paths stay invalid).
   assert.equal((await A('POST', '/catalog/gallery', { id: 'up-1', group: 'U', image: up.body.path })).status, 201);
   assert.equal((await A('POST', '/catalog/gallery', { id: 'up-2', group: 'U', image: 'uploads/ffffffffffffffffffffffff.png' })).status, 400);
   await A('DELETE', '/catalog/gallery/up-1');
@@ -300,49 +317,43 @@ test('uploads: images are sniffed, stored by content hash and served; videos get
   assert.equal((await call('POST', '/admin/uploads/video', { filename: 'a.mp4' }, viewer.token)).status, 403);
 });
 
-test('uploads live in MySQL: a Releasing This Month poster uploaded on one device shows on every other device, even after the disk is wiped', async () => {
-  // The reported bug: an admin uploads a poster, the catalog row is saved in MySQL, but the image FILE sat only on this server's disk -
-  // so after a restart or redeploy (Render's free plan wipes the disk each time) every other device got a broken image.
-  const art = Buffer.concat([PNG, crypto.randomBytes(2048)]);                 // stands in for the 16:9 poster artwork
+test('new catalog photos live in R2: poster survives a local disk wipe and validates after upload', async () => {
+  const art = Buffer.concat([PNG, crypto.randomBytes(2048)]);
   const up = await A('POST', '/uploads/image', null, { raw: art, headers: { 'Content-Type': 'image/png' } });
   assert.equal(up.status, 201);
   const name = path.basename(up.body.path);
-  assert.deepEqual((await db.uploads.get(name)).data, art, 'the durable copy is in MySQL, not only on disk');
-  assert.equal((await db.uploads.existing([name, 'ffffffffffffffffffffffff.png'])).size, 1);
+  assert.match(up.body.path, /^r2-assets\/catalog\/[0-9a-f]{24}\.png$/);
+  assert.deepEqual(r2Objects.get(`catalog/${name}`).data, art, 'the new photo bytes are in R2');
+  assert.equal(await db.uploads.get(name), null, 'no uploaded_files image blob is inserted');
+  assert.equal((await db.uploads.existing([name, 'ffffffffffffffffffffffff.png'])).size, 0);
+  assert.equal(fs.existsSync(path.join(uploadDir, name)), false, 'R2 photos do not use the legacy disk cache');
 
-  fs.rmSync(uploadDir, { recursive: true, force: true });                     // restart / redeploy: the upload folder is empty again
-  assert.equal(fs.existsSync(path.join(uploadDir, name)), false);
-
-  // The title is created after the wipe: the validator must accept an upload that exists only in MySQL - and still refuse one that exists nowhere.
-  const created = await A('POST', '/catalog/upcoming', { id: 'release-1', title: 'Release One', category: 'releasing-this-month', poster: up.body.path, backdrop: up.body.path });
+  fs.rmSync(uploadDir, { recursive: true, force: true });
+  const created = await A('POST', '/catalog/upcoming', { id: 'release-r2', title: 'Release R2', category: 'releasing-this-month', poster: up.body.path, backdrop: up.body.path });
   assert.equal(created.status, 201, JSON.stringify(created.body));
-  const ghost = await A('POST', '/catalog/upcoming', { id: 'release-ghost', title: 'Ghost', poster: 'uploads/ffffffffffffffffffffffff.png' });
+  const ghost = await A('POST', '/catalog/upcoming', { id: 'release-ghost', title: 'Ghost', poster: 'r2-assets/catalog/ffffffffffffffffffffffff.png' });
   assert.equal(ghost.status, 400); assert.match(ghost.body.error.message, /does not exist/);
 
-  // Another device: no sign-in, no browser cache. It sees the title in the release category with its artwork ...
-  const seen = (await call('GET', '/catalog')).body.upcoming.find((u) => u.id === 'release-1');
+  const seen = (await call('GET', '/catalog')).body.upcoming.find((u) => u.id === 'release-r2');
   assert.equal(seen.category, 'releasing-this-month'); assert.equal(seen.backdrop, up.body.path);
-  // ... and the artwork itself loads: served from MySQL, then copied back to the folder.
-  const img = await fetch(`${root}/${seen.backdrop}`);
-  assert.equal(img.status, 200); assert.equal(img.headers.get('content-type'), 'image/png'); assert.deepEqual(Buffer.from(await img.arrayBuffer()), art);
-  assert.equal(fs.existsSync(path.join(uploadDir, name)), true, 'the folder is only a cache');
+  const img = await fetch(`${root}/${seen.backdrop}`, { redirect: 'manual' });
+  assert.equal(img.status, 302); assert.equal(img.headers.get('location'), `https://r2.test/catalog/${name}`);
+  assert.deepEqual(r2Objects.get(`catalog/${name}`).data, art);
 
-  // Later edits keep working while the file is missing from disk (they used to fail with "file ... does not exist").
   fs.rmSync(uploadDir, { recursive: true, force: true });
-  const edited = await A('PUT', '/catalog/upcoming/release-1', { ...seen, title: 'Release One (edited)' });
+  const edited = await A('PUT', '/catalog/upcoming/release-r2', { ...seen, title: 'Release R2 (edited)' });
   assert.equal(edited.status, 200, JSON.stringify(edited.body));
 
-  // Subtitles take the same path.
+  // Subtitle uploads are still durable in MySQL.
   const sub = await A('POST', '/uploads/subtitle', null, { raw: '1\n00:00:01,000 --> 00:00:02,000\nHello\n', headers: { 'Content-Type': 'text/plain' } });
   assert.equal(sub.status, 201);
   fs.rmSync(uploadDir, { recursive: true, force: true });
   const vtt = await fetch(`${root}/${sub.body.path}`);
   assert.equal(vtt.status, 200); assert.match(vtt.headers.get('content-type'), /^text\/vtt/); assert.match(await vtt.text(), /^WEBVTT/);
 
-  // The setup checklist reports where uploads are kept.
   const health = (await A('GET', '/health')).body.checks.find((c) => c.id === 'uploads');
-  assert.equal(health.ok, true); assert.match(health.detail, /MySQL/);
-  await A('DELETE', '/catalog/upcoming/release-1');
+  assert.equal(health.ok, true); assert.match(health.detail, /R2/);
+  await A('DELETE', '/catalog/upcoming/release-r2');
 });
 
 test('messages: triage inbox', async () => {

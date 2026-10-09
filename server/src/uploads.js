@@ -11,7 +11,9 @@ export function sniffImage(buf) {
   return null;
 }
 
-/** Stored upload names: content hashes, optional high/low image rendition suffixes, or subtitle hashes. */
+/** Image objects have content hashes and optional high/low rendition suffixes. */
+export const IMAGE_UPLOAD_NAME = /^(?:[0-9a-f]{24}(?:-hq)?\.(?:webp|png|jpg|gif)|[0-9a-f]{24}-low\.webp)$/;
+/** MySQL still serves legacy image blobs and subtitle files uploaded before R2 became the image store. */
 export const UPLOAD_NAME = /^(?:[0-9a-f]{24}(?:-hq)?\.(?:webp|png|jpg|gif)|[0-9a-f]{24}-low\.webp|[0-9a-f]{24}\.vtt)$/;
 const IMAGE_PARENT_NAME = /^[0-9a-f]{24}-hq\.(?:webp|png|jpg|gif)$/;
 const UPLOAD_TYPES = { webp: 'image/webp', png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif', vtt: 'text/vtt; charset=utf-8' };

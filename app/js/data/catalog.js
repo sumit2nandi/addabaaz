@@ -190,12 +190,16 @@ export class Catalog {
   }
 }
 
-/** Admin uploads are stored as `uploads/<hash>.webp`. When the app is served from a different origin than the API (native apps, split hosting), point them at the API host. */
-// Rewrites `uploads/...` paths to absolute URLs.
+/** Legacy uploads and new R2 catalog photos need the API host in split/native deployments. */
+// Rewrites media paths to stable absolute or root-relative URLs without changing catalog metadata.
 export function rebaseUploads(data, base) {
-  if (!base || base === 'off') return data;
+  if (base === 'off') return data;
+  const mediaBase = String(base || '').replace(/\/$/, '');
   const walk = (v) => {
-    if (typeof v === 'string') return v.startsWith('uploads/') ? `${base}/${v}` : v;
+    if (typeof v === 'string') {
+      if (v.startsWith('r2-assets/catalog/')) return `${mediaBase ? `${mediaBase}/` : '/'}${v}`;
+      return mediaBase && v.startsWith('uploads/') ? `${mediaBase}/${v}` : v;
+    }
     if (Array.isArray(v)) return v.map(walk);
     if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]));
     return v;

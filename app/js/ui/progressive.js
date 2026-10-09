@@ -15,7 +15,7 @@
  *  non-uploaded assets. Only paths tagged `-hq` opt in, so older content never causes a pointless 404. */
 export function lowResolutionSrc(src) {
   const match = /^(.*\/)([0-9a-f]{24})-hq\.(?:webp|png|jpg|gif)([?#].*)?$/i.exec(String(src || ''));
-  if (!match || !/(?:^|\/)(?:uploads|r2-assets\/broadcast)\/$/.test(match[1])) return '';
+  if (!match || !/(?:^|\/)(?:uploads|r2-assets\/broadcast|r2-assets\/catalog)\/$/.test(match[1])) return '';
   return `${match[1]}${match[2]}-low.webp${match[3] || ''}`;
 }
 

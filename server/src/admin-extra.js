@@ -150,7 +150,7 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
     const title = str(b.title, limit.title), body = str(b.body, limit.body), url = str(b.url, 300) || '/', button = str(b.button, 40);
     const imageUrl = normalizeImage(b.imageUrl), imageAlt = str(b.imageAlt, 200);
     if (!title || !body) throw bad('A title and a message are required.');
-    if (b.imageUrl && !imageUrl) throw bad('The image must be an https:// URL or a local path under /uploads/, /media/ or /r2-assets/broadcast/.', 'invalid_image');
+    if (b.imageUrl && !imageUrl) throw bad('The image must be an https:// URL or a local path under /uploads/, /media/, /r2-assets/catalog/ or /r2-assets/broadcast/.', 'invalid_image');
     if (!/^\/(?!\/)/.test(url) && !/^https:\/\//.test(url)) throw bad('The link must start with / (a page on this site) or https://.');
     const a = String(b.audience || (channel === 'email' ? 'all' : 'news'));
     const snap = await catalog.get({ all: true });
@@ -313,15 +313,15 @@ export function adminExtraRoutes({ router, db, billing, catalog, push, mailer, c
   router.delete('/errors', wrap(async (req, res) => { await db.errors.clear(); await log(req, 'errors.clear'); res.sendStatus(204); }));
 }
 
-// Broadcast images may be an admin upload (/uploads/…, /media/…), a private-R2 broadcast image URL,
+// Broadcast images may be a legacy admin upload (/uploads/…), a bundled /media/ path, a stable private-R2 catalog/Broadcast image URL,
 // or a full https URL. Anything else is dropped (notification images are fetched by viewer devices).
 export function normalizeImage(value) {
   const v = typeof value === 'string' ? value.trim().slice(0, 500) : '';
   if (!v) return '';
   if (/^https:\/\/[^\s]+$/.test(v)) return v;
-  // Uploads return `uploads/<hash>[-hq].<ext>` (no leading slash); accept both forms.
+  // Local/legacy uploads and validated private-R2 catalog or Broadcast image keys are stable app URLs.
   const localPath = v.startsWith('/') ? v.slice(1) : v;
   if (/^(uploads|media)\/[A-Za-z0-9._/-]+$/.test(localPath)
-    || /^r2-assets\/broadcast\/(?:[0-9a-f]{24}(?:-hq)?\.(?:webp|png|jpg|gif)|[0-9a-f]{24}-low\.webp)$/.test(localPath)) return `/${localPath}`;
+    || /^r2-assets\/(?:broadcast|catalog)\/(?:[0-9a-f]{24}(?:-hq)?\.(?:webp|png|jpg|gif)|[0-9a-f]{24}-low\.webp)$/.test(localPath)) return `/${localPath}`;
   return '';
 }

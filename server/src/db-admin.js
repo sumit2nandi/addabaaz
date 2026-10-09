@@ -172,7 +172,7 @@ export function adminDb({ q, tx, self, iso }) {
     async countVideosOf(showId) { return (await q("SELECT COUNT(*) AS n FROM catalog_items WHERE type = 'video' AND JSON_UNQUOTE(JSON_EXTRACT(doc, '$.showId')) = ?", [showId]))[0].n; },
   };
 
-  // ---- Uploaded files: admin-uploaded images and subtitles live in MySQL (the upload folder is only a cache of them) ----
+  // ---- Legacy uploaded image blobs and subtitle files remain in MySQL (UPLOAD_DIR is their cache) ----
   const uploads = {
     /** Stores a file under its content-hash name; identical bytes have the same name, so a repeat upload is a no-op. */
     async put(name, type, data) { await q('INSERT IGNORE INTO uploaded_files (name, content_type, bytes, data) VALUES (?,?,?,?)', [name, type, data.length, data]); },

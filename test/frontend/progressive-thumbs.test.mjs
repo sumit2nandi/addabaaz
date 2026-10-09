@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadHighQuality, lowResolutionSrc, swapToHighQuality } from '../../app/js/ui/progressive.js';
+import { rebaseUploads } from '../../app/js/data/catalog.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -25,8 +26,16 @@ test('new uploaded high-resolution artwork maps to its saved low WebP sibling', 
   assert.equal(lowResolutionSrc('/uploads/0123456789abcdef01234567-hq.png'), '/uploads/0123456789abcdef01234567-low.webp');
   assert.equal(lowResolutionSrc('https://api.example.test/uploads/0123456789abcdef01234567-hq.webp'), 'https://api.example.test/uploads/0123456789abcdef01234567-low.webp');
   assert.equal(lowResolutionSrc('https://site.example.test/r2-assets/broadcast/0123456789abcdef01234567-hq.gif'), 'https://site.example.test/r2-assets/broadcast/0123456789abcdef01234567-low.webp');
+  assert.equal(lowResolutionSrc('r2-assets/catalog/0123456789abcdef01234567-hq.jpg'), 'r2-assets/catalog/0123456789abcdef01234567-low.webp');
   assert.equal(lowResolutionSrc('uploads/0123456789abcdef01234567.webp'), '', 'legacy uploads do not request a missing compact variant');
   assert.equal(lowResolutionSrc('media/shows/poster-lg.webp'), '', 'bundled artwork is unchanged');
+});
+
+test('new R2 catalog photo URLs are rebased for same-origin and native/split-host apps', () => {
+  const path = 'r2-assets/catalog/0123456789abcdef01234567-hq.png';
+  assert.deepEqual(rebaseUploads({ poster: path }, ''), { poster: `/${path}` });
+  assert.deepEqual(rebaseUploads({ poster: path }, 'https://api.example.test'), { poster: `https://api.example.test/${path}` });
+  assert.deepEqual(rebaseUploads({ poster: 'uploads/0123456789abcdef01234567.png' }, 'https://api.example.test'), { poster: 'https://api.example.test/uploads/0123456789abcdef01234567.png' });
 });
 
 test('a plain image swaps its low-quality src for the best one, once', () => {

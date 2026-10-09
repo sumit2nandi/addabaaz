@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createSeo } from './seo.js';
 import { wrap, safeRedirectLocation } from './http.js';
 import { SITE_CSP } from './middleware/security.js';
-import { UPLOAD_NAME, uploadType, cacheUpload } from './uploads.js';
+import { IMAGE_UPLOAD_NAME, UPLOAD_NAME, uploadType, cacheUpload } from './uploads.js';
 
 // Every `<script>` without a src, i.e. the inline blocks that need a CSP hash to run at all.
 const INLINE_SCRIPT = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
@@ -50,6 +50,36 @@ export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS
     if (!req.accepts('html')) return res.status(503).type('text/plain').set({ 'Cache-Control': 'no-store', 'Retry-After': String(maintenance.retryAfter(state)) }).send(state.message);
     res.status(503).set({ 'Cache-Control': 'no-store', 'Retry-After': String(maintenance.retryAfter(state)), 'Content-Security-Policy': csp }).type('html').send(body);
   };
+  // Same-host and configured clients may show uploaded images; unrelated pages may not hot-link them.
+  const HOTLINK_BOTS = /bot|crawler|spider|slurp|preview|embed|facebookexternalhit|twitterbot|whatsapp|telegrambot|slackbot|discordbot|linkedinbot|pinterest|snapchat|skypeuripreview|vkshare|w3c_validator|applebot|metadata/i;
+  const hostOf = (url) => { try { return new URL(url).host.toLowerCase(); } catch { return ''; } };
+  const imageHosts = new Set([
+    ...[hostOf(billing?.config?.siteUrl)].flatMap((h) => (h ? [h, h.startsWith('www.') ? h.slice(4) : `www.${h}`] : [])),
+    ...(corsOrigins === '*' ? [] : String(corsOrigins).split(',').map((s) => hostOf(s.trim()))),
+    'app.addabaaz.in',
+    ...String(process.env.IMAGE_ALLOWED_HOSTS || '').split(',').map((s) => s.trim().toLowerCase()),
+  ].filter(Boolean));
+  const guardImages = (req, res, next) => {
+    const ref = req.get('referer');
+    if (ref) {
+      let same = false;
+      try { const u = new URL(ref); same = u.host === req.headers.host || u.host === (req.get('x-forwarded-host') || '') || imageHosts.has(u.host.toLowerCase()); } catch { same = false; }
+      if (!same && !HOTLINK_BOTS.test(req.get('user-agent') || '')) return res.status(403).type('text/plain').send('Forbidden');
+    }
+    next();
+  };
+  // Catalog-photo objects use stable app URLs although the R2 bucket is private: issue a fresh signed GET
+  // redirect on each fetch. The immutable bytes themselves are cached by R2/browser for a year.
+  app.get('/r2-assets/catalog/:name', guardImages, wrap(async (req, res) => {
+    const name = String(req.params.name || '');
+    if (!IMAGE_UPLOAD_NAME.test(name) || !r2?.configured || typeof r2.presignGet !== 'function') {
+      return res.status(404).type('text/plain').send('Not found');
+    }
+    const target = req.method === 'HEAD' && typeof r2.presignHead === 'function'
+      ? r2.presignHead(`catalog/${name}`, { ttl: 3600 })
+      : r2.presignGet(`catalog/${name}`, { ttl: 3600 });
+    return res.set({ 'Cache-Control': 'public, max-age=60', 'X-Content-Type-Options': 'nosniff' }).redirect(302, target);
+  }));
   // Broadcast-photo URLs are stable even though the bucket is private: issue a fresh signed GET redirect
   // on each fetch, so push notifications and old e-mails keep working beyond the signature lifetime.
   app.get('/r2-assets/broadcast/:name', wrap(async (req, res) => {
@@ -90,31 +120,7 @@ export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS
     const appRoot = built ? path.join(ROOT, '.build', 'app') : path.join(ROOT, 'app');
     const swRoot = built ? path.join(ROOT, '.build', 'sw.js') : path.join(ROOT, 'sw.js');
     app.get('/sw.js', (_q, res) => { res.set('Cache-Control', 'no-cache'); res.sendFile(swRoot); });
-    // Images belong to this site: other pages may not hot-link them (crawlers for social previews and
-    // direct visits without a referrer keep working).
-    const HOTLINK_BOTS = /bot|crawler|spider|slurp|preview|embed|facebookexternalhit|twitterbot|whatsapp|telegrambot|slackbot|discordbot|linkedinbot|pinterest|snapchat|skypeuripreview|vkshare|w3c_validator|applebot|metadata/i;
-    // Pages that may show these images: this server's own host(s), plus the public site (PUBLIC_SITE_URL, with and without www), any explicit
-    // CORS_ORIGINS, the native apps' WebView (capacitor.config.json server.hostname - the app loads admin-uploaded posters from this API,
-    // and without this their requests, which carry that origin as the Referer, were refused) and IMAGE_ALLOWED_HOSTS (comma-separated extras).
-    const hostOf = (url) => { try { return new URL(url).host.toLowerCase(); } catch { return ''; } };
-    const imageHosts = new Set([
-      ...[hostOf(billing?.config?.siteUrl)].flatMap((h) => (h ? [h, h.startsWith('www.') ? h.slice(4) : `www.${h}`] : [])),
-      ...(corsOrigins === '*' ? [] : String(corsOrigins).split(',').map((s) => hostOf(s.trim()))),
-      'app.addabaaz.in',
-      ...String(process.env.IMAGE_ALLOWED_HOSTS || '').split(',').map((s) => s.trim().toLowerCase()),
-    ].filter(Boolean));
-    const guardImages = (req, res, next) => {
-      const ref = req.get('referer');
-      if (ref) {
-        let same = false;
-        try { const u = new URL(ref); same = u.host === req.headers.host || u.host === (req.get('x-forwarded-host') || '') || imageHosts.has(u.host.toLowerCase()); } catch { same = false; }
-        if (!same && !HOTLINK_BOTS.test(req.get('user-agent') || '')) return res.status(403).type('text/plain').send('Forbidden');
-      }
-      next();
-    };
-    // Admin uploads are stored in MySQL; the upload folder is only a cache that a restart or redeploy can empty (Render's free plan, a
-    // Hostinger redeploy, a second server). When a file is not on disk, serve it from MySQL and put a copy back on disk. The names are
-    // content hashes, so a URL never changes meaning and can be cached for a year.
+    // Legacy MySQL image blobs and subtitle uploads are served from a local cache when present; new catalog images redirect to R2 above.
     const uploadFromDb = wrap(async (req, res, next) => {
       if (req.method !== 'GET' && req.method !== 'HEAD') return next();
       const name = req.path.slice(1);
@@ -128,7 +134,7 @@ export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS
     app.use('/app', express.static(appRoot, { ...opts(0), etag: true }));
     app.use('/data', express.static(path.join(ROOT, 'data'), opts(60_000)));
     app.use('/media', guardImages, express.static(path.join(ROOT, 'media'), opts(7 * 86_400_000)));
-    app.use('/uploads', guardImages, express.static(uploadDir, { maxAge: '365d', immutable: true, index: false, dotfiles: 'ignore' }), uploadFromDb);   // admin-uploaded images and subtitles (content-hash names): disk cache first, then MySQL
+    app.use('/uploads', guardImages, express.static(uploadDir, { maxAge: '365d', immutable: true, index: false, dotfiles: 'ignore' }), uploadFromDb);   // legacy catalog images and subtitles (content-hash names): disk cache first, then MySQL
     // The management consoles — the Admin console (/admin/) and the Content studio (/content/). Each has its
     // own page + scripts, is never cached, and is locked down with a strict CSP (no inline script, no framing).
     const consoleHeaders = (_q, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'self'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' https://accounts.google.com https://connect.facebook.net https://appleid.cdn-apple.com; connect-src 'self' https:; frame-src 'self' https://accounts.google.com https://www.facebook.com https://appleid.apple.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" }); next(); };

@@ -23,7 +23,7 @@ services:
       db: { condition: service_healthy }
     ports: ["3000:3000"]
     volumes:
-      - uploads:/app/uploads      # images uploaded from the admin console
+      - uploads:/app/uploads      # cache for legacy image blobs and subtitle uploads
       - backups:/app/backups      # `docker compose exec app npm run backup` writes here (copy them off the machine!)
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/v1/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]

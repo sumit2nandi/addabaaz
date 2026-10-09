@@ -2,6 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validate } from '../src/catalog-schema.js';
 
+test('R2 catalog-photo paths are accepted offline and can be checked by the admin API', () => {
+  const show = { id: 'r2-show', title: 'R2 show', description: 'A description', poster: 'r2-assets/catalog/0123456789abcdef01234567-hq.webp' };
+  assert.deepEqual(validate('show', show).errors, [], 'offline catalog checks validate the stable path format without R2 credentials');
+  const checked = validate('show', show, { r2FileExists: (path) => path === show.poster });
+  assert.deepEqual(checked.errors, [], 'the online validator accepts a verified R2 object');
+  assert.match(validate('show', show, { r2FileExists: () => false }).errors.join(' '), /R2 photo .* does not exist/);
+});
+
 test('Premium show and video access are independent of the media source', () => {
   const youtubeChild = { id: 'youtube-child', showId: 'premium-show', source: { type: 'youtube', id: 'abcdefghijk' } };
   const show = validate('show', {
