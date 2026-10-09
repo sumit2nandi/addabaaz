@@ -238,7 +238,7 @@ function wireSecurity(root) {
     });
   });
   $('#signOutAll', root)?.addEventListener('click', async () => {
-    if (await confirmDialog({ icon: 'logout', title: 'Sign out of other devices?', text: 'Every other phone, TV and browser signed in to this account will need to sign in again. This device stays signed in.', confirm: 'Sign Out Other Devices', danger: true })) {
+    if (await confirmDialog({ icon: 'logout', title: 'Sign Out of Other Devices?', text: 'Every other phone, TV and browser signed in to this account will need to sign in again. This device stays signed in.', confirm: 'Sign Out Other Devices', danger: true })) {
       try { await u.signOutEverywhere(); toast('Signed Out of Your Other Devices'); } catch (err) { toast(friendly(err)); }
     }
   });

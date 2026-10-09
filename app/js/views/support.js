@@ -144,7 +144,7 @@ const ticketRow = (t) => {
 /** The conversation with support: the original message plus every reply. */
 export async function openTicket(ctx, id, email) {
   const u = app.user;
-  const { el } = openDialog(html`<h2>Your Support Ticket</h2><div id="tkBody"><div class="spinner" style="margin:20px auto"></div></div>`, { title: 'Support ticket' });
+  const { el } = openDialog(html`<h2>Your Support Ticket</h2><div id="tkBody"><div class="spinner" style="margin:20px auto"></div></div>`, { title: 'Support Ticket' });
   const draw = async () => {
     const box = $('#tkBody', el); if (!box) return;
     let data;
