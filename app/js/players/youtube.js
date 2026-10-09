@@ -44,13 +44,6 @@ async function loadYouTubeForPlayback(autoplay) {
 
 // YouTube needs the page origin for the postMessage handshake, but native apps run on non-http origins.
 const httpOrigin = () => (/^https?:$/.test(location.protocol) ? location.origin : undefined);
-function isIOSBrowser() {
-  const nav = globalThis.navigator;
-  if (!nav) return false;
-  return nav.userAgentData?.platform === 'iOS'
-    || /iPad|iPhone|iPod/i.test(nav.userAgent || '')
-    || (nav.platform === 'MacIntel' && Number(nav.maxTouchPoints) > 1);
-}
 
 const YT_SETTINGS_ICONS = {
   gear: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>',
@@ -251,18 +244,23 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
           ready = true;
           settingsUI?.refresh();
           // Start explicitly in the requested mode; a muted retry is only for a refused sound-first attempt.
-          // For chromeless muted embeds (Reels), playerVars autoplay=1&mute=1 already starts playback
-          // without waking YouTube's mobile pause overlay; only call playVideo() if the embed is paused.
+          // For chromeless Reels embeds, playerVars autoplay=1&mute=1 already starts playback natively:
+          // sending mute() or playVideo() over postMessage during startup wakes YouTube's mobile touch
+          // overlay and leaves its center pause icon visible for ~3 seconds before auto-hiding.
           if (autoplay) {
             try {
-              if (startMuted) event.target.mute();
               const S = YT.PlayerState || {};
               const state = event.target.getPlayerState?.();
-              if (!startMuted || controls || state === S.PAUSED) event.target.playVideo();
+              if (!reel) {
+                if (startMuted) event.target.mute();
+                event.target.playVideo();
+              } else if (state === S.PAUSED) {
+                event.target.playVideo();
+              }
             } catch { /* the browser may still require a tap */ }
-            if (!mutedFallbackAttempted) {
+            if (!startMuted && !mutedFallbackAttempted) {
               // Some iOS/YouTube combinations omit onAutoplayBlocked. If the player remains unstarted
-              // after the initial attempt, retry muted; give genuine network buffering extra time.
+              // after the sound-first attempt, retry muted; give genuine network buffering extra time.
               mutedFallbackStartedAt = Date.now();
               const checkMutedFallback = () => {
                 if (destroyed || mutedFallbackAttempted) return;
@@ -289,13 +287,7 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
         onError: (e) => { clearTimeout(mutedFallbackTimer); onState?.('error', e.data); resolve(); },
         onStateChange: (e) => {
           const S = YT.PlayerState;
-          if (e.data === S.PLAYING) {
-            clearTimeout(mutedFallbackTimer); mutedFallbackTimer = null;
-            if (startMuted && !muted && currentMuted && !isIOSBrowser() && globalThis.navigator?.userActivation?.hasBeenActive !== false) {
-              try { player.unMute?.(); player.setVolume?.(100); currentMuted = false; } catch { /* keep muted */ }
-            }
-            onState?.('playing'); clearInterval(timer); timer = setInterval(tick, 1000);
-          }
+          if (e.data === S.PLAYING) { clearTimeout(mutedFallbackTimer); mutedFallbackTimer = null; onState?.('playing'); clearInterval(timer); timer = setInterval(tick, 1000); }
           else if (e.data === S.PAUSED) { onState?.('paused'); tick(); clearInterval(timer); }
           else if (e.data === S.ENDED) {
             clearInterval(timer); timer = null; tick();
