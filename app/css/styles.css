@@ -1081,6 +1081,7 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .is-open > .accordion-panel { grid-template-rows: 1fr; opacity: 1; visibility: visible; }
 .accordion-clip { min-height: 0; overflow: hidden; }
 .accordion-body { padding: 0 12px 16px; }
+.accordion-body .empty { padding: 0 8px; }
 .accordion-body .account-section > .sub-h { display: none; }
 .accordion-body .account-section + .account-section { margin-top: 16px; }
 .accordion-body .row-link, .accordion-body .row-switch { gap: 12px; }

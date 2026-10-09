@@ -51,5 +51,6 @@ test('expanded settings are borderless and share the parent surface on mobile an
     assert.ok(cards.includes(property), property);
   }
   assert.match(css, /\.profile-page \.group-list \.accordion-body \.row-link,\s*\.profile-page \.group-list \.accordion-body \.row-switch \{\s*background: transparent;\s*border: 0;\s*border-radius: 0;/);
+  assert.match(css, /\.accordion-body \.empty \{\s*padding: 0 8px;\s*\}/);
   assert.ok(css.indexOf('.profile-page .accordion-body .card-panel {') > css.lastIndexOf('.profile-page .group-list .account-accordion .card-panel'), 'shared flattening rules follow the desktop overrides');
 });
