@@ -90,6 +90,11 @@ export const api = {
     const a = Object.assign(document.createElement('a'), { href: url, download: filename }); document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
   },
+  /** Uploads a raw photo; the server creates and stores both WebP sizes beside the specified R2 video. */
+  uploadVideoThumbnail: (videoKey, file) => send('POST', '/uploads/video-thumbnail', {
+    raw: file,
+    headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Video-Key': videoKey },
+  }),
   /** Uploads a .srt/.vtt subtitle file (converted to WebVTT on the server) → { path, cues }. */
   uploadSubtitle: (file) => send('POST', '/uploads/subtitle', { raw: file, headers: { 'Content-Type': 'application/octet-stream' } }),
   /** Uploads full + compact admin image renditions → { path, lowPath? }. */

@@ -31,7 +31,7 @@ test('preflight allows the app device headers', async () => {
   assert.equal(res.status, 204);
   assert.equal(res.headers.get('access-control-allow-origin'), '*');
   const allowed = (res.headers.get('access-control-allow-headers') || '').toLowerCase();
-  for (const h of ['content-type', 'authorization', 'range', 'if-range', 'x-device-id', 'x-device-label', 'x-parental-pin', 'x-image-renditions', 'x-image-variant-of']) {
+  for (const h of ['content-type', 'authorization', 'range', 'if-range', 'x-device-id', 'x-device-label', 'x-parental-pin', 'x-image-renditions', 'x-image-variant-of', 'x-video-key']) {
     assert.ok(allowed.includes(h), `Access-Control-Allow-Headers must include ${h} (got "${allowed}")`);
   }
   assert.match(res.headers.get('access-control-allow-methods') || '', /POST/);

@@ -27,14 +27,18 @@ test('new uploaded high-resolution artwork maps to its saved low WebP sibling', 
   assert.equal(lowResolutionSrc('https://api.example.test/uploads/0123456789abcdef01234567-hq.webp'), 'https://api.example.test/uploads/0123456789abcdef01234567-low.webp');
   assert.equal(lowResolutionSrc('https://site.example.test/r2-assets/broadcast/0123456789abcdef01234567-hq.gif'), 'https://site.example.test/r2-assets/broadcast/0123456789abcdef01234567-low.webp');
   assert.equal(lowResolutionSrc('r2-assets/catalog/0123456789abcdef01234567-hq.jpg'), 'r2-assets/catalog/0123456789abcdef01234567-low.webp');
+  assert.equal(lowResolutionSrc('r2-assets/video-thumbnails/premium/show/0123456789abcdef01234567-hq.webp'), 'r2-assets/video-thumbnails/premium/show/0123456789abcdef01234567-low.webp');
   assert.equal(lowResolutionSrc('uploads/0123456789abcdef01234567.webp'), '', 'legacy uploads do not request a missing compact variant');
   assert.equal(lowResolutionSrc('media/shows/poster-lg.webp'), '', 'bundled artwork is unchanged');
 });
 
-test('new R2 catalog photo URLs are rebased for same-origin and native/split-host apps', () => {
+test('new R2 catalog-photo and video-thumbnail URLs are rebased for same-origin and native/split-host apps', () => {
   const path = 'r2-assets/catalog/0123456789abcdef01234567-hq.png';
+  const thumb = 'r2-assets/video-thumbnails/premium/show/0123456789abcdef01234567-hq.webp';
   assert.deepEqual(rebaseUploads({ poster: path }, ''), { poster: `/${path}` });
   assert.deepEqual(rebaseUploads({ poster: path }, 'https://api.example.test'), { poster: `https://api.example.test/${path}` });
+  assert.deepEqual(rebaseUploads({ thumbnail: thumb }, ''), { thumbnail: `/${thumb}` });
+  assert.deepEqual(rebaseUploads({ thumbnail: thumb }, 'https://api.example.test'), { thumbnail: `https://api.example.test/${thumb}` });
   assert.deepEqual(rebaseUploads({ poster: 'uploads/0123456789abcdef01234567.png' }, 'https://api.example.test'), { poster: 'https://api.example.test/uploads/0123456789abcdef01234567.png' });
 });
 

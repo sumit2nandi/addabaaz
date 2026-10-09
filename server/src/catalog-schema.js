@@ -3,13 +3,13 @@
  * validate(type, input, ctx) → { doc, errors }  — `doc` is the normalised document to store (only known fields, trimmed, typed).
  *   upcoming.category controls the homepage placement; studio.homePosters remains only for compatibility with older catalogs.
  *   ctx.fileExists(rel)  optional: check that local image paths (media/…, legacy uploads/…) exist
- *   ctx.r2FileExists(rel) optional: check that an R2 catalog-photo path exists (used by the online admin API)
+ *   ctx.r2FileExists(rel) optional: check that an R2 catalog-photo or video-thumbnail path exists (used by the online admin API)
  *   ctx.showIds / ctx.upcomingIds  optional Sets: check catalog references
  */
 export const TYPES = { shows: 'show', videos: 'video', upcoming: 'upcoming', gallery: 'gallery' };
 // Reusable patterns and allowed values. New catalog photos use an exact content-hash path in private R2; legacy uploads/media paths stay supported.
 const ID = /^[\w-]{1,64}$/;
-const IMG = /^(?:(?:media|uploads)\/[\w\-./]+|r2-assets\/catalog\/(?:[0-9a-f]{24}(?:-hq)?\.(?:webp|png|jpg|gif)|[0-9a-f]{24}-low\.webp)|https:\/\/[^\s"'<>]+)$/;
+const IMG = /^(?:(?:media|uploads)\/[\w\-./]+|r2-assets\/catalog\/(?:[0-9a-f]{24}(?:-hq)?\.(?:webp|png|jpg|gif)|[0-9a-f]{24}-low\.webp)|r2-assets\/video-thumbnails\/(?:[\w.-]+\/)*[0-9a-f]{24}-(?:hq|low)\.webp|https:\/\/[^\s"'<>]+)$/;
 const ACCESS = ['free', 'premium'], SHOW_TYPES = ['series', 'standup', 'podcast', 'film'];
 const RATINGS = ['U', '7+', '13+', '16+', '18+'];   // U = suitable for everyone; the Kids profile shows only U and 7+ (unrated titles stay hidden from it)
 const SUB = /^(?:(?:media|uploads)\/[\w\-./]+\.vtt|https:\/\/[^\s"'<>?#]+\.vtt(?:\?[^\s"'<>]*)?)$/i;
@@ -61,9 +61,10 @@ function reader(input, allowed, label, ctx) {
     img(k, { req = false } = {}) {
       if (!has(k)) { if (req) errors.push(`${k} (an image) is required.`); return; }
       const v = typeof src[k] === 'string' ? src[k].trim() : '';
-      if (!IMG.test(v) || v.includes('..')) return void errors.push(`${k} must be an uploaded image, a media/… path or an https:// URL.`);
-      if (v.startsWith('r2-assets/catalog/')) {
-        if (ctx.r2FileExists && !ctx.r2FileExists(v)) return void errors.push(`${k}: R2 photo ${v} does not exist.`);
+      if (!IMG.test(v) || v.includes('..') || (v.startsWith('r2-assets/video-thumbnails/') && v.split('/').includes('.'))) return void errors.push(`${k} must be an uploaded image, a media/… path or an https:// URL.`);
+      if (v.startsWith('r2-assets/catalog/') || v.startsWith('r2-assets/video-thumbnails/')) {
+        const kind = v.startsWith('r2-assets/video-thumbnails/') ? 'R2 video thumbnail' : 'R2 photo';
+        if (ctx.r2FileExists && !ctx.r2FileExists(v)) return void errors.push(`${k}: ${kind} ${v} does not exist.`);
       } else if (!/^https:/.test(v) && ctx.fileExists && !ctx.fileExists(v)) return void errors.push(`${k}: file ${v} does not exist.`);
       out[k] = v;
     },

@@ -7,7 +7,7 @@ import { withTimeout, OUTBOUND_TIMEOUT_MS } from './http.js';
  *   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET   (R2 → Manage API tokens → "Object Read & Write", scoped to the media bucket)
  *   R2_ENDPOINT   optional override (defaults to https://<account>.r2.cloudflarestorage.com; any S3-compatible store works)
  *
- * The bucket stays PRIVATE. Video APIs issue short-lived signatures after access checks; stable app routes serve only validated catalog and Broadcast image keys.
+ * The bucket stays PRIVATE. Video APIs issue short-lived signatures after access checks; stable app routes expose only validated catalog, Broadcast and video-thumbnail image keys.
  */
 // An HLS playlist is a few kilobytes of text; anything larger is not a playlist and is refused rather than
 // buffered into memory by the gateway (server/src/routes/media.js).

@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createSeo } from './seo.js';
 import { wrap, safeRedirectLocation } from './http.js';
 import { SITE_CSP } from './middleware/security.js';
-import { IMAGE_UPLOAD_NAME, UPLOAD_NAME, uploadType, cacheUpload } from './uploads.js';
+import { IMAGE_UPLOAD_NAME, UPLOAD_NAME, isVideoThumbnailKey, uploadType, cacheUpload } from './uploads.js';
 
 // Every `<script>` without a src, i.e. the inline blocks that need a CSP hash to run at all.
 const INLINE_SCRIPT = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
@@ -78,6 +78,17 @@ export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS
     const target = req.method === 'HEAD' && typeof r2.presignHead === 'function'
       ? r2.presignHead(`catalog/${name}`, { ttl: 3600 })
       : r2.presignGet(`catalog/${name}`, { ttl: 3600 });
+    return res.set({ 'Cache-Control': 'public, max-age=60', 'X-Content-Type-Options': 'nosniff' }).redirect(302, target);
+  }));
+  // Video thumbnails live beside their source video in R2; this stable namespace maps back to that exact bucket key.
+  app.get('/r2-assets/video-thumbnails/*', guardImages, wrap(async (req, res) => {
+    const key = String(req.params[0] || '');
+    if (!isVideoThumbnailKey(key) || !r2?.configured || typeof r2.presignGet !== 'function') {
+      return res.status(404).type('text/plain').send('Not found');
+    }
+    const target = req.method === 'HEAD' && typeof r2.presignHead === 'function'
+      ? r2.presignHead(key, { ttl: 3600 })
+      : r2.presignGet(key, { ttl: 3600 });
     return res.set({ 'Cache-Control': 'public, max-age=60', 'X-Content-Type-Options': 'nosniff' }).redirect(302, target);
   }));
   // Broadcast-photo URLs are stable even though the bucket is private: issue a fresh signed GET redirect

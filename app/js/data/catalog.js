@@ -197,7 +197,7 @@ export function rebaseUploads(data, base) {
   const mediaBase = String(base || '').replace(/\/$/, '');
   const walk = (v) => {
     if (typeof v === 'string') {
-      if (v.startsWith('r2-assets/catalog/')) return `${mediaBase ? `${mediaBase}/` : '/'}${v}`;
+      if (v.startsWith('r2-assets/catalog/') || v.startsWith('r2-assets/video-thumbnails/')) return `${mediaBase ? `${mediaBase}/` : '/'}${v}`;
       return mediaBase && v.startsWith('uploads/') ? `${mediaBase}/${v}` : v;
     }
     if (Array.isArray(v)) return v.map(walk);

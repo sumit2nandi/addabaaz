@@ -1,4 +1,4 @@
-// Legacy admin images/subtitles still read from MySQL, while all new catalog/Broadcast photo bytes go to private R2.
+// Legacy admin images/subtitles still read from MySQL, while all new catalog/Broadcast/video-thumbnail photos go to private R2.
 // These tests use an in-memory database and an R2 fake to exercise uploads, validation, durable URL serving and hotlink protection.
 // Needs no MySQL: the database is an in-memory stub (just enough of `uploads`, `catalog` and `audit`) driven through the real Express routes;
 // the MySQL-backed twin of the admin flow lives in admin.test.js.
@@ -8,8 +8,9 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import sharp from 'sharp';
 import { createApp } from '../src/app.js';
-import { describeImage, describeImageVariant, describeSubtitle, cacheUpload, UPLOAD_NAME, uploadType } from '../src/uploads.js';
+import { describeImage, describeImageVariant, describeSubtitle, isVideoThumbnailKey, cacheUpload, UPLOAD_NAME, uploadType } from '../src/uploads.js';
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), crypto.randomBytes(64)]);
 const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP'), crypto.randomBytes(32)]);
@@ -160,6 +161,86 @@ test('new catalog image uploads store both renditions in R2, never MySQL, and va
   assert.equal(lowFetch.headers.get('location'), `https://r2.example.test/catalog/${compactName}?ttl=3600`);
   assert.match(lowFetch.headers.get('cache-control'), /max-age=60/);
   assert.deepEqual(objects.get(`catalog/${compactName}`).data, lowBytes);
+});
+
+test('R2 video-thumbnail photos are processed into two WebP sizes beside the source video and remain stable catalog URLs', async () => {
+  const { r2, objects } = r2Fixture();
+  const { dir, base } = await start({ r2 });
+  const videoKey = 'premium/rendition-show/episode-1.mp4';
+  objects.set(videoKey, { data: Buffer.from('video-bytes'), contentType: 'video/mp4' });
+  const photo = await sharp({ create: { width: 1600, height: 800, channels: 3, background: { r: 32, g: 96, b: 180 } } }).png().toBuffer();
+  const upload = (body, key = videoKey) => fetch(`${base}/api/v1/admin/uploads/video-thumbnail`, {
+    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'image/png', ...(key ? { 'X-Video-Key': key } : {}) }, body,
+  });
+
+  const withoutVideo = await upload(photo, '');
+  assert.equal(withoutVideo.status, 400, 'a photo cannot be uploaded without its R2 video key');
+  const missingVideo = await upload(photo, 'premium/not-uploaded/episode.mp4');
+  assert.equal(missingVideo.status, 404, 'the server verifies that the associated video exists');
+  const invalidPhoto = await upload(Buffer.from('not an image'));
+  assert.equal(invalidPhoto.status, 400, 'the raw photo is decoded and validated server-side');
+  assert.equal(objects.size, 1, 'failed requests never add image objects');
+
+  const response = await upload(photo);
+  assert.equal(response.status, 201, await response.clone().text());
+  const result = await response.json();
+  assert.equal(result.type, 'image/webp');
+  assert.equal(result.renditions.high.width, 1000);
+  assert.equal(result.renditions.low.width, 480);
+  assert.match(result.path, /^r2-assets\/video-thumbnails\/premium\/rendition-show\/[0-9a-f]{24}-hq\.webp$/);
+  assert.equal(result.lowPath, result.path.replace('-hq.webp', '-low.webp'));
+  const highKey = result.path.slice('r2-assets/video-thumbnails/'.length);
+  const lowKey = result.lowPath.slice('r2-assets/video-thumbnails/'.length);
+  assert.equal(highKey.slice(0, highKey.lastIndexOf('/')), videoKey.slice(0, videoKey.lastIndexOf('/')));
+  assert.equal(lowKey.slice(0, lowKey.lastIndexOf('/')), videoKey.slice(0, videoKey.lastIndexOf('/')));
+  assert.equal(isVideoThumbnailKey(highKey), true);
+  const high = objects.get(highKey), low = objects.get(lowKey);
+  assert.ok(high && low, 'both processed renditions are stored in R2');
+  assert.equal(high.contentType, 'image/webp');
+  assert.equal(low.contentType, 'image/webp');
+  assert.match(high.cacheControl, /immutable/);
+  assert.match(low.cacheControl, /immutable/);
+  assert.notDeepEqual(high.data, photo, 'the original upload is not stored unprocessed');
+  assert.ok(high.data.length > 0 && low.data.length > 0);
+  const [highMeta, lowMeta] = await Promise.all([sharp(high.data).metadata(), sharp(low.data).metadata()]);
+  assert.equal(highMeta.format, 'webp');
+  assert.equal(lowMeta.format, 'webp');
+  assert.ok(highMeta.width > lowMeta.width);
+  assert.ok(fs.readdirSync(dir).length === 0, 'thumbnail bytes are not copied to the local upload directory');
+  assert.equal(stored.has(path.basename(highKey)), false, 'thumbnail bytes never enter MySQL uploads');
+  assert.equal(stored.has(path.basename(lowKey)), false, 'the compact rendition never enters MySQL uploads');
+
+  const saved = await fetch(`${base}/api/v1/admin/catalog/videos`, {
+    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: 'video-with-r2-thumbnail', kind: 'episode', title: 'Video with processed thumbnail',
+      source: { type: 'r2', key: videoKey }, thumbnail: result.path, duration: 60,
+      publishedAt: '2026-10-10T00:00:00Z', access: 'premium',
+    }),
+  });
+  assert.equal(saved.status, 201, await saved.clone().text());
+  const catalog = await (await fetch(`${base}/api/v1/catalog`)).json();
+  assert.equal(catalog.videos.find((item) => item.id === 'video-with-r2-thumbnail').thumbnail, result.path);
+  const ghost = await fetch(`${base}/api/v1/admin/catalog/videos`, {
+    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: 'video-with-missing-thumbnail', kind: 'episode', title: 'Missing thumbnail',
+      source: { type: 'r2', key: videoKey }, thumbnail: 'r2-assets/video-thumbnails/premium/rendition-show/ffffffffffffffffffffffff-hq.webp',
+      duration: 60, publishedAt: '2026-10-10T00:00:00Z', access: 'premium',
+    }),
+  });
+  assert.equal(ghost.status, 400, 'the admin catalog refuses an R2 thumbnail object that is missing');
+  assert.match((await ghost.json()).error.message, /R2 video thumbnail .* does not exist/);
+
+  for (const [pathName, key] of [[result.path, highKey], [result.lowPath, lowKey]]) {
+    const stable = await fetch(`${base}/${pathName}`, { redirect: 'manual' });
+    assert.equal(stable.status, 302);
+    assert.equal(stable.headers.get('location'), `https://r2.example.test/${key}?ttl=3600`);
+    assert.match(stable.headers.get('cache-control'), /max-age=60/);
+  }
+  const blocked = await fetch(`${base}/${result.path}`, { redirect: 'manual', headers: { Referer: 'https://evil.example/' } });
+  assert.equal(blocked.status, 403, 'the stable thumbnail route retains the image hotlink guard');
+  assert.equal((await fetch(`${base}/r2-assets/video-thumbnails/premium/show/not-an-image.png`, { redirect: 'manual' })).status, 404);
 });
 
 test('catalog photo uploads fail clearly when R2 is not configured, without falling back to MySQL', async () => {

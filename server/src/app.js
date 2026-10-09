@@ -157,7 +157,7 @@ export function createApp({
   errorLogger: suppliedErrorLogger = null,                   // shared database reporter (created here in tests/embedded use)
   catalogPath = path.join(ROOT, 'data/catalog.json'),
   studioPath = path.join(path.dirname(catalogPath), 'studio.json'),
-  r2 = createR2(),                                            // Cloudflare R2 (private storage for catalog/Broadcast photos and video files)
+  r2 = createR2(),                                            // Cloudflare R2 (private storage for catalog/Broadcast/video-thumbnail photos and video files)
   social = socialFromEnv(),                                   // { config, verifiers: { google?, facebook? } }
   publicApiUrl = process.env.PUBLIC_API_URL || '',            // absolute base for HLS URLs when behind a proxy
   // Seconds a signed video URL stays valid. Clamped: a huge value would let a playback link outlive a

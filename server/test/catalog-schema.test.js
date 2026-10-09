@@ -10,6 +10,19 @@ test('R2 catalog-photo paths are accepted offline and can be checked by the admi
   assert.match(validate('show', show, { r2FileExists: () => false }).errors.join(' '), /R2 photo .* does not exist/);
 });
 
+test('R2 video-thumbnail paths allow generated nested WebP renditions and check object existence online', () => {
+  const thumbnail = 'r2-assets/video-thumbnails/premium/show-name/0123456789abcdef01234567-hq.webp';
+  const video = {
+    id: 'video-thumb', kind: 'episode', title: 'Video with a thumbnail',
+    source: { type: 'r2', key: 'premium/show-name/episode.mp4' }, thumbnail,
+    duration: 60, publishedAt: '2026-01-01', access: 'premium',
+  };
+  assert.deepEqual(validate('video', video).errors, [], 'offline catalog validation recognizes the stable video-thumbnail path');
+  assert.deepEqual(validate('video', video, { r2FileExists: (path) => path === thumbnail }).errors, [], 'the admin validator accepts the verified R2 object');
+  assert.match(validate('video', video, { r2FileExists: () => false }).errors.join(' '), /R2 video thumbnail .* does not exist/);
+  assert.match(validate('video', { ...video, thumbnail: 'r2-assets/video-thumbnails/premium/../0123456789abcdef01234567-hq.webp' }).errors.join(' '), /thumbnail must be an uploaded image/);
+});
+
 test('Premium show and video access are independent of the media source', () => {
   const youtubeChild = { id: 'youtube-child', showId: 'premium-show', source: { type: 'youtube', id: 'abcdefghijk' } };
   const show = validate('show', {

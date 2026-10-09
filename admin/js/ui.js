@@ -199,7 +199,7 @@ function fieldHtml(f, v) {
     case 'select': ctl = html`<select id="${id}" name="${f.k}">${f.options.map((o) => html`<option value="${o.v}" ${String(o.v) === String(val ?? f.dflt ?? '') ? 'selected' : ''}>${o.l}</option>`)}</select>`; break;
     case 'bool': return html`<div class="field check"><label><input type="checkbox" name="${f.k}" ${val ? 'checked' : ''}> <span>${f.label}</span></label>${help}</div>`;
     case 'datetime': ctl = html`<input id="${id}" name="${f.k}" type="datetime-local" value="${toLocalInput(val)}">`; break;
-    case 'image': ctl = html`<div class="imgf" data-image="${f.k}" data-maxw="${f.maxWidth || 1600}"><div class="imgf-prev">${val ? html`<img src="${imgSrc(val)}" alt="">` : html`<span class="muted small">No image</span>`}</div><div class="imgf-in"><input id="${id}" name="${f.k}" value="${val ?? ''}" placeholder="Upload, or paste media/… or https://…"><label class="btn sm">${icon('upload', 16)} Upload<input type="file" accept="image/*" hidden></label><span class="imgf-st small muted"></span></div></div>`; break;
+    case 'image': ctl = html`<div class="imgf" data-image="${f.k}" data-upload="${f.upload || ''}" data-maxw="${f.maxWidth || 1600}"><div class="imgf-prev">${val ? html`<img src="${imgSrc(val)}" alt="">` : html`<span class="muted small">No image</span>`}</div><div class="imgf-in"><input id="${id}" name="${f.k}" value="${val ?? ''}" placeholder="Upload, or paste media/… or https://…"><label class="btn sm">${icon('upload', 16)} Upload<input type="file" accept="image/*" hidden></label><span class="imgf-st small muted"></span></div></div>`; break;
     case 'custom': return f.render(v);
     default: ctl = html`<input id="${id}" name="${f.k}" type="${f.type || 'text'}" value="${val ?? ''}" maxlength="${f.max || 300}" placeholder="${f.placeholder || ''}" ${ro} ${f.type === 'password' ? 'autocomplete="new-password"' : ''}>`;
   }
@@ -223,22 +223,32 @@ export function readForm(form, fields) {
 export function wireImages(root) {
   for (const box of $$('[data-image]', root)) {
     const input = $('input[type=text], input:not([type])', box), file = $('input[type=file]', box), st = $('.imgf-st', box), prev = $('.imgf-prev', box);
+    const form = box.closest('form');
     const upload = box.dataset.upload === 'r2' ? api.uploadBroadcastImage : api.uploadImage;
     const show = () => { prev.innerHTML = input.value.trim() ? `<img alt="" src="${esc(imgSrc(input.value.trim()))}">` : '<span class="muted small">No image</span>'; };
     input.addEventListener('change', show);
     file.addEventListener('change', async () => {
       const f = file.files[0]; if (!f) return; st.classList.remove('err', 'ok'); st.textContent = 'Preparing two image sizes…';
       try {
-        const maxWidth = Number(box.dataset.maxw) || 1600;
-        const full = await prepareImage(f, { maxWidth });
-        const low = await prepareImage(f, { maxWidth: Math.min(480, maxWidth), quality: 0.64, webpOnly: true }).catch(() => null);
-        st.textContent = 'Uploading…';
-        const r = await upload(full, low);
+        let r;
+        if (box.dataset.upload === 'video-thumbnail' && form?.elements.srcType?.value === 'r2') {
+          const videoKey = form.elements.r2Key?.value.trim();
+          if (!videoKey) throw new ApiError(400, 'Upload the R2 video first, then choose its thumbnail photo.', 'video_required');
+          st.textContent = 'Processing thumbnail on the server…';
+          r = await api.uploadVideoThumbnail(videoKey, f);
+        } else {
+          const maxWidth = Number(box.dataset.maxw) || 1600;
+          const full = await prepareImage(f, { maxWidth });
+          const low = await prepareImage(f, { maxWidth: Math.min(480, maxWidth), quality: 0.64, webpOnly: true }).catch(() => null);
+          st.textContent = 'Uploading…';
+          r = await upload(full, low);
+        }
         input.value = r.path;
         const EventCtor = input.ownerDocument.defaultView?.Event || Event;
         input.dispatchEvent(new EventCtor('change', { bubbles: true }));
         st.classList.add('ok');
-        st.textContent = `Uploaded ✓ (${Math.round(r.bytes / 1024)} KB${r.lowPath ? ' · compact + sharp sizes' : ' · full-size'})`;
+        const sizes = r.renditions ? ` · ${r.renditions.low.width}px + ${r.renditions.high.width}px WebP` : r.lowPath ? ' · compact + sharp sizes' : ' · full-size';
+        st.textContent = `Uploaded ✓ (${Math.round(r.bytes / 1024)} KB${sizes})`;
       } catch (e) { st.classList.add('err'); st.textContent = `✖ ${errMsg(e)}`; toast(errMsg(e), 'err'); }
       finally { file.value = ''; }
     });

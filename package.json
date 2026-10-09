@@ -2,7 +2,7 @@
   "name": "addabaaz",
   "version": "2.0.1",
   "private": true,
-  "description": "ADDABAAZ OTT \u2014 web app (PWA), REST API and Capacitor wrapper for Android/iOS",
+  "description": "ADDABAAZ OTT — web app (PWA), REST API and Capacitor wrapper for Android/iOS",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -34,6 +34,7 @@
     "mysql2": "^3.24.4",
     "nodemailer": "^10.0.12",
     "pdfkit": "^0.20.2",
+    "sharp": "^0.35.5",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
