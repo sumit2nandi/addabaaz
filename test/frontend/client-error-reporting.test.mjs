@@ -142,4 +142,13 @@ test('global browser hooks install synchronously and the client report endpoint 
   assert.equal(await detectApi('off'), false);
   assert.equal(requests.length, before, 'forced local-only mode never calls an API');
   app.api = api;
+
+  const { reportClientError: boundedReport } = await import('../../app/js/errors.js?bounded-test');
+  let accepted = 0;
+  const beforeReports = requests.filter(({ url }) => url === 'https://api.test/api/v1/client-errors').length;
+  for (let i = 0; i < 150; i++) accepted += Number(boundedReport(new Error(`bounded diagnostic ${i}`)));
+  assert.equal(accepted, 100, 'a page can enqueue at most 100 reports, even if a runtime error loop continues');
+  await tick();
+  assert.equal(requests.filter(({ url }) => url === 'https://api.test/api/v1/client-errors').length - beforeReports, 100,
+    'the bounded queue eventually drains when the endpoint is healthy');
 });

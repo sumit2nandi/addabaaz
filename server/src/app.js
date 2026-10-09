@@ -60,6 +60,80 @@ const VERSION = APP_VERSION;
 const MAX_PROFILES = 5, PALETTE = 8;
 
 /**
+ * The one HTTP error boundary for API, admin, and website middleware. Record the error before
+ * checking `headersSent`: a response may already be committed (streaming/download failures), but
+ * the failure still belongs in Admin → Errors. Routine-but-real client failures are warnings rather
+ * than being silently discarded; Sentry remains reserved for application faults.
+ */
+export function createHttpErrorHandler({ errorLogger, captureError = () => {} } = {}) {
+  // Auth/validation/rate-limit/maintenance responses are useful diagnostics, but a client or crawler
+  // can produce many identical 4xx responses. Keep one per route/error fingerprint each minute, plus
+  // a hard per-process ceiling for high-cardinality bursts.
+  const warningSamples = new Map();
+  const warningWindowMs = 60_000, warningSampleTtlMs = 60_000, maxWarningsPerWindow = 300, maxWarningSamples = 5_000;
+  let warningWindowStartedAt = Date.now(), warningsInWindow = 0;
+
+  const shouldCaptureWarning = (error, req, status) => {
+    const now = Date.now();
+    if (now - warningWindowStartedAt >= warningWindowMs) { warningWindowStartedAt = now; warningsInWindow = 0; }
+    const route = req.route?.path || safeErrorUrl(req.originalUrl || '');
+    const fingerprint = crypto.createHash('sha256').update(JSON.stringify([
+      req.method || '', req.baseUrl || '', route, status, error.code || '', error.name || '', error.message || '',
+    ])).digest('hex');
+    const previous = warningSamples.get(fingerprint);
+    if (previous != null && now - previous < warningSampleTtlMs) return false;
+    warningSamples.set(fingerprint, now);
+    if (warningSamples.size > maxWarningSamples) {
+      for (const [key, at] of warningSamples) if (now - at >= warningSampleTtlMs) warningSamples.delete(key);
+      while (warningSamples.size > maxWarningSamples) warningSamples.delete(warningSamples.keys().next().value);
+    }
+    if (warningsInWindow >= maxWarningsPerWindow) return false;
+    warningsInWindow++;
+    return true;
+  };
+
+  return (err, req, res, next) => {
+    if (err.type === 'entity.parse.failed') err = bad('Invalid JSON body.', 'invalid_json');
+    if (err.type === 'entity.too.large') err = new HttpError(413, 'too_large', 'Request too large.');
+
+    const responseCommitted = !!res.headersSent;
+    const hasErrorStatus = Number.isInteger(err.status) && err.status >= 400 && err.status <= 599;
+    const status = hasErrorStatus ? err.status : 500;
+    const responseStatus = responseCommitted && Number.isInteger(res.statusCode) && res.statusCode >= 100 && res.statusCode <= 599
+      ? res.statusCode : status;
+    const authored = err instanceof HttpError || (Number.isInteger(err?.status) && typeof err?.code === 'string');
+    const routineClientFailure = err.code === 'maintenance' || err.code === 'rate_limited' || status === 401;
+    const expectedClientError = routineClientFailure || (err instanceof HttpError && status < 500 && !err.cause);
+    const shouldRecord = !expectedClientError || shouldCaptureWarning(err, req, status);
+    const userId = req.user?.id || req.admin?.id || null;
+
+    if (!expectedClientError) {
+      try { captureError(err, req); } catch { /* optional external monitoring must never break error handling */ }
+    }
+    if (shouldRecord) errorLogger.capture(err, {
+      source: 'server', severity: expectedClientError ? 'warning' : 'error',
+      kind: responseCommitted ? 'http-after-headers' : 'http-request', status: responseStatus, method: req.method,
+      requestId: req.requestId, url: req.originalUrl, userAgent: req.get('user-agent'), userId,
+      details: {
+        route: req.route?.path || null,
+        basePath: req.baseUrl || null,
+        adminId: req.admin?.id || (req.admin?.via === 'token' ? 'ADMIN_TOKEN' : null),
+        adminAuth: req.admin?.via || null,
+        protocol: req.protocol || null,
+        httpVersion: req.httpVersion || null,
+        responseHeadersSent: responseCommitted,
+        errorStatus: responseCommitted && status !== responseStatus ? status : null,
+      },
+    });
+
+    if (responseCommitted) return next(err);
+    const message = authored && err.message ? err.message : (status >= 500 ? 'Something went wrong.' : 'That request couldn’t be completed.');
+    const code = authored && typeof err.code === 'string' ? err.code : (status >= 500 ? 'server_error' : 'bad_request');
+    res.status(status).json({ error: { code, message }, requestId: req.requestId });
+  };
+}
+
+/**
  * @param {object} opts
  * @param {object} opts.db  MySQL data layer from createDb() (required; run migrate() first)
  */
@@ -137,8 +211,8 @@ export function createApp({
   // Maintenance mode is consulted before every viewer route (and by web.js for pages). It always exists, so
   // an unconfigured server simply reports "not in maintenance" (docs/MAINTENANCE.md).
   const maintenance = createMaintenance({ db, log: logger });
-  // Before every other route on this router: the guard must see viewer calls first. Only /health, /status,
-  // /admin, /auth, payment webhooks and unsubscribe links pass while the switch is on (maintenance.js).
+  // Before every other route on this router: the guard must see viewer calls first. Health/status,
+  // client diagnostics, consoles, auth, payment webhooks and unsubscribe links remain reachable during maintenance.
   api.use(maintenance.guard());
   registerSystemRoutes(api, { db, catalog, payments, billing, r2, version: VERSION, release, maintenance });
   // Rate limit for sign-up/login endpoints: 20 requests per minute per IP (disabled in tests with rate:false).
@@ -173,7 +247,7 @@ export function createApp({
 
   registerUnsubscribeRoute(api, { db, unsubscribeSignature: unsubSig, logger });
   /* ---------- Cloudflare R2 video streaming ---------- */
-  registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, r2, catalog, features, userFromRequest, logger });
+  registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, r2, catalog, features, userFromRequest });
   registerContactRoutes(api, { db, rate, contactWebhook, logger });
   registerPaymentWebhook(api, { db, billing, payments, logger });
   /* ---------- admin console API (admin accounts, or ADMIN_TOKEN for scripts) — see server/src/admin.js ---------- */
@@ -197,40 +271,12 @@ export function createApp({
   app.use('/api/v1', api);
 
   mountWebsite(app, { serveStatic, ROOT, db, catalog, PLANS, uploadDir, billing, corsOrigins, seoCfg, maintenance, r2, logger });
-  // FINAL ERROR HANDLER: turn route/parser failures into the stable JSON contract. EVERYTHING is
-  // persisted for Admin → Errors — deliberately-authored 4xx as 'warning' (skipping them entirely
-  // once buried a real bug: a DELETE to /me/devices/ with an empty id 404-ed invisibly), every 5xx
-  // and unexpected exception as 'error'. Only routine chatter that would drown the log stays out:
-  // sign-in prompts (401), rate limiting and maintenance mode.
-  app.use((err, req, res, next) => {
-    if (err.type === 'entity.parse.failed') err = bad('Invalid JSON body.', 'invalid_json');
-    if (err.type === 'entity.too.large') err = new HttpError(413, 'too_large', 'Request too large.');
-    if (res.headersSent) return next(err);
-    const status = Number.isInteger(err.status) && err.status >= 400 && err.status <= 599 ? err.status : 500;
-    const authored = err instanceof HttpError || (Number.isInteger(err?.status) && typeof err?.code === 'string');
-    const expectedClientError = err instanceof HttpError && status < 500 && !err.cause;
-    const routineNoise = err.code === 'maintenance' || status === 401 || err.code === 'rate_limited';
-    if (!routineNoise) {
-      // External monitoring keeps its narrower scope (faults only); the admin error log gets both.
-      if (!expectedClientError) { try { app.locals.captureError?.(err, req); } catch { /* optional monitoring must never break error handling */ } }
-      const userId = req.user?.id || req.admin?.id || null;
-      errorLogger.capture(err, {
-        source: 'server', severity: expectedClientError ? 'warning' : 'error', kind: 'http-request', status, method: req.method,
-        requestId: req.requestId, url: req.originalUrl, userAgent: req.get('user-agent'), userId,
-        details: {
-          route: req.route?.path || null,
-          basePath: req.baseUrl || null,
-          adminId: req.admin?.id || (req.admin?.via === 'token' ? 'ADMIN_TOKEN' : null),
-          adminAuth: req.admin?.via || null,
-          protocol: req.protocol || null,
-          httpVersion: req.httpVersion || null,
-        },
-      });
-    }
-    const message = authored && err.message ? err.message : (status >= 500 ? 'Something went wrong.' : 'That request couldn’t be completed.');
-    const code = authored && typeof err.code === 'string' ? err.code : (status >= 500 ? 'server_error' : 'bad_request');
-    res.status(status).json({ error: { code, message }, requestId: req.requestId });
-  });
+  // FINAL ERROR HANDLER: persist all HTTP error responses, including expected 4xx/auth/rate-limit
+  // responses as warnings, and failures that happen after a stream has committed its headers.
+  app.use(createHttpErrorHandler({
+    errorLogger,
+    captureError: (error, req) => app.locals.captureError?.(error, req),
+  }));
   // Expose internals for tests and for index.js (background jobs).
   app.db = db;
   app.locals.errorLogger = errorLogger;

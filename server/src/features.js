@@ -6,6 +6,7 @@ import { endpointHash } from './push.js';
 import { FREE_KINDS } from './catalog-schema.js';
 import { normalizeEmail } from './email-address.js';
 import { isPhoneEmail } from './sms.js';
+import { redactErrorText, sanitizeErrorDetails } from './error-reporting.js';
 import * as mail from './emails.js';
 import { passwordProblem } from '../../app/js/password-rule.js';
 
@@ -207,22 +208,26 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
           // A failure resolving attribution should not discard the original browser report.
           await reportError?.(error, { kind: 'client-error-session-lookup', requestId: req.requestId, method: req.method, url: req.originalUrl, userAgent: req.get('user-agent') });
         }
-        const clientError = new Error(b.message.trim().slice(0, 500));
-        clientError.name = typeof b.errorName === 'string' ? b.errorName.replace(/[^\w.$-]/g, '').slice(0, 128) || 'Error' : 'Error';
-        if (typeof b.stack === 'string' && b.stack) clientError.stack = b.stack.slice(0, 12_000);
-        if (typeof b.errorCode === 'string') clientError.code = b.errorCode.slice(0, 128);
-        if (Number.isInteger(b.status) && b.status >= 100 && b.status <= 599) clientError.status = b.status;
+        const clientError = new Error(redactErrorText(b.message.trim(), 500));
+        clientError.name = typeof b.errorName === 'string' ? redactErrorText(b.errorName, 128).replace(/[^\w.$-]/g, '').slice(0, 128) || 'Error' : 'Error';
+        if (typeof b.stack === 'string' && b.stack) clientError.stack = redactErrorText(b.stack, 12_000);
+        if (typeof b.errorCode === 'string') clientError.code = redactErrorText(b.errorCode, 128);
+        if (Number.isInteger(b.status) && b.status >= 0 && b.status <= 599) clientError.status = b.status;
+        const severity = ['warning', 'error', 'fatal'].includes(b.severity) ? b.severity : 'error';
+        const clientDetails = b.details && typeof b.details === 'object' && !Array.isArray(b.details) ? b.details : {};
+        const hasClientDetails = Object.keys(clientDetails).length > 0;
         if (reportError) {
           await reportError(clientError, {
-            source: 'client', severity: 'error', kind: 'browser-error', requestId: req.requestId, method: req.method,
+            source: 'client', severity, kind: 'browser-error', requestId: req.requestId, method: req.method,
             url: safeErrorUrl(b.url), userAgent: req.get('user-agent'), userId: user?.id || null,
-            details: b.details && typeof b.details === 'object' ? { client: b.details } : {},
+            details: hasClientDetails ? { client: clientDetails } : {},
           });
         } else {
           await db.errors.add({
-            source: 'client', message: clientError.message, errorName: clientError.name, code: clientError.code || null, status: clientError.status || null,
+            source: 'client', severity, message: clientError.message, errorName: clientError.name, code: clientError.code || null, status: clientError.status ?? null,
             stack: clientError.stack, requestId: req.requestId || null, method: req.method, url: safeErrorUrl(b.url),
-            userAgent: req.get('user-agent'), userId: user?.id || null, details: b.details || null,
+            userAgent: redactErrorText(req.get('user-agent') || '', 300) || null, userId: user?.id || null,
+            details: hasClientDetails ? { client: sanitizeErrorDetails(clientDetails) } : null,
           });
         }
         res.sendStatus(204);

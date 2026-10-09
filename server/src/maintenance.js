@@ -8,11 +8,12 @@
 // What stays available while the switch is on, because an operator needs it or a user already paid for it:
 //   * /health, /health/ready           — uptime checks and load balancers keep seeing the process
 //   * /status                          — the site and the apps poll it to know we are down and when we are back
+//   * /client-errors                   — preserve browser/admin diagnostics while the viewer app is offline
 //   * /admin/*                         — the console, so the switch can be turned back off
 //   * /auth/*                          — signing in to reach that console
 //   * /payments/webhook                — a payment that already happened must still settle
 //   * /notifications/unsubscribe       — an unsubscribe link in an e-mail that was already sent
-// Everything else is refused with 503 + Retry-After, and the apps show the maintenance screen.
+// Other viewer API routes are refused with 503 + Retry-After, and the apps show the maintenance screen.
 //
 // The window can end by itself: when `until` passes, the site comes back automatically even if nobody turns
 // the switch off, so a forgotten "back in an hour" cannot strand the site. Settings are cached for a few
@@ -35,6 +36,7 @@ export const DEFAULT_RETRY_AFTER = 60;   // seconds, when no end time is known
 export const ALWAYS_ALLOWED = Object.freeze([
   /^\/health(?:\/|$)/,
   /^\/status$/,
+  /^\/client-errors$/,
   /^\/admin(?:\/|$)/,
   /^\/auth(?:\/|$)/,
   /^\/payments\/webhook(?:\/|$)/,

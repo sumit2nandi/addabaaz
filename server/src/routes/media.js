@@ -10,7 +10,7 @@ import { FREE_KINDS } from '../catalog-schema.js';
 const CAPACITOR_ORIGIN = 'https://app.addabaaz.in';
 const isNativeWebView = (req) => req.get('origin') === CAPACITOR_ORIGIN || /\bwv\b/i.test(req.get('user-agent') || '');
 
-export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, r2, catalog, features, userFromRequest, logger = console }) {
+export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, r2, catalog, features, userFromRequest }) {
   const checkObject = mediaHeadCache((key) => r2.head(key));
   // Small helpers: catalog lookup, the public base URL for links we hand out, and mp4-vs-HLS detection.
   const findVideo = (id) => catalog.video(id);
@@ -88,12 +88,9 @@ export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, 
         if (value) res.set(name, value);
       }
       if (!upstream.body) return res.end();
-      try { await pipeline(Readable.fromWeb(upstream.body), res); }
-      catch (e) {
-        if (!res.headersSent) throw e;
-        logger.error('[media] native video stream failed after headers were sent:', e);
-        res.destroy(e);
-      }
+      // Let stream failures propagate to the shared HTTP error boundary even when response headers
+      // have been committed; it records the request context before Express closes the connection.
+      await pipeline(Readable.fromWeb(upstream.body), res);
       return;
     }
     res.set('Cache-Control', 'no-store').redirect(302, r2.presignGet(target, { ttl: 900 }));

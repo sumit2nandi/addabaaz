@@ -25,6 +25,9 @@ console.log(`[db] settings from ${process.env.DATABASE_URL ? 'DATABASE_URL' : 'D
 console.log(`[db] TLS: ${dbConfig.ssl ? (dbConfig.ssl.ca ? `on, trusting the provided CA certificate (${(dbConfig.ssl.ca.match(/BEGIN CERTIFICATE/g) || []).length})` : 'on, NO custom CA certificate (only public CAs are trusted)') : 'off'}`);
 // Connect to MySQL (creating the database first when DB_CREATE=true) and stop early with a clear message if it is unreachable.
 const db = await createDb({ config: dbConfig, ensureDatabase: process.env.DB_CREATE === 'true' });
+// Create the reporter as soon as a DB handle exists. It can capture migration/startup failures whenever
+// the error table is already available, and otherwise falls back to the host runtime log.
+const errorLogger = createErrorLogger({ db, appVersion: APP_VERSION, release: releaseSha });
 try { await db.ping(); }
 catch (e) {
   console.error(`Cannot connect to MySQL (${e.code || e.message}). Check DATABASE_URL / DB_* settings — see .env.example.`);
@@ -34,14 +37,19 @@ catch (e) {
 }
 if (process.env.DB_MIGRATE !== 'false') {                       // set DB_MIGRATE=false to run `npm run db:migrate` as a separate deploy step
   console.log(`[migrate] automatic startup migrations enabled (DB_MIGRATE=${process.env.DB_MIGRATE === undefined ? 'unset' : 'not false'})`);
-  const applied = await migrate(db, { log: (m) => console.log('[migrate]', m) });
+  let applied;
+  try { applied = await migrate(db, { log: (m) => console.log('[migrate]', m) }); }
+  catch (e) {
+    await errorLogger.capture(e, { severity: 'fatal', kind: 'startup-migration' });
+    await errorLogger.flush();
+    await db.close().catch(() => {});
+    throw e;
+  }
   console.log(`[migrate] startup check complete; applied ${applied.length} migration(s)`);
 } else {
   console.warn('[migrate] DB_MIGRATE=false — migrations and schema-drift checks are skipped at startup; run `npm run db:migrate` as a deploy step.');
 }
-// Once migrations have ensured the error table exists, use one process-wide reporter for startup checks,
-// the HTTP app, background work and fatal process events.
-const errorLogger = createErrorLogger({ db, appVersion: APP_VERSION, release: releaseSha });
+// The same reporter now spans startup checks, the HTTP app, background work and fatal process events.
 // One address = one account: rewrite stored addresses in the normalized form (migration 012 could only
 // lower-case and trim them in SQL). Rows that collide are flagged for Admin → Users → merge.
 try {
@@ -58,7 +66,14 @@ if (process.env.MINIFY !== 'false') {
   try { const m = await prepareWebAssets(); console.log(`[web] front-end minified (${m.files} files, −${(m.saved / 1024).toFixed(0)} KB)`); }
   catch (e) { errorLogger.logger.warn('[web] front-end minification skipped — serving sources as-is:', e); }
 }
-const app = createApp({ db, rate: !noRate, release: releaseSha, errorLogger });
+let app;
+try { app = createApp({ db, rate: !noRate, release: releaseSha, errorLogger }); }
+catch (e) {
+  await errorLogger.capture(e, { severity: 'fatal', kind: 'startup-app-creation' });
+  await errorLogger.flush();
+  await db.close().catch(() => {});
+  throw e;
+}
 // Optional Sentry: `npm i @sentry/node` and set SENTRY_DSN. Not installed by default; the built-in Errors page in /admin works without it.
 if (process.env.SENTRY_DSN) {
   try {
