@@ -6,7 +6,7 @@ import { HttpError, bad, wrap } from '../http.js';
 import { normalizeEmail } from '../email-address.js';
 import { SocialError } from '../social-errors.js';
 
-export function registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled, sms = null, promos = null, logger = console }) {
+export function registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled, sms = null, promos = null, logger = console, signupMailWaitMs = 5000 }) {
   // Create an account with e-mail + password. A verification-mail failure must be visible to the user (the account is still created so they can sign in and retry).
   api.post('/auth/signup', authLimit, wrap(async (req, res) => {
     const { name = '', email = '', password = '', ref = '' } = req.body || {};      // `ref` = an inviter's code
@@ -28,19 +28,31 @@ export function registerAuthRoutes(api, { db, secret, social, features, mailer, 
       const ex = await db.users.byEmail(user.email);
       throw new HttpError(409, 'email_taken', ex && !ex.passwordHash ? 'This email is already registered — use “Continue with Google/Facebook” to sign in.' : 'An account with this email already exists.');
     }
-    let verificationEmailSent = false;
-    try {
-      await features.sendVerification({ ...user, emailVerifiedAt: null }, { strict: true });
-      verificationEmailSent = mailer.provider === 'smtp';
-    } catch (e) {
-      // Keep the newly created account usable, but don't silently pretend its confirmation mail went out.
-      logger.warn(`[auth] verification email failed${e.code ? ` (${e.code})` : ''}:`, e);
-    }
+    // The confirmation mail must never stall the sign-up screen. SMTP gets a short budget (SIGNUP_EMAIL_WAIT_MS)
+    // to finish inside the request — a healthy provider still reports an accurate `verificationEmailSent` — and a
+    // slow or hanging mail server turns into "still on its way" (`verificationEmailPending`): the answer goes out
+    // right away while the send continues in the background. The account exists either way, and a failure stays
+    // visible (the client offers Resend from Account) instead of freezing the form behind a dead mail server.
+    let verificationEmailSent = false, verificationEmailPending = false, mailFailure = null;
+    const verification = features.sendVerification({ ...user, emailVerifiedAt: null }, { strict: true });
+    // `settled` never rejects: it folds the outcome into true/false and keeps the error for logging, so the
+    // background continuation after an expired budget can never become an unhandled rejection.
+    const settled = verification.then(() => true, (e) => { mailFailure = e; return false; });
+    let budget;
+    const finished = await Promise.race([settled, new Promise((resolve) => { budget = setTimeout(() => resolve(null), signupMailWaitMs); })]);
+    clearTimeout(budget);
+    const warnMail = (where) => logger.warn(`[auth] verification email failed${where}${mailFailure?.code ? ` (${mailFailure.code})` : ''}:`, mailFailure);
+    if (finished === null) {
+      verificationEmailPending = true;                          // still in flight — the response must not wait for it
+      settled.then((ok) => { if (!ok) warnMail(' in the background'); });
+    } else if (finished) verificationEmailSent = mailer.provider === 'smtp';
+    // Keep the newly created account usable, but don't silently pretend its confirmation mail went out.
+    else warnMail('');
     // Promotions: the welcome bonus, and the referral bonus for both sides when a code came with the sign-up.
     // A promotion must never break an account creation, so `onSignup` swallows its own errors.
     const bonus = promos ? await promos.onSignup({ user: await db.users.byId(user.id) || user, code: ref }) : { welcomePaise: 0 };
     res.status(201).json({
-      token: signToken(user.id, secret), user: publicUser(user), profiles: [profile], verificationEmailSent,
+      token: signToken(user.id, secret), user: publicUser(user), profiles: [profile], verificationEmailSent, verificationEmailPending,
       ...(bonus.welcomePaise || bonus.inviteePaise ? { creditPaise: bonus.welcomePaise + bonus.inviteePaise } : {}),
       ...(bonus.inviterPaise ? { referral: { inviterPaise: bonus.inviterPaise, hold: bonus.hold || null } } : {}),
       ...(bonus.skipped ? { referralSkipped: bonus.skipped } : {}),

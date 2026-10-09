@@ -213,7 +213,10 @@ export default async function auth(ctx) {
     busy(true, signup ? 'Creating your account…' : 'Signing you in…');
     try {
       const result = await (signup ? u.signUp(body) : u.signIn(body));
-      if (signup && result.verificationEmailSent === false) finish('Account created, but the confirmation email could not be sent. Try Resend link from Account.', 'err');
+      // The server answers as soon as the account exists: a slow mail server never freezes this screen. A mail
+      // still in flight is "pending" (it lands a moment later); a real failure says so and offers the resend path.
+      if (signup && result.verificationEmailPending) finish('Account created — the confirmation email is on its way. Resend it from Account if it doesn’t arrive.');
+      else if (signup && result.verificationEmailSent === false) finish('Account created, but the confirmation email could not be sent. Try Resend link from Account.', 'err');
       else finish(signup ? 'Welcome to ADDABAAZ!' : 'Signed in');
     } catch (err) { busy(false); setStatus(friendly(err)); btn.disabled = false; }
   });

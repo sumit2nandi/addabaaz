@@ -20,7 +20,7 @@ components:
     Profile: { type: object, properties: { id: { type: string }, name: { type: string }, color: { type: integer } } }
     Auth:
       type: object
-      properties: { token: { type: string }, user: { $ref: '#/components/schemas/User' }, profiles: { type: array, items: { $ref: '#/components/schemas/Profile' } }, verificationEmailSent: { type: boolean, description: 'Signup only; false means the account exists but the confirmation email was not delivered.' } }
+      properties: { token: { type: string }, user: { $ref: '#/components/schemas/User' }, profiles: { type: array, items: { $ref: '#/components/schemas/Profile' } }, verificationEmailSent: { type: boolean, description: 'Signup only; false means the account exists but the confirmation email was not delivered.' }, verificationEmailPending: { type: boolean, description: 'Signup only; true means the confirmation email is still being sent (a slow mail server never stalls the response) and will arrive shortly.' } }
     Library:
       type: object
       properties:
@@ -42,7 +42,7 @@ paths:
   /auth/signup:
     post:
       security: []
-      summary: Create account (+ first profile). Password 8–128 chars. Returns verificationEmailSent=false if the account was created but email delivery failed.
+      summary: Create account (+ first profile). Password 8–128 chars. Answers as soon as the account exists — a slow mail server never stalls it. Returns verificationEmailSent=false if the account was created but email delivery failed, or verificationEmailPending=true while the confirmation email is still being sent (SIGNUP_EMAIL_WAIT_MS budget).
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name, email, password], properties: { name: { type: string }, email: { type: string }, password: { type: string } } } } } }
       responses: { '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Auth' } } } }, '409': { description: email_taken }, '429': { description: Rate limited } }
   /auth/login:
