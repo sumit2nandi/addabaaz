@@ -88,7 +88,7 @@ test('a failed history still shows the error card and the way back to plan detai
   });
   const root = await render();
   assert.match(root.textContent, /Couldn’t load your billing history/, 'the viewer is told, plainly');
-  assert.ok(root.querySelector('a.account-edit-back[href="#/plans"]'), 'with the icon-only back link to Plans');
+    assert.ok(root.querySelector('.page-head-title-row a.page-back[href="#/plans"]'), 'with the plain-arrow back link beside the title');
 });
 
 test('the view keeps one parallel fetch, one cache and no per-payment requests', () => {

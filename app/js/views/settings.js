@@ -14,10 +14,12 @@ export default async function settings(ctx) {
   ctx.setTitle(meta.title);
   const backButton = pageBack(ctx, '/account');
   ctx.root.innerHTML = html`<div class="page page-narrow account-page settings-page">
-    ${backButton}
     <div class="account-layout">
       ${accountNav(settingGroups(), meta.id)}
-      <div class="account-content">${body}</div>
+      <div class="account-content">
+        <header class="settings-page-heading">${backButton}<h1>${meta.title}</h1></header>
+        ${body}
+      </div>
     </div>
   </div>`.s;
   wireSetting(meta.id, ctx.root, ctx);

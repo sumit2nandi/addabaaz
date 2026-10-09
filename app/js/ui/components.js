@@ -216,8 +216,8 @@ export function emptyState({ iconName = 'film', title, text = '', action = '' })
   return html`<div class="empty">${icon(iconName, { size: 44 })}<h2>${title}</h2>${text ? html`<p>${text}</p>` : ''}${action}</div>`;
 }
 // Page/section heading with optional tag and subtitle.
-export function sectionHeader({ tag = '', title, subtitle = '' }) {
-  return html`<header class="page-head">${tag ? html`<div class="eyebrow">${tag}</div>` : ''}<h1>${title}</h1>${subtitle ? html`<p>${subtitle}</p>` : ''}</header>`;
+export function sectionHeader({ tag = '', title, subtitle = '', back = '' }) {
+  return html`<header class="page-head">${tag ? html`<div class="eyebrow">${tag}</div>` : ''}${back ? html`<div class="page-head-title-row">${back}<h1>${title}</h1></div>` : html`<h1>${title}</h1>`}${subtitle ? html`<p>${subtitle}</p>` : ''}</header>`;
 }
 /* ---------- toast ---------- */
 // A toast is the small message bar at the bottom of the screen; showing a new one replaces the old one.

@@ -14,7 +14,7 @@ export default async function accountDetails(ctx) {
   const parts = (account.name || '').trim().split(/\s+/);
   let savedName = parts.join(' '), busy = false;
   ctx.root.innerHTML = html`<div class="page page-narrow account-details-page">
-    <header class="account-edit-header"><a class="account-edit-back" href="#/account" aria-label="Back to Account">${icon('left', { size: 24 })}</a><h1>Edit Account</h1></header>
+    <header class="account-edit-header"><a class="page-back" href="#/account" aria-label="Back to Account">${icon('left', { size: 28 })}</a><h1>Edit Account</h1></header>
     <div id="accountPlanSummary">${accountPlan(u)}</div>
     <form class="account-edit-form" id="accountNameForm">
       <div class="account-name-fields">

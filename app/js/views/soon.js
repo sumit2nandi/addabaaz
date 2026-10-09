@@ -14,8 +14,7 @@ export default async function soon(ctx) {
   if (!u) throw new Error('This title does not exist.');
   const extras = cat.extras(u.id);
   // A Coming Soon page is nearly always reached from a banner somewhere else (home, the Coming Soon list),
-  // so it carries the same circular Back as the other detail-less pages — falling back to the Coming Soon
-  // list when the viewer landed here directly (a shared link) and there is no page to go back to.
+  // so Back returns to that page; a directly opened shared link falls back to the Coming Soon list.
   const backButton = pageBack(ctx, '/upcoming');
   ctx.setTitle(`${u.titleEn || u.title} — Coming soon`);
   ctx.root.innerHTML = html`
@@ -24,9 +23,8 @@ export default async function soon(ctx) {
       <div class="hero-inner">
         <button type="button" class="detail-poster" id="detailPoster" aria-label="Open the full poster">${img(u.posterLg || u.poster, u.title, { lazy: false, lowSrc: u.poster })}</button>
         <div class="hero-copy soon-hero-copy">
-          ${backButton}
           <div class="eyebrow">${icon('clock', { size: 12 })} Coming soon</div>
-          <h1 class="hero-title bn">${u.title}</h1>
+          <div class="detail-title-row">${backButton}<h1 class="hero-title bn">${u.title}</h1></div>
           ${u.titleEn && u.titleEn !== u.title ? html`<div class="hero-title-en">${u.titleEn}</div>` : ''}
           <p class="hero-desc">${u.note || 'An upcoming ADDABAAZ original. Release date to be announced.'}</p>
           <div class="hero-actions soon-hero-actions">

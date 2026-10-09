@@ -70,10 +70,13 @@ test('checkout shows the balance and only spends it when the viewer asks', () =>
 test('Account → Refer & earn keeps rewards/activity, removes highlighted cards and the WhatsApp shortcut', () => {
   assert.match(account, /wireReferral\(root\)/, 'the account page wires the section');
   assert.match(account, /<div id="referSlot" class="account-section"><\/div>/, 'and has a place for it in the responsive Account grid');
-  assert.match(account, /Refer &amp; Earn/, 'named plainly');
+  assert.match(account, /\['refer', 'Refer & Earn'/, 'the Refer & Earn settings group keeps its plain title');
   assert.match(account, /id="refShare" data-referral-share/, 'the standard share action remains in the hero');
   assert.doesNotMatch(account, /wa\.me|referral-hero-whatsapp|Share your invite on WhatsApp/i, 'there is no direct WhatsApp share shortcut');
   assert.match(styles, /\.referral-hero-image\s*\{[^}]*object-position:\s*right center;/, 'the hero image keeps its right edge visible when cover-cropped');
+  const benefitGridRules = [...styles.matchAll(/\.referral-benefits\s*\{([^}]*)\}/g)].map(([, rule]) => rule);
+  assert.ok(benefitGridRules.some((rule) => /grid-template-columns:\s*repeat\(2,\s*minmax\(0,1fr\)\)/.test(rule)), 'the benefit cards use two equal columns');
+  assert.ok(benefitGridRules.every((rule) => !/grid-template-columns:\s*(?:1fr|minmax\(0,1fr\))/.test(rule)), 'narrow-width rules never stack the cards');
   assert.doesNotMatch(account, /YOUR PERSONAL INVITE|NO HIDDEN MILESTONES|Know someone who’d love ADDABAAZ/, 'the three highlighted sections are removed');
   assert.doesNotMatch(account, /refLink|refCode/, 'copy fallback no longer depends on fields removed with the personal-invite card');
   assert.match(account, /Benefits for both of you/, 'the referral benefits remain');

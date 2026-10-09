@@ -29,5 +29,10 @@ test('desktop layouts cover settings and support without replacing mobile naviga
   assert.match(desktop, /\.account-sidebar \{ display: grid;/);
   assert.match(read('app/js/views/settings.js'), /accountNav\(settingGroups\(\), meta.id\)/);
   assert.match(read('app/js/views/settings.js'), /pageBack\(ctx/);
+  const accountDetails = read('app/js/views/account-details.js');
+  assert.match(accountDetails, /class="account-edit-header"><a class="page-back"[\s\S]*?<\/a><h1>Edit Account<\/h1>/,
+    'account details places a plain arrow immediately before its page title');
+  assert.match(css, /\.account-edit-header \{ display: flex; align-items: center;/,
+    'the account details title and arrow share one row');
   assert.match(read('app/js/views/support.js'), /accountNav\(settingGroups\(\), 'help'\)/);
 });

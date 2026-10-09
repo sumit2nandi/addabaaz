@@ -2,8 +2,7 @@
 //
 //   1. tapping a Coming Soon banner on the home page opens #/soon/:id — the floating menu must light up
 //      SHOWS there (it has no Coming Soon item of its own), not leave the bar with nothing highlighted;
-//   2. those pages carry the same circular Back button as the rest of the app, so a viewer who arrived
-//      from a banner gets back to where they were.
+//   2. those pages carry the same plain-arrow Back action as the rest of the app, beside the page title.
 //
 // Run: node --test test/frontend/coming-soon-nav.test.mjs
 import { test } from 'node:test';
@@ -51,20 +50,19 @@ test('a Coming Soon page highlights Shows in the floating menu (and Coming Soon 
   assert.deepEqual(activeTab(), ['/reels']);
 });
 
-test('both Coming Soon pages use the shared circular Back button', () => {
+test('both Coming Soon pages use the shared plain-arrow Back beside the title', () => {
   for (const view of ['soon', 'upcoming']) {
     const source = read(`app/js/views/${view}.js`);
     assert.match(source, /import \{ pageBack \} from '\.\.\/ui\/page-back\.js';/, `${view}.js imports the shared button`);
     assert.match(source, /pageBack\(ctx/, `${view}.js wires it to the previous page`);
-    assert.match(source, /\$\{backButton\}/, `${view}.js renders it`);
-    assert.doesNotMatch(source, /class="back-link"/, `${view}.js has no old text back link`);
+    if (view === 'soon') assert.match(source, /class="detail-title-row">\$\{backButton\}<h1/, `${view}.js puts it beside the title`);
+    else assert.match(source, /back: backButton/, `${view}.js puts it beside the title`);
+    assert.doesNotMatch(source, /class="back-link"|class="back-row"/, `${view}.js has no old standalone Back row`);
   }
   // A shared /soon/… link opened cold has no in-app page to go back to: Back lands on the Coming Soon list.
   assert.match(read('app/js/views/soon.js'), /pageBack\(ctx, '\/upcoming'\)/);
-  // The banner's button sits in the copy column (the top bar's brand owns the top-left corner) and the
-  // hero's own gap spaces it, so it needs no extra margin.
   const css = read('app/css/styles.css');
-  assert.match(css, /\.detail-hero \.hero-copy > \.back-row \{ margin: 0; \}/);
+  assert.match(css, /\.detail-title-row \.page-back \{[^}]*color: #fff;/, 'the plain arrow stays visible on the artwork');
 });
 
 test('the rendered Coming Soon list carries a working Back button', async () => {
@@ -83,8 +81,8 @@ test('the rendered Coming Soon list carries a working Back button', async () => 
   const root = document.createElement('main');
   let cleanup;
   await upcoming({ root, setTitle() {}, onCleanup(fn) { cleanup = fn; } });
-  const back = root.querySelector('.account-edit-back');
-  assert.ok(back, 'the Coming Soon page shows the circular Back button');
+  const back = root.querySelector('.page-back');
+  assert.ok(back, 'the Coming Soon page shows its plain-arrow Back action beside the heading');
   assert.equal(back.getAttribute('aria-label'), 'Back to previous page');
   assert.match(root.textContent, /Coming Soon/, 'and the page itself still renders');
   cleanup?.();

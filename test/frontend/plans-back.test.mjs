@@ -3,21 +3,23 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const read = path => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
-test('Plans uses the shared previous-page button in both rendering branches', () => {
+test('Plans places the shared plain-arrow Back beside its heading in both rendering branches', () => {
   const source = read('app/js/views/plans.js');
   assert.ok(source.includes("pageBack(ctx, '/account')"));
-  assert.equal((source.match(/\$\{backButton\}/g) || []).length, 2);
+  assert.match(source, /sectionHeader\(\{ title: 'Plans Need the ADDABAAZ Server', back: backButton \}\)/);
+  assert.equal((source.match(/back: backButton/g) || []).length, 3, 'fallback and both regular plan headers use the inline arrow');
 });
 
-test('all requested pages use shared circular Back without old text back links', () => {
+test('pages with a Back action use the shared plain arrow beside the page title', () => {
   for (const view of ['mylist', 'settings', 'support', 'deletion', 'studio', 'legal']) {
     const source = read(`app/js/views/${view}.js`);
     assert.match(source, /pageBack\(ctx/);
-    assert.match(source, /\$\{backButton\}/);
-    assert.doesNotMatch(source, /class="back-link"/);
+    assert.match(source, /backButton/);
+    assert.doesNotMatch(source, /class="back-link"|class="back-row"/);
   }
-  assert.equal((read('app/js/views/studio.js').match(/\$\{backButton\}/g) || []).length, 3);
-  assert.equal((read('app/js/views/support.js').match(/\$\{backButton\}/g) || []).length, 2);
+  assert.equal((read('app/js/views/studio.js').match(/back: backButton/g) || []).length, 3);
+  assert.equal((read('app/js/views/support.js').match(/back: backButton/g) || []).length, 2);
+  assert.match(read('app/js/views/settings.js'), /class="settings-page-heading">\$\{backButton\}<h1>/);
 });
 
 test('shared button navigates back, falls home for direct entry, and cleans up its handler', async () => {
@@ -35,7 +37,7 @@ test('shared button navigates back, falls home for direct entry, and cleans up i
     root.innerHTML = pageBack({ root, onCleanup(fn) { cleanup = fn; } }).s;
     const button = root.querySelector('button');
     assert.equal(button.getAttribute('aria-label'), 'Back to previous page');
-    assert.ok(button.classList.contains('account-edit-back'));
+    assert.ok(button.classList.contains('page-back'));
     button.click();
     assert.equal(backs, 1);
     window.__navDepth = 0;

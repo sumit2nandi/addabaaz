@@ -64,7 +64,7 @@ function wireNotifications(root, { guest = false, onCleanup = null } = {}) {
     // The browser and the app both keep three choices per device (docs/ENGAGEMENT.md): a guest app has no
     // account to link episode/launch notifications to, so it gets the master switch only.
     const topics = s.subscribed && (!s.native || !s.guest);
-    slot.innerHTML = html`<h2 class="sub-h">Notifications</h2><div class="card-panel list">
+    slot.innerHTML = html`<div class="card-panel list">
       <label class="row-switch"><span><b>Notify Me on This Device</b><small>${blocked}</small></span><span class="switch"><input type="checkbox" id="pushOn" ${s.subscribed ? 'checked' : ''} ${s.permission === 'denied' ? 'disabled' : ''}><span class="track"></span></span></label>
       ${topics ? html`<label class="row-switch"><span><b>New Episodes of Shows I Follow</b></span><span class="switch"><input type="checkbox" data-pp="episodes" ${s.prefs.episodes ? 'checked' : ''}><span class="track"></span></span></label>
         <label class="row-switch"><span><b>When a Coming Soon Title Launches</b></span><span class="switch"><input type="checkbox" data-pp="launches" ${s.prefs.launches ? 'checked' : ''}><span class="track"></span></span></label>
@@ -91,7 +91,7 @@ function wireNotifications(root, { guest = false, onCleanup = null } = {}) {
 function wireReferral(root) {
   const u = app.user;
   const slot = $('#referSlot', root); if (!slot) return;
-  slot.innerHTML = html`<h2 class="sub-h">Refer &amp; Earn</h2><div class="card-panel"><div class="spinner" style="margin:14px auto"></div></div>`.s;
+  slot.innerHTML = html`<div class="card-panel"><div class="spinner" style="margin:14px auto"></div></div>`.s;
   let data = null;
   const inr = (paise) => {
     const amount = Math.max(0, Number(paise) || 0) / 100;
@@ -101,7 +101,7 @@ function wireReferral(root) {
     let response;
     try { response = await u.promos(); }
     catch (err) {
-      slot.innerHTML = html`<h2 class="sub-h">Refer &amp; Earn</h2><div class="referral-empty card-panel" role="status">
+      slot.innerHTML = html`<div class="referral-empty card-panel" role="status">
         <span class="referral-empty-icon">${icon('gift', { size: 24 })}</span><h3>Couldn’t load your invite details</h3>
         <p>${friendly(err)}</p><button class="btn btn-primary" type="button" id="refRetry">Try again</button>
       </div>`.s;
@@ -109,14 +109,14 @@ function wireReferral(root) {
     }
     data = response?.viewer || null;
     if (!data) {
-      slot.innerHTML = html`<h2 class="sub-h">Refer &amp; Earn</h2><div class="referral-empty card-panel" role="status">
+      slot.innerHTML = html`<div class="referral-empty card-panel" role="status">
         <span class="referral-empty-icon">${icon('gift', { size: 24 })}</span><h3>Sign in to see your invite details</h3>
         <p>Your referral code, rewards and activity will appear here when you’re signed in.</p>
       </div>`.s;
       return;
     }
     if (!data.offer?.enabled) {
-      slot.innerHTML = html`<h2 class="sub-h">Refer &amp; Earn</h2>${emptyState({ iconName: 'gift', title: 'Refer & Earn Is Off', text: 'There is no invite offer running right now — check back later.' })}`.s;
+      slot.innerHTML = html`${emptyState({ iconName: 'gift', title: 'Refer & Earn Is Off', text: 'There is no invite offer running right now — check back later.' })}`.s;
       return;
     }
 
@@ -149,8 +149,7 @@ function wireReferral(root) {
     ];
     const benefitRows = (items) => items.map(([title, detail]) => html`<li class="referral-benefit-row"><span class="referral-benefit-check">${icon('check', { size: 18 })}</span><span class="referral-benefit-copy"><b>${title}</b><small>${detail}</small></span></li>`);
 
-    slot.innerHTML = html`<h2 class="sub-h referral-page-heading">Refer &amp; Earn</h2>
-      <div class="referral-shell">
+    slot.innerHTML = html`<div class="referral-shell">
         <section class="referral-hero" aria-labelledby="referralHeroTitle">
           <img class="referral-hero-image" src="media/referral-invite.jpg" alt="Friends enjoying a show together" fetchpriority="high" decoding="async">
           <div class="referral-hero-copy">
@@ -277,7 +276,6 @@ function wireReferral(root) {
 function playbackSection() {
   const u = app.user;
   return html`<section class="account-section">
-    <h2 class="sub-h">Playback</h2>
     <div class="card-panel list">
       <label class="row-switch"><span><b>Autoplay Next Episode</b><small>Keep watching without lifting a finger.</small></span><span class="switch"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span></span></label>
     </div>
@@ -304,7 +302,6 @@ function securitySection() {
       </div>
     </section>` : '';
   return html`${contactEmail}<section class="account-section">
-    <h2 class="sub-h">Security</h2>
     <div class="card-panel list">
       ${signInMethod}
       ${row('signOutAll', 'logout', 'Sign Out of Other Devices', 'Signs out every other phone, TV and browser. This device stays signed in.')}
@@ -317,7 +314,6 @@ function kidsSection() {
   const u = app.user;
   if (!u.account) return '';
   return html`<section class="account-section">
-    <h2 class="sub-h">Parental Control</h2>
     <div class="card-panel list">
       ${row('pinBtn', 'lock', u.hasPin ? 'Change or Remove Parental PIN' : 'Set a Parental PIN', u.hasPin ? 'Needed to leave a Kids profile or change profiles.' : 'Keeps children on their Kids profile and stops profile changes.')}
     </div>

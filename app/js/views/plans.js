@@ -95,7 +95,7 @@ export default async function plans(ctx) {
   const backButton = pageBack(ctx, '/account');
   const next = /^\/(?!\/)/.test(ctx.query.next || '') ? ctx.query.next : '';
   if (!u.supportsAuth) {
-    ctx.root.innerHTML = html`<div class="page">${backButton}<div class="empty">${icon('crown', { size: 44 })}<h2>Plans Need the ADDABAAZ Server</h2><p>This copy of ADDABAAZ is running without the API, so subscriptions aren’t available. Free episodes and reels work as usual.</p><a class="btn btn-primary" href="#/">Keep Watching</a></div></div>`.s; return;
+    ctx.root.innerHTML = html`<div class="page">${sectionHeader({ title: 'Plans Need the ADDABAAZ Server', back: backButton })}<div class="empty">${icon('crown', { size: 44 })}<p>This copy of ADDABAAZ is running without the API, so subscriptions aren’t available. Free episodes and reels work as usual.</p><a class="btn btn-primary" href="#/">Keep Watching</a></div></div>`.s; return;
   }
   const { plans: list, payments, billing: bill } = await u.plans();
   const memo = {};
@@ -169,10 +169,9 @@ export default async function plans(ctx) {
           : html`<button class="btn btn-primary block" data-plan="${p.id}">${p.id === cur ? 'Extend' : active ? 'Switch to' : 'Get'} ${p.interval === 'year' ? 'yearly' : 'monthly'} plan</button>`}
       </article>`)}</div>`;
     ctx.root.innerHTML = html`<div class="page">
-      ${backButton}
       ${sectionHeader(isNative
-        ? { title: 'Your access', subtitle: 'View the access currently linked to your ADDABAAZ account.' }
-        : { title: 'Choose your plan', subtitle: 'Pay once for the period — no auto-renewal, nothing to cancel.' })}
+        ? { title: 'Your access', subtitle: 'View the access currently linked to your ADDABAAZ account.', back: backButton }
+        : { title: 'Choose your plan', subtitle: 'Pay once for the period — no auto-renewal, nothing to cancel.', back: backButton })}
       ${status}${why}
       ${!isNative && creditPaise > 0 ? html`<div class="notice ok">${icon('gift', { size: 18 })}<span>You have <b>${inr(creditPaise)}</b> of ADDABAAZ credit${offer?.expiryDays ? html` — it expires ${offer.expiryDays} days after it was added` : ''}. Tick “use my credit” at checkout and it comes straight off the price.</span></div>` : ''}
       ${canBuy || guestWeb ? plusCard : legacyCards}

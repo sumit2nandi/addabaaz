@@ -14,8 +14,7 @@ export default async function legal(ctx) {
   ctx.setTitle(d.title);
   const backButton = pageBack(ctx);
   ctx.root.innerHTML = html`<article class="page page-narrow legal">
-    ${backButton}
-    ${sectionHeader({ tag: 'Legal', title: d.title, subtitle: `Last updated ${fmtDate(LEGAL_UPDATED)}` })}
+    ${sectionHeader({ tag: 'Legal', title: d.title, subtitle: `Last updated ${fmtDate(LEGAL_UPDATED)}`, back: backButton })}
     <p class="lead">${d.intro}</p>
     ${ctx.path === '/privacy' ? privacyChoices() : ''}
     ${d.sections.map(([h, ps]) => html`<section><h2>${h}</h2>${ps.map((t) => html`<p>${t}</p>`)}</section>`)}
