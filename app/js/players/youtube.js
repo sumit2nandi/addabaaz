@@ -44,6 +44,13 @@ async function loadYouTubeForPlayback(autoplay) {
 
 // YouTube needs the page origin for the postMessage handshake, but native apps run on non-http origins.
 const httpOrigin = () => (/^https?:$/.test(location.protocol) ? location.origin : undefined);
+function isIOSBrowser() {
+  const nav = globalThis.navigator;
+  if (!nav) return false;
+  return nav.userAgentData?.platform === 'iOS'
+    || /iPad|iPhone|iPod/i.test(nav.userAgent || '')
+    || (nav.platform === 'MacIntel' && Number(nav.maxTouchPoints) > 1);
+}
 
 const YT_SETTINGS_ICONS = {
   gear: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>',
@@ -195,7 +202,7 @@ function createYouTubeSettingsSheet(shell, { getPlayer, getLoop, setLoop }) {
 }
 
 // Creates the player and a timer that reports playback position (used for Continue Watching and analytics).
-export async function createYouTubePlayer(container, videoId, { start = 0, autoplay = true, muted = false, controls = true, onProgress, onEnded, onState } = {}) {
+export async function createYouTubePlayer(container, videoId, { start = 0, autoplay = true, muted = false, controls = true, reel = false, onProgress, onEnded, onState } = {}) {
   container.innerHTML = '';
   const mount = document.createElement('div');
   let shell = null;
@@ -205,23 +212,28 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
     shell.appendChild(mount);
     container.appendChild(shell);
   } else container.appendChild(mount);
+  // Chromeless Reels embeds must start muted via URL playerVars and avoid an initial postMessage
+  // playVideo() call: a blocked unmuted attempt or a postMessage playVideo() wakes YouTube's mobile
+  // touch overlay, leaving its center pause icon on screen for several seconds at startup.
+  const startMuted = Boolean(muted || (autoplay && reel));
   let YT;
   try { YT = await loadYouTubeForPlayback(autoplay); }
   catch (e) {
     // The plain iframe must honor the requested sound mode too. If browser policy blocks unmuted
     // autoplay, the browser requires a user gesture; do not silently change the viewer's preference.
-    return plainIframe(container, videoId, start, autoplay, muted, controls);
+    return plainIframe(container, videoId, start, autoplay, startMuted, controls);
   }
 
-  let player, timer, mutedFallbackTimer, mutedFallbackStartedAt = 0, destroyed = false, ready = false, mutedFallbackAttempted = false, loopEnabled = false;
+  let player, timer, mutedFallbackTimer, mutedFallbackStartedAt = 0, destroyed = false, ready = false, mutedFallbackAttempted = false, loopEnabled = false, currentMuted = startMuted;
   const settingsUI = controls && shell ? createYouTubeSettingsSheet(shell, {
     getPlayer: () => player,
     getLoop: () => loopEnabled,
     setLoop: (value) => { loopEnabled = !!value; },
   }) : null;
   const retryMutedAutoplay = (target = player) => {
-    if (!autoplay || muted || mutedFallbackAttempted || destroyed || !target) return;
+    if (!autoplay || mutedFallbackAttempted || destroyed || !target) return;
     mutedFallbackAttempted = true;
+    currentMuted = true;
     clearTimeout(mutedFallbackTimer); mutedFallbackTimer = null;
     try { target.mute(); target.playVideo(); } catch { /* shared timeout handles a refused fallback */ }
   };
@@ -233,18 +245,24 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
     player = new YT.Player(mount, {
       videoId,
       width: '100%', height: '100%',
-      playerVars: { autoplay: autoplay ? 1 : 0, playsinline: 1, controls: controls ? 1 : 0, fs: controls ? 1 : 0, rel: 0, modestbranding: 1, start: Math.floor(start), origin: httpOrigin(), iv_load_policy: 3, cc_load_policy: 0, hl: 'en', mute: muted ? 1 : 0 },
+      playerVars: { autoplay: autoplay ? 1 : 0, playsinline: 1, controls: controls ? 1 : 0, disablekb: controls ? 0 : 1, fs: controls ? 1 : 0, rel: 0, modestbranding: 1, start: Math.floor(start), origin: httpOrigin(), iv_load_policy: 3, cc_load_policy: 0, hl: 'en', mute: startMuted ? 1 : 0 },
       events: {
         onReady: (event) => {
           ready = true;
           settingsUI?.refresh();
           // Start explicitly in the requested mode; a muted retry is only for a refused sound-first attempt.
+          // For chromeless muted embeds (Reels), playerVars autoplay=1&mute=1 already starts playback
+          // without waking YouTube's mobile pause overlay; only call playVideo() if the embed is paused.
           if (autoplay) {
-            try { if (muted) event.target.mute(); event.target.playVideo(); }
-            catch { /* the browser may still require a tap */ }
-            if (!muted && !mutedFallbackAttempted) {
+            try {
+              if (startMuted) event.target.mute();
+              const S = YT.PlayerState || {};
+              const state = event.target.getPlayerState?.();
+              if (!startMuted || controls || state === S.PAUSED) event.target.playVideo();
+            } catch { /* the browser may still require a tap */ }
+            if (!mutedFallbackAttempted) {
               // Some iOS/YouTube combinations omit onAutoplayBlocked. If the player remains unstarted
-              // after the sound-first attempt, retry muted; give genuine network buffering extra time.
+              // after the initial attempt, retry muted; give genuine network buffering extra time.
               mutedFallbackStartedAt = Date.now();
               const checkMutedFallback = () => {
                 if (destroyed || mutedFallbackAttempted) return;
@@ -271,7 +289,13 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
         onError: (e) => { clearTimeout(mutedFallbackTimer); onState?.('error', e.data); resolve(); },
         onStateChange: (e) => {
           const S = YT.PlayerState;
-          if (e.data === S.PLAYING) { clearTimeout(mutedFallbackTimer); mutedFallbackTimer = null; onState?.('playing'); clearInterval(timer); timer = setInterval(tick, 1000); }
+          if (e.data === S.PLAYING) {
+            clearTimeout(mutedFallbackTimer); mutedFallbackTimer = null;
+            if (startMuted && !muted && currentMuted && !isIOSBrowser() && globalThis.navigator?.userActivation?.hasBeenActive !== false) {
+              try { player.unMute?.(); player.setVolume?.(100); currentMuted = false; } catch { /* keep muted */ }
+            }
+            onState?.('playing'); clearInterval(timer); timer = setInterval(tick, 1000);
+          }
           else if (e.data === S.PAUSED) { onState?.('paused'); tick(); clearInterval(timer); }
           else if (e.data === S.ENDED) {
             clearInterval(timer); timer = null; tick();
@@ -293,7 +317,9 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
     time: () => { try { return player.getCurrentTime(); } catch { return 0; } },
     duration: () => { try { return player.getDuration(); } catch { return 0; } },
     seek: (s) => player.seekTo?.(s, true),
-    mute: () => player.mute?.(), unmute: () => { player.unMute?.(); player.setVolume?.(100); }, isMuted: () => !!player.isMuted?.(),
+    mute: () => { currentMuted = true; player.mute?.(); },
+    unmute: () => { currentMuted = false; player.unMute?.(); player.setVolume?.(100); },
+    isMuted: () => { try { return typeof player.isMuted === 'function' ? (currentMuted && !!player.isMuted()) : currentMuted; } catch { return currentMuted; } },
     play: () => player.playVideo?.(),
     pause: () => { clearTimeout(mutedFallbackTimer); mutedFallbackTimer = null; player.pauseVideo?.(); },
     destroy() { destroyed = true; settingsUI?.destroy(); clearTimeout(mutedFallbackTimer); clearInterval(timer); try { player.destroy(); } catch {} container.innerHTML = ''; },
@@ -303,7 +329,7 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
 // Last-resort embed with no API (no progress tracking). Keep the requested mute mode and inline/autoplay parameters.
 function plainIframe(container, videoId, start, autoplay, muted, controls) {
   const o = httpOrigin();
-  container.innerHTML = `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=${autoplay ? 1 : 0}&mute=${muted ? 1 : 0}&enablejsapi=1&controls=${controls ? 1 : 0}&fs=${controls ? 1 : 0}&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&cc_load_policy=0&hl=en&start=${Math.floor(start)}${o ? '&origin=' + encodeURIComponent(o) : ''}" title="Video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+  container.innerHTML = `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=${autoplay ? 1 : 0}&mute=${muted ? 1 : 0}&enablejsapi=1&controls=${controls ? 1 : 0}&disablekb=${controls ? 0 : 1}&fs=${controls ? 1 : 0}&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&cc_load_policy=0&hl=en&start=${Math.floor(start)}${o ? '&origin=' + encodeURIComponent(o) : ''}" title="Video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
   const iframe = container.querySelector('iframe');
   let isMuted = !!muted;
   const cmd = (line) => { try { iframe?.contentWindow?.postMessage(line, '*'); } catch { /* frame already gone */ } };

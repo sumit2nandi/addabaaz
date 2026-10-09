@@ -530,7 +530,7 @@ body.reels-mode { overflow: hidden; padding-bottom: 0; } body.reels-mode .footer
 @supports (content-visibility: auto) { .reel { content-visibility: auto; } }   /* skip off-screen reel subtrees: big GPU/RAM saving on phones */
 .reel-frame { position: relative; height: 100%; max-height: 900px; aspect-ratio: 9/16; max-width: 100%; border-radius: var(--radius-lg); overflow: hidden; background: #000; box-shadow: 0 0 0 1px var(--border-2), 0 30px 80px rgba(0,0,0,.6); }
 .reel-slot { position: absolute; inset: 0; } .reel-slot > img { width: 100%; height: 100%; object-fit: cover; }
-.reel-player, .reel-player iframe, .reel-player > div { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; }
+.reel-player, .reel-player iframe, .reel-player > div { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #000; pointer-events: none; }
 .reel-loading { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.35); pointer-events: none; } .reel.playing .reel-loading { display: none; }
 /* The thumbnail shows until the first video frame: the player stays transparent until it is playing. */
 .reel-player { opacity: 0; transition: opacity .3s ease; }
