@@ -7,8 +7,8 @@ services:
     runtime: node
     region: singapore            # pick the region closest to your Aiven database (Aiven: AWS ap-southeast-1 / Singapore)
     plan: free                   # free sleeps after 15 min idle (admin uploads are kept in MySQL, so they survive deploys); `starter` is always on and can send mail
-    buildCommand: npm ci
-    startCommand: npm start
+    buildCommand: npm ci && npm run build:server-web
+    startCommand: node server/src/index.js
     healthCheckPath: /api/v1/health/ready
     autoDeploy: true
     # The live branch. Pushing to it deploys (autoDeploy above); changing this one line moves production to

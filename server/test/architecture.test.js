@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { shouldBuildWebAssets } from '../src/web-assets.js';
 
 const SRC = fileURLToPath(new URL('../src/', import.meta.url));
 const ROUTES = path.join(SRC, 'routes');
@@ -52,4 +53,11 @@ test('persistence adapters do not depend on HTTP transport', () => {
     const source = fs.readFileSync(path.join(SRC, name), 'utf8');
     assert.doesNotMatch(source, /from\s+['"][^'"]*(?:express|\/routes\/|\/app\.js)/u, `${name} must remain transport-independent`);
   }
+});
+
+test('production reuses prebuilt web assets, while dev or incomplete builds regenerate them', () => {
+  assert.equal(shouldBuildWebAssets({ enabled: true, production: true, ready: true }), false);
+  assert.equal(shouldBuildWebAssets({ enabled: true, production: true, ready: false }), true);
+  assert.equal(shouldBuildWebAssets({ enabled: true, production: false, ready: true }), true);
+  assert.equal(shouldBuildWebAssets({ enabled: false, production: true, ready: false }), false);
 });

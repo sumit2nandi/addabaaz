@@ -14,6 +14,7 @@
     "validate:catalog": "node scripts/validate-catalog.mjs",
     "images": "bash scripts/optimize-images.sh",
     "build:www": "node scripts/build-www.mjs",
+    "build:server-web": "node scripts/build-server-web.mjs",
     "mobile:sync": "npm run build:www && npm --prefix mobile run sync",
     "mobile:android": "npm run mobile:sync && npm --prefix mobile run open:android",
     "mobile:ios": "npm run mobile:sync && npm --prefix mobile run open:ios",

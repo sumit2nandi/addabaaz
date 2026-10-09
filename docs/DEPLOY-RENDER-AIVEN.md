@@ -37,8 +37,8 @@ The app needs no manual SQL: it creates all 26 tables itself when it starts (eve
 | Language / Runtime | **Node** |
 | Branch | `arena/01a10339-addabaaz` — the live branch (`render.yaml` sets the same one) |
 | Region | **Singapore** (or next to your Aiven database) |
-| Build Command | `npm ci` |
-| Start Command | `npm start` |
+| Build Command | `npm ci && npm run build:server-web` |
+| Start Command | `node server/src/index.js` |
 | Instance type | Free to try, **Starter** for a real site |
 | Advanced → Health Check Path | `/api/v1/health/ready` |
 
