@@ -55,7 +55,7 @@ test('a database that cannot answer never looks like maintenance', async () => {
 });
 
 test('only the paths an operator (or a settled payment) needs survive the guard', () => {
-  for (const p of ['/health', '/health/ready', '/status', '/admin/maintenance', '/auth/login', '/payments/webhook', '/notifications/unsubscribe'])
+  for (const p of ['/health', '/health/ready', '/status', '/client-errors', '/admin/maintenance', '/auth/login', '/payments/webhook', '/notifications/unsubscribe'])
     assert.equal(maintenanceAllows(p), true, `${p} stays available`);
   for (const p of ['/catalog', '/plans', '/credits', '/support/tickets', '/push/subscribe', '/media/1'])
     assert.equal(maintenanceAllows(p), false, `${p} is refused`);

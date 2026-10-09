@@ -1,16 +1,15 @@
 /* Client diagnostics for the shared browser/PWA/Capacitor app. Reports are anonymous unless the server
- * verifies the saved session token, bounded per page, and limited to runtime context plus the error itself.
- * Request bodies, search/hash strings, device IDs and passwords never enter this module's reports.
- * Also owns `friendly()` — the one place that decides what a user may see when something throws. */
+ * verifies the saved session token and contain only redacted error/runtime context, never request bodies,
+ * search/hash strings, device IDs or passwords. The network queue is bounded, reporting is capped at 100
+ * events per page, and 429/5xx/offline failures retry so transient outages do not drop the queue. Also owns `friendly()`. */
 import { app } from './app.js';
 
-const MAX_REPORTS = 5;
-const MAX_QUEUE = 5;
-const seen = new Set();
+const MAX_QUEUE = 100;
+const MAX_REPORTS_PER_PAGE = 100;
 const queued = [];
-let sent = 0, flushTask = null, initialized = false, nativeAppState = 'unknown';
-// Ignore browser/extension noise that does not identify an ADDABAAZ fault. Network failures are useful
-// client diagnostics, so unlike generic telemetry filters they are intentionally retained (deduplicated).
+const recentlyReported = new WeakMap();
+let reportsCreated = 0, flushTask = null, retryTimer = null, retryDelayMs = 5_000, initialized = false, nativeAppState = 'unknown';
+// Ignore known browser/extension noise unless a caller explicitly marks it as diagnostic.
 const NOISE = /^Script error\.?$|ResizeObserver loop|Non-Error promise rejection|chrome-extension:|moz-extension:|safari-web-extension:/i;
 
 /**
@@ -127,7 +126,13 @@ function sessionToken() {
   try { return localStorage.getItem('ab.token') || ''; } catch { return ''; }
 }
 
+function scheduleRetry(delay = retryDelayMs) {
+  if (retryTimer) return;
+  retryTimer = setTimeout(() => { retryTimer = null; void flushReports(); }, Math.max(1_000, Math.min(Number(delay) || 5_000, 60_000)));
+}
+
 async function flushReports() {
+  if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
   if (flushTask || !queued.length) return flushTask;
   flushTask = (async () => {
     while (queued.length) {
@@ -144,13 +149,23 @@ async function flushReports() {
           body: JSON.stringify(report),
         });
         if (!response.ok) {
-          if (response.status >= 500) return; // retain briefly; a later online/foreground transition can retry
-          queued.shift(); // expired session/rate limits cannot improve through an immediate retry
+          if (response.status === 429 || response.status >= 500) {
+            const retryAfter = Number(response.headers?.get?.('Retry-After'));
+            const wait = retryAfter > 0 ? retryAfter * 1_000 : response.status === 429 ? 60_000 : retryDelayMs;
+            retryDelayMs = Math.min(retryDelayMs * 2, 60_000);
+            scheduleRetry(wait);
+            return; // preserve the report and retry after the server's rate window / outage
+          }
+          queued.shift(); // invalid/expired reports cannot be fixed by retrying the same body
           continue;
         }
         queued.shift();
-      } catch { return; }
-      finally { if (timer) clearTimeout(timer); }
+        retryDelayMs = 5_000;
+      } catch {
+        retryDelayMs = Math.min(retryDelayMs * 2, 60_000);
+        scheduleRetry(retryDelayMs);
+        return;
+      } finally { if (timer) clearTimeout(timer); }
     }
   })().finally(() => { flushTask = null; });
   return flushTask;
@@ -162,18 +177,24 @@ function queueReport(report) {
   void flushReports();
 }
 
-/** Reports one error (at most 5 per page load, each message once), including anonymous visitors. */
+/** Reports client-side exceptions and diagnostics, including anonymous visitors and repeated occurrences. */
 export function reportClientError(err, extra = {}) {
   try {
     // Explicit playback diagnostics may be expected network/media failures, but remain useful when a stream breaks.
     const options = extra && typeof extra === 'object' ? extra : {};
-    const { force = false, ...details } = options;
+    const { force = false, severity = 'error', ...details } = options;
     const parts = errorParts(err);
     const message = parts.message || 'Unknown client error';
-    if (!message || sent >= MAX_REPORTS || seen.has(message) || (!force && NOISE.test(message))) return false;
+    if (!message || reportsCreated >= MAX_REPORTS_PER_PAGE || (!force && NOISE.test(message))) return false;
     const url = endpoint();
     if (!url) return false;
-    seen.add(message); sent++;
+    // The same Error is often reported by both a local catch and the global rejection hook. Coalesce only
+    // that immediate duplicate; a later occurrence, even with the same message, is recorded separately.
+    if (err && (typeof err === 'object' || typeof err === 'function')) {
+      const now = Date.now(), previous = recentlyReported.get(err);
+      if (previous && now - previous < 1_000) return false;
+      recentlyReported.set(err, now);
+    }
     let context = safeDetails({ ...details, ...clientRuntime() });
     if (err && typeof err === 'object' && err.cause) {
       const causes = []; let current = err.cause; const chain = new Set([err]);
@@ -190,12 +211,44 @@ export function reportClientError(err, extra = {}) {
     } catch { context = { omitted: 'Client diagnostics could not be serialized.' }; }
     const report = {
       ...parts,
+      severity: ['warning', 'error', 'fatal'].includes(severity) ? severity : 'error',
       url: routePath(),
       details: context,
     };
     queueReport(report);
+    reportsCreated++;
     return true;
   } catch { /* never throw from the reporter */ return false; }
+}
+
+// Preserve console diagnostics as well as uncaught browser events. This picks up errors that an app
+// catch block handled after writing to the console, without replacing the user's console output.
+let consoleHooksInstalled = false;
+function installConsoleHooks() {
+  if (consoleHooksInstalled || typeof console === 'undefined') return;
+  consoleHooksInstalled = true;
+  for (const method of ['error', 'warn']) {
+    try {
+      const original = console[method];
+      if (typeof original !== 'function') continue;
+      console[method] = function (...args) {
+        try { original.apply(this, args); } catch { /* diagnostics must never break the app */ }
+        try {
+          const printable = args.map((value) => {
+            if (value instanceof Error) return `${value.name || 'Error'}: ${value.message || ''}`;
+            if (typeof value === 'string' || typeof value === 'number') return String(value);
+            try { return JSON.stringify(value); } catch { return String(value); }
+          }).join(' ').slice(0, 1_000);
+          const err = args.find((value) => value instanceof Error)
+            || Object.assign(new Error(text(printable || `console.${method} called`)), { name: method === 'warn' ? 'ConsoleWarning' : 'ConsoleError' });
+          reportClientError(err, {
+            where: `console.${method}`, loggerMessage: printable,
+            severity: method === 'warn' ? 'warning' : 'error', force: true,
+          });
+        } catch { /* the browser's console remains best effort */ }
+      };
+    } catch { /* some embedded WebViews expose a read-only console */ }
+  }
 }
 
 // A single plain toast so an uncaught error is never silent (throttled so a loop cannot spam).
@@ -209,7 +262,7 @@ function notice() {
 
 function resourceFailure(target) {
   const tag = text(target?.tagName || '', 12).toLowerCase();
-  if (!['script', 'link'].includes(tag)) return;
+  if (!['script', 'link', 'img', 'audio', 'video', 'source', 'iframe', 'track'].includes(tag)) return;
   const url = target.src || target.href || '';
   let path = '';
   try { path = new URL(url, location.href).pathname.slice(0, 300); } catch { /* omit malformed URL */ }
@@ -223,6 +276,7 @@ function resourceFailure(target) {
 export function initErrorReporting() {
   if (initialized || typeof window === 'undefined') return;
   initialized = true;
+  installConsoleHooks();
   window.addEventListener('error', (event) => {
     if (event.target && event.target !== window) { resourceFailure(event.target); return; }
     const message = text(event.message || event.error?.message || '', 500);

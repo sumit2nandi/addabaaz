@@ -1,15 +1,16 @@
-// Browser, mobile, playback and server failures with searchable context and copyable diagnostics.
+// Browser, mobile, admin-console, playback and server failures with searchable context and copyable diagnostics.
 import { api } from '../api.js';
 import { empty, html, $, $$, badge, icon, pageHead, confirmBox, toast, errMsg, ago, fmtDT, pager, debounce, loadingTable } from '../ui.js';
 
 const LIMIT = 50;
-const SOURCES = [['', 'All sources'], ['client', 'Browser & mobile'], ['server', 'Server']];
+const SOURCES = [['', 'All sources'], ['client', 'Browser, mobile & admin console'], ['server', 'Server']];
 const display = (value, fallback = '—') => value === null || value === undefined || value === '' ? fallback
   : typeof value === 'object' ? JSON.stringify(value) : String(value);
-const sourceLabel = (source) => source === 'client' ? 'Browser / mobile' : source === 'server' ? 'Server' : source || 'Unknown';
+const sourceLabel = (source) => source === 'client' ? 'Client' : source === 'server' ? 'Server' : source || 'Unknown';
 const methodLabel = (source) => source === 'client' ? 'Report method' : 'HTTP method';
 const requestIdLabel = (source) => source === 'client' ? 'Report request ID' : 'Request ID';
 const urlLabel = (source) => source === 'client' ? 'Page route' : 'Request URL';
+const statusLabel = (source, status) => source === 'client' && Number(status) === 0 ? 'No HTTP response' : `HTTP ${status}`;
 const severityTone = (severity) => severity === 'fatal' || severity === 'error' ? 'bad' : severity === 'warning' ? 'gold' : '';
 const statusTone = (status) => Number(status) >= 500 ? 'bad' : Number(status) >= 400 ? 'gold' : '';
 const pretty = (value) => { try { return JSON.stringify(value, null, 2); } catch { return String(value ?? ''); } };
@@ -38,7 +39,7 @@ const errorText = (e) => [
   `Severity: ${e.severity || 'error'}`,
   `Error: ${e.errorName || 'Error'}${e.errorCode ? ` · ${e.errorCode}` : ''}`,
   `Message: ${e.message}`,
-  `HTTP status: ${display(e.status)}`,
+  `HTTP status: ${e.source === 'client' && e.status === 0 ? 'No HTTP response' : display(e.status)}`,
   `${methodLabel(e.source)}: ${display(e.method)}`,
   `${requestIdLabel(e.source)}: ${display(e.requestId)}`,
   `Release: ${display(e.release)}`,
@@ -115,7 +116,7 @@ function renderGroups(groups) {
   return groups.length ? html`<div class="card flush"><table class="tbl compact error-groups"><thead><tr><th>Repeated error</th><th>Source / status</th><th class="num">Times</th><th>Last seen</th></tr></thead><tbody>
     ${groups.map((group) => html`<tr>
       <td class="error-group-message"><strong>${group.errorName || 'Error'}</strong> ${group.errorCode ? html`<code>${group.errorCode}</code>` : ''}<div>${group.message}</div></td>
-      <td class="small">${badge(sourceLabel(group.source), group.source === 'server' ? 'bad' : '')}${group.severity ? html` ${badge(group.severity, severityTone(group.severity))}` : ''}${group.status != null ? html` ${badge(`HTTP ${group.status}`, statusTone(group.status))}` : ''}<div class="muted error-group-url">${group.url || '(no page recorded)'}</div></td>
+      <td class="small">${badge(sourceLabel(group.source), group.source === 'server' ? 'bad' : '')}${group.severity ? html` ${badge(group.severity, severityTone(group.severity))}` : ''}${group.status != null ? html` ${badge(statusLabel(group.source, group.status), statusTone(group.status))}` : ''}<div class="muted error-group-url">${group.url || '(no page recorded)'}</div></td>
       <td class="num">${Number(group.count || 0).toLocaleString('en-IN')}</td>
       <td class="small nowrap" title="${fmtDT(group.lastAt)}">${ago(group.lastAt)}</td>
     </tr>`)}</tbody></table></div>` : empty('No matching errors were reported in the last 7 days.');
@@ -123,7 +124,7 @@ function renderGroups(groups) {
 
 function renderRecent(error) {
   const source = sourceLabel(error.source);
-  const status = error.status == null ? '' : `HTTP ${error.status}`;
+  const status = error.status == null ? '' : statusLabel(error.source, error.status);
   return html`<details class="card error-entry">
     <summary>
       <span class="error-entry-badges">${badge(source, error.source === 'server' ? 'bad' : '')}${badge(error.severity || 'error', severityTone(error.severity))}${status ? badge(status, statusTone(error.status)) : ''}</span>
@@ -133,7 +134,7 @@ function renderRecent(error) {
     <div class="error-detail-bar"><div class="error-context small muted">
       <div><b>Report:</b> #${error.id} · ${fmtDT(error.at)}</div>
       <div><b>Severity:</b> ${error.severity || 'error'} · <b>Error:</b> ${error.errorName || 'Error'}${error.errorCode ? ` (${error.errorCode})` : ''}</div>
-      <div><b>HTTP status:</b> ${display(error.status)} · <b>${methodLabel(error.source)}:</b> ${display(error.method)}</div>
+      <div><b>HTTP status:</b> ${error.source === 'client' && error.status === 0 ? 'No HTTP response' : display(error.status)} · <b>${methodLabel(error.source)}:</b> ${display(error.method)}</div>
       <div><b>${requestIdLabel(error.source)}:</b> <code>${display(error.requestId)}</code></div>
       <div><b>Release / environment:</b> ${display(error.release)} · ${display(error.environment)}</div>
       <div><b>Instance:</b> <code>${display(error.instanceId)}</code></div>
@@ -157,7 +158,7 @@ export default async function errors(root, _p, ctx) {
     source: ['client', 'server'].includes(ctx.query?.get('source')) ? ctx.query.get('source') : '',
     offset: 0, revision: 0, topGroups: [],
   };
-  root.innerHTML = html`${pageHead('Errors', 'Search recent browser, mobile, playback and server reports. Client details are privacy-filtered; database SQL values are never stored.', html`<button class="btn danger" id="clearErrors" type="button">Clear all</button>`)}
+  root.innerHTML = html`${pageHead('Errors', 'Search recent browser, mobile, admin-console, playback and server reports. Client details are privacy-filtered; database SQL values are never stored.', html`<button class="btn danger" id="clearErrors" type="button">Clear all</button>`)}
     <form class="toolbar error-toolbar" id="errorFilters">
       <div class="search">${icon('search', 16)}<input id="errorQuery" type="search" value="${state.q}" placeholder="Message, code, route or request ID" aria-label="Search error reports"></div>
       <select id="errorSource" aria-label="Filter errors by source">${SOURCES.map(([value, label]) => html`<option value="${value}" ${state.source === value ? 'selected' : ''}>${label}</option>`)}</select>

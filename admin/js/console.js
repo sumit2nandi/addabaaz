@@ -10,11 +10,14 @@
  * the page frame (sidebar + content), the hash router, the sidebar badges and session-loss handling.
  */
 import { api, getToken, setToken } from './api.js';
+import { initAdminErrorReporting, reportAdminError } from './error-reporter.js';
 import { html, $, $$, icon, errMsg, guard, loadingPage, applyResponsiveTableLabels } from './ui.js';
 import { mountSocialButtons } from '/app/js/social.js';
 
 /** Boots a console. `nav` and `routes` come from the entry point; the rest is presentation. */
 export function startConsole({ nav, routes, name = 'Admin', title = 'ADDABAAZ Admin', switchTo = null, badges = true }) {
+  // Capture global runtime failures before session restore and lazy-loaded pages begin.
+  initAdminErrorReporting();
   // `admin` = the signed-in administrator; `navToken` lets a slow page load detect that the user already navigated away.
   const app = $('#app');
   let admin = null, navToken = 0, tableLabelsObserver = null;
@@ -131,6 +134,7 @@ export function startConsole({ nav, routes, name = 'Admin', title = 'ADDABAAZ Ad
       } catch (e) {
         if (my !== navToken) return;
         console.error(e);
+        reportAdminError(e, { where: 'console-route', route: path });
         main.innerHTML = html`<div class="card error-card"><h2>Something went wrong</h2><p>${errMsg(e)}</p><button class="btn" data-reload>Reload</button></div>`.s;
         main.querySelector('[data-reload]').onclick = () => location.reload();
       }

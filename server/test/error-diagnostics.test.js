@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import express from 'express';
 import { createFeatures } from '../src/features.js';
-import { createApp } from '../src/app.js';
+import { createApp, createHttpErrorHandler } from '../src/app.js';
 import { HttpError } from '../src/http.js';
 import { createErrorLogger, installProcessErrorHandlers } from '../src/error-reporting.js';
 import { createMsg91 } from '../src/sms.js';
@@ -194,6 +194,7 @@ test('error records persist and return safe SQL-template diagnostics', async () 
 
 test('server error reports include verified account context and useful database diagnostics', () => {
   const app = read('server/src/app.js');
+  const media = read('server/src/routes/media.js');
   const features = read('server/src/features.js');
   const migrate = read('server/src/migrate.js');
   const index = read('server/src/index.js');
@@ -202,8 +203,12 @@ test('server error reports include verified account context and useful database 
 
   assert.match(app, /const userId = req\.user\?\.id \|\| req\.admin\?\.id \|\| null/,
     'server failures identify the viewer or administrator when the request is authenticated');
-  assert.match(app, /errorLogger\.capture\(err,[\s\S]*?status, method: req\.method/,
+  assert.match(app, /errorLogger\.capture\(err,[\s\S]*?status: responseStatus, method: req\.method/,
     'unexpected server failures and provider 5xx responses share the database reporter');
+  assert.match(media, /await pipeline\(Readable\.fromWeb\(upstream\.body\), res\)/,
+    'native HLS stream failures propagate to the shared HTTP boundary with request context');
+  assert.doesNotMatch(media, /logger\.error\('\[media\] native video stream failed/,
+    'the streaming route does not swallow post-header failures into an uncorrelated log entry');
   assert.match(reporter, /sqlQuery: error\.sqlTemplate[\s\S]*?sqlException: error\.sqlException/,
     'safe SQL templates, parameter counts and structured driver exceptions are preserved');
   assert.match(reporter, /requestId,[\s\S]*?runtime:/, 'request correlation and runtime/release context are stored');
@@ -221,6 +226,12 @@ test('server error reports include verified account context and useful database 
     'Render boot logs state that migrations ran and how many were applied');
   assert.match(index, /RENDER_GIT_COMMIT/,
     'Render logs and public health checks identify the deployed source commit');
+  assert.match(index, /const errorLogger = createErrorLogger\(\{ db, appVersion: APP_VERSION, release: releaseSha \}\)/,
+    'a database-backed reporter is ready before startup migrations');
+  assert.match(index, /kind: 'startup-migration'[\s\S]*?errorLogger\.flush\(\)[\s\S]*?await db\.close\(\)/,
+    'migration failures are captured and flushed before startup exits');
+  assert.match(index, /kind: 'startup-app-creation'[\s\S]*?errorLogger\.flush\(\)[\s\S]*?await db\.close\(\)/,
+    'app-construction failures are captured and flushed before startup exits');
   assert.match(features, /userFromRequest\?\.\(req\)/, 'client errors resolve an optional first-party session');
   assert.match(features, /userId: user\?\.id \|\| null/, 'client-supplied IDs are not trusted');
   assert.match(db, /e\.user_agent, e\.user_id, u\.name AS account_name, u\.email AS account_email/);
@@ -267,6 +278,26 @@ test('central error reporter stores diagnostic context while redacting credentia
   assert.doesNotMatch(JSON.stringify(saved), /private-token|reader@example\.com|password-value|919812345678|654321/);
 });
 
+test('error reports retain structured AggregateError and network-system diagnostics', async () => {
+  const saved = [];
+  const reporter = createErrorLogger({
+    db: { errors: { async add(record) { saved.push(record); } } },
+    rawConsole: { error() {}, warn() {}, info() {}, log() {}, debug() {} },
+  });
+  const aggregate = Object.assign(new AggregateError([
+    new TypeError('first renderer failed'),
+    Object.assign(new Error('second renderer failed'), { code: 'ECONNRESET' }),
+  ], 'all renderers failed'), { code: 'EUPSTREAM', syscall: 'connect', address: '127.0.0.1', port: 3306 });
+  await reporter.capture(aggregate, { kind: 'background-worker' });
+  assert.equal(saved[0].details.code, 'EUPSTREAM');
+  assert.equal(saved[0].details.syscall, 'connect');
+  assert.equal(saved[0].details.address, '127.0.0.1');
+  assert.equal(saved[0].details.port, 3306);
+  assert.equal(saved[0].details.aggregateErrors.length, 2);
+  assert.equal(saved[0].details.aggregateErrors[0].name, 'TypeError');
+  assert.equal(saved[0].details.aggregateErrors[1].code, 'ECONNRESET');
+});
+
 test('fatal process hooks persist uncaught exceptions and unhandled rejections before shutdown', async () => {
   const { EventEmitter } = await import('node:events');
   const processRef = new EventEmitter();
@@ -307,7 +338,62 @@ test('SMS provider network failures preserve their cause without storing the pho
   assert.doesNotMatch(JSON.stringify(saved), /919812345678|654321|private-auth-key/);
 });
 
-test('HTTP provider failures are persisted with a request ID; authored 4xx are warnings; auth chatter is skipped', async () => {
+test('HTTP boundary records auth, rate-limit, maintenance, ordinary failures, and errors after headers', async () => {
+  const records = [], external = [];
+  const handler = createHttpErrorHandler({
+    errorLogger: { capture(error, context) { records.push({ error, context }); return Promise.resolve(true); } },
+    captureError(error, req) { external.push({ error, url: req.originalUrl }); },
+  });
+  const req = (path = '/api/v1/test') => ({
+    method: 'GET', requestId: 'request-test', originalUrl: path, get: () => 'TestAgent',
+    route: { path: '/test' }, baseUrl: '/api/v1', protocol: 'https', httpVersion: '1.1',
+    user: null, admin: null,
+  });
+  const response = (headersSent = false, statusCode = 200) => ({
+    headersSent, statusCode, body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+  });
+
+  for (const error of [
+    new HttpError(401, 'unauthorized', 'Please sign in.'),
+    new HttpError(429, 'rate_limited', 'Slow down.'),
+    new HttpError(503, 'maintenance', 'Temporarily unavailable.'),
+  ]) {
+    const res = response();
+    handler(error, req(), res, () => assert.fail('handled client errors should return JSON'));
+    assert.equal(res.statusCode, error.status);
+  }
+  const repeatedAuth = response();
+  handler(new HttpError(401, 'unauthorized', 'Please sign in.'), req(), repeatedAuth, () => {});
+  assert.equal(repeatedAuth.statusCode, 401, 'sampling never changes the client response');
+  const ordinary = Object.assign(new Error('unexpected handler failure'), { code: 'EFAULT' });
+  handler(ordinary, req('/api/v1/broken'), response(), () => {});
+  const streamError = Object.assign(new Error('stream failed after response began'), { code: 'ECONNRESET' });
+  let forwarded;
+  handler(streamError, req('/api/v1/media/stream'), response(true, 206), (error) => { forwarded = error; });
+
+  assert.deepEqual(records.map(({ context }) => context.severity), ['warning', 'warning', 'warning', 'error', 'error']);
+  assert.equal(records[0].context.status, 401);
+  assert.equal(records[1].context.status, 429);
+  assert.equal(records[2].context.kind, 'http-request');
+  assert.equal(records[3].context.details.responseHeadersSent, false);
+  assert.equal(records[4].context.kind, 'http-after-headers');
+  assert.equal(records[4].context.status, 206);
+  assert.equal(records[4].context.details.responseHeadersSent, true);
+  assert.equal(records[4].context.details.errorStatus, 500, 'the original failure status is retained when committed response headers cannot change');
+  assert.equal(forwarded, streamError, 'the original streaming error is still passed to Express');
+  assert.deepEqual(external.map(({ url }) => url), ['/api/v1/broken', '/api/v1/media/stream'],
+    'only application faults reach external exception monitoring');
+
+  for (let i = 0; i < 400; i++) {
+    handler(new HttpError(400, 'bad_input', `invalid input ${i}`), req(), response(), () => {});
+  }
+  assert.equal(records.filter(({ context }) => context.severity === 'warning').length, 300,
+    'unique 4xx bursts are capped per process/minute after duplicate-route sampling');
+});
+
+test('HTTP provider failures are persisted with a request ID; every authored 4xx is a warning', async () => {
   const { db, mailer, payments, sms, secret } = fakeDeps();
   const saved = [];
   db.errors.add = async (record) => { saved.push(record); };
@@ -337,18 +423,19 @@ test('HTTP provider failures are persisted with a request ID; authored 4xx are w
     const unauthorized = await fetch(`${base}/me`);
     assert.equal(unauthorized.status, 401);
     await app.locals.errorLogger.flush();
-    assert.equal(saved.length, 1, 'routine 401 sign-in prompts never flood the application error log');
+    assert.equal(saved.length, 2, '401 sign-in failures are included as warnings');
+    assert.equal(saved[1].severity, 'warning');
+    assert.equal(saved[1].status, 401);
 
-    // Any other authored 4xx IS captured (severity warning) so Admin → Errors shows the full
-    // picture — a silent 404 once hid the broken DELETE /me/devices/ call for days.
+    // Authored 4xx responses are warnings so Admin → Errors captures client mistakes as well as faults.
     const broken = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{oops' });
     assert.equal(broken.status, 400);
     await app.locals.errorLogger.flush();
-    assert.equal(saved.length, 2, 'authored 4xx responses reach the admin error log');
-    assert.equal(saved[1].severity, 'warning');
-    assert.equal(saved[1].status, 400);
-    assert.equal(saved[1].code, 'invalid_json');
-    assert.equal(saved[1].method, 'POST');
+    assert.equal(saved.length, 3, 'authored 4xx responses reach the admin error log');
+    assert.equal(saved[2].severity, 'warning');
+    assert.equal(saved[2].status, 400);
+    assert.equal(saved[2].code, 'invalid_json');
+    assert.equal(saved[2].method, 'POST');
   } finally {
     await new Promise((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
   }
@@ -372,7 +459,7 @@ test('client error reports are linked to a verified session, never a browser-sup
   try {
     const response = await fetch(base, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-session' },
-      body: JSON.stringify({ message: 'Playback failure', errorName: 'MediaError', errorCode: 'UPSTREAM_DOWN', status: 503, stack: 'diagnostic trace', url: '/watch/title?token=secret', details: { browser: 'test' }, userId: 'forged-user' }),
+      body: JSON.stringify({ message: 'Playback failure', errorName: 'MediaError', errorCode: 'UPSTREAM_DOWN', status: 503, severity: 'warning', stack: 'diagnostic trace', url: '/watch/title?token=secret', details: { browser: 'test', accessToken: 'private-token', contact: { email: 'reader@example.com' } }, userId: 'forged-user' }),
     });
     assert.equal(response.status, 204);
     assert.equal(reports[0].userId, 'verified-user-17');
@@ -380,13 +467,22 @@ test('client error reports are linked to a verified session, never a browser-sup
     assert.equal(reports[0].errorName, 'MediaError');
     assert.equal(reports[0].code, 'UPSTREAM_DOWN');
     assert.equal(reports[0].status, 503);
-    assert.deepEqual(reports[0].details, { browser: 'test' });
+    assert.equal(reports[0].severity, 'warning', 'client severity is preserved and validated on the server');
+    assert.deepEqual(reports[0].details, { client: { browser: 'test', accessToken: '[redacted]', contact: { email: '[redacted]' } } });
+    assert.doesNotMatch(JSON.stringify(reports[0]), /private-token|reader@example\.com/,
+      'the direct database fallback uses the same privacy filters as the shared reporter');
 
     await fetch(base, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: 'Anonymous failure', userId: 'forged-user' }),
     });
     assert.equal(reports[1].userId, null, 'an unauthenticated client cannot attach someone else’s ID');
+
+    await fetch(base, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'No HTTP response', status: 0, errorCode: 'network' }),
+    });
+    assert.equal(reports[2].status, 0, 'network failures with no HTTP response remain distinguishable from HTTP errors');
   } finally {
     await new Promise((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
   }

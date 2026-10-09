@@ -44,7 +44,7 @@ test('Admin Errors filters and pages reports, exposes client/server diagnostics,
     'long stack traces can be opened separately');
   assert.match(view, /pretty\(error\.details\)/,
     'copy includes the complete structured diagnostic context');
-  assert.match(view, /`HTTP status: \$\{display\(e\.status\)\}`[\s\S]*\$\{requestIdLabel\(e\.source\)\}: \$\{display\(e\.requestId\)\}/,
+  assert.match(view, /`HTTP status: \$\{e\.source === 'client' && e\.status === 0 \? 'No HTTP response' : display\(e\.status\)\}`[\s\S]*\$\{requestIdLabel\(e\.source\)\}: \$\{display\(e\.requestId\)\}/,
     'copy contains status and request correlation details');
   assert.match(view, /const methodLabel = \(source\) => source === 'client' \? 'Report method' : 'HTTP method'/,
     'client report-ingestion method is distinguished from the failing server request method');
@@ -89,6 +89,8 @@ test('Admin Errors renders verified client context and safely handles missing di
     } },
     stack: 'MediaError: Playback failure', sqlQuery: null, sqlException: null, userId: null, accountName: null, accountEmail: null,
   };
+  const noStatusReport = { ...report, id: 20, message: 'Legacy client report', status: null, details: null };
+  const networkReport = { ...report, id: 21, message: 'Client offline', status: 0, details: { client: { where: 'admin-api-network' } } };
   const calls = [];
   globalThis.document = document;
   globalThis.window = window;
@@ -98,7 +100,7 @@ test('Admin Errors renders verified client context and safely handles missing di
     calls.push(String(url));
     return { status: 200, ok: true, headers: { get: () => 'application/json' }, json: async () => ({
       groups: [{ source: 'client', severity: 'error', errorName: 'MediaError', errorCode: 'network', status: 503, message: 'Playback failure', count: 2, lastAt: report.at, url: report.url }],
-      recent: [report, { id: 20, source: 'server', severity: 'error', message: 'Legacy server error', at: report.at, details: null, stack: null }], total: 2, limit: 50, offset: 0,
+      recent: [report, noStatusReport, networkReport, { id: 22, source: 'server', severity: 'error', message: 'Legacy server error', at: report.at, details: null, stack: null }], total: 4, limit: 50, offset: 0,
     }) };
   };
   try {
@@ -120,9 +122,122 @@ test('Admin Errors renders verified client context and safely handles missing di
     assert.match(root.textContent, /Report request ID: req-report-19/);
     assert.match(root.textContent, /unknown \/ anonymous/);
     assert.match(root.textContent, /Legacy server error/, 'legacy server rows without structured context still render');
+    const entries = root.querySelectorAll('.error-entry');
+    assert.match(entries[1].textContent, /HTTP status: —/);
+    assert.doesNotMatch(entries[1].textContent, /No HTTP response/, 'a missing status is not mistaken for status zero');
+    assert.match(entries[2].textContent, /No HTTP response/, 'status zero is described as a network/CORS/DNS failure');
   } finally {
     if (old.document === undefined) delete globalThis.document; else globalThis.document = old.document;
     if (old.window === undefined) delete globalThis.window; else globalThis.window = old.window;
+    if (old.navigator) Object.defineProperty(globalThis, 'navigator', old.navigator); else delete globalThis.navigator;
+    if (old.localStorage) Object.defineProperty(globalThis, 'localStorage', old.localStorage); else delete globalThis.localStorage;
+    if (old.fetch === undefined) delete globalThis.fetch; else globalThis.fetch = old.fetch;
+  }
+});
+
+test('admin console browser failures and handled route/API errors are sent with safe client context', async () => {
+  const { document, window } = parseHTML('<!doctype html><html><body><main id="app"></main></body></html>');
+  window.location = { pathname: '/admin/', href: 'https://app.test/admin/', hash: '#/errors?token=private-query' };
+  window.innerWidth = 1280; window.innerHeight = 800; window.devicePixelRatio = 2;
+  const old = {
+    document: globalThis.document, window: globalThis.window, location: globalThis.location,
+    navigator: Object.getOwnPropertyDescriptor(globalThis, 'navigator'),
+    localStorage: Object.getOwnPropertyDescriptor(globalThis, 'localStorage'), fetch: globalThis.fetch,
+  };
+  const calls = [];
+  globalThis.document = document;
+  globalThis.window = window;
+  globalThis.location = window.location;
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: Object.assign(window.navigator, { userAgent: 'Admin browser', language: 'en-IN', onLine: true }) });
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: () => JSON.stringify('admin-session-token'), setItem() {}, removeItem() {} } });
+  globalThis.fetch = async (url, options = {}) => {
+    const target = String(url);
+    calls.push({ url: target, options });
+    if (target === '/api/v1/admin/failure') return {
+      ok: false, status: 503,
+      headers: { get: (name) => name.toLowerCase() === 'content-type' ? 'application/json' : name.toLowerCase() === 'x-request-id' ? 'failed-request-43' : null },
+      json: async () => ({ error: { code: 'storage_failed', message: 'Admin storage API failed.' } }),
+    };
+    if (target === '/api/v1/admin/offline') throw new TypeError('Network failed while calling the admin API.');
+    return { ok: true, status: 204, headers: { get: () => null } };
+  };
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
+  try {
+    const { initAdminErrorReporting, reportAdminError } = await import('../../admin/js/error-reporter.js');
+    initAdminErrorReporting();
+    const caught = Object.assign(new Error('Admin route failed for reader@example.com token=private-value'), { code: 'ER_VIEW_FAILED', status: 503 });
+    assert.equal(reportAdminError(caught, { where: 'console-route', route: 'errors', method: 'GET', status: 503, requestId: 'request-17', accessToken: 'must-not-be-sent' }), true);
+    await tick();
+    assert.equal(calls[0].url, '/api/v1/client-errors');
+    assert.equal(calls[0].options.headers.Authorization, 'Bearer admin-session-token');
+    const report = JSON.parse(calls[0].options.body);
+    assert.equal(report.errorCode, 'ER_VIEW_FAILED');
+    assert.equal(report.url, '/errors', 'admin hash query strings are never transmitted');
+    assert.equal(report.details.where, 'console-route');
+    assert.equal(report.details.runtime, 'admin-console');
+    assert.equal(report.details.failedRequestId, 'request-17');
+    assert.doesNotMatch(calls[0].options.body, /admin-session-token|private-value|reader@example\.com|must-not-be-sent|private-query/);
+    assert.equal(reportAdminError(caught, { where: 'duplicate' }), false, 'the same error object is coalesced when two hooks see it immediately');
+
+    const event = new window.Event('unhandledrejection');
+    Object.defineProperty(event, 'reason', { value: new TypeError('Admin renderer failed') });
+    window.dispatchEvent(event);
+    await tick();
+    assert.ok(calls.some(({ options }) => options.body?.includes('Admin renderer failed')),
+      'global browser promise failures are also submitted to the shared error log');
+
+    const { api, putFile } = await import('../../admin/js/api.js');
+    await assert.rejects(api.get('/failure'), (error) => error.status === 503 && error.code === 'storage_failed');
+    await tick();
+    const apiReport = calls.map(({ options }) => options.body ? JSON.parse(options.body) : null)
+      .find((body) => body?.details?.where === 'admin-api-response');
+    assert.ok(apiReport, 'Admin API 5xx failures report the failed route');
+    assert.equal(apiReport.status, 503);
+    assert.equal(apiReport.details.route, '/failure');
+    assert.equal(apiReport.details.failedRequestId, 'failed-request-43');
+
+    await assert.rejects(api.get('/offline'), (error) => error.status === 0 && error.code === 'network');
+    await tick();
+    const networkReport = calls.map(({ options }) => options.body ? JSON.parse(options.body) : null)
+      .find((body) => body?.details?.where === 'admin-api-network');
+    assert.ok(networkReport, 'network/API failures with no response are retained');
+    assert.equal(networkReport.status, 0);
+    assert.equal(networkReport.details.status, 0);
+    assert.equal(networkReport.details.cause.message, 'Network failed while calling the admin API.');
+
+    const oldXHR = globalThis.XMLHttpRequest;
+    class FailedUploadXHR {
+      constructor() { this.upload = {}; }
+      open(method, url) { this.method = method; this.url = url; }
+      setRequestHeader() {}
+      send() { this.status = 403; this.responseText = '<Code>AccessDenied</Code><Message>reader@example.com</Message>'; this.onload(); }
+    }
+    globalThis.XMLHttpRequest = FailedUploadXHR;
+    try {
+      await assert.rejects(putFile('https://r2.example/signed?token=private-upload-token', {}, null, 'video/mp4'),
+        (error) => error.status === 403 && error.code === 'r2_upload');
+      await tick();
+    } finally {
+      if (oldXHR === undefined) delete globalThis.XMLHttpRequest; else globalThis.XMLHttpRequest = oldXHR;
+    }
+    const uploadReport = calls.map(({ options }) => options.body ? JSON.parse(options.body) : null)
+      .find((body) => body?.details?.where === 'r2-direct-upload');
+    assert.ok(uploadReport, 'R2 direct-upload failures are reported too');
+    assert.equal(uploadReport.status, 403);
+    assert.equal(uploadReport.details.method, 'PUT');
+    assert.doesNotMatch(JSON.stringify(uploadReport), /r2\.example|private-upload-token|reader@example\.com/);
+
+    const { reportAdminError: boundedReport } = await import('../../admin/js/error-reporter.js?bounded-test');
+    const beforeReports = calls.length;
+    let accepted = 0;
+    for (let i = 0; i < 150; i++) accepted += Number(boundedReport(new Error(`bounded admin diagnostic ${i}`)));
+    assert.equal(accepted, 100, 'the admin reporter caps reports at 100 per page');
+    await tick();
+    assert.equal(calls.length - beforeReports, 100, 'the admin reporter drains its bounded queue when healthy');
+  } finally {
+    if (old.document === undefined) delete globalThis.document; else globalThis.document = old.document;
+    if (old.window === undefined) delete globalThis.window; else globalThis.window = old.window;
+    if (old.location === undefined) delete globalThis.location; else globalThis.location = old.location;
     if (old.navigator) Object.defineProperty(globalThis, 'navigator', old.navigator); else delete globalThis.navigator;
     if (old.localStorage) Object.defineProperty(globalThis, 'localStorage', old.localStorage); else delete globalThis.localStorage;
     if (old.fetch === undefined) delete globalThis.fetch; else globalThis.fetch = old.fetch;

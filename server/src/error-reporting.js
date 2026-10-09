@@ -60,6 +60,9 @@ function sanitizeValue(value, { depth = 0, seen = new WeakSet() } = {}) {
   return out;
 }
 
+/** Sanitize structured client/server context when a caller needs to persist it without the reporter wrapper. */
+export function sanitizeErrorDetails(value) { return sanitizeValue(value); }
+
 function causesOf(error) {
   const causes = [];
   let current = error?.cause;
@@ -131,8 +134,10 @@ export function createErrorLogger({ db, appVersion = '', release = '', environme
   async function persist(input, context = {}) {
     const error = parseError(input);
     const source = context.source === 'client' ? 'client' : 'server';
-    const status = Number.isInteger(context.status ?? error.status) && (context.status ?? error.status) >= 100 && (context.status ?? error.status) <= 599
-      ? Number(context.status ?? error.status) : null;
+    // Client reports use status 0 to mean that no HTTP response was received (offline/CORS/DNS).
+    const reportedStatus = context.status ?? error.status;
+    const status = Number.isInteger(reportedStatus) && reportedStatus >= (source === 'client' ? 0 : 100) && reportedStatus <= 599
+      ? Number(reportedStatus) : null;
     const method = typeof context.method === 'string' && /^[A-Za-z-]{1,12}$/.test(context.method) ? context.method.toUpperCase() : null;
     const requestId = cleanScalar(context.requestId, 64) || crypto.randomUUID();
     const causeChain = causesOf(error);
@@ -148,6 +153,14 @@ export function createErrorLogger({ db, appVersion = '', release = '', environme
       ...(error.sqlState ? { sqlState: redactErrorText(error.sqlState, 5) } : {}),
       ...(sqlParamCount != null ? { sqlParamCount, sqlBoundValuesStored: false } : {}),
       ...(error.sqlException ? { sqlException: error.sqlException } : {}),
+      ...(error.syscall ? { syscall: error.syscall } : {}),
+      ...(error.address ? { address: error.address } : {}),
+      ...(Number.isInteger(error.port) ? { port: error.port } : {}),
+      ...(error.path ? { path: error.path } : {}),
+      ...(error.signal ? { signal: error.signal } : {}),
+      ...(error.statusCode ? { statusCode: error.statusCode } : {}),
+      ...(error.statusText ? { statusText: error.statusText } : {}),
+      ...(error instanceof AggregateError && Array.isArray(error.errors) ? { aggregateErrors: error.errors.slice(0, 20) } : {}),
       runtime: {
         service: 'addabaaz', appVersion: appVersion || null, release: normalizedRelease || null,
         environment: redactErrorText(environment, 32), node: source === 'server' ? process.version : null,

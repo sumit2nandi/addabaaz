@@ -1,4 +1,6 @@
 /* Admin API client. The session token is the same one the public site stores, so being signed in there is enough. */
+import { reportAdminError } from './error-reporter.js';
+
 // Sign-in token key: the same localStorage entry the public site uses, so an admin account signed in on the site is signed in here too.
 const KEY = 'ab.token';
 export const getToken = () => { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } };
@@ -21,12 +23,22 @@ async function send(method, path, { body, raw, headers = {}, base = '/api/v1/adm
       headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers },
       body: raw ?? (body !== undefined ? JSON.stringify(body) : undefined),
     });
-  } catch { throw new ApiError(0, 'Can’t reach the server. Check your connection.', 'network'); }
+  } catch (cause) {
+    const error = new ApiError(0, 'Can’t reach the server. Check your connection.', 'network');
+    error.cause = cause;
+    reportAdminError(error, { where: 'admin-api-network', method, route: path, status: 0 });
+    throw error;
+  }
   if (res.status === 204) return null;
   const isJson = (res.headers.get('content-type') || '').includes('json');
-  const data = isJson ? await res.json().catch(() => ({})) : res;
+  let data = res;
+  if (isJson) {
+    try { data = await res.json(); }
+    catch (cause) { reportAdminError(cause, { where: 'admin-api-json', method, route: path, status: res.status }); data = {}; }
+  }
   if (!res.ok) {
     const e = new ApiError(res.status, data?.error?.message || `Request failed (${res.status})`, data?.error?.code);
+    if (res.status >= 500) reportAdminError(e, { where: 'admin-api-response', method, route: path, status: res.status, requestId: res.headers.get('x-request-id') });
     if (base.endsWith('/admin') && (res.status === 401 || (res.status === 403 && ['forbidden', 'account_disabled'].includes(e.code)))) authLost(e);
     throw e;
   }
@@ -88,12 +100,26 @@ export function putFile(url, file, onProgress, contentType) {
           : x.status === 403
             ? `Cloudflare R2 refused the upload (403${code ? ` ${code}` : ''}). Make sure your R2 API token has “Object Read & Write” permission for this bucket.`
             : `Storage refused the upload (HTTP ${x.status}${code ? ` ${code}` : ''}${msg ? `: ${msg}` : ''}). Check the R2 token allows writes and the bucket CORS allows PUT from this site.`;
-      reject(new ApiError(x.status, detail, 'r2_upload'));
+      const error = new ApiError(x.status, detail, 'r2_upload');
+      reportAdminError(error, { where: 'r2-direct-upload', method: 'PUT', route: '/uploads/video', status: x.status });
+      reject(error);
     };
     const origin = typeof location !== 'undefined' && location.origin ? location.origin : 'this site';
-    x.onerror = () => reject(new ApiError(0, `Upload to Cloudflare R2 was blocked by the browser (CORS or network error). In Cloudflare R2 → Bucket → Settings → CORS Policy, allow origin “${origin}” with AllowedMethods ["GET", "HEAD", "PUT"] and AllowedHeaders ["*"].`, 'r2_cors'));
-    x.onabort = () => reject(new ApiError(0, 'The video upload was cancelled before it finished.', 'r2_abort'));
-    x.ontimeout = () => reject(new ApiError(0, 'The video upload timed out. Check your connection and try again.', 'r2_timeout'));
+    x.onerror = () => {
+      const error = new ApiError(0, `Upload to Cloudflare R2 was blocked by the browser (CORS or network error). In Cloudflare R2 → Bucket → Settings → CORS Policy, allow origin “${origin}” with AllowedMethods ["GET", "HEAD", "PUT"] and AllowedHeaders ["*"].`, 'r2_cors');
+      reportAdminError(error, { where: 'r2-direct-upload', method: 'PUT', route: '/uploads/video', status: 0 });
+      reject(error);
+    };
+    x.onabort = () => {
+      const error = new ApiError(0, 'The video upload was cancelled before it finished.', 'r2_abort');
+      reportAdminError(error, { where: 'r2-direct-upload', method: 'PUT', route: '/uploads/video', status: 0, severity: 'warning' });
+      reject(error);
+    };
+    x.ontimeout = () => {
+      const error = new ApiError(0, 'The video upload timed out. Check your connection and try again.', 'r2_timeout');
+      reportAdminError(error, { where: 'r2-direct-upload', method: 'PUT', route: '/uploads/video', status: 0 });
+      reject(error);
+    };
     x.send(file);
   });
 }
