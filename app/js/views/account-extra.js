@@ -129,10 +129,6 @@ function wireReferral(root) {
     const pendingPaise = Math.max(0, Number(data.pendingPaise) || 0);
     const heldPaise = Math.max(0, Number(data.heldPaise) || 0);
     const link = data.link || '';
-    const shareText = rewardPaise
-      ? `Join me on ADDABAAZ using my invite. You get ${inr(rewardPaise)} in credit, and I get ${inr(rewardPaise)} ${hold}.`
-      : 'Join me on ADDABAAZ and discover something great to watch.';
-    const whatsapp = `https://wa.me/?text=${encodeURIComponent(`${shareText}${link ? ` ${link}` : ''}`)}`;
     const earnedPaise = Math.max(0, Number(invitees.earnedPaise) || 0);
     const invitedTotal = Math.max(0, Number(invitees.activeTotal ?? invitees.total) || 0);
     const completedTotal = Math.max(0, Number(invitees.completed) || 0);
@@ -148,10 +144,7 @@ function wireReferral(root) {
             <span class="referral-eyebrow">GOOD STORIES TRAVEL FURTHER</span>
             <h1 id="referralHeroTitle">Invite Friends.<br><span>Watch More.</span></h1>
             <p>${inviteSummary}</p>
-            <div class="referral-hero-actions">
-              <button class="btn btn-primary" id="refShare" data-referral-share type="button">${icon('share', { size: 17 })} Share your invite</button>
-              <a class="referral-hero-whatsapp" href="${whatsapp}" target="_blank" rel="noopener noreferrer" aria-label="Share your invite on WhatsApp" title="Share on WhatsApp">${icon('chat', { size: 20 })}<span class="sr-only">WhatsApp</span></a>
-            </div>
+            <button class="btn btn-primary" id="refShare" data-referral-share type="button">${icon('share', { size: 17 })} Share your invite</button>
           </div>
           ${rewardPaise ? html`<div class="referral-hero-stamp"><span>${icon('gift', { size: 20 })}</span><b>${inr(rewardPaise)} each</b><small>for every qualifying referral</small></div>` : ''}
         </section>
@@ -232,7 +225,7 @@ function wireReferral(root) {
       field.remove();
     }
     if (copied) toast('Invite copied');
-    else toast('Could not copy automatically. Try WhatsApp or your device share options.');
+    else toast('Could not copy automatically. Try your device share options.');
   };
   const shareInvite = async () => {
     const shareLink = data?.link || '';

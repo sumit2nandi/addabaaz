@@ -13,6 +13,7 @@ const read = (p) => fs.readFileSync(new URL('../../' + p, import.meta.url), 'utf
 const exists = (p) => fs.existsSync(new URL('../../' + p, import.meta.url));
 const plans = read('app/js/views/plans.js');
 const account = read('app/js/views/account-extra.js');
+const styles = read('app/css/styles.css');
 const auth = read('app/js/views/auth.js');
 const user = read('app/js/data/user.js');
 const adapters = read('app/js/data/adapters.js');
@@ -66,12 +67,13 @@ test('checkout shows the balance and only spends it when the viewer asks', () =>
   assert.match(read('server/src/routes/billing.js'), /useCredit: req\.body\?\.useCredit === true/, 'the checkout route is opt-in');
 });
 
-test('Account → Refer & earn keeps rewards/activity, removes the highlighted cards and shares via WhatsApp from the hero', () => {
+test('Account → Refer & earn keeps rewards/activity, removes highlighted cards and the WhatsApp shortcut', () => {
   assert.match(account, /wireReferral\(root\)/, 'the account page wires the section');
   assert.match(account, /<div id="referSlot" class="account-section"><\/div>/, 'and has a place for it in the responsive Account grid');
   assert.match(account, /Refer &amp; Earn/, 'named plainly');
-  assert.match(account, /class="referral-hero-actions"[\s\S]*data-referral-share[\s\S]*class="referral-hero-whatsapp"[\s\S]*href="\$\{whatsapp\}"/, 'the hero pairs its share action with a WhatsApp shortcut');
-  assert.match(account, /aria-label="Share your invite on WhatsApp"/, 'the icon-only WhatsApp shortcut has an accessible name');
+  assert.match(account, /id="refShare" data-referral-share/, 'the standard share action remains in the hero');
+  assert.doesNotMatch(account, /wa\.me|referral-hero-whatsapp|Share your invite on WhatsApp/i, 'there is no direct WhatsApp share shortcut');
+  assert.match(styles, /\.referral-hero-image\s*\{[^}]*object-position:\s*right center;/, 'the hero image keeps its right edge visible when cover-cropped');
   assert.doesNotMatch(account, /YOUR PERSONAL INVITE|NO HIDDEN MILESTONES|Know someone who’d love ADDABAAZ/, 'the three highlighted sections are removed');
   assert.doesNotMatch(account, /refLink|refCode/, 'copy fallback no longer depends on fields removed with the personal-invite card');
   assert.match(account, /Benefits for both of you/, 'the referral benefits remain');
