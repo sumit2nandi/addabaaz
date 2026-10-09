@@ -161,7 +161,7 @@ test('recommended-next countdown ticks preserve the thumbnail and card controls'
     const countdown = card.querySelector('[data-next-countdown]');
     assert.ok(thumbnail, 'the recommendation thumbnail is rendered');
     assert.ok(countdown);
-    assert.match(countdown.textContent, /Next in \d+s/);
+    assert.equal(countdown.textContent, 'Next in 5s');
     const seconds = Number(countdown.textContent.match(/(\d+)s$/)[1]);
 
     tick();
