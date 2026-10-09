@@ -29,7 +29,7 @@ export default async function billing(ctx) {
   const u = app.user;
   ctx.setTitle('Billing & invoices');
   if (!u.supportsAuth || !u.account) { go('/signin?next=' + encodeURIComponent('/billing'), { replace: true }); return; }
-  const backLink = html`<p class="back-row"><a class="account-edit-back" href="#/plans" aria-label="Back to plan details">${icon('left', { size: 24 })}</a></p>`;
+  const backLink = html`<a class="page-back" href="#/plans" aria-label="Back to plan details">${icon('left', { size: 28 })}</a>`;
   const key = cacheKey();
   const hit = cache && cache.key === key && Date.now() - cache.at < CACHE_MS ? cache : null;
   let items, rr = { requests: [], windowDays: 0 };
@@ -37,7 +37,7 @@ export default async function billing(ctx) {
   else {
     // One round trip, not two in a row: the history and the refund window are fetched at the same time.
     const [history, refunds] = await Promise.allSettled([u.billingHistory(), u.remote.refundRequests()]);
-    if (history.status === 'rejected') { ctx.root.innerHTML = html`<div class="page page-narrow">${backLink}<div class="empty"><h2>Couldn’t load your billing history</h2><p>${friendly(history.reason)}</p></div></div>`.s; return; }
+    if (history.status === 'rejected') { ctx.root.innerHTML = html`<div class="page page-narrow">${sectionHeader({ title: 'Couldn’t load your billing history', back: backLink })}<div class="empty"><p>${friendly(history.reason)}</p></div></div>`.s; return; }
     items = history.value;
     if (refunds.status === 'fulfilled') rr = refunds.value;   // older server: no self-service refunds
     cache = { key, at: Date.now(), items, rr };
@@ -46,8 +46,7 @@ export default async function billing(ctx) {
   const canAsk = (p) => rr.windowDays > 0 && p.provider === 'razorpay' && p.amountPaise > 0 && p.refundedPaise < p.amountPaise && !pending.has(p.id) && (Date.now() - Date.parse(p.paidAt)) / 864e5 <= rr.windowDays;
   const doc = (d, label) => html`<button class="btn btn-ghost" data-dl="${d.id}" data-name="${d.number}">${icon('download', { size: 16 })} ${label} ${d.number}</button>`;
   ctx.root.innerHTML = html`<div class="page page-narrow">
-    ${backLink}
-    ${sectionHeader({ tag: 'Account', title: 'Billing & invoices', subtitle: u.account.emailIsPlaceholder ? 'Your payment documents and refunds. Add a verified contact email in Account to receive billing emails.' : 'Your payments, GST invoices and refunds.' })}
+    ${sectionHeader({ tag: 'Account', title: 'Billing & invoices', subtitle: u.account.emailIsPlaceholder ? 'Your payment documents and refunds. Add a verified contact email in Account to receive billing emails.' : 'Your payments, GST invoices and refunds.', back: backLink })}
     ${items.length ? html`<div class="bill">${items.map((p) => html`<article class="bill-item">
       <div class="bill-head"><div><b>${p.planName}</b><div class="muted small">${fmtDate(p.paidAt)}${p.couponCode ? ` · coupon ${p.couponCode} (−${inr(p.discountPaise)})` : ''}</div></div><div class="bill-amt">${p.amountPaise ? inr(p.amountPaise) : 'Free'}</div></div>
       ${p.refundedPaise ? html`<div><span class="pill ok">Refunded ${inr(p.refundedPaise)}</span></div>` : p.refunds.some((r) => r.status === 'pending') ? html`<div><span class="pill">Refund in Progress</span></div>` : pending.has(p.id) ? html`<div><span class="pill">${u.account.emailIsPlaceholder ? 'Refund requested — check this page for updates' : 'Refund requested — we’ll email you'}</span></div>` : ''}

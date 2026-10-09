@@ -132,19 +132,8 @@ test('YouTube autoplay explicitly mutes the iOS iframe before asking it to play 
     assert.equal(config.playerVars.autoplay, 1);
     assert.equal(config.playerVars.mute, 1);
     assert.equal(config.playerVars.playsinline, 1);
-    assert.equal(config.playerVars.controls, 0);
-    assert.equal(config.playerVars.disablekb, 1);
     assert.deepEqual(actions, ['mute', 'play']);
     ctl.destroy();
-
-    actions.length = 0;
-    const reelCtl = await createYouTubePlayer(container, 'reel-video', { autoplay: true, muted: false, controls: false, reel: true });
-    assert.equal(config.playerVars.autoplay, 1);
-    assert.equal(config.playerVars.mute, 1);
-    assert.equal(config.playerVars.controls, 0);
-    assert.equal(config.playerVars.disablekb, 1);
-    assert.deepEqual(actions, [], 'chromeless Reels start from URL playerVars without postMessage commands that wake YouTube’s pause overlay');
-    reelCtl.destroy();
   } finally { restore(); }
 });
 

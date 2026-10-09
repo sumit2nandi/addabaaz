@@ -143,6 +143,8 @@ test('putFile reports actionable R2 error messages for 403, 404 NoSuchBucket, Si
 
 test('admin panel surfaces technical R2 diagnostics while public app/website keeps viewer errors non-technical', () => {
   const contentView = read('admin/js/views/content.js');
+  const adminUi = read('admin/js/ui.js');
+  const adminApi = read('admin/js/api.js');
   const adminServer = read('server/src/admin.js');
   const appServer = read('server/src/app.js');
   const mediaRoutes = read('server/src/routes/media.js');
@@ -152,6 +154,10 @@ test('admin panel surfaces technical R2 diagnostics while public app/website kee
   assert.match(contentView, /accept="video\/\*.*\.mov/, 'file picker accepts any video/* and common video extensions');
   assert.match(contentView, /probeVideoDuration\(f\)/, 'duration is automatically derived from the selected video file');
   assert.match(contentView, /✖ Upload failed: \$\{msg\}/, 'upload failures remain visible inline in the modal');
+  assert.match(contentView, /upload: 'video-thumbnail'/, 'the video form routes R2 thumbnail photos through the server-side rendition pipeline');
+  assert.match(adminUi, /api\.uploadVideoThumbnail\(videoKey, f\)/, 'R2 thumbnails upload the untouched photo after the video key exists');
+  assert.match(adminApi, /'X-Video-Key': videoKey/, 'the API associates the photo with its uploaded R2 video');
+  assert.match(adminServer, /router\.post\('\/uploads\/video-thumbnail'/, 'the admin API provides the paired thumbnail endpoint');
   assert.match(adminServer, /verifyR2Source/, 'admin catalog save verifies the R2 object exists when r2.head is present');
   assert.match(adminServer, /r2_object_missing/, 'missing R2 objects produce a clear 400 error on save in admin');
 

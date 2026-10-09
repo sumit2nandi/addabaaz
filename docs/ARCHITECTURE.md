@@ -63,7 +63,7 @@ flowchart LR
 
   subgraph data[Durable data]
     mysql[(MySQL 8<br/>users · catalog · billing · uploads · engagement)]
-    r2[(Private object storage<br/>video / HLS / Broadcast photos)]
+    r2[(Private object storage<br/>catalog photos / Broadcast photos / video / HLS)]
     seed[data/catalog.json + studio.json<br/>seed and static-mode fallback]
     cache[(Local upload cache<br/>recoverable from MySQL)]
     localBackups[(Local backup files<br/>encrypted when configured)]
@@ -260,8 +260,8 @@ flowchart TB
 |---|---|---|
 | Accounts, identities, sessions, profiles, library, playback, subscriptions, payments, invoices, refunds | MySQL | Client-side account state is a session cache; local guest state is separate until sync. |
 | Curated catalog, studio documents, moderation, YouTube preview/import records | MySQL once the API is active | JSON files seed the database and serve as static-mode fallback; catalog service keeps an in-process versioned snapshot. |
-| Admin-uploaded catalog images and subtitles | MySQL `uploaded_files` | `UPLOAD_DIR` is a content-hash filesystem cache and can be rebuilt. |
-| Broadcast photos | Private R2-compatible object storage under `broadcast/` | MySQL stores the campaign path; a stable app URL redirects recipients to a fresh signed GET URL. |
+| New admin-uploaded catalog and Broadcast photos | Private R2-compatible object storage under `catalog/` and `broadcast/` | MySQL stores catalog/campaign paths; stable app URLs redirect to fresh signed GET URLs. Progressive high/low variants are separate immutable objects. |
+| Legacy catalog image blobs and subtitles | MySQL `uploaded_files` | `UPLOAD_DIR` is a cache for legacy images and subtitle files; new photo uploads never enter this table. |
 | Video/reel media objects | Private R2-compatible object storage | Catalog metadata and object keys stay in MySQL; delivery uses signed URLs or the HLS API gateway. |
 | Push tokens, preferences, campaigns, analytics, errors | MySQL | Push provider sends are external side effects; dead native tokens are removed when providers report them. |
 | Backups | Local backup volume and optional separate R2 bucket | Encryption is controlled by `BACKUP_PASSPHRASE`; backups must be copied off-host and tested with restore. |

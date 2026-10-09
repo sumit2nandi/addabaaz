@@ -30,8 +30,10 @@ test('every settings group opens its own sub-page', () => {
     'every sub-page offers a way back to the profile page');
   assert.match(view, /wireSetting\(meta\.id, ctx\.root, ctx\)/,
     'the sub-page wires its section once it is in the DOM');
-  assert.match(css, /\.back-link \{ display: inline-flex; align-items: center;/,
-    'the back link is a tap-friendly row');
+  assert.match(view, /class="settings-page-heading">\$\{backButton\}<h1>\$\{meta\.title\}<\/h1>/,
+    'the settings title and its Back action share one header row');
+  assert.match(css, /\.page-back \{[^}]*border: 0[^}]*border-radius: 0/,
+    'Back is a plain arrow with no surrounding button shape');
   for (const id of ['playback', 'security', 'kids', 'refer', 'notify']) {
     assert.match(extras, new RegExp(`if \\(id === '${id}'\\) return `),
       `the ${id} group has a sub-page section`);
@@ -40,8 +42,8 @@ test('every settings group opens its own sub-page', () => {
     assert.match(extras, new RegExp(`if \\(id === '${id}'\\) return wire`),
       `the ${id} group has its wiring hooked up`);
   }
-  assert.match(extras, /<section class="account-section">\s*<h2 class="sub-h">Security<\/h2>/,
-    'the Security section keeps its heading');
+  assert.doesNotMatch(extras, /<h2 class="sub-h">Security<\/h2>/,
+    'the Security title is promoted into the shared settings page header');
   assert.match(extras, /<div id="referSlot" class="account-section"><\/div>/,
     'Refer & earn keeps its asynchronous slot');
   assert.match(extras, /<div id="notifySlot" class="account-section"><\/div>/,

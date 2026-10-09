@@ -149,7 +149,7 @@ export default async function content(root, [section], ctx) {
     { k: 'episode', label: 'Episode number', type: 'number', min: 1, help: 'Episodes only.' },
     { k: 'access', label: 'Access', type: 'select', options: ACCESS, dflt: 'free', help: 'Premium access is independent of media source; viewers need an active paid plan to play it in the app.' },
     sourceField(),
-    { k: 'thumbnail', label: 'Thumbnail', type: 'image', maxWidth: 1000, wide: true, help: 'Required for R2 videos; YouTube videos use their own thumbnail.' },
+    { k: 'thumbnail', label: 'Thumbnail', type: 'image', upload: 'video-thumbnail', maxWidth: 1000, wide: true, help: 'Required for R2 videos; upload the video first, then its photo is processed into WebP sizes up to 1000px and 480px beside it. YouTube videos use their own thumbnail.' },
     { k: 'duration', label: 'Duration (mm:ss)', placeholder: 'Auto-detected on upload (or e.g. 12:34)', help: 'Automatically derived when you upload a video file. For YouTube or external links, enter the runtime as mm:ss.' }, { k: 'publishedAt', label: 'Published', type: 'datetime', req: true },
     { k: 'publishAt', label: 'Publish at (optional)', type: 'datetime', help: 'Leave empty to publish now. A future time hides the video from viewers, Google and the API until then — admins still see it, and followers get a notification when it goes live.' },
     { k: 'hidden', label: 'Hide from the public website', type: 'bool', wide: true, help: 'Hidden videos stay in the admin catalog and can be restored later.' },

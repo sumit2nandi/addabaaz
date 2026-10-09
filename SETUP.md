@@ -52,7 +52,7 @@ Two ways to run it:
 | **Hostinger Business Web Hosting** | production | Provides the Node.js Web App, MySQL database, phpMyAdmin and SSL. See section 10. |
 | **Docker + Docker Compose** | quick start / production | Optional but the easiest way. |
 | A domain with **HTTPS** | production | Required for sign-in providers, payments, push notifications and PWA install. |
-| Accounts you may need later | | Google Cloud, Facebook developers, Apple Developer ($99/yr), Cloudflare (R2), Razorpay, an SMTP email provider, Google Search Console. Each is optional — see section 8. |
+| Accounts you may need later | | Google Cloud, Facebook developers, Apple Developer ($99/yr), Cloudflare (R2; required for new admin photos), Razorpay, an SMTP email provider, Google Search Console. Optional features are explained in section 8. |
 | `ffmpeg` (only on your own computer) | encoding premium video | Only for `npm run encode:hls`. |
 | Android Studio / Xcode (macOS) | mobile apps only | See section 12. |
 
@@ -62,7 +62,7 @@ Two ways to run it:
 
 *Use this to try ADDABAAZ on your own computer (Docker isn't available on Hostinger Business hosting — for going live, go straight to [section 10](#10-deploying-to-production-hostinger-business-web-hosting)).*
 
-This starts the app **and** a MySQL 8 database, with the database and uploaded images kept in Docker volumes.
+This starts the app **and** a MySQL 8 database. MySQL/catalog data and legacy upload cache use Docker volumes; new admin photos are stored in private R2, so configure R2 credentials before uploading photos.
 
 ```bash
 git clone https://github.com/sumit2nandi/addabaaz.git
@@ -251,8 +251,8 @@ All settings are environment variables (see `.env.example`, which has the same l
 | `PUBLIC_API_URL` | — | Public address of the API when it differs from the site (needed for HLS video behind a proxy). |
 | `CORS_ORIGINS` | `*` | Allowed browser origins, comma separated. Sign-in uses bearer tokens, so `*` is safe; restrict it if you like. |
 | `TRUST_PROXY` | — | Number of reverse proxies in front of the app (e.g. `1`). Needed so rate limits and logs see real visitor IPs. |
-| `UPLOAD_DIR` | `./uploads` | Local **cache** of admin-uploaded images and subtitles. The real copies are stored in MySQL (table `uploaded_files`), so a restart or redeploy that empties this folder loses nothing — files are served from MySQL and copied back. A folder outside the deployed app (section 10.2-C) or a Docker volume just saves re-reading them. |
-| `IMAGE_ALLOWED_HOSTS` | *(empty)* | Optional: extra hosts (comma-separated) whose pages may show `/media` and `/uploads` images. The site (`PUBLIC_SITE_URL`, with and without `www`), `CORS_ORIGINS` entries and the native app (`app.addabaaz.in`) are always allowed. |
+| `UPLOAD_DIR` | `./uploads` | Local cache for legacy catalog image blobs and subtitle files stored in MySQL (`uploaded_files`). New catalog/Broadcast photos are stored in R2 and do not use this folder. A folder outside the deployed app or a Docker volume only preserves the legacy cache. |
+| `IMAGE_ALLOWED_HOSTS` | *(empty)* | Optional: extra hosts (comma-separated) whose pages may show `/media`, legacy `/uploads`, and `/r2-assets/catalog` images. The site (`PUBLIC_SITE_URL`, with and without `www`), `CORS_ORIGINS` entries and the native app (`app.addabaaz.in`) are always allowed. |
 
 ### Database
 
@@ -285,7 +285,7 @@ All settings are environment variables (see `.env.example`, which has the same l
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | — | Optional private Cloudflare R2 video storage (use it when the media itself needs protection). |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | — | Private Cloudflare R2 credentials. **Required for all new catalog and Broadcast photo uploads**; also used for optional R2-hosted video/reel media. |
 | `R2_ENDPOINT` | derived | Override for S3-compatible storage other than R2. |
 | `STREAM_URL_TTL` | `21600` | Seconds a signed video link stays valid (6 h). |
 | `STREAM_LIMIT` | `2` | Premium screens one account may play at the same time. |
@@ -379,9 +379,9 @@ Required by the App Store if the iOS app offers Google or Facebook. Needs a paid
 2. For the website create a **Services ID** (e.g. `com.addabaaz.web`), tick Sign In with Apple → *Configure*: domain `addabaaz.in`, return URL `https://addabaaz.in` → `APPLE_SERVICE_ID=<services id>`.
 3. Restart. Check with `curl https://addabaaz.in/api/v1/auth/providers` — it lists every provider that is configured.
 
-### 8.4 Optional private media storage in Cloudflare R2
+### 8.4 Photo and private media storage in Cloudflare R2
 
-Premium is an app-level access setting and is independent of source. This configures private R2 storage for video/reel files and Broadcast photos; ADDABAAZ gates Premium playback to signed-in viewers **with an active paid plan**. Video/reel media bytes and Broadcast photo bytes live in R2, while catalog and campaign metadata stay in MySQL.
+New catalog photos (posters, banners and thumbnails) and Broadcast photos are stored in private R2; MySQL stores the stable paths and catalog/campaign metadata only. Configure this section before uploading any new photos. Video/reel files can also use R2. Premium is an app-level access setting, independent of source; Premium playback is gated to signed-in viewers **with an active paid plan**.
 
 1. Cloudflare → **R2 → Create bucket** (e.g. `addabaaz-premium`). Keep **public access OFF**.
 2. *R2 → Manage API tokens → Create token* with **Object Read & Write**, scoped to that bucket. Copy the Access Key ID and Secret to the server environment only, and note your Account ID.
@@ -395,7 +395,7 @@ Premium is an app-level access setting and is independent of source. This config
 5. **Getting a video in** — either
    * *MP4 (simplest):* `ffmpeg -i episode.mov -c:v libx264 -crf 21 -preset slow -c:a aac -b:a 128k -movflags +faststart ep6.mp4`, then upload it in the admin (Videos → New video → *Private Cloudflare R2* → Upload — this uses the server's Object Read & Write token; alternatively upload with `rclone` or the R2 dashboard and type the key), or
    * *Adaptive HLS (better on mobile networks):* on your own computer, `npm run encode:hls -- episode.mov --name shahid-ep6 --upload`. It needs `ffmpeg` and a write-capable token, and prints the key to use (`premium/shahid-ep6/master.m3u8`). Try a short clip first.
-6. Broadcast photos use the Broadcast composer’s **Upload** button and are saved to the bucket automatically; no browser-to-R2 CORS rule is needed for those images.
+6. Catalog and Broadcast photos are uploaded through the server and saved to R2 automatically; no browser-to-R2 CORS rule is needed for photos. Existing MySQL image blobs remain available as legacy uploads.
 7. In the admin, create the video with *Source = Private Cloudflare R2* and that key; set *Access = Premium*.
 8. Verify: `npm run r2:check -- premium/shahid-ep6/master.m3u8`.
 
@@ -538,7 +538,7 @@ Business hosting is shared hosting, so three things work differently from a norm
 
 | Limit | What it means | What you do |
 |---|---|---|
-| **Deploys erase the app folder** | Everything inside the deployed app (`hbuilds/…`, `public_html`) is replaced on every deploy. Images uploaded from `/admin` are kept in MySQL, so they survive; only the local upload cache is emptied. | Nothing required; optionally keep the cache outside the app (**10.2-C**). |
+| **Deploys erase the app folder** | Everything inside the deployed app (`hbuilds/…`, `public_html`) is replaced on every deploy. New catalog/Broadcast photos are stored in R2; legacy image blobs and subtitles stay in MySQL. | Configure R2 for new photo uploads; optionally keep the legacy cache outside the app (**10.2-C**). |
 | **The process sleeps when idle** | Hostinger stops your app when nobody visits and restarts it on the next request. Timer-based jobs (renewal reminders, new-episode pushes) only run while it is awake. | A free uptime monitor pings it every 5 minutes (**10.2-E**). |
 | **No command line** | You can't run `npm run admin` or `npm run backup`. | Make the first admin and take backups with phpMyAdmin and hPanel (**10.2-D**, section 13). |
 
@@ -562,9 +562,9 @@ Business hosting is shared hosting, so three things work differently from a norm
    | `DB_NAME`, `DB_USER`, `DB_PASSWORD` | from step 10.2-A below (Hostinger adds a prefix like `u123456789_`) |
    | `DB_POOL_SIZE` | `5` (shared plans limit connections per database user) |
    | `TRUST_PROXY` | `1` |
-   | `UPLOAD_DIR` | optional: a folder **outside** the deployed app (a cache; uploads themselves are stored in MySQL) — see 10.2-C |
+   | `UPLOAD_DIR` | optional: a folder **outside** the deployed app for legacy MySQL image/subtitle cache only — see 10.2-C |
 
-   Do **not** set `PORT`: Hostinger chooses it and the app reads it automatically. Add the optional feature variables (Razorpay, R2, SMTP …) when you reach section 8.
+   Do **not** set `PORT`: Hostinger chooses it and the app reads it automatically. Add the R2 variables (required for photo uploads) and any optional feature variables (Razorpay, SMTP …) when you reach section 8.
 
    Use the separate `DB_*` variables rather than `DATABASE_URL` — a password containing `@`, `:` or `/` breaks a URL unless encoded.
 
@@ -614,15 +614,15 @@ Business hosting is shared hosting, so three things work differently from a norm
 
 **C. Uploads and deploys**
 
-Hostinger **replaces everything inside the deployed app on every deployment** (`~/domains/<your-domain>/hbuilds/…` and `public_html`) — direct edits are not preserved. Images and subtitles uploaded from `/admin` are therefore **stored in your MySQL database** (table `uploaded_files`), not only as files: a deploy cannot lose them, every visitor on every device sees them, and your phpMyAdmin export (section 13) contains them. The app also keeps a copy in the upload folder (`UPLOAD_DIR`) to serve them faster, and quietly rebuilds that copy from MySQL whenever it is empty. So the folder is a cache and nothing needs to be done here.
+Hostinger **replaces everything inside the deployed app on every deployment** (`~/domains/<your-domain>/hbuilds/…` and `public_html`) — direct edits are not preserved. New catalog and Broadcast photos are stored in private R2; MySQL stores their stable paths, so a redeploy does not remove the images. Configure the `R2_*` credentials and bucket from section 8.4 before uploading. Older catalog image blobs and subtitle files remain in MySQL (`uploaded_files`); `UPLOAD_DIR` is only their local cache. New photo bytes are not part of phpMyAdmin exports, so back up/version the R2 bucket separately.
 
-*Optional:* to avoid re-reading images from MySQL after each deploy, keep the cache outside the deployed app:
+*Optional:* to avoid rebuilding the cache for legacy MySQL images/subtitles after each deploy, keep it outside the deployed app:
 
 1. hPanel → **File Manager** → in your home folder (the one that contains `domains/`) create `addabaaz-data/uploads`.
 2. Add the environment variable `UPLOAD_DIR=/home/u123456789/addabaaz-data/uploads` (use your real account id; the File Manager shows the full path) and redeploy.
-3. If the app cannot write there, nothing breaks — images are simply served straight from MySQL.
+3. If the app cannot write there, legacy images and subtitles are served straight from MySQL; new catalog photos are served from R2.
 
-Images uploaded **before** uploads were stored in MySQL (migration `010_uploaded_files`) existed only as files and may already be gone after an earlier deploy: open `/admin`, edit the title, upload the image again and save (once).
+Existing legacy image blobs remain in MySQL and continue to work. They are not migrated automatically; re-upload an image in `/admin` to create its new R2-backed copy. New photo uploads require R2 to be configured.
 
 Videos stored in **R2** are not affected: they go straight from the browser to Cloudflare R2, never to Hostinger's disk.
 
@@ -728,7 +728,7 @@ Before publishing:
 **Hostinger Web App (no command line).** `npm run backup` cannot be run there, so use what Hostinger gives you — and do all three:
 
 1. **Database:** hPanel → *Databases* → **phpMyAdmin** → select your database → **Export** (Quick, SQL) and keep the file somewhere else, weekly and before every big change. Restoring = phpMyAdmin → **Import**. Also turn on / check Hostinger's own **Backups** page in hPanel (its schedule depends on your plan).
-2. **Uploaded images and subtitles** are stored in the database (table `uploaded_files`), so the phpMyAdmin export in step 1 already contains them; `addabaaz-data/uploads` (if you made it) is only a cache.
+2. **Legacy image blobs and subtitle uploads** remain in MySQL (`uploaded_files`) and are included in the phpMyAdmin export; `addabaaz-data/uploads` (if configured) is only their cache. New catalog/Broadcast photos are in R2 and are not in that export — back up/version the media bucket separately.
 3. **Settings:** keep a copy of every environment variable (especially `JWT_SECRET`) in a password manager.
 
 Test an import on a spare database once, before you need it. The `npm run backup` command below is for computers where you have a terminal (your own machine, or a copy of the site you run locally).
@@ -738,8 +738,8 @@ BACKUP_PASSPHRASE='a long secret' npm run backup     # → ./backups/addabaaz-<U
 ```
 
 * One file with **every table** and all admin-uploaded files, taken from a consistent snapshot. Set `BACKUP_PASSPHRASE` — it contains emails and password hashes.
-* Keeps the newest `BACKUP_KEEP` files (default 14). With `BACKUP_R2_BUCKET` set it also copies each backup to a **separate** R2 bucket (never the bucket used for video media).
-* **Copy backups off the server.** R2 video objects are not included — enable versioning on the video bucket. Your `.env` (especially `JWT_SECRET`) is not included either; store it in a password manager.
+* Keeps the newest `BACKUP_KEEP` files (default 14). With `BACKUP_R2_BUCKET` set it also copies each backup to a **separate** R2 bucket (never the bucket used for catalog/Broadcast photos or video media).
+* **Copy backups off the server.** R2 photo and video objects are not included — enable versioning or another backup for the media bucket. Your `.env` (especially `JWT_SECRET`) is not included either; store it in a password manager.
 * Schedule daily: `0 3 * * * cd /path/to/addabaaz && npm run -s backup >> /var/log/ab-backup.log 2>&1` (Docker: `docker compose exec -T app npm run -s backup`).
 
 Restore:
@@ -784,7 +784,7 @@ Prints requests per second and p50/p95/p99 latency per endpoint. The numbers dep
 - [ ] `NODE_ENV=production`, strong unique `JWT_SECRET`, `PUBLIC_SITE_URL` correct, HTTPS working, one hostname.
 - [ ] MySQL password strong; database **not** exposed to the internet; automated backups running and one restore tested.
 - [ ] `TRUST_PROXY` set to match your proxy chain (`1` on Hostinger).
-- [ ] **Hostinger:** an image uploaded in `/admin` is still shown after a redeploy (uploads are stored in MySQL); uptime monitor on `/api/v1/health/ready` running; a phpMyAdmin export downloaded and stored off Hostinger.
+- [ ] **Hostinger:** a new image uploaded in `/admin` is still shown after a redeploy (photos are stored in R2); uptime monitor on `/api/v1/health/ready` running; MySQL and R2 backups handled separately.
 - [ ] At least one admin (`npm run admin -- grant …`); no leftover test admins.
 - [ ] Razorpay **live** keys + webhook set, one real low-value payment and refund tried.
 - [ ] `GSTIN` and business details set; a test invoice checked by your accountant.
@@ -807,7 +807,7 @@ Prints requests per second and p50/p95/p99 latency per endpoint. The numbers dep
 | Hostinger: Runtime log shows `ERR_REQUIRE_ASYNC_MODULE` | The entry file is `server/src/index.js` (or another ES-module file with top-level `await`). Set **Entry file** to `server.cjs` and redeploy. |
 | Hostinger: app is "Running" but the site shows an error / 503 | Open **Runtime logs**. Usual causes: a missing or mistyped environment variable, wrong `DB_*` values, or an entry file that doesn't exist (use `server.cjs`). Never hard-code a port — the app reads `PORT`. |
 | Hostinger: 403 after a redeploy | Hostinger regenerates `public_html/.htaccess` on each deploy; don't edit it by hand — just redeploy. |
-| An uploaded poster/image shows on one device but not on others, or vanished after a deploy | It was uploaded before images were stored in MySQL, so its file was lost with the old disk. Upload it again in `/admin` and save the title (once); new uploads are permanent (section 10.2-C). |
+| A new poster/photo upload fails | Configure `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_BUCKET`; all new catalog/Broadcast photo uploads require R2. Existing MySQL legacy images still display. |
 | Hostinger: reminders / notifications arrive late | The process sleeps when idle. Add the 5-minute uptime monitor (section 10.2-E). |
 | Hostinger: `Too many connections` / `max_user_connections` | Lower `DB_POOL_SIZE` (try `3`–`5`). |
 | Hostinger: SQL syntax errors on the first start | The database is probably MariaDB and hit something the app doesn't support there. Copy the exact error from the **Runtime logs** and send it to whoever maintains the code — it is a small fix in `server/migrations/` or `server/src/db*.js`. Ask Hostinger support which engine/version your database runs. |

@@ -55,12 +55,15 @@ test('broadcast image URLs accept uploaded, R2, media, and https paths in canoni
   const uploadPath = 'uploads/dc4d24a1667f00aabbccdde1.webp';
   const mediaPath = 'media/bts/song-bts-1-lg.webp';
   const r2Path = 'r2-assets/broadcast/dc4d24a1667f00aabbccdde1.webp';
+  const catalogR2Path = 'r2-assets/catalog/dc4d24a1667f00aabbccdde1-hq.jpg';
   assert.equal(normalizeImage(uploadPath), `/${uploadPath}`);
   assert.equal(normalizeImage(`/${uploadPath}`), `/${uploadPath}`);
   assert.equal(normalizeImage(mediaPath), `/${mediaPath}`);
   assert.equal(normalizeImage(`/${mediaPath}`), `/${mediaPath}`);
   assert.equal(normalizeImage(r2Path), `/${r2Path}`);
   assert.equal(normalizeImage(`/${r2Path}`), `/${r2Path}`);
+  assert.equal(normalizeImage(catalogR2Path), `/${catalogR2Path}`);
+  assert.equal(normalizeImage(`/${catalogR2Path}`), `/${catalogR2Path}`);
   assert.equal(normalizeImage('https://cdn.example.com/broadcast.webp'), 'https://cdn.example.com/broadcast.webp');
   assert.equal(normalizeImage('http://cdn.example.com/broadcast.webp'), '', 'insecure remote image URLs stay rejected');
   assert.equal(normalizeImage('uploads/broadcast.webp?download=1'), '', 'unsupported URL components stay rejected');

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /* Validates data/catalog.json + data/studio.json (the seed / static export) with the same rules the admin console enforces,
- * and that every referenced local image exists.   Run: npm run validate:catalog   — wired into CI. */
+ * verifies referenced local images, and checks R2 photo paths for valid stable-path syntax (the online admin and catalog importer check object existence).
+ * Run: npm run validate:catalog — wired into CI. */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

@@ -41,8 +41,7 @@ export default async function support(ctx) {
   ctx.setTitle('Support');
   const backButton = pageBack(ctx);
   if (!u.supportsAuth) {
-    ctx.root.innerHTML = html`<div class="page page-narrow">${backButton}<div class="empty">${icon('chat', { size: 44 })}
-      <h2>Support Needs a Connection</h2><p>This copy of ADDABAAZ runs without the server, so tickets can’t be sent from here. Please write to us once you’re back online.</p>
+    ctx.root.innerHTML = html`<div class="page page-narrow">${sectionHeader({ title: 'Support Needs a Connection', back: backButton })}<div class="empty">${icon('chat', { size: 44 })}<p>This copy of ADDABAAZ runs without the server, so tickets can’t be sent from here. Please write to us once you’re back online.</p>
       <a class="btn btn-primary" href="#/contact">Contact Us Instead</a></div></div>`.s;
     return;
   }
@@ -54,9 +53,8 @@ export default async function support(ctx) {
   if (ctx.stale?.()) return;   // see the sign-in page: an older shell may not have it yet
 
   ctx.root.innerHTML = html`<div class="page page-narrow support-page">
-    ${backButton}
     <div class="account-layout">${accountNav(settingGroups(), 'help')}<div class="account-content">
-    ${sectionHeader({ tag: 'We’re here to help', title: 'Support', subtitle: 'Tell us what went wrong and we’ll get back to you by e-mail — usually within one working day.' })}
+    ${sectionHeader({ tag: 'We’re here to help', title: 'Support', subtitle: 'Tell us what went wrong and we’ll get back to you by e-mail — usually within one working day.', back: backButton })}
     ${acc ? html`<div class="card-panel notice"><div>${icon('mail', { size: 22 })}</div><div><b>Signed in as ${acc.name}</b>
       <p class="muted">${acc.emailIsPlaceholder ? `This account signs in with SMS. Enter a separate e-mail address below so we can reply to your ticket.` : `We’ll reply to ${acc.email}.`}</p></div></div>` : ''}
     <section class="card-panel form" id="supForm">

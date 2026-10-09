@@ -149,7 +149,7 @@ export function createApp({
   promos: promosOption = null,                                // promotional credit + referrals (server/src/promos.js)
   adminToken = process.env.ADMIN_TOKEN || '',                 // optional shared secret for scripts (≥24 chars); admin ACCOUNTS (users.is_admin) need no token
   sessionHours = Number(process.env.ADMIN_SESSION_HOURS) || 12, // admin sessions are shorter than viewer sessions
-  uploadDir = process.env.UPLOAD_DIR || path.join(ROOT, 'uploads'),   // local cache of admin uploads (the real copies are stored in MySQL)
+  uploadDir = process.env.UPLOAD_DIR || path.join(ROOT, 'uploads'),   // cache for legacy MySQL image blobs and subtitle uploads
   contactWebhook = process.env.CONTACT_WEBHOOK_URL || '',
   youtubeFeed = createYouTubeFeed(),                         // fetched only after an administrator explicitly previews uploads
   rate = true,
@@ -157,7 +157,7 @@ export function createApp({
   errorLogger: suppliedErrorLogger = null,                   // shared database reporter (created here in tests/embedded use)
   catalogPath = path.join(ROOT, 'data/catalog.json'),
   studioPath = path.join(path.dirname(catalogPath), 'studio.json'),
-  r2 = createR2(),                                            // Cloudflare R2 (private storage for video files)
+  r2 = createR2(),                                            // Cloudflare R2 (private storage for catalog/Broadcast/video-thumbnail photos and video files)
   social = socialFromEnv(),                                   // { config, verifiers: { google?, facebook? } }
   publicApiUrl = process.env.PUBLIC_API_URL || '',            // absolute base for HLS URLs when behind a proxy
   // Seconds a signed video URL stays valid. Clamped: a huge value would let a playback link outlive a

@@ -14,8 +14,7 @@ export default async function mylist(ctx) {
     const shows = entries.filter((x) => x.type !== 'video').map(savedCard);
     const videos = entries.filter((x) => x.type === 'video').map(savedCard);
     ctx.root.innerHTML = html`<div class="page">
-    ${backButton}
-      ${sectionHeader({ tag: u.profile ? `${u.profile.name}’s library` : 'Library', title: 'My List', subtitle: 'Shows and videos you’ve saved.' })}
+      ${sectionHeader({ tag: u.profile ? `${u.profile.name}’s library` : 'Library', title: 'My List', subtitle: 'Shows and videos you’ve saved.', back: backButton })}
       ${shows.length ? html`<h2 class="sub-h">Saved Shows</h2><div class="grid grid-shows">${shows}</div>` : ''}
       ${videos.length ? html`<h2 class="sub-h">Saved Videos</h2><div class="grid grid-videos">${videos}</div>` : ''}
       ${!entries.length ? emptyState({ iconName: 'list', title: 'Your list is empty', text: 'Tap the + on any show or video to save it here.', action: html`<a class="btn btn-primary" href="#/shows">Browse Shows</a>` }) : ''}

@@ -64,7 +64,7 @@ function wireNotifications(root, { guest = false, onCleanup = null } = {}) {
     // The browser and the app both keep three choices per device (docs/ENGAGEMENT.md): a guest app has no
     // account to link episode/launch notifications to, so it gets the master switch only.
     const topics = s.subscribed && (!s.native || !s.guest);
-    slot.innerHTML = html`<h2 class="sub-h">Notifications</h2><div class="card-panel list">
+    slot.innerHTML = html`<div class="card-panel list">
       <label class="row-switch"><span><b>Notify Me on This Device</b><small>${blocked}</small></span><span class="switch"><input type="checkbox" id="pushOn" ${s.subscribed ? 'checked' : ''} ${s.permission === 'denied' ? 'disabled' : ''}><span class="track"></span></span></label>
       ${topics ? html`<label class="row-switch"><span><b>New Episodes of Shows I Follow</b></span><span class="switch"><input type="checkbox" data-pp="episodes" ${s.prefs.episodes ? 'checked' : ''}><span class="track"></span></span></label>
         <label class="row-switch"><span><b>When a Coming Soon Title Launches</b></span><span class="switch"><input type="checkbox" data-pp="launches" ${s.prefs.launches ? 'checked' : ''}><span class="track"></span></span></label>
@@ -91,51 +91,184 @@ function wireNotifications(root, { guest = false, onCleanup = null } = {}) {
 function wireReferral(root) {
   const u = app.user;
   const slot = $('#referSlot', root); if (!slot) return;
-  slot.innerHTML = html`<h2 class="sub-h">Refer &amp; Earn</h2><div class="card-panel"><div class="spinner" style="margin:14px auto"></div></div>`.s;
+  slot.innerHTML = html`<div class="card-panel"><div class="spinner" style="margin:14px auto"></div></div>`.s;
+  let data = null;
+  const inr = (paise) => {
+    const amount = Math.max(0, Number(paise) || 0) / 100;
+    return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: amount % 1 ? 2 : 0, maximumFractionDigits: 2 })}`;
+  };
   const draw = async () => {
-    let data = null;
-    try { data = await u.credits(); } catch { /* the section shows the empty state below */ }
-    if (!data || !data.offer?.enabled || (!data.offer.referralPaise && !data.creditPaise)) {
-      slot.innerHTML = emptyState({ iconName: 'gift', title: 'Refer & Earn Is Off', text: 'There is no invite offer running right now — check back later.' }).s;
+    let response;
+    try { response = await u.promos(); }
+    catch (err) {
+      slot.innerHTML = html`<div class="referral-empty card-panel" role="status">
+        <span class="referral-empty-icon">${icon('gift', { size: 24 })}</span><h3>Couldn’t load your invite details</h3>
+        <p>${friendly(err)}</p><button class="btn btn-primary" type="button" id="refRetry">Try again</button>
+      </div>`.s;
       return;
     }
-    const inr = (p) => `₹${(p / 100).toFixed(p % 100 ? 2 : 0)}`;
-    let share = null;
-    try { share = await u.inviteLink(); } catch { /* the code alone is enough */ }
-    const code = share?.code || '';
-    const link = share?.link || '';
-    slot.innerHTML = html`<h2 class="sub-h">Refer &amp; Earn</h2>
-      <div class="card-panel refer-card">
-        <div class="refer-head">${icon('gift', { size: 22 })}<div><b>${inr(data.offer.referralPaise)} for you and ${inr(data.offer.referralPaise)} for your friend</b>
-          <small>${data.offer.hold === 'signup' ? 'Credit lands as soon as they sign up.' : data.offer.hold === 'payment' ? 'Your reward unlocks after their first payment.' : 'Your reward unlocks when they confirm their email or phone.'}</small></div></div>
-        <div class="refer-bal">${inr(data.creditPaise)}${data.pendingPaise || data.heldPaise ? html` <small>+ ${inr((data.pendingPaise || 0) + (data.heldPaise || 0))} on hold</small>` : ''}<em>Credit Available</em></div>
-        ${data.heldPaise ? html`<p class="fine fine-left">${inr(data.heldPaise)} is held by an order that was not completed — it comes back automatically.</p>` : ''}
-        ${code ? html`<label>Your Invite Code<span class="co-row"><input id="refCode" readonly value="${code}"><button class="btn btn-ghost" type="button" data-copy="${code}">Copy</button></span></label>
-          <label>Your Invite Link<span class="co-row"><input id="refLink" readonly value="${link}"><button class="btn btn-ghost" type="button" data-copy="${link}">Copy</button></span></label>` : ''}
-        <div class="row"><button class="btn btn-ghost btn-sm" id="refShare" type="button">${icon('share', { size: 16 })} Share Invite</button></div>
-        ${data.invited?.items?.length ? html`<ul class="dev-list">${data.invited.items.map((f) => html`<li><span>${icon('user', { size: 20 })}</span><div><b>${f.name}</b><small>${f.status === 'completed' ? `Reward unlocked · ${timeAgo(f.completedAt)}` : 'Waiting for them to confirm'}</small></div><b class="muted">+${inr(f.bonusPaise)}</b></li>`)}</ul>` : html`<p class="fine fine-left">Nobody has joined with your code yet — share your link on WhatsApp.</p>`}
-        ${data.canRedeem ? html`<label>Have a Friend’s Invite Code?<span class="co-row"><input id="refRedeem" maxlength="12" autocapitalize="characters" placeholder="e.g. AB12CD34"><button class="btn btn-primary" type="button" id="refApply">Apply</button></span></label>` : ''}
-        ${data.referredBy ? html`<p class="fine fine-left">You joined with a friend’s invite — ${data.referredBy.status === 'completed' ? 'their reward is unlocked.' : 'your first confirmation unlocks their reward.'}</p>` : ''}
-        ${data.ledger?.length ? html`<details class="refer-ledger"><summary>Credit History</summary><ul>${data.ledger.map((r) => html`<li><span>${r.reason || r.label}</span><b class="${r.amountPaise < 0 ? 'muted' : ''}">${r.amountPaise < 0 ? '' : '+'}${inr(Math.abs(r.amountPaise))}</b></li>`)}</ul></details>` : ''}
+    data = response?.viewer || null;
+    if (!data) {
+      slot.innerHTML = html`<div class="referral-empty card-panel" role="status">
+        <span class="referral-empty-icon">${icon('gift', { size: 24 })}</span><h3>Sign in to see your invite details</h3>
+        <p>Your referral code, rewards and activity will appear here when you’re signed in.</p>
+      </div>`.s;
+      return;
+    }
+    if (!data.offer?.enabled) {
+      slot.innerHTML = html`${emptyState({ iconName: 'gift', title: 'Refer & Earn Is Off', text: 'There is no invite offer running right now — check back later.' })}`.s;
+      return;
+    }
+
+    const offer = data.offer;
+    const rewardPaise = Math.max(0, Number(offer.referralPaise) || 0);
+    const welcomePaise = Math.max(0, Number(offer.signupPaise) || 0);
+    const hold = offer.hold === 'signup' ? 'as soon as they join' : offer.hold === 'payment' ? 'after their first plan payment' : 'after they confirm their email or phone';
+    const invitees = data.invited || {};
+    const invitedItems = (invitees.items || []).filter((friend) => friend.status !== 'void');
+    const pendingPaise = Math.max(0, Number(data.pendingPaise) || 0);
+    const heldPaise = Math.max(0, Number(data.heldPaise) || 0);
+    const link = data.link || '';
+    const earnedPaise = Math.max(0, Number(invitees.earnedPaise) || 0);
+    const invitedTotal = Math.max(0, Number(invitees.activeTotal ?? invitees.total) || 0);
+    const completedTotal = Math.max(0, Number(invitees.completed) || 0);
+    const inviteSummary = rewardPaise
+      ? `Your friend gets ${inr(rewardPaise)} in ADDABAAZ credit when they use your code. You earn the same after they ${offer.hold === 'signup' ? 'join' : offer.hold === 'payment' ? 'make their first plan payment' : 'confirm their email or phone'}.`
+      : 'Your invite code is ready to share, but no referral-credit amount is configured right now.';
+    const inviterBenefits = [
+      [rewardPaise ? `${inr(rewardPaise)} Credit` : 'Referral credit', rewardPaise ? 'for every qualifying friend.' : 'No referral-credit amount is configured right now.'],
+      ...(rewardPaise ? [['Reward timing', `Your credit unlocks ${hold}.`]] : []),
+      ['More to watch', 'Use referral credit toward an eligible plan at checkout.'],
+      ['Track your invites', 'Follow friend sign-ups and reward progress below.'],
+    ];
+    const inviteeBenefits = [
+      [rewardPaise ? `${inr(rewardPaise)} ADDABAAZ Credit` : 'Referral credit', rewardPaise ? 'when they join with your invite code.' : 'No referral-credit amount is configured right now.'],
+      ...(welcomePaise ? [[`${inr(welcomePaise)} Welcome Bonus`, 'for eligible new accounts.']] : []),
+      ...(rewardPaise ? [['Available right away', 'Their invite credit is ready to use at signup.']] : []),
+      ['More to enjoy', 'Use available credit toward an eligible ADDABAAZ plan.'],
+    ];
+    const benefitRows = (items) => items.map(([title, detail]) => html`<li class="referral-benefit-row"><span class="referral-benefit-check">${icon('check', { size: 18 })}</span><span class="referral-benefit-copy"><b>${title}</b><small>${detail}</small></span></li>`);
+
+    slot.innerHTML = html`<div class="referral-shell">
+        <section class="referral-hero" aria-labelledby="referralHeroTitle">
+          <img class="referral-hero-image" src="media/referral-invite.jpg" alt="Friends enjoying a show together" fetchpriority="high" decoding="async">
+          <div class="referral-hero-copy">
+            <span class="referral-eyebrow">GOOD STORIES TRAVEL FURTHER</span>
+            <h1 id="referralHeroTitle">Invite Friends.<br><span>Watch More.</span></h1>
+            <p>${inviteSummary}</p>
+            <button class="btn btn-primary" id="refShare" data-referral-share type="button">${icon('share', { size: 17 })} Share your invite</button>
+          </div>
+          ${rewardPaise ? html`<div class="referral-hero-stamp"><span>${icon('gift', { size: 20 })}</span><b>${inr(rewardPaise)} each</b><small>for every qualifying referral</small></div>` : ''}
+        </section>
+
+        <section class="referral-flow" aria-label="How your referral works">
+          <div class="referral-flow-step"><span class="referral-flow-icon">${icon('share', { size: 18 })}</span><b>Share your link</b></div>
+          <span class="referral-flow-arrow" aria-hidden="true">›</span>
+          <div class="referral-flow-step"><span class="referral-flow-icon">${icon('user', { size: 18 })}</span><b>Friend joins</b></div>
+          <span class="referral-flow-arrow" aria-hidden="true">›</span>
+          <div class="referral-flow-step"><span class="referral-flow-icon">${icon('gift', { size: 18 })}</span><b>Reward unlocks</b></div>
+          <span class="referral-flow-arrow" aria-hidden="true">›</span>
+          <div class="referral-flow-step"><span class="referral-flow-icon">${icon('play', { size: 16 })}</span><b>Watch more</b></div>
+        </section>
+
+        <section class="referral-wallet" aria-labelledby="referralWalletTitle">
+          <div class="referral-wallet-head">
+            <div class="referral-wallet-title"><span class="referral-wallet-icon">${icon('gift', { size: 23 })}</span><div><span class="referral-eyebrow">YOUR REWARDS</span><h2 id="referralWalletTitle">Available credit</h2></div></div>
+            <div class="referral-wallet-balance">${inr(data.creditPaise)}<small>ADDABAAZ credit</small></div>
+          </div>
+          <p class="referral-wallet-note">Use your credit toward a plan at checkout. Credit is not cash and can’t be withdrawn.</p>
+          <div class="referral-stats" aria-label="Referral statistics">
+            <div><b>${inr(earnedPaise)}</b><span>Referral credit unlocked</span></div>
+            <div><b>${invitedTotal}</b><span>Friends joined</span></div>
+            <div><b>${completedTotal}</b><span>Rewards unlocked</span></div>
+          </div>
+          ${pendingPaise ? html`<p class="referral-wallet-status">${icon('clock', { size: 15 })}${inr(pendingPaise)} is pending while referral rewards complete their offer requirements.</p>` : ''}
+          ${heldPaise ? html`<p class="referral-wallet-status">${icon('info', { size: 15 })}${inr(heldPaise)} is reserved for an unfinished order and returns automatically if it isn’t completed.</p>` : ''}
+        </section>
+
+        <section class="referral-panel referral-benefits-panel" aria-labelledby="referralBenefitsTitle">
+          <div class="referral-benefits-heading">
+            <span class="referral-benefits-heading-icon">${icon('gift', { size: 38 })}</span>
+            <div><span class="referral-eyebrow">A LITTLE SOMETHING FOR BOTH</span><h2 id="referralBenefitsTitle">Benefits for both of you</h2><p>A win-win for everyone</p></div>
+          </div>
+          <div class="referral-benefits">
+            <article class="referral-benefit referral-benefit--you" aria-labelledby="referralYouTitle">
+              <h3 class="referral-benefit-title" id="referralYouTitle">YOU GET</h3>
+              <ul class="referral-benefit-list">${benefitRows(inviterBenefits)}</ul>
+            </article>
+            <article class="referral-benefit referral-benefit--friend" aria-labelledby="referralFriendTitle">
+              <h3 class="referral-benefit-title" id="referralFriendTitle">YOUR FRIEND GETS</h3>
+              <ul class="referral-benefit-list">${benefitRows(inviteeBenefits)}</ul>
+            </article>
+          </div>
+          <p class="referral-footnote">Referral credit can be used toward plans; it is not a cash payout.</p>
+        </section>
+
+        <section class="referral-panel referral-activity" aria-labelledby="referralActivityTitle">
+          <div class="referral-panel-heading referral-activity-heading"><div><span class="referral-eyebrow">YOUR REFERRAL JOURNEY</span><h2 id="referralActivityTitle">Friends you invited</h2></div><span class="referral-count">${invitedTotal} total</span></div>
+          ${invitedItems.length ? html`<ul class="referral-activity-list">${invitedItems.map((friend) => {
+            const completed = friend.status === 'completed';
+            const amount = Math.max(0, Number(friend.bonusPaise) || 0);
+            const timestamp = completed ? timeAgo(friend.completedAt || friend.joinedAt) : timeAgo(friend.joinedAt);
+            return html`<li class="referral-activity-item">
+              <span class="referral-activity-icon ${completed ? 'is-complete' : ''}">${icon(completed ? 'check' : 'clock', { size: 18 })}</span>
+              <span class="referral-activity-person"><b>${friend.name || 'Friend'}</b><small>${friend.email ? `${friend.email} · ` : ''}Joined ${timestamp || 'recently'}</small></span>
+              <span class="referral-activity-state ${completed ? 'is-complete' : ''}">${completed ? 'Reward unlocked' : 'In progress'}</span>
+              ${amount ? html`<b class="referral-activity-amount">+${inr(amount)}</b>` : ''}
+            </li>`;
+          })}</ul>` : invitedTotal ? html`<p class="referral-empty-copy">Your referral count is up to date; there’s no recent active invite to show here.</p>` : html`<div class="referral-activity-empty"><span>${icon('user', { size: 22 })}</span><div><b>Your first invite is waiting</b><p>Share your link and your friends will appear here when they join.</p></div><button class="btn btn-primary btn-sm" type="button" data-referral-share>Invite a friend</button></div>`}
+        </section>
+
+        <div class="referral-tools-grid">
+          ${data.canRedeem ? html`<section class="referral-panel referral-redeem" aria-labelledby="referralRedeemTitle">
+            <span class="referral-eyebrow">JOINED RECENTLY?</span><h2 id="referralRedeemTitle">Have a Friend’s Invite Code?</h2>
+            <p>If you’re within the offer’s code-redemption window, you can add their code once.</p>
+            <label class="referral-field" for="refRedeem">Friend’s Invite Code<span class="referral-input-row"><input id="refRedeem" maxlength="12" autocomplete="off" autocapitalize="characters" placeholder="e.g. AB12CD34"><button class="btn btn-primary" type="button" id="refApply">Apply code</button></span></label>
+          </section>` : data.referredBy ? html`<section class="referral-panel referral-redeem" aria-labelledby="referralRedeemTitle">
+            <span class="referral-eyebrow">YOUR INVITE</span><h2 id="referralRedeemTitle">You joined with a friend’s code</h2>
+            <p>${data.referredBy.status === 'completed' ? 'Their referral reward has been unlocked.' : 'The referral is still in progress.'}</p>
+          </section>` : ''}
+          ${data.ledger?.length ? html`<details class="referral-panel referral-ledger"><summary><span><span class="referral-eyebrow">YOUR ACCOUNT</span><b>Credit history</b></span><span class="referral-ledger-count">${data.ledger.length} entries ${icon('chev-down', { size: 16 })}</span></summary><ul>${data.ledger.map((entry) => html`<li><span><b>${entry.reason || entry.label || 'Credit activity'}</b><small>${entry.createdAt ? timeAgo(entry.createdAt) : ''}</small></span><strong class="${entry.amountPaise < 0 ? 'is-negative' : ''}">${entry.amountPaise < 0 ? '−' : '+'}${inr(Math.abs(entry.amountPaise))}</strong></li>`)}</ul></details>` : ''}
+        </div>
       </div>`.s;
   };
-  const copy = async (text) => { try { await navigator.clipboard.writeText(text); toast('Copied'); } catch { toast('Copy the code from the box'); } };
-  slot.addEventListener('click', async (e) => {
-    const c = e.target.closest('[data-copy]');
-    if (c) return copy(c.dataset.copy);
-    if (e.target.closest('#refShare')) {
-      const link = $('#refLink', slot)?.value || '';
-      const text = `Join me on ADDABAAZ${link ? ` — ${link}` : ''}`;
-      try { if (navigator.share) await navigator.share({ title: 'ADDABAAZ', text, url: link || undefined }); else return copy(text); }
-      catch { /* the viewer dismissed the share sheet */ }
-      return;
+
+  const copy = async (text) => {
+    if (!text) return;
+    let copied = false;
+    try { if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); copied = true; } } catch { /* try the legacy clipboard path below */ }
+    if (!copied) {
+      const field = document.createElement('textarea');
+      field.value = text; field.setAttribute('readonly', ''); field.style.position = 'fixed'; field.style.opacity = '0';
+      document.body.append(field); field.select();
+      try { copied = Boolean(document.execCommand?.('copy')); } catch { /* clipboard is unavailable */ }
+      field.remove();
     }
-    const b = e.target.closest('#refApply'); if (!b) return;
-    const input = $('#refRedeem', slot), code = String(input?.value || '').trim();
-    if (!code) return;
-    b.disabled = true;
-    try { const r = await u.redeemInvite(code); toast(r.message || 'Invite Applied'); await draw(); }
-    catch (err) { toast(friendly(err)); b.disabled = false; }
+    if (copied) toast('Invite copied');
+    else toast('Could not copy automatically. Try your device share options.');
+  };
+  const shareInvite = async () => {
+    const shareLink = data?.link || '';
+    const rewardPaise = Math.max(0, Number(data?.offer?.referralPaise) || 0);
+    const hold = data?.offer?.hold === 'signup' ? 'as soon as they join' : data?.offer?.hold === 'payment' ? 'after their first plan payment' : 'after they confirm their email or phone';
+    const text = rewardPaise
+      ? `Join me on ADDABAAZ using my invite. You get ${inr(rewardPaise)} in credit, and I get ${inr(rewardPaise)} ${hold}.`
+      : 'Join me on ADDABAAZ and discover something great to watch.';
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Invite a friend to ADDABAAZ', text, url: shareLink || undefined }); }
+      catch (err) { if (err?.name !== 'AbortError') await copy(shareLink || text); }
+    } else await copy(shareLink || text);
+  };
+
+  slot.addEventListener('click', async (e) => {
+    if (e.target.closest('[data-referral-share]')) return shareInvite();
+    if (e.target.closest('#refRetry')) return draw();
+    const button = e.target.closest('#refApply'); if (!button) return;
+    const input = $('#refRedeem', slot), code = String(input?.value || '').trim().toUpperCase();
+    if (!code) { input?.focus(); return; }
+    button.disabled = true;
+    try { const result = await u.redeemInvite(code); toast(result.message || 'Invite applied'); await draw(); }
+    catch (err) { toast(friendly(err)); button.disabled = false; }
   });
   draw();
 }
@@ -143,7 +276,6 @@ function wireReferral(root) {
 function playbackSection() {
   const u = app.user;
   return html`<section class="account-section">
-    <h2 class="sub-h">Playback</h2>
     <div class="card-panel list">
       <label class="row-switch"><span><b>Autoplay Next Episode</b><small>Keep watching without lifting a finger.</small></span><span class="switch"><input type="checkbox" id="autoNext" ${u.pref('autoplayNext') ? 'checked' : ''}><span class="track"></span></span></label>
     </div>
@@ -170,7 +302,6 @@ function securitySection() {
       </div>
     </section>` : '';
   return html`${contactEmail}<section class="account-section">
-    <h2 class="sub-h">Security</h2>
     <div class="card-panel list">
       ${signInMethod}
       ${row('signOutAll', 'logout', 'Sign Out of Other Devices', 'Signs out every other phone, TV and browser. This device stays signed in.')}
@@ -183,7 +314,6 @@ function kidsSection() {
   const u = app.user;
   if (!u.account) return '';
   return html`<section class="account-section">
-    <h2 class="sub-h">Parental Control</h2>
     <div class="card-panel list">
       ${row('pinBtn', 'lock', u.hasPin ? 'Change or Remove Parental PIN' : 'Set a Parental PIN', u.hasPin ? 'Needed to leave a Kids profile or change profiles.' : 'Keeps children on their Kids profile and stops profile changes.')}
     </div>

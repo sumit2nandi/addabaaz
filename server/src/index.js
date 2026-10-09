@@ -7,7 +7,7 @@ import { createDb } from './db.js';
 import { dbConfigFromEnv, dbTransportWarnings } from './config.js';
 import { migrate } from './migrate.js';
 import { runScheduledJobs } from './jobs.js';
-import { prepareWebAssets } from './web-assets.js';
+import { prepareWebAssets, shouldBuildWebAssets, webAssetsReady } from './web-assets.js';
 import { safeErrorUrl } from './http.js';
 
 // Listen port (PORT, default 3000).
@@ -63,11 +63,20 @@ try {
 const noRate = /^(1|true)$/i.test(process.env.DISABLE_RATE_LIMIT || '') && process.env.NODE_ENV !== 'production';
 if (noRate) errorLogger.logger.warn('⚠ Rate limiting is OFF (DISABLE_RATE_LIMIT) — never expose this instance publicly.');
 // Build the HTTP app.
-// Minify the front-end first: production serves .build/ (same URLs, no readable source comments).
-// Only for the public site; tests and API-only runs keep serving the original files.
-if (process.env.MINIFY !== 'false') {
-  try { const m = await prepareWebAssets(); console.log(`[web] front-end minified (${m.files} files, −${(m.saved / 1024).toFixed(0)} KB)`); }
-  catch (e) { errorLogger.logger.warn('[web] front-end minification skipped — serving sources as-is:', e); }
+// Render and Docker pre-minify the front-end during their build phase. On production startup, reuse that
+// artifact so a synchronous 75-file/esbuild pass does not delay health checks. Keep the runtime build as
+// a safe fallback for older/custom deploys, and rebuild in development so local edits are never stale.
+const minifyEnabled = process.env.MINIFY !== 'false';
+const production = process.env.NODE_ENV === 'production';
+const prebuiltWebAssets = webAssetsReady();
+const buildWebAssets = shouldBuildWebAssets({ enabled: minifyEnabled, production, ready: prebuiltWebAssets });
+if (minifyEnabled && prebuiltWebAssets && !buildWebAssets) {
+  console.log('[web] using prebuilt minified assets');
+} else if (buildWebAssets) {
+  try {
+    const m = await prepareWebAssets();
+    console.log(`[web] front-end minified (${m.files} files, −${(m.saved / 1024).toFixed(0)} KB)`);
+  } catch (e) { errorLogger.logger.warn('[web] front-end minification skipped — serving sources as-is:', e); }
 }
 let app;
 try { app = createApp({ db, rate: !noRate, release: releaseSha, errorLogger }); }

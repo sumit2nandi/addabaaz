@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import sharp from 'sharp';
 
 /** Image sniffing by magic bytes — never trust the client's Content-Type or file name. SVG is deliberately NOT accepted (scriptable). */
 export function sniffImage(buf) {
@@ -11,21 +12,76 @@ export function sniffImage(buf) {
   return null;
 }
 
-/** What a stored upload is called: 24 hex characters of its content hash + an extension (webp png jpg gif for images, vtt for subtitles). */
-export const UPLOAD_NAME = /^[0-9a-f]{24}\.(?:webp|png|jpg|gif|vtt)$/;
+/** Image objects have content hashes and optional high/low rendition suffixes. */
+export const IMAGE_UPLOAD_NAME = /^(?:[0-9a-f]{24}(?:-hq)?\.(?:webp|png|jpg|gif)|[0-9a-f]{24}-low\.webp)$/;
+/** MySQL still serves legacy image blobs and subtitle files uploaded before R2 became the image store. */
+export const UPLOAD_NAME = /^(?:[0-9a-f]{24}(?:-hq)?\.(?:webp|png|jpg|gif)|[0-9a-f]{24}-low\.webp|[0-9a-f]{24}\.vtt)$/;
+const IMAGE_PARENT_NAME = /^[0-9a-f]{24}-hq\.(?:webp|png|jpg|gif)$/;
 const UPLOAD_TYPES = { webp: 'image/webp', png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif', vtt: 'text/vtt; charset=utf-8' };
 /** The Content-Type a stored upload is served with, from its file name. */
 export const uploadType = (name) => UPLOAD_TYPES[String(name).split('.').pop()] || 'application/octet-stream';
 // File name = hash of the content, so identical uploads share one file and URLs never change meaning (and can be cached for a year).
 const hashName = (content, ext) => `${crypto.createHash('sha256').update(content).digest('hex').slice(0, 24)}.${ext}`;
 
-/** Checks an uploaded image (by its bytes) and names it by content hash. Nothing is written. -> { name, path, bytes, type, data } or null if it is not an accepted image. */
-export function describeImage(buf) {
+/** Checks an uploaded image (by its bytes) and names it by content hash. When a low rendition will follow,
+ *  `progressive` gives the full-size file an `-hq` suffix so the app requests its matching `-low.webp` only
+ *  for new, paired uploads. Nothing is written. -> { name, path, bytes, type, data } or null if invalid. */
+export function describeImage(buf, { progressive = false } = {}) {
   // Detect the real image type from its bytes; reject anything that is not WebP/PNG/JPEG/GIF.
   const kind = sniffImage(buf);
   if (!kind) return null;
-  const name = hashName(buf, kind.ext);
+  const hashed = hashName(buf, kind.ext);
+  const name = progressive ? hashed.replace(`.${kind.ext}`, `-hq.${kind.ext}`) : hashed;
   return { name, path: `uploads/${name}`, bytes: buf.length, type: kind.type, data: buf };
+}
+
+/** Describes the compact WebP child of a newly uploaded high-quality image. The child name is tied to the
+ *  high-quality content hash, so the front end can discover it without adding rendition fields to the catalog. */
+export function describeImageVariant(buf, highName) {
+  const parent = IMAGE_PARENT_NAME.exec(String(highName || ''));
+  const kind = sniffImage(buf);
+  if (!parent || !kind || kind.ext !== 'webp') return null;
+  const name = `${parent[0].slice(0, 24)}-low.webp`;
+  return { name, path: `uploads/${name}`, bytes: buf.length, type: kind.type, data: buf };
+}
+
+/** Process a raw video-thumbnail photo on the server into two normalized WebP renditions. Input dimensions
+ *  are bounded to avoid decompression bombs; EXIF orientation is applied and metadata is stripped. */
+export async function processVideoThumbnail(buf) {
+  if (!Buffer.isBuffer(buf) || !buf.length || buf.length > 10 * 1024 * 1024 || !sniffImage(buf)) return null;
+  const options = { limitInputPixels: 40_000_000, failOn: 'error' };
+  try {
+    const encode = (width, quality) => sharp(buf, options)
+      .rotate()
+      .resize({ width, height: width, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality, effort: 4 })
+      .toBuffer({ resolveWithObject: true });
+    const [high, low] = await Promise.all([encode(1000, 84), encode(480, 62)]);
+    if (!high.data.length || !low.data.length || high.info.format !== 'webp' || low.info.format !== 'webp') return null;
+    const hash = crypto.createHash('sha256').update(high.data).digest('hex').slice(0, 24);
+    return {
+      hash,
+      high: { data: high.data, bytes: high.data.length, width: high.info.width, height: high.info.height },
+      low: { data: low.data, bytes: low.data.length, width: low.info.width, height: low.info.height },
+    };
+  } catch { return null; }
+}
+
+/** Safe source-key subset for colocated thumbnail writes: printable catalog-schema characters, no traversal or empty/dot segments. */
+export function isSafeR2ObjectKey(value) {
+  const key = String(value || '');
+  return key.length > 0 && key.length <= 1024 && /^[\w./-]+$/.test(key)
+    && !key.includes('..') && !key.startsWith('/') && !key.endsWith('/')
+    && key.split('/').every((part) => part !== '' && part !== '.');
+}
+
+/** Stable public routes expose only the two server-generated WebP thumbnail objects, never arbitrary R2 keys. */
+export function isVideoThumbnailKey(value) {
+  const key = String(value || '');
+  if (!key || key.length > 1024 || key.includes('..') || key.startsWith('/') || key.endsWith('/')) return false;
+  const parts = key.split('/'), name = parts.pop();
+  return /^[0-9a-f]{24}-(?:hq|low)\.webp$/.test(name)
+    && parts.every((part) => /^[\w.-]+$/.test(part) && part !== '.');
 }
 
 /** Writes a copy of an upload into the local upload folder. Best effort: MySQL holds the real copy and the folder is only a cache

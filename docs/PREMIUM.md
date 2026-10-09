@@ -1,6 +1,6 @@
-# Premium video on Cloudflare R2
+# Private media and Premium video on Cloudflare R2
 
-Premium access is an app-level catalog setting and is **not limited to R2 sources**: any show or video can be marked Premium. This guide covers private Cloudflare R2 media for cases where the video itself must also stay protected. Public sources such as YouTube or public MP4/HLS links may be reachable outside ADDABAAZ even when the app requires a paid account.
+New catalog and Broadcast photo uploads are stored in private R2; configure the shared R2 credentials and bucket before uploading photos. Premium access is an app-level catalog setting and is **not limited to R2 sources**: any show or video can be marked Premium. The video steps below cover private R2 media for cases where the video itself must also stay protected. Public sources such as YouTube or public MP4/HLS links may be reachable outside ADDABAAZ even when the app requires a paid account.
 
 ```
 Viewer opens a Premium title hosted in R2
@@ -17,7 +17,7 @@ Viewer opens a Premium title hosted in R2
 ## 1. Create the bucket and credentials
 
 1. Cloudflare dashboard → **R2 Object Storage → Create bucket** (e.g. `addabaaz-premium`). Leave **public access OFF** (no r2.dev URL, no custom domain).
-2. *R2 → Manage API tokens → Create API token*: permission **Object Read & Write**, scoped to that bucket. Copy the Access Key ID and Secret to the server environment only. The server signs browser video/reel PUTs and uploads validated Broadcast photos; the credentials themselves are never sent to a browser or app.
+2. *R2 → Manage API tokens → Create API token*: permission **Object Read & Write**, scoped to that bucket. Copy the Access Key ID and Secret to the server environment only. The server stores validated catalog/Broadcast photos and signs browser video/reel PUTs; the credentials themselves are never sent to a browser or app.
 3. Note your **Account ID** (R2 overview page).
 4. Server environment: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (see `.env.example`).
 5. Bucket **CORS** (needed for browser HLS reads and browser-direct video/reel uploads; Broadcast-photo uploads run server-side). *Bucket → Settings → CORS policy*:

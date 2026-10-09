@@ -8,13 +8,13 @@
  * POST /api/v1/admin/cache/purge): this worker checks GET /api/v1/client-version on activation and on every
  * message, and throws away its caches when the number it stored is stale.
  * Bump VERSION (or run `npm run build:www`, which stamps it) to force a refresh. */
-const VERSION = 'v2.17.2';   // Reels chromeless YouTube autoplay without pause overlay; 5s Next Up countdown; accordion empty padding
+const VERSION = 'v2.17.1';   // desktop Coming Soon grid: 5 posters per row, landscape spans two columns; artwork: a small rendition shows first (ui/progressive.js)
 // One cache per kind of content, all tagged with the version so old caches are deleted when the version changes.
 const SHELL = `ab-shell-${VERSION}`, DATA = `ab-data-${VERSION}`, MEDIA = `ab-media-${VERSION}`, THUMBS = `ab-thumbs-${VERSION}`;
 // Files downloaded at install so the app shell opens offline. A missing file is skipped rather than failing the install.
 const PRECACHE = ['./', 'index.html', 'manifest.webmanifest', 'app/env.js', 'app/refresh-flag.js', 'app/launch-platform.js', 'app/css/styles.css', 'app/js/main.js', 'app/js/app.js', 'app/js/config.js', 'app/js/util.js', 'app/js/icons.js',
   'app/js/router.js', 'app/js/mode.js', 'app/js/routes.js', 'app/js/seo/meta.js', 'app/js/seo/head.js', 'app/js/platform.js', 'app/js/social.js', 'app/js/payments.js', 'app/js/consent.js', 'app/js/errors.js', 'app/js/push.js', 'app/js/push-native.js', 'app/js/client-version.js', 'app/js/notify-prompt.js', 'app/js/maintenance.js', 'app/js/legal-text.js', 'app/js/data/catalog.js', 'app/js/data/api.js', 'app/js/data/adapters.js', 'app/js/data/user.js',
-  'app/js/ui/shell.js', 'app/js/ui/components.js', 'app/js/ui/dialog.js', 'app/js/ui/lightbox.js', 'app/js/ui/parental.js', 'app/js/views/engage.js', 'app/js/views/home.js', 'app/js/views/reels.js', 'app/js/views/show.js', 'app/js/views/watch.js',
+  'app/js/ui/shell.js', 'app/js/ui/components.js', 'app/js/ui/dialog.js', 'app/js/ui/lightbox.js', 'app/js/ui/parental.js', 'app/js/views/engage.js', 'app/js/views/home.js', 'app/js/views/show.js', 'app/js/views/watch.js',
   'app/js/players/index.js', 'app/js/players/youtube.js', 'app/js/players/html5.js', 'data/catalog.json', 'data/studio.json', 'media/icons/icon-192.png', 'media/icons/logo-96.webp'];
 // The service worker keeps the client-cache generation in its own meta cache (the page keeps a copy in
 // localStorage), so a purge survives even when the worker is restarted between visits.
@@ -109,7 +109,7 @@ self.addEventListener('fetch', (e) => {
     // The management consoles (/admin/ and the Content studio /content/) are never cached or shadowed by
     // the app shell — they must always come from the server, where their strict CSP and no-store apply.
     if (url.pathname.includes('/api/') || ['/admin', '/content'].some((p) => url.pathname === p || url.pathname.startsWith(`${p}/`))) return;
-    if (url.pathname.startsWith('/uploads/')) return e.respondWith(cacheFirst(req, MEDIA));   // admin uploads have content-hash names
+    if (url.pathname.startsWith('/uploads/')) return e.respondWith(cacheFirst(req, MEDIA));   // admin uploads and their immutable rendition siblings
     // Pages: ask the server for the real URL (it answers /show/x with that page's HTML and the right status); offline → the cached app shell.
     if (req.mode === 'navigate') return e.respondWith(fetch(req).catch(() => caches.match('./').then((r) => r || caches.match('index.html'))));
     if (url.pathname.includes('/data/')) return e.respondWith(networkFirst(req, DATA));

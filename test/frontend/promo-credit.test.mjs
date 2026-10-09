@@ -13,6 +13,7 @@ const read = (p) => fs.readFileSync(new URL('../../' + p, import.meta.url), 'utf
 const exists = (p) => fs.existsSync(new URL('../../' + p, import.meta.url));
 const plans = read('app/js/views/plans.js');
 const account = read('app/js/views/account-extra.js');
+const styles = read('app/css/styles.css');
 const auth = read('app/js/views/auth.js');
 const user = read('app/js/data/user.js');
 const adapters = read('app/js/data/adapters.js');
@@ -66,15 +67,29 @@ test('checkout shows the balance and only spends it when the viewer asks', () =>
   assert.match(read('server/src/routes/billing.js'), /useCredit: req\.body\?\.useCredit === true/, 'the checkout route is opt-in');
 });
 
-test('Account → Refer & earn shows the code, the balance and the people who joined', () => {
+test('Account → Refer & earn keeps rewards/activity, removes highlighted cards and the WhatsApp shortcut', () => {
   assert.match(account, /wireReferral\(root\)/, 'the account page wires the section');
   assert.match(account, /<div id="referSlot" class="account-section"><\/div>/, 'and has a place for it in the responsive Account grid');
-  assert.match(account, /Refer &amp; Earn/, 'named plainly');
-  assert.match(account, /Your Invite Code/, 'the code is shown');
-  assert.match(account, /data-copy="\$\{code\}"/, 'with a copy button');
-  assert.match(account, /Have a Friend’s Invite Code\?/, 'and a box to add someone else’s code');
-  assert.match(account, /u\.redeemInvite\(code\)/, 'which reaches the API');
-  assert.match(account, /held by an order that was not completed/, 'credit held by an unfinished order is explained');
+  assert.match(account, /\['refer', 'Refer & Earn'/, 'the Refer & Earn settings group keeps its plain title');
+  assert.match(account, /id="refShare" data-referral-share/, 'the standard share action remains in the hero');
+  assert.doesNotMatch(account, /wa\.me|referral-hero-whatsapp|Share your invite on WhatsApp/i, 'there is no direct WhatsApp share shortcut');
+  assert.match(styles, /\.referral-hero-image\s*\{[^}]*object-position:\s*right center;/, 'the hero image keeps its right edge visible when cover-cropped');
+  const benefitGridRules = [...styles.matchAll(/\.referral-benefits\s*\{([^}]*)\}/g)].map(([, rule]) => rule);
+  assert.ok(benefitGridRules.some((rule) => /grid-template-columns:\s*repeat\(2,\s*minmax\(0,1fr\)\)/.test(rule)), 'the benefit cards use two equal columns');
+  assert.ok(benefitGridRules.every((rule) => !/grid-template-columns:\s*(?:1fr|minmax\(0,1fr\))/.test(rule)), 'narrow-width rules never stack the cards');
+  assert.doesNotMatch(account, /YOUR PERSONAL INVITE|NO HIDDEN MILESTONES|Know someone who’d love ADDABAAZ/, 'the three highlighted sections are removed');
+  assert.doesNotMatch(account, /refLink|refCode/, 'copy fallback no longer depends on fields removed with the personal-invite card');
+  assert.match(account, /Benefits for both of you/, 'the referral benefits remain');
+  assert.match(account, /A win-win for everyone/, 'the benefits section uses the design subtitle');
+  assert.match(account, /referral-benefit--you[\s\S]*YOU GET[\s\S]*referral-benefit--friend[\s\S]*YOUR FRIEND GETS/, 'the two-column benefits cards distinguish the inviter and friend');
+  assert.match(account, /referral-benefit-check/, 'benefits use the checkmark list treatment');
+  assert.match(account, /Friends you invited/, 'the referral activity remains');
+  assert.match(account, /Credit history/, 'the credit ledger remains');
+  assert.match(account, /Have a Friend’s Invite Code\?/, 'the redeem-code option remains available');
+  assert.match(account, /u\.redeemInvite\(code\)/, 'redeeming an invite still reaches the API');
+  assert.match(account, /reserved for an unfinished order and returns automatically/, 'credit held by an unfinished order is explained');
+  assert.match(account, /u\.promos\(\)/, 'the referral page reads the full viewer summary, not just the balance-only endpoint');
+  assert.match(account, /invitees\.earnedPaise/, 'the all-time referral earnings use the server summary');
   assert.match(user, /promos\(\) \{ return \(this\.remote \|\| this\.local\)\.promo\(\); \}/, 'user.promos');
   assert.match(user, /credits\(\) \{ return \(this\.remote \|\| this\.local\)\.credits\(\); \}/, 'user.credits');
   assert.match(adapters, /promo\(\) \{ return this\.api\.get\('\/promo'\); \}/, 'GET /promo');

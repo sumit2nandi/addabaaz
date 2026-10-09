@@ -38,8 +38,7 @@ function about(ctx, d) {
   ctx.setTitle('About');
   const backButton = pageBack(ctx);
   ctx.root.innerHTML = html`<div class="page">
-    ${backButton}
-    ${sectionHeader({ tag: 'About the production house', title: 'ADDABAAZ', subtitle: d.studio.tagline })}
+    ${sectionHeader({ tag: 'About the production house', title: 'ADDABAAZ', subtitle: d.studio.tagline, back: backButton })}
     <div class="two-col">
       <div class="card-panel"><h2>আমাদের লক্ষ্য</h2><ul class="mission bn">${d.missionBn.map((m) => html`<li>${m}</li>`)}</ul></div>
       <div class="card-panel"><h2>Our Mission</h2><ul class="mission">${d.missionEn.map((m) => html`<li>${m}</li>`)}</ul></div>
@@ -54,8 +53,7 @@ function services(ctx, d) {
   ctx.setTitle('Services');
   const backButton = pageBack(ctx);
   ctx.root.innerHTML = html`<div class="page">
-    ${backButton}
-    ${sectionHeader({ tag: 'Capabilities & production', title: 'Our expertise', subtitle: 'Full-service film and commercial advertisement production based in Kolkata.' })}
+    ${sectionHeader({ tag: 'Capabilities & production', title: 'Our expertise', subtitle: 'Full-service film and commercial advertisement production based in Kolkata.', back: backButton })}
     <div class="services">${d.services.map((s) => html`<article class="service"><span class="num">${s.num}</span><h3>${s.title}</h3><p>${s.text}</p></article>`)}</div>
     <section class="cta-band"><div><h2>Your vision. Our expertise.</h2><p>“Let’s make great films together.”</p></div><a class="btn btn-primary btn-lg" href="#/contact">Talk to Us</a></section>
   </div>`.s;
@@ -67,8 +65,7 @@ function contact(ctx, d) {
   ctx.setTitle('Contact');
   const backButton = pageBack(ctx);
   ctx.root.innerHTML = html`<div class="page">
-    ${backButton}
-    ${sectionHeader({ tag: 'Collaborate', title: 'Initiate a project', subtitle: 'Reach out for production inquiries, commercial briefs, press relations, or general correspondence.' })}
+    ${sectionHeader({ tag: 'Collaborate', title: 'Initiate a project', subtitle: 'Reach out for production inquiries, commercial briefs, press relations, or general correspondence.', back: backButton })}
     <div class="two-col contact">
       <form class="card-panel form" id="cf" novalidate>
         <h2>Project Inquiry</h2>

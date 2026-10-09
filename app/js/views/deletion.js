@@ -17,8 +17,7 @@ export default async function deletion(ctx) {
   ctx.setTitle(`Delete your ${name} account`);
   const backButton = pageBack(ctx);
   ctx.root.innerHTML = html`<article class="page page-narrow legal deletion-page">
-    ${backButton}
-    ${sectionHeader({ tag: 'Account & privacy', title: 'Delete your account', subtitle: name })}
+    ${sectionHeader({ tag: 'Account & privacy', title: 'Delete your account', subtitle: name, back: backButton })}
     <p class="lead">You can permanently delete your ADDABAAZ account and request deletion even if you can no longer sign in.</p>
 
     <section class="card-panel"><h2>Delete From the App</h2>

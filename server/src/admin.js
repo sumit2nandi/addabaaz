@@ -8,7 +8,7 @@ import { visibleEmail, plainEmail } from './email-address.js';
 import { sessionForRequest } from './sessions.js';
 import { PLANS, paidPlan } from './plans.js';
 import { validate, TYPES } from './catalog-schema.js';
-import { describeImage, describeSubtitle, cacheUpload, UPLOAD_NAME, videoKey } from './uploads.js';
+import { describeImage, describeImageVariant, describeSubtitle, processVideoThumbnail, isSafeR2ObjectKey, isVideoThumbnailKey, cacheUpload, IMAGE_UPLOAD_NAME, UPLOAD_NAME, videoKey } from './uploads.js';
 import { adminExtraRoutes } from './admin-extra.js';
 import { adminPromoRoutes } from './admin-promos.js';
 import { adminMaintenanceRoutes } from './admin-maintenance.js';
@@ -171,13 +171,15 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
       // Phone sign-in (MSG91). Reports which variables are present — never their values — so "SMS is not set
       // up yet" is visible in the console instead of only in the server log (docs/MSG91.md).
       (() => { const c = smsHealthCheck(env, sms?.provider || 'none'); return item('sms', 'SMS sign-in (MSG91)', c.ok, c.detail, c.level); })(),
-      item('r2', 'Private video storage (R2)', !!r2.configured, r2.configured ? `Bucket “${r2.bucket}” is configured.` : 'R2 is not configured — R2-hosted videos cannot play (optional for other sources).'),
+      item('r2', 'R2 photo/video storage', !!r2.configured, r2.configured ? `Bucket “${r2.bucket}” is configured for new photos and R2-hosted video.` : 'R2 is not configured — new catalog/Broadcast photos, video thumbnails and R2-hosted videos are unavailable.'),
       item('push', 'Web push', !!push?.configured, push?.configured ? 'VAPID keys are set; broadcasts reach browsers and installed web apps.' : 'VAPID keys are not set — browser notifications are off (optional).', 'info'),
       item('apppush', 'App push', !!push?.nativeConfigured, push?.nativeConfigured ? 'Server Firebase credentials are set; native app builds also need Firebase client config (and iOS APNs setup).' : 'FCM_SERVICE_ACCOUNT is not set — the phone apps cannot receive broadcasts (optional; see docs/MOBILE.md).', 'info'),
       item('apple', 'Apple sign-in', !!social.verifiers?.apple, social.verifiers?.apple ? 'Enabled.' : 'Not configured (optional; required only for iOS apps that offer other social logins).', 'info'),
       item('google', 'Google sign-in', !!social.verifiers?.google, social.verifiers?.google ? 'Enabled.' : 'Not configured (optional).', 'info'),
       item('facebook', 'Facebook sign-in', !!social.verifiers?.facebook, social.verifiers?.facebook ? 'Enabled.' : 'Not configured (optional).', 'info'),
-      item('uploads', 'Image uploads', dbUp, dbUp ? `Stored in MySQL, so they survive restarts and redeploys. ${uploads ? `A local copy is kept in ${uploadDir} to serve them faster.` : `The local cache folder ${uploadDir} is not writable, so files are served straight from MySQL.`}` : 'MySQL is not reachable, so images and subtitles cannot be saved.', 'error'),
+      item('uploads', 'Image uploads', dbUp && !!r2.configured && typeof r2.putObject === 'function', dbUp && r2.configured && typeof r2.putObject === 'function'
+        ? `New catalog and Broadcast photos, including R2 video thumbnails, are stored in bucket “${r2.bucket}”; subtitles and legacy images remain in MySQL${uploads ? ` (legacy upload cache: ${uploadDir}).` : '.'}`
+        : !dbUp ? 'MySQL is not reachable, so catalog references and subtitle uploads cannot be saved.' : 'R2 is not configured, so new photo uploads are unavailable. Configure R2 credentials and bucket access.', 'error'),
       item('site', 'Public site URL', !!env.PUBLIC_SITE_URL, env.PUBLIC_SITE_URL ? env.PUBLIC_SITE_URL : 'PUBLIC_SITE_URL is not set — links in emails, canonical URLs and the sitemap fall back to the address of each request. Set it to your https address (no trailing slash).', prod ? 'warn' : 'info'),
       item('indexing', 'Google indexing', indexing, indexing ? 'Search engines may index the site: robots.txt and /sitemap.xml are live.' : 'Search engines are told NOT to index this site (robots.txt disallows all). That is right for staging; on the live site set NODE_ENV=production or ALLOW_INDEXING=true.', prod ? 'warn' : 'info'),
       item('admins', 'Administrators', (await db.adminUsers.countAdmins()) > 0, `${await db.adminUsers.countAdmins()} admin account(s).`, 'warn'),
@@ -350,9 +352,9 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   };
   // Extra context the catalog validator needs to check existing references and media files.
   const ctxOf = (snap) => ({ fileExists, showIds: snap.showIds, upcomingIds: snap.upcomingIds });
-  // Uploaded images and subtitles live in MySQL; the upload folder is only a cache that a restart or redeploy can empty. So a document may
-  // legitimately refer to an upload that is not on this server's disk. The validator is synchronous, so first look up the stored uploads
-  // that the document mentions, then let `fileExists` accept those too.
+  // Legacy catalog images and subtitles remain in MySQL; new catalog photos live in private R2. A document may
+  // therefore refer to a local/cache file, an older uploaded_files row, or a new R2 object. The schema validator
+  // is synchronous, so look up every referenced object first and supply its existence as a synchronous predicate.
   const uploadNamesIn = (value, found = new Set()) => {
     if (found.size >= 200) return found;
     if (typeof value === 'string') { const m = /^uploads\/([^/]+)$/.exec(value.trim()); if (m && UPLOAD_NAME.test(m[1])) found.add(m[1]); }
@@ -360,9 +362,33 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
     else if (value && typeof value === 'object') Object.values(value).forEach((v) => uploadNamesIn(v, found));
     return found;
   };
+  const r2ImageKeysIn = (value, found = new Map()) => {
+    if (found.size >= 200) return found;
+    if (typeof value === 'string') {
+      const rel = value.trim(), catalogImage = /^r2-assets\/catalog\/([^/]+)$/.exec(rel);
+      const videoThumbnail = /^r2-assets\/video-thumbnails\/(.+)$/.exec(rel);
+      if (catalogImage && IMAGE_UPLOAD_NAME.test(catalogImage[1])) found.set(rel, `catalog/${catalogImage[1]}`);
+      else if (videoThumbnail && isVideoThumbnailKey(videoThumbnail[1])) found.set(rel, videoThumbnail[1]);
+    } else if (Array.isArray(value)) value.forEach((v) => r2ImageKeysIn(v, found));
+    else if (value && typeof value === 'object') Object.values(value).forEach((v) => r2ImageKeysIn(v, found));
+    return found;
+  };
   const ctxFor = async (snap, doc) => {
     const stored = await db.uploads.existing([...uploadNamesIn(doc)]);
-    return { ...ctxOf(snap), fileExists: (rel) => fileExists(rel) || (rel.startsWith('uploads/') && stored.has(rel.slice('uploads/'.length))) };
+    const r2Images = new Set();
+    if (r2?.configured && typeof r2.head === 'function') {
+      await Promise.all([...r2ImageKeysIn(doc)].map(async ([rel, key]) => {
+        const label = rel.startsWith('r2-assets/catalog/') ? 'catalog photo' : 'video thumbnail';
+        let head;
+        try { head = await r2.head(key); }
+        catch (e) { throw new HttpError(502, 'r2_unreachable', `Could not verify ${label} “${key}” in Cloudflare R2.`, { cause: e }); }
+        if (head.status === 200) r2Images.add(rel);
+        else if (head.status !== 404) throw new HttpError(502, 'r2_error', `Cloudflare R2 returned HTTP ${head.status} when checking ${label} “${key}”.`);
+      }));
+    }
+    return { ...ctxOf(snap), fileExists: (rel) => fileExists(rel)
+      || (rel.startsWith('uploads/') && stored.has(rel.slice('uploads/'.length))),
+    r2FileExists: (rel) => r2Images.has(rel) };
   };
   // Maps the `:type` URL segment (show, video, upcoming, gallery) to the collection; unknown types -> 404.
   const kindOf = (req) => { if (!TYPES[req.params.type]) throw new HttpError(404, 'not_found', 'Unknown catalog section.'); return { key: req.params.type, type: TYPES[req.params.type] }; };
@@ -582,33 +608,92 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   }));
 
   /* ---------- uploads ---------- */
-  // Image upload: the raw file is the request body; the type is detected from its bytes (not the file name).
-  // The file is saved in MySQL (durable, and shared by every server instance), then copied into the upload folder as a local cache.
+  // New catalog, Broadcast and video-thumbnail photo bytes are stored in private R2. MySQL still holds catalog paths and continues
+  // serving legacy image blobs and subtitles; new photos are never copied into uploaded_files or UPLOAD_DIR.
   const keepUpload = async (file) => { await db.uploads.put(file.name, file.type, file.data); cacheUpload(uploadDir, file.name, file.data); };
+  const storeR2Image = async (saved, prefix, parentName = '') => {
+    if (!r2?.configured || typeof r2.putObject !== 'function') {
+      const kind = prefix === 'catalog' ? 'Catalog photo' : 'Broadcast photo';
+      throw new HttpError(503, 'storage_not_configured', `${kind} storage (R2) is not configured on this server. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_BUCKET; new photo uploads require R2.`);
+    }
+    if (parentName && typeof r2.head === 'function') {
+      let high;
+      try { high = await r2.head(`${prefix}/${parentName}`); }
+      catch (e) { throw new HttpError(502, 'r2_unreachable', `Could not verify the high-quality photo in Cloudflare R2 (${e?.message || 'network error'}).`, { cause: e }); }
+      if (high.status === 404) throw new HttpError(404, 'image_not_found', 'Upload the high-quality image to R2 before its compact rendition.');
+      if (high.status !== 200) throw new HttpError(502, 'r2_error', `Cloudflare R2 returned HTTP ${high.status} when checking the high-quality photo.`);
+      if (Number.isFinite(high.size) && high.size > 0 && saved.bytes >= high.size) throw bad('The compact rendition must be smaller than the high-quality image.', 'invalid_image_variant');
+    }
+    try {
+      await r2.putObject(`${prefix}/${saved.name}`, saved.data, { contentType: saved.type, cacheControl: 'public, max-age=31536000, immutable' });
+    } catch (e) {
+      throw new HttpError(502, 'r2_upload_failed', `Could not upload the photo to Cloudflare R2${e?.statusCode ? ` (HTTP ${e.statusCode})` : ''}. Check the R2 credentials and try again.`, { cause: e });
+    }
+    return `r2-assets/${prefix}/${saved.name}`;
+  };
   router.post('/uploads/image', express.raw({ type: () => true, limit: '10mb' }), wrap(async (req, res) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the image file as the request body.');
-    const saved = describeImage(req.body); if (!saved) throw bad('Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
-    await keepUpload(saved);
-    await log(req, 'upload.image', saved.path, { bytes: saved.bytes });
-    res.status(201).json({ path: saved.path, bytes: saved.bytes, type: saved.type });
+    const highName = req.get('x-image-variant-of');
+    const saved = highName
+      ? describeImageVariant(req.body, highName)
+      : describeImage(req.body, { progressive: req.get('x-image-renditions') === 'progressive' });
+    if (!saved) throw bad(highName ? 'The compact rendition must be WebP and match a high-quality image.' : 'Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
+    const publicPath = await storeR2Image(saved, 'catalog', highName);
+    await log(req, highName ? 'upload.image.variant' : 'upload.image', publicPath, { bytes: saved.bytes });
+    res.status(201).json({ path: publicPath, bytes: saved.bytes, type: saved.type, ...(highName ? { variant: 'low' } : {}) });
   }));
-  // Broadcast images live in private R2, not uploaded_files/MySQL. Their stable public app URL redirects
-  // to a fresh short-lived R2 GET signature whenever a notification or e-mail client fetches the image.
+  // Broadcast images use the same private-R2 storage helper and stable app URLs as catalog photos.
   router.post('/uploads/broadcast-image', express.raw({ type: () => true, limit: '10mb' }), wrap(async (req, res) => {
-    if (!r2?.configured || typeof r2.putObject !== 'function') {
-      throw new HttpError(503, 'storage_not_configured', 'Broadcast photo storage (R2) is not configured on this server. Configure R2 with Object Read & Write access, then try again.');
-    }
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the image file as the request body.');
-    const saved = describeImage(req.body); if (!saved) throw bad('Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
-    const key = `broadcast/${saved.name}`;
-    try {
-      await r2.putObject(key, saved.data, { contentType: saved.type, cacheControl: 'public, max-age=31536000, immutable' });
-    } catch (e) {
-      throw new HttpError(502, 'r2_upload_failed', `Could not upload the broadcast photo to Cloudflare R2${e?.statusCode ? ` (HTTP ${e.statusCode})` : ''}. Check the R2 credentials and try again.`, { cause: e });
+    const highName = req.get('x-image-variant-of');
+    const saved = highName
+      ? describeImageVariant(req.body, highName)
+      : describeImage(req.body, { progressive: req.get('x-image-renditions') === 'progressive' });
+    if (!saved) throw bad(highName ? 'The compact rendition must be WebP and match a high-quality image.' : 'Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
+    const publicPath = await storeR2Image(saved, 'broadcast', highName);
+    await log(req, highName ? 'upload.broadcast_image.variant' : 'upload.broadcast_image', publicPath, { bytes: saved.bytes });
+    res.status(201).json({ path: publicPath, bytes: saved.bytes, type: saved.type, ...(highName ? { variant: 'low' } : {}) });
+  }));
+  // Video thumbnails are decoded and re-encoded on the server, then placed beside the already-uploaded video object in R2.
+  router.post('/uploads/video-thumbnail', express.raw({ type: () => true, limit: '10mb' }), wrap(async (req, res) => {
+    if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the thumbnail photo as the request body.');
+    const sourceKey = String(req.get('x-video-key') || '').trim();
+    if (!isSafeR2ObjectKey(sourceKey)) throw bad('Upload the R2 video first, then choose its thumbnail photo.', 'invalid_video_key');
+    if (!r2?.configured || typeof r2.putObject !== 'function') {
+      throw new HttpError(503, 'storage_not_configured', 'Video thumbnail storage (R2) is not configured on this server. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_BUCKET.');
     }
-    const publicPath = `r2-assets/${key}`;
-    await log(req, 'upload.broadcast_image', publicPath, { bytes: saved.bytes });
-    res.status(201).json({ path: publicPath, bytes: saved.bytes, type: saved.type });
+    if (typeof r2.head !== 'function') throw new HttpError(503, 'r2_verification_unavailable', 'This server cannot verify the R2 video object. Check the R2 configuration and try again.');
+    let video;
+    try { video = await r2.head(sourceKey); }
+    catch (e) { throw new HttpError(502, 'r2_unreachable', `Could not reach Cloudflare R2 to verify the video “${sourceKey}”.`, { cause: e }); }
+    if (video.status === 404) throw new HttpError(404, 'r2_object_missing', `The video “${sourceKey}” was not found in R2. Upload the video first, wait for “Uploaded ✓”, then add its thumbnail.`);
+    if (video.status === 403) throw new HttpError(502, 'r2_access_denied', `Cloudflare R2 denied access to “${sourceKey}”. Check the R2 credentials and bucket permissions.`);
+    if (video.status !== 200) throw new HttpError(502, 'r2_error', `Cloudflare R2 returned HTTP ${video.status} when checking “${sourceKey}”.`);
+
+    const renditions = await processVideoThumbnail(req.body);
+    if (!renditions) throw bad('Could not process that photo. Choose a valid JPEG, PNG, WebP or GIF image under 10 MB.', 'unsupported_image');
+    const folder = sourceKey.includes('/') ? sourceKey.slice(0, sourceKey.lastIndexOf('/')) : '';
+    const name = (suffix) => `${renditions.hash}-${suffix}.webp`;
+    const highKey = folder ? `${folder}/${name('hq')}` : name('hq');
+    const lowKey = folder ? `${folder}/${name('low')}` : name('low');
+    if (!isVideoThumbnailKey(highKey) || !isVideoThumbnailKey(lowKey)) throw bad('The video folder cannot be used for a thumbnail path.', 'invalid_video_key');
+    try {
+      const cacheControl = 'public, max-age=31536000, immutable';
+      await r2.putObject(highKey, renditions.high.data, { contentType: 'image/webp', cacheControl });
+      await r2.putObject(lowKey, renditions.low.data, { contentType: 'image/webp', cacheControl });
+    } catch (e) {
+      throw new HttpError(502, 'r2_upload_failed', `Could not upload both video-thumbnail sizes to Cloudflare R2${e?.statusCode ? ` (HTTP ${e.statusCode})` : ''}. Check the R2 credentials and try again.`, { cause: e });
+    }
+    const prefix = 'r2-assets/video-thumbnails/';
+    const publicPath = `${prefix}${highKey}`, lowPath = `${prefix}${lowKey}`;
+    await log(req, 'upload.video_thumbnail', sourceKey, { highBytes: renditions.high.bytes, lowBytes: renditions.low.bytes });
+    res.status(201).json({
+      path: publicPath, lowPath, type: 'image/webp', bytes: renditions.high.bytes,
+      renditions: {
+        high: { path: publicPath, width: renditions.high.width, height: renditions.high.height, bytes: renditions.high.bytes },
+        low: { path: lowPath, width: renditions.low.width, height: renditions.low.height, bytes: renditions.low.bytes },
+      },
+    });
   }));
   // Subtitle upload (.vtt or .srt; converted to WebVTT).
   router.post('/uploads/subtitle', express.raw({ type: () => true, limit: '2mb' }), wrap(async (req, res) => {

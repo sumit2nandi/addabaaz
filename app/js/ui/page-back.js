@@ -9,5 +9,5 @@ export function pageBack(ctx, fallback = '/') {
   };
   ctx.root.addEventListener('click', onBack);
   ctx.onCleanup(() => ctx.root.removeEventListener('click', onBack));
-  return html`<div class="back-row"><button type="button" class="account-edit-back" data-page-back aria-label="Back to previous page">${icon('left', { size: 24 })}</button></div>`;
+  return html`<button type="button" class="page-back" data-page-back aria-label="Back to previous page">${icon('left', { size: 28 })}</button>`;
 }

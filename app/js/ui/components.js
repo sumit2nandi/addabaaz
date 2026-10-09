@@ -4,15 +4,16 @@ import { html, raw, esc, timeAgo } from '../util.js';
 import { icon } from '../icons.js';
 import { avatarColor } from '../data/user.js';
 import { confirmDialog } from './dialog.js';
+import { lowResolutionSrc } from './progressive.js';
 
 // If an image fails to load, main.js's delegated handler reads data-fb to pick a fallback (inline
 // onerror= scripts would be blocked by the site's Content-Security-Policy).
 
 // <img> markup with lazy loading and the failure fallback above.
-// `lowSrc` is a small rendition shown first; `src` (the best quality) replaces it as soon as the small one has loaded
-// (see ui/progressive.js). Without `lowSrc`, the image loads exactly as before.
+// `lowSrc` is a small rendition shown first; after it loads, `src` (the best quality) is fetched in the background
+// and replaces it only when fully downloaded (see ui/progressive.js). Without a low rendition, behavior is unchanged.
 export function img(src, alt = '', { cls = '', lazy = true, fallback, priority = false, lowSrc = '' } = {}) {
-  const low = lowSrc && lowSrc !== src ? lowSrc : '';
+  const low = (lowSrc && lowSrc !== src ? lowSrc : '') || lowResolutionSrc(src);
   return html`<img class="${cls}" src="${low || src}" data-hq="${low ? src : ''}" alt="${alt}" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''} ${priority ? raw('fetchpriority="high"') : ''}>`;
 }
 /** The breakpoint at which a banner swaps the poster in for the wide still. Kept here, beside the markup that
@@ -21,10 +22,10 @@ export const HERO_POSTER_MQ = '(max-width: 759px)';
 /** Hero background. Wide screens get the landscape episode thumbnail; phones (portrait, < 760px) get the portrait show poster instead,
  *  because a 16:9 picture cropped into a tall phone screen shows only a thin slice of the middle (faces cut in half). */
 // `lowThumb` / `lowPoster` are the small renditions shown first (see ui/progressive.js); the wide still and the poster
-// then swap to `thumb` / `poster` once they have loaded.
+// replace them only once their high-quality renditions have downloaded.
 export function heroBg(thumb, poster, { lazy = false, fallback, lowThumb = '', lowPoster = '' } = {}) {
-  const lt = lowThumb && lowThumb !== thumb ? lowThumb : '';
-  const lp = lowPoster && lowPoster !== poster ? lowPoster : '';
+  const lt = (lowThumb && lowThumb !== thumb ? lowThumb : '') || lowResolutionSrc(thumb);
+  const lp = (lowPoster && lowPoster !== poster ? lowPoster : '') || lowResolutionSrc(poster);
   const img = html`<img src="${lt || thumb || poster}" data-hq="${lt ? thumb : ''}" alt="" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''}>`;
   return poster ? html`<picture><source media="${HERO_POSTER_MQ}" srcset="${lp || poster}" data-hq="${lp ? poster : ''}">${img}</picture>` : img;
 }
@@ -215,8 +216,8 @@ export function emptyState({ iconName = 'film', title, text = '', action = '' })
   return html`<div class="empty">${icon(iconName, { size: 44 })}<h2>${title}</h2>${text ? html`<p>${text}</p>` : ''}${action}</div>`;
 }
 // Page/section heading with optional tag and subtitle.
-export function sectionHeader({ tag = '', title, subtitle = '' }) {
-  return html`<header class="page-head">${tag ? html`<div class="eyebrow">${tag}</div>` : ''}<h1>${title}</h1>${subtitle ? html`<p>${subtitle}</p>` : ''}</header>`;
+export function sectionHeader({ tag = '', title, subtitle = '', back = '' }) {
+  return html`<header class="page-head">${tag ? html`<div class="eyebrow">${tag}</div>` : ''}${back ? html`<div class="page-head-title-row">${back}<h1>${title}</h1></div>` : html`<h1>${title}</h1>`}${subtitle ? html`<p>${subtitle}</p>` : ''}</header>`;
 }
 /* ---------- toast ---------- */
 // A toast is the small message bar at the bottom of the screen; showing a new one replaces the old one.

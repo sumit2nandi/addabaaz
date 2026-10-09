@@ -615,12 +615,24 @@ export function extraDb({ q, tx, iso }) {
     async byId(id) { return mapReferral((await q('SELECT * FROM referrals WHERE id = ?', [id]))[0]); },
     /** The referral of an invited account (each account can have at most one). */
     async byInvitee(inviteeId) { return mapReferral((await q('SELECT * FROM referrals WHERE invitee_id = ?', [inviteeId]))[0]); },
-    /** Everyone this account invited, newest first, with the friend's name/email. */
+    /** Everyone this account invited, newest first, with the friend's name/email and accurate summary counts. */
     async forInviter(inviterId, { limit = 50, offset = 0 } = {}) {
-      const rows = await q(`SELECT r.*, u.email AS invitee_email, u.name AS invitee_name FROM referrals r LEFT JOIN users u ON u.id = r.invitee_id
-        WHERE r.inviter_id = ? ORDER BY r.created_at DESC LIMIT ? OFFSET ?`, [inviterId, limit, offset]);
-      const total = Number((await q('SELECT COUNT(*) AS n FROM referrals WHERE inviter_id = ?', [inviterId]))[0].n);
-      return { total, items: rows.map(mapReferral) };
+      const [rows, summaryRows] = await Promise.all([
+        q(`SELECT r.*, u.email AS invitee_email, u.name AS invitee_name FROM referrals r LEFT JOIN users u ON u.id = r.invitee_id
+          WHERE r.inviter_id = ? ORDER BY r.created_at DESC, r.id DESC LIMIT ? OFFSET ?`, [inviterId, limit, offset]),
+        q(`SELECT COUNT(*) AS total,
+            SUM(CASE WHEN status <> 'void' THEN 1 ELSE 0 END) AS active_total,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+            SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
+            COALESCE(SUM(CASE WHEN status = 'completed' THEN bonus_paise ELSE 0 END), 0) AS earned_paise
+          FROM referrals WHERE inviter_id = ?`, [inviterId]),
+      ]);
+      const summary = summaryRows[0] || {};
+      return {
+        total: Number(summary.total || 0), activeTotal: Number(summary.active_total || 0),
+        completed: Number(summary.completed || 0), pending: Number(summary.pending || 0),
+        earnedPaise: Number(summary.earned_paise || 0), items: rows.map(mapReferral),
+      };
     },
     /** How many rewards this account has already earned or is waiting on (the anti-farming cap). */
     async countForInviter(inviterId) { return Number((await q("SELECT COUNT(*) AS n FROM referrals WHERE inviter_id = ? AND status <> 'void'", [inviterId]))[0].n); },

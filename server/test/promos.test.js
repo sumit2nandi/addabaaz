@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { createPromos, promosConfigFromEnv, allocateFifo, newReferralCode, normalizeReferralCode, isValidReferralCode, referralLink } from '../src/promos.js';
 import { fakeCreditDb } from './helpers/credit-db.js';
+import { extraDb } from '../src/db-extra.js';
 
 const HOUR = 3600_000;
 // Every test uses its own database (and its own promotion service) so nothing leaks between them.
@@ -230,11 +231,48 @@ test('the viewer’s summary carries the balance, the ledger, their code and the
   assert.equal(view.code, inviter.referralCode);
   assert.equal(view.link, `https://addabaaz.in/#/signup?ref=${inviter.referralCode}`);
   assert.equal(view.invited.total, 1);
+  assert.equal(view.invited.activeTotal, 1);
+  assert.equal(view.invited.completed, 0);
+  assert.equal(view.invited.pending, 1);
+  assert.equal(view.invited.earnedPaise, 0);
   assert.equal(view.invited.items[0].name, 'Ravi');
   assert.equal(view.invited.items[0].email, 'ra••@example.com', 'the invited friend’s address is masked');
   assert.equal(view.referredBy, null);
   assert.ok(view.ledger.some((r) => r.label === 'Welcome bonus'));
   assert.equal(view.offer.referralPaise, 10000);
+
+  await promos.qualify(friend, { reason: 'verified' });
+  const completedView = await promos.summary(await db.users.byId('inv'));
+  assert.equal(completedView.invited.total, 1);
+  assert.equal(completedView.invited.activeTotal, 1);
+  assert.equal(completedView.invited.completed, 1);
+  assert.equal(completedView.invited.pending, 0);
+  assert.equal(completedView.invited.earnedPaise, 10000, 'all-time earnings count completed inviter rewards');
+});
+
+test('the inviter query returns all-time referral counts and earned credit separately from the current page', async () => {
+  const calls = [];
+  const q = async (sql, params) => {
+    calls.push({ sql, params });
+    if (sql.includes('LEFT JOIN users u ON u.id = r.invitee_id')) return [{
+      id: 'ref-1', inviter_id: 'inv', invitee_id: 'friend', code: 'AB12CD34', status: 'completed', bonus_paise: 10000,
+      created_at: new Date('2026-01-01T00:00:00Z'), completed_at: new Date('2026-01-02T00:00:00Z'), invitee_email: 'friend@example.com', invitee_name: 'Friend',
+    }];
+    if (sql.includes('SELECT COUNT(*) AS total')) return [{ total: '3', active_total: '2', completed: '1', pending: '1', earned_paise: '10000' }];
+    throw new Error(`Unexpected query: ${sql}`);
+  };
+  const db = extraDb({ q, tx: async (fn) => fn({ query: q }), iso: (value) => value ? new Date(value).toISOString() : null });
+  const page = await db.referrals.forInviter('inv', { limit: 1, offset: 1 });
+  assert.equal(page.total, 3, 'the existing total still includes cancelled rows for admin consumers');
+  assert.equal(page.activeTotal, 2);
+  assert.equal(page.completed, 1);
+  assert.equal(page.pending, 1);
+  assert.equal(page.earnedPaise, 10000);
+  assert.equal(page.items.length, 1);
+  assert.equal(page.items[0].inviteeName, 'Friend');
+  assert.equal(calls.length, 2, 'one paged activity query and one aggregate query run together');
+  assert.match(calls[0].sql, /LIMIT \? OFFSET \?/);
+  assert.match(calls[1].sql, /SUM\(CASE WHEN status <> 'void' THEN 1 ELSE 0 END\) AS active_total/, 'the viewer can count active invites without changing the existing total');
 });
 
 test('administrators can see the numbers, grant goodwill credit and revoke an untouched grant', async () => {

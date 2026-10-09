@@ -57,7 +57,7 @@ test('backup → wipe → restore round-trips every table and uploaded file (enc
   const ticketId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
   await db.pool.query('INSERT INTO support_tickets (id, user_id, name, email, category, subject, body) VALUES (?,?,?,?,?,?,?)', [ticketId, s.body.user.id, 'Round Trip', 'rt@example.com', 'other', 'Unicode backup', 'দারুণ! 🎉 emoji and “quotes”']);
   await db.pool.query("INSERT INTO error_log (source, message) VALUES ('client', 'boom')");
-  // Uploaded images live in MySQL too (the upload folder is only a cache): big binary rows must survive the round trip. Three ~1.5 MB
+  // Legacy uploaded images live in MySQL (the upload folder is only a cache): binary rows must survive a backup/restore. Three ~1.5 MB
   // images make the restore cut its INSERT by size (it flushes once the binary values add up to about 4 MB).
   const blobs = [0, 1, 2].map((i) => ({ name: `${String(i + 1).repeat(24)}.png`, data: crypto.randomBytes(1_500_000 + i) }));
   for (const b of blobs) await db.uploads.put(b.name, 'image/png', b.data);
@@ -87,7 +87,7 @@ test('backup → wipe → restore round-trips every table and uploaded file (enc
   assert.equal((await db.pool.query('SELECT body FROM support_tickets WHERE id = ?', [ticketId]))[0][0].body, 'দারুণ! 🎉 emoji and “quotes”', 'Unicode support data survives');
   for (const b of blobs) {
     const back = await db.uploads.get(b.name);
-    assert.equal(back.type, 'image/png'); assert.deepEqual(back.data, b.data, 'images stored in MySQL are byte-identical after the restore');
+    assert.equal(back.type, 'image/png'); assert.deepEqual(back.data, b.data, 'legacy MySQL image blobs are byte-identical after the restore');
   }
   assert.deepEqual(fs.readFileSync(path.join(uploads2, 'a.bin')), Buffer.from([0, 1, 2, 250, 251, 252, 255]), 'binary uploads are byte-identical');
   assert.match(fs.readFileSync(path.join(uploads2, 'sub', 'b.vtt'), 'utf8'), /হ্যালো/);

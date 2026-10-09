@@ -16,7 +16,7 @@ users ──< profiles ──< list_items        (My List:   PK profile_id, item
 
 contact_messages                         (standalone inbox for the Contact form; handled_at/by set from the admin console)
 catalog_items, catalog_meta              (the catalog: one JSON document per show/video/upcoming/gallery/studio; edited in /admin)
-uploaded_files                           (admin-uploaded images and subtitles, stored as binary; the upload folder is only a cache of these)
+uploaded_files                           (legacy catalog image blobs and subtitle files; new photos are in R2)
 youtube_import_items                     (YouTube import batches; retained to support safe undo/removal)
 youtube_preview_snapshots                (15-minute full-channel preview snapshots for multi-instance-safe imports)
 admin_audit                              (append-only log of admin actions)
@@ -43,7 +43,7 @@ schema_migrations                        (applied migration files)
 | `catalog_items` | `(type, id)` PK · `position` (display order) · `doc` JSON — the item exactly as in `data/catalog.json`; video docs may include `hidden: true` to keep them admin-visible but exclude them from public catalogs. Seeded once from the file |
 | `youtube_preview_snapshots` | `snapshot_id` PK · `actor` · `checked_at` · `expires_at` · `videos` JSON — temporary complete-channel preview used by imports; expired rows are reaped on the next preview |
 | `catalog_meta` | `k` PK · `n` — `version` (bumped on every catalog write; servers compare it to refresh their cache) and `seeded` |
-| `uploaded_files` | `name` PK (content-hash file name, e.g. `3f9c…e1.webp`) · `content_type` · `bytes` · `data` MEDIUMBLOB · `created_at` UTC — served at `/uploads/<name>` whenever the file is not in the local upload folder; catalog documents refer to it as `uploads/<name>` |
+| `uploaded_files` | `name` PK · `content_type` · `bytes` · `data` MEDIUMBLOB · `created_at` UTC — retains legacy catalog image blobs and subtitle uploads for compatibility; served at `/uploads/<name>` when absent from the local cache. New catalog/Broadcast photo renditions are stored in private R2, with only their stable path in the catalog JSON |
 | `youtube_import_items` | `(batch_id, video_id)` PK · `actor` · `imported_at` UTC; retained after catalog deletion so admin can undo the last batch or remove today's imports |
 | `admin_audit` | `id` PK · `at` · `actor_id` / `actor` (email, or `token`) · `action` · `target` · `meta` JSON · `ip` |
 | `database_monitor_samples` | UTC minute bucket (PK) · estimated schema data/index/row metrics · server-wide buffer-pool and connection gauges · counter deltas used to derive per-minute SQL activity; retention is configurable in Admin → System → Database (default 7 days, maximum 30) |

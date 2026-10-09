@@ -73,9 +73,9 @@ export function installSecurityMiddleware(app, { corsOrigins = '*', production =
     // one origin's response (with or without Access-Control-Allow-Origin) for a different Origin.
     if (origin) res.append('Vary', 'Origin');
     if (origin && (corsOrigins === '*' || allowedOrigin(origin, corsOriginList))) {
-      // X-Device-* / X-Parental-Pin are sent by the site AND the Android app WebView (origin app.addabaaz.in):
-      // without them in the allow-list the preflight fails and every API call looks "offline" in the app.
-      res.set({ 'Access-Control-Allow-Origin': corsOrigins === '*' ? '*' : origin, 'Access-Control-Allow-Headers': 'Content-Type, Authorization, Range, If-Range, X-Device-Id, X-Device-Label, X-Parental-Pin', 'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'Access-Control-Max-Age': '600' });
+      // Device, image-rendition and X-Video-Key headers are sent by the site and cross-origin app/admin flows;
+      // without them in the allow-list the browser preflight blocks those API calls.
+      res.set({ 'Access-Control-Allow-Origin': corsOrigins === '*' ? '*' : origin, 'Access-Control-Allow-Headers': 'Content-Type, Authorization, Range, If-Range, X-Device-Id, X-Device-Label, X-Parental-Pin, X-Image-Renditions, X-Image-Variant-Of, X-Video-Key', 'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'Access-Control-Max-Age': '600' });
     }
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
