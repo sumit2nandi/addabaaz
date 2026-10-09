@@ -332,6 +332,8 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .ep-thumb img, .reel-slot > img { filter: var(--art-pop); }
 .poster-soon img { object-fit: contain; }
 .home-coming-soon .poster-soon img { object-fit: cover; }
+/* My List cards: the artwork fills the whole card (cropped at the edges), never letterboxed. */
+.card-fill .poster-soon img { object-fit: cover; }
 .card-soon:hover .poster-soon-image { transform: none; }
 img.img-failed { opacity: 0; }
 .card-gallery .poster { aspect-ratio: 2/3; cursor: zoom-in; }

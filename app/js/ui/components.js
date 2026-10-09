@@ -124,8 +124,8 @@ export function reelCard(v) {
   </a>`;
 }
 // Fixed portrait card for upcoming rails. The dedicated upcoming page uses adaptive portrait frames and preserves full artwork.
-export function soonCard(u, { saved = false } = {}) {
-  return html`<a class="card card-poster card-soon" href="#/soon/${u.id}" aria-label="${u.titleEn || u.title} — coming soon">
+export function soonCard(u, { saved = false, fill = false } = {}) {
+  return html`<a class="card card-poster card-soon ${fill ? 'card-fill' : ''}" href="#/soon/${u.id}" aria-label="${u.titleEn || u.title} — coming soon">
     <div class="poster poster-soon">${img(u.poster, 'Coming soon poster', { cls: 'poster-soon-image' })}<span class="chip chip-soon">Coming Soon</span></div>
     ${saved ? html`<div class="card-quick">${listBtn('upcoming', u.id, { cls: 'icon-btn' })}</div>` : ''}
   </a>`;
