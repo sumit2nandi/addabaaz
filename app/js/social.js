@@ -67,6 +67,9 @@ function initFacebook({ appId, version = 'v21.0' }) {
     loadScript('fb', 'https://connect.facebook.net/en_US/sdk.js').catch((e) => { fbReady = null; rej(e); });
   }));
 }
+// Google's button takes any width from 200 to 400px; its height is fixed by its size (40px for "large").
+// A slot that has no width yet (hidden, not laid out) falls back to a middle width until it has one.
+export const googleButtonWidth = (px) => Math.min(400, Math.max(200, Math.floor(px) || 260));
 const facebookWeb = (FB) => new Promise((res, rej) => FB.login((r) => (r.authResponse?.accessToken ? res(r.authResponse.accessToken) : rej(Object.assign(new Error('cancelled'), { cancelled: true }))), { scope: 'public_profile,email' }));
 
 /* ---------- web: Apple ---------- */
@@ -223,7 +226,7 @@ async function nativeCredential(provider, providers) {
 // Brand logos for the buttons.
 const FB_LOGO = html`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M22 12a10 10 0 1 0-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.5 1.49-3.89 3.78-3.89 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.78l-.44 2.89h-2.34v6.99A10 10 0 0 0 22 12z"/></svg>`;
 const APPLE_LOGO = html`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>`;
-const G_LOGO = html`<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285F4" d="M22.5 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h5.9a5.05 5.05 0 0 1-2.19 3.31v2.75h3.55c2.08-1.91 3.24-4.73 3.24-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.55-2.75c-.98.66-2.24 1.06-3.73 1.06-2.87 0-5.3-1.94-6.17-4.55H2.16v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.83 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.16a11 11 0 0 0 0 9.88l3.67-2.84z"/><path fill="#EA4335" d="M12 5.35c1.62 0 3.06.56 4.21 1.65l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.16 7.06L5.83 9.9C6.7 7.29 9.13 5.35 12 5.35z"/></svg>`;
+const G_LOGO = html`<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M22.5 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h5.9a5.05 5.05 0 0 1-2.19 3.31v2.75h3.55c2.08-1.91 3.24-4.73 3.24-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.55-2.75c-.98.66-2.24 1.06-3.73 1.06-2.87 0-5.3-1.94-6.17-4.55H2.16v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.83 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.16a11 11 0 0 0 0 9.88l3.67-2.84z"/><path fill="#EA4335" d="M12 5.35c1.62 0 3.06.56 4.21 1.65l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.16 7.06L5.83 9.9C6.7 7.29 9.13 5.35 12 5.35z"/></svg>`;
 
 /**
  * Fills `box` with "Continue with Google / Facebook" buttons for the providers the server has enabled.
@@ -264,15 +267,28 @@ export function mountSocialButtons(box, providers, { signup = false, onCredentia
   if (wanted.includes('google') && !isNative) {
     initGoogle(providers.google.clientId, (cred) => run('google', async () => cred)).then((gid) => {
       const el = $('#gBtn', box); if (!el) return;
-      // Google's button is the only thing in this slot: it stays blank until Google has drawn it, then fades in.
-      // A fixed numeric width means Google never re-measures it.
+      // Google's button is the only thing in this slot. The slot is exactly as tall as Google's "large"
+      // button (40px), so the button's own border is never cut off. The button is drawn at the slot's
+      // width and drawn again only when that width changes (rotation, a resized window), so it never
+      // overflows a narrower card. It stays blank until Google has drawn it, then fades in.
       const real = $('.gsi-real', el);
-      // White Google button with the official multicolor "G" logo (theme: 'outline'), matching
-      // Google's own "Sign in with Google" branding.
-      gid.renderButton(real, { type: 'standard', theme: 'outline', size: 'large', shape: 'rectangular', text: signup ? 'signup_with' : 'signin_with', logo_alignment: 'left', width: Math.max(200, Math.min(280, Math.round(real.clientWidth || el.clientWidth || 260))) });
-      const reveal = () => el.classList.add('ready');
-      real.querySelector('iframe')?.addEventListener('load', reveal, { once: true });
-      setTimeout(reveal, 1500);
+      let drawn = 0, ro = null;
+      const draw = () => {
+        if (!el.isConnected) return ro?.disconnect();          // the page was left
+        const width = googleButtonWidth(el.getBoundingClientRect().width);
+        if (width === drawn) return;
+        drawn = width;
+        el.classList.remove('ready');
+        real.innerHTML = '';
+        // White Google button with the official multicolor "G" logo (theme: 'outline'), matching
+        // Google's own "Sign in with Google" branding.
+        gid.renderButton(real, { type: 'standard', theme: 'outline', size: 'large', shape: 'rectangular', text: signup ? 'signup_with' : 'signin_with', logo_alignment: 'left', width });
+        const reveal = () => el.classList.add('ready');
+        real.querySelector('iframe')?.addEventListener('load', reveal, { once: true });
+        setTimeout(reveal, 1500);
+      };
+      draw();
+      if ('ResizeObserver' in window) { ro = new ResizeObserver(draw); ro.observe(el); }
     }).catch(() => { const el = $('#gBtn', box); if (el) el.outerHTML = html`<button type="button" class="btn-social btn-google" disabled aria-label="Google sign-in unavailable" title="Google sign-in unavailable">${G_LOGO}<span>${gLabel}</span></button>`.s; });
   }
   // Facebook's SDK must already be loaded when the user taps (popup blockers), so preload it now.
