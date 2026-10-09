@@ -185,8 +185,8 @@ test('signup answers while the confirmation mail is still in flight instead of w
 
 test('change password & sign out everywhere', async () => {
   const u = await signup(); const other = (await call('POST', '/auth/login', { email: u.email, password: u.password })).body.token;
-  assert.equal((await call('POST', '/me/password', { currentPassword: 'wrong', newPassword: 'newpassword1' }, u.token)).status, 403);
-  const r = await call('POST', '/me/password', { currentPassword: u.password, newPassword: 'newpassword1' }, u.token); assert.equal(r.status, 200);
+  assert.equal((await call('POST', '/me/password', { currentPassword: 'wrong', newPassword: 'NewPassword1!' }, u.token)).status, 403);
+  const r = await call('POST', '/me/password', { currentPassword: u.password, newPassword: 'NewPassword1!' }, u.token); assert.equal(r.status, 200);
   assert.equal((await call('GET', '/me', null, other)).status, 401); assert.equal((await call('GET', '/me', null, u.token)).status, 401);
   const s = await call('POST', '/me/sessions/revoke', null, r.body.token); assert.equal((await call('GET', '/me', null, r.body.token)).status, 401); assert.equal((await call('GET', '/me', null, s.body.token)).status, 200);
 });
