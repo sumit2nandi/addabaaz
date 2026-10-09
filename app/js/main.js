@@ -200,7 +200,9 @@ function networkStatus() {
 // Progressive artwork (ui/progressive.js): a small rendition loads first, then the best one replaces it.
 // A small rendition that fails goes straight to the best one; a failed best one uses data-fb as before.
 function wireImageFallbacks() {
-  window.addEventListener('load', (e) => {
+  // `load` does not bubble and never reaches window (the event path stops at document), so it is listened for on
+  // document in the capture phase. Listening on window here silently did nothing.
+  document.addEventListener('load', (e) => {
     const t = e.target;
     if (t instanceof HTMLImageElement && (t.dataset.hq || t.parentElement?.tagName === 'PICTURE')) swapToHighQuality(t);
   }, true);

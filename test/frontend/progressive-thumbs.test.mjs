@@ -98,7 +98,9 @@ test('main.js upgrades on load and runs the upgrade before the data-fb fallback 
   const main = read('app/js/main.js');
   assert.match(main, /import \{ swapToHighQuality \} from '\.\/ui\/progressive\.js';/);
   const fn = main.match(/function wireImageFallbacks\(\) \{[\s\S]*?\n\}/)?.[0] || '';
-  assert.match(fn, /addEventListener\('load'[\s\S]*swapToHighQuality\(t\)/, 'load swaps in the best rendition');
+  // `load` events never reach window (the event path stops at document): the listener must be on document.
+  assert.match(fn, /document\.addEventListener\('load'[\s\S]*swapToHighQuality\(t\)/, 'load swaps in the best rendition (listened for on document)');
+  assert.doesNotMatch(fn, /window\.addEventListener\('load'/, 'a window listener never receives image load events');
   assert.match(fn, /if \(!\(t instanceof HTMLImageElement\) \|\| swapToHighQuality\(t\)\) return;/, 'error tries the best rendition first');
   assert.ok(fn.indexOf('swapToHighQuality(t)) return') < fn.indexOf("t.dataset.fbTried = '1'"), 'before the fallback is marked as tried');
 });
