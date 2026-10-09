@@ -73,6 +73,11 @@ function errorParts(input) {
 function scheduleRetry(delay = retryDelayMs) {
   if (retryTimer) return;
   retryTimer = setTimeout(() => { retryTimer = null; void flush(); }, Math.max(1_000, Math.min(Number(delay) || 5_000, 60_000)));
+  // A pending retry must not hold the host open. node's test runner imports these browser modules, and the
+  // retry reschedules itself for as long as the endpoint is unreachable, so an ordinary timer here keeps the
+  // event loop alive forever and `npm test` never returns. In a browser setTimeout returns a number and has
+  // no unref(), so this line changes nothing about how the page behaves.
+  retryTimer.unref?.();
 }
 
 async function flush() {

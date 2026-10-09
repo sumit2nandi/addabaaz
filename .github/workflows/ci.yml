@@ -11,6 +11,10 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # A test that wedges must not eat the runner. Without this the job ran to GitHub's 6 h default and
+    # every check on every branch stayed "in progress" (that is what happened when a self-rescheduling
+    # retry timer leaked into the test process), so a red result arrives in minutes, naming the test.
+    timeout-minutes: 30
     services:
       mysql:
         image: mysql:8.0
@@ -22,6 +26,9 @@ jobs:
           --health-interval=5s --health-timeout=5s --health-retries=20
     env:
       TEST_DATABASE_URL: mysql://root:root@127.0.0.1:3306/x
+      # Fail a test that takes over 2 minutes instead of hanging (0 locally, where `npm test` has no
+      # budget; see the `test` script). The TAP block then reaches the annotation below.
+      ADDABAAZ_TEST_TIMEOUT_MS: 120000
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
