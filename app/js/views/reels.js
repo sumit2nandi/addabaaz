@@ -146,7 +146,7 @@ export default async function reels(ctx) {
       const media = v.source.type === 'r2' ? await prepareMedia(v) : v;
       if (my !== token) { h.remove(); return; }
       const c = await createPlayer(h, media, {
-        autoplay: true, muted: !soundOn, controls: false,
+        autoplay: true, muted: !soundOn, controls: false, reel: true,
         onEnded: () => sections[i + 1]?.scrollIntoView({ behavior: 'smooth' }),
         onState: (st) => {
           if (my !== token) return;

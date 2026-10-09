@@ -10,7 +10,7 @@ export const CONFIG = {
   // UI limits and player behaviour (the server enforces its own limits too).
   maxProfiles: 5,
   homeRailSize: 12,
-  autoplayCountdown: 8,      // seconds before the next episode starts
+  autoplayCountdown: 5,      // seconds before the next episode starts
   resumeMinSeconds: 1,       // include any started video in Continue Watching
   watchedThreshold: 0.94,    // >94% watched = finished
 };
