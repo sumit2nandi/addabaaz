@@ -77,7 +77,16 @@ export function fakeCreditDb() {
     },
     async byId(id) { return referralRows.find((r) => r.id === id) || null; },
     async byInvitee(id) { return referralRows.find((r) => r.inviteeId === id && r.status !== 'void') || null; },
-    async forInviter(id, { limit = 25 } = {}) { const items = referralRows.filter((r) => r.inviterId === id).slice(0, limit).map((r) => ({ ...r, inviteeName: users.get(r.inviteeId)?.name, inviteeEmail: users.get(r.inviteeId)?.email })); return { total: items.length, items }; },
+    async forInviter(id, { limit = 25, offset = 0 } = {}) {
+      const all = referralRows.filter((r) => r.inviterId === id).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+      const active = all.filter((r) => r.status !== 'void');
+      const items = all.slice(offset, offset + limit).map((r) => ({ ...r, inviteeName: users.get(r.inviteeId)?.name, inviteeEmail: users.get(r.inviteeId)?.email }));
+      return {
+        total: all.length, activeTotal: active.length, completed: active.filter((r) => r.status === 'completed').length,
+        pending: active.filter((r) => r.status === 'pending').length,
+        earnedPaise: active.filter((r) => r.status === 'completed').reduce((n, r) => n + Number(r.bonusPaise || 0), 0), items,
+      };
+    },
     async countForInviter(id) { return referralRows.filter((r) => r.inviterId === id && r.status !== 'void').length; },
     async complete(id) { const r = referralRows.find((x) => x.id === id); if (r) { r.status = 'completed'; r.completedAt = new Date().toISOString(); } return r; },
     async void(id) { const r = referralRows.find((x) => x.id === id); if (r) r.status = 'void'; },

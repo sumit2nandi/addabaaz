@@ -74,7 +74,11 @@ test('Account → Refer & earn shows the code, the balance and the people who jo
   assert.match(account, /data-copy="\$\{code\}"/, 'with a copy button');
   assert.match(account, /Have a Friend’s Invite Code\?/, 'and a box to add someone else’s code');
   assert.match(account, /u\.redeemInvite\(code\)/, 'which reaches the API');
-  assert.match(account, /held by an order that was not completed/, 'credit held by an unfinished order is explained');
+  assert.match(account, /reserved for an unfinished order and returns automatically/, 'credit held by an unfinished order is explained');
+  assert.match(account, /u\.promos\(\)/, 'the referral page reads the full viewer summary, not just the balance-only endpoint');
+  assert.match(account, /href="\$\{whatsapp\}"[\s\S]*href="\$\{telegram\}"/, 'WhatsApp and Telegram sharing links are both present');
+  assert.match(account, /invitees\.earnedPaise/, 'the all-time referral earnings use the server summary');
+  assert.match(account, /No extra invite threshold or milestone bonus is configured/, 'the page does not invent milestone rewards');
   assert.match(user, /promos\(\) \{ return \(this\.remote \|\| this\.local\)\.promo\(\); \}/, 'user.promos');
   assert.match(user, /credits\(\) \{ return \(this\.remote \|\| this\.local\)\.credits\(\); \}/, 'user.credits');
   assert.match(adapters, /promo\(\) \{ return this\.api\.get\('\/promo'\); \}/, 'GET /promo');

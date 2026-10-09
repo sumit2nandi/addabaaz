@@ -157,7 +157,11 @@ export function createPromos({ db, config = promosConfigFromEnv(), mailer = null
       creditPaise: balances.availablePaise, pendingPaise: balances.pendingPaise, heldPaise: balances.heldPaise || 0,
       expiringPaise: balances.expiringPaise, nextExpiryAt: balances.nextExpiryAt,
       code, link: referralLink(siteUrl, code),
-      invited: { total: invited.total, items: invited.items.map(inviteeView) },
+      invited: {
+        total: invited.total, activeTotal: invited.activeTotal ?? invited.total,
+        completed: invited.completed || 0, pending: invited.pending || 0,
+        earnedPaise: invited.earnedPaise || 0, items: invited.items.map(inviteeView),
+      },
       referredBy: referred && referred.status !== 'void' ? { status: referred.status, createdAt: referred.createdAt, completedAt: referred.completedAt, bonusPaise: referred.bonusPaise } : null,
       canRedeem: !referred && await canRedeem(user),
       ledger: ledger.items.map(ledgerView),
