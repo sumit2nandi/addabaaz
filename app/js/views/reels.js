@@ -26,7 +26,7 @@ function reelCover(cat, v) {
   const show = cat.show(v.showId) || cat.soon(v.showId);
   const src = max || hq || v.poster || show?.posterLg || show?.poster || 'media/logo.webp';
   const fb = [hq, v.poster, show?.posterLg || show?.poster].find((u) => u && u !== src) || '';
-  return { src, fallback: fb };
+  return { src, fallback: fb, low: cat.thumb(v, 'mqdefault') };
 }
 
 export default async function reels(ctx) {
@@ -57,7 +57,7 @@ export default async function reels(ctx) {
   // the current one, removed again when it scrolls out of the keep-window.
   const contentHtml = (v, i) => { const show = cat.show(v.showId) || cat.soon(v.showId); const cover = reelCover(cat, v); return html`
     <div class="reel-frame ${cat.isPremium(v) ? 'has-premium' : ''}">
-      <div class="reel-slot">${img(cover.src, '', { fallback: cover.fallback, lazy: i > 2 && i !== startIdx, priority: i === startIdx })}<div class="reel-loading"><div class="spinner"></div></div></div>
+      <div class="reel-slot">${img(cover.src, '', { fallback: cover.fallback, lowSrc: cover.low, lazy: i > 2 && i !== startIdx, priority: i === startIdx })}<div class="reel-loading"><div class="spinner"></div></div></div>
       ${cat.isPremium(v) ? premiumMark() : ''}
       <button type="button" class="reel-tap" data-reel-tap aria-label="Play or pause"><span class="reel-pp">${icon('play', { size: 34 })}</span></button>
       <div class="reel-caption"><strong>${cat.displayTitle(v)}</strong>${show ? html`<a href="#/${cat.show(v.showId) ? 'show' : 'soon'}/${show.id}">${show.titleEn || show.title}</a>` : html`<span>ADDABAAZ</span>`}</div>

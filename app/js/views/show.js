@@ -14,7 +14,7 @@ export function epRow(v, { current = false } = {}) {
   const cat = app.catalog; const frac = app.user.fraction(v.id, v.duration);
   return html`<a class="ep-row ${current ? 'current' : ''}" href="#/watch/${v.id}" ${current ? html`aria-current="true"` : ''}>
     <span class="ep-num">${v.episode || '•'}</span>
-    <span class="ep-thumb">${img(cat.thumb(v, 'maxresdefault'), '', { fallback: cat.thumb(v, 'hqdefault') })}${cat.isPremium(v) ? premiumMark({ cls: 'premium-mark-compact' }) : ''}${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}<span class="play-overlay">${icon('play', { size: 18 })}</span></span>
+    <span class="ep-thumb">${img(cat.thumb(v, 'maxresdefault'), '', { fallback: cat.thumb(v, 'hqdefault'), lowSrc: cat.thumb(v, 'mqdefault') })}${cat.isPremium(v) ? premiumMark({ cls: 'premium-mark-compact' }) : ''}${frac > 0.01 ? html`<span class="progress"><i style="width:${Math.round(frac * 100)}%"></i></span>` : ''}<span class="play-overlay">${icon('play', { size: 18 })}</span></span>
     <span class="ep-info"><span class="ep-title">${cat.displayTitle(v)}</span>
       <span class="ep-meta">${fmtDate(v.publishedAt)} ${frac >= 0.94 ? html`<em class="watched">${icon('check', { size: 12 })} Watched</em>` : ''}</span></span>
   </a>`;
@@ -33,11 +33,11 @@ export default async function showView(ctx) {
 
   ctx.root.innerHTML = html`
     <section class="detail-hero" id="detailHero">
-      <div class="hero-bg">${latest ? heroBg(cat.thumb(latest, 'maxresdefault'), s.posterLg || s.poster, { fallback: cat.thumb(latest, 'hqdefault') }) : heroBg(s.posterLg || s.poster, '')}</div>
+      <div class="hero-bg">${latest ? heroBg(cat.thumb(latest, 'maxresdefault'), s.posterLg || s.poster, { fallback: cat.thumb(latest, 'hqdefault'), lowThumb: cat.thumb(latest, 'mqdefault'), lowPoster: s.poster }) : heroBg(s.posterLg || s.poster, '', { lowThumb: s.poster })}</div>
       <div class="hero-shade"></div>
       ${s.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
       <div class="hero-inner">
-        <button type="button" class="detail-poster" id="detailPoster" aria-label="Open the full poster">${img(s.posterLg || s.poster, s.title, { lazy: false })}</button>
+        <button type="button" class="detail-poster" id="detailPoster" aria-label="Open the full poster">${img(s.posterLg || s.poster, s.title, { lazy: false, lowSrc: s.poster })}</button>
         <div class="hero-copy">
           <div class="eyebrow">${s.type === 'series' ? 'Original Series' : s.type === 'podcast' ? 'Fake Podcast' : 'Stand-up Comedy'}</div>
           <h1 class="hero-title bn">${s.title}</h1>

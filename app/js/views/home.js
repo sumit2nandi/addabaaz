@@ -173,7 +173,7 @@ function heroHtml(slides) {
       const entry = entries[i];
       return html`<article class="hero-slide ${initialSlideClass(i, slides.length)}" data-i="${i}" data-show-id="${show.id}" data-watch-id="${entry.watch}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
         <a class="hero-banner-link" href="#/show/${show.id}" aria-label="View ${show.titleEn || show.title} details">
-          <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault') })}</div>
+          <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault'), lowThumb: cat.thumb(latest, 'mqdefault'), lowPoster: show.poster })}</div>
         </a>
         <div class="hero-shade"></div>
         ${show.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
@@ -183,7 +183,7 @@ function heroHtml(slides) {
             ${show.titleEn && show.titleEn !== show.title ? html`<div class="hero-title-en">${show.titleEn}</div>` : ''}
             ${showMeta(show, { maxGenres: 1 })}
           </div>
-          <a class="hero-poster" href="#/show/${show.id}" tabindex="-1" aria-hidden="true">${img(show.posterLg || show.poster, '', { lazy: i > 0 })}</a>
+          <a class="hero-poster" href="#/show/${show.id}" tabindex="-1" aria-hidden="true">${img(show.posterLg || show.poster, '', { lazy: i > 0, lowSrc: show.poster })}</a>
         </div>
       </article>`;
     })}
