@@ -10,7 +10,7 @@ export function savedEntries(user, catalog) {
   }).filter(Boolean);
 }
 export function savedCard({ type, item }) {
-  return type === 'show' ? showCard(item) : type === 'video' ? videoCard(item, { progress: false }) : soonCard(item, { saved: true });
+  return type === 'show' ? showCard(item) : type === 'video' ? videoCard(item, { progress: false }) : soonCard(item, { saved: true, fill: true });
 }
 export function savedListStrip(entries) {
   if (!entries.length) return html``;
