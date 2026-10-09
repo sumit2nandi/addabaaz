@@ -306,6 +306,12 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .grid-upcoming .upcoming-page-poster { aspect-ratio: 2/3; }
 .grid-upcoming .show-tile.is-wide .upcoming-page-poster { aspect-ratio: 16/9; }
 .grid-upcoming .upcoming-page-poster img { object-fit: cover; }
+/* Desktop only (≥1024px): more portrait posters per row, and a landscape tile spans two columns instead of the
+   full page width (a full-width banner was ~750px tall on a 1440px screen). Phones and tablets keep the layout above. */
+@media (min-width: 1024px) {
+  .grid-upcoming { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); grid-auto-flow: dense; }
+  .grid-upcoming .show-tile.is-wide { grid-column: span 2; }
+}
 .show-tile { display: grid; gap: 10px; align-content: start; } .show-tile-info { display: grid; gap: 6px; justify-items: start; } .show-tile-info > a { font-size: 17px; font-weight: 600; }
 @media (min-width: 700px) { .grid-shows, .grid-gallery { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); } .grid-reels { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); } }
 
