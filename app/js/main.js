@@ -14,6 +14,7 @@ import { Router, parseLocation, currentPath, replaceUrl, go } from './router.js'
 import { HISTORY } from './mode.js';
 import { renderShell, renderProfileMenu, markActive } from './ui/shell.js';
 import { syncButtons, scrollRail, toast } from './ui/components.js';
+import { swapToHighQuality } from './ui/progressive.js';
 import { initPlatform } from './platform.js';
 import { initConsent, trackPage } from './consent.js';
 import { initErrorReporting, reportClientError, friendly } from './errors.js';
@@ -196,10 +197,17 @@ function networkStatus() {
 }
 
 // Image failure fallbacks (data-fb): used to be inline onerror= handlers, which a strict CSP blocks.
+// Progressive artwork (ui/progressive.js): a small rendition loads first, then the best one replaces it.
+// A small rendition that fails goes straight to the best one; a failed best one uses data-fb as before.
 function wireImageFallbacks() {
+  window.addEventListener('load', (e) => {
+    const t = e.target;
+    if (t instanceof HTMLImageElement && (t.dataset.hq || t.parentElement?.tagName === 'PICTURE')) swapToHighQuality(t);
+  }, true);
   window.addEventListener('error', (e) => {
     const t = e.target;
-    if (!(t instanceof HTMLImageElement) || t.dataset.fbTried) return;
+    if (!(t instanceof HTMLImageElement) || swapToHighQuality(t)) return;
+    if (t.dataset.fbTried) return;
     t.dataset.fbTried = '1';
     const fb = t.dataset.fb;
     if (fb) t.src = fb; else t.classList.add('img-failed');

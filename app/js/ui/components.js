@@ -9,17 +9,24 @@ import { confirmDialog } from './dialog.js';
 // onerror= scripts would be blocked by the site's Content-Security-Policy).
 
 // <img> markup with lazy loading and the failure fallback above.
-export function img(src, alt = '', { cls = '', lazy = true, fallback, priority = false } = {}) {
-  return html`<img class="${cls}" src="${src}" alt="${alt}" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''} ${priority ? raw('fetchpriority="high"') : ''}>`;
+// `lowSrc` is a small rendition shown first; `src` (the best quality) replaces it as soon as the small one has loaded
+// (see ui/progressive.js). Without `lowSrc`, the image loads exactly as before.
+export function img(src, alt = '', { cls = '', lazy = true, fallback, priority = false, lowSrc = '' } = {}) {
+  const low = lowSrc && lowSrc !== src ? lowSrc : '';
+  return html`<img class="${cls}" src="${low || src}" data-hq="${low ? src : ''}" alt="${alt}" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''} ${priority ? raw('fetchpriority="high"') : ''}>`;
 }
 /** The breakpoint at which a banner swaps the poster in for the wide still. Kept here, beside the markup that
  *  acts on it, so the artwork popup can resolve exactly the picture the banner is showing at this moment. */
 export const HERO_POSTER_MQ = '(max-width: 759px)';
 /** Hero background. Wide screens get the landscape episode thumbnail; phones (portrait, < 760px) get the portrait show poster instead,
  *  because a 16:9 picture cropped into a tall phone screen shows only a thin slice of the middle (faces cut in half). */
-export function heroBg(thumb, poster, { lazy = false, fallback } = {}) {
-  const img = html`<img src="${thumb || poster}" alt="" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''}>`;
-  return poster ? html`<picture><source media="${HERO_POSTER_MQ}" srcset="${poster}">${img}</picture>` : img;
+// `lowThumb` / `lowPoster` are the small renditions shown first (see ui/progressive.js); the wide still and the poster
+// then swap to `thumb` / `poster` once they have loaded.
+export function heroBg(thumb, poster, { lazy = false, fallback, lowThumb = '', lowPoster = '' } = {}) {
+  const lt = lowThumb && lowThumb !== thumb ? lowThumb : '';
+  const lp = lowPoster && lowPoster !== poster ? lowPoster : '';
+  const img = html`<img src="${lt || thumb || poster}" data-hq="${lt ? thumb : ''}" alt="" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''}>`;
+  return poster ? html`<picture><source media="${HERO_POSTER_MQ}" srcset="${lp || poster}" data-hq="${lp ? poster : ''}">${img}</picture>` : img;
 }
 /**
  * Which artwork a `heroBg()` banner is showing right now: 'poster' on phones (the <picture> above swaps it in),
@@ -38,7 +45,8 @@ export function ytImg(v, alt = '', { cls = '' } = {}) {
   const show = v?.showId ? app.catalog.show(v.showId) || app.catalog.soon(v.showId) : null;
   const hq = app.catalog.thumb(v, 'hqdefault');
   const src = app.catalog.thumb(v, 'maxresdefault') || hq || v?.poster || show?.backdrop || show?.posterLg || show?.poster || 'media/logo.webp';
-  return img(src, alt, { cls, fallback: hq && hq !== src ? hq : '' });
+  // A small rendition (mqdefault, 320x180) appears first; the best one replaces it once it has downloaded.
+  return img(src, alt, { cls, fallback: hq && hq !== src ? hq : '', lowSrc: app.catalog.thumb(v, 'mqdefault') });
 }
 // Small golden "premium" word used as the Premium mark on artwork, instead of the old crown medallion.
 export function premiumMark({ cls = '' } = {}) {

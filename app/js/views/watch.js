@@ -112,7 +112,7 @@ export default async function watch(ctx) {
     const base = localArt || thumb;
     if (base && !box.classList.contains('has-wall')) {
       box.classList.add('has-wall');
-      box.insertAdjacentHTML('afterbegin', html`<div class="player-wall-bg" style="background-image:url('${base}')"></div>${thumb && thumb !== base ? img(thumb, '', { cls: 'player-wall-art', lazy: false }) : ''}`.s);
+      box.insertAdjacentHTML('afterbegin', html`<div class="player-wall-bg" style="background-image:url('${base}')"></div>${thumb && thumb !== base ? img(thumb, '', { cls: 'player-wall-art', lazy: false, lowSrc: cat.thumb(v, 'mqdefault') }) : ''}`.s);
     }
     msg.innerHTML = kind === 'login'
       ? html`${icon('lock', { size: 40 })}<h2>Sign In to Watch</h2><div class="row"><a class="btn btn-primary btn-lg" href="#/signin?next=${here}">Sign In</a><a class="btn btn-ghost btn-lg" href="#/signup?next=${here}">Create Account</a></div>`.s
@@ -220,7 +220,7 @@ export default async function watch(ctx) {
     let n = CONFIG.autoplayCountdown;
     // Render once: replacing the markup each second reloads the thumbnail and makes it blink.
     box.innerHTML = html`<div class="next-card">
-      ${img(cat.thumb(target, 'maxresdefault'), '', { fallback: cat.thumb(target, 'hqdefault') })}
+      ${img(cat.thumb(target, 'maxresdefault'), '', { fallback: cat.thumb(target, 'hqdefault'), lowSrc: cat.thumb(target, 'mqdefault') })}
       <div class="next-card-copy"><div class="eyebrow" data-next-countdown>Next in ${n}s</div>
         <strong>${cat.displayTitle(target)}</strong>
         <button type="button" class="btn btn-primary btn-sm" id="nuPlay">${icon('play', { size: 16 })} Play now</button>
