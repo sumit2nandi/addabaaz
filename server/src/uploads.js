@@ -11,20 +11,34 @@ export function sniffImage(buf) {
   return null;
 }
 
-/** What a stored upload is called: 24 hex characters of its content hash + an extension (webp png jpg gif for images, vtt for subtitles). */
-export const UPLOAD_NAME = /^[0-9a-f]{24}\.(?:webp|png|jpg|gif|vtt)$/;
+/** Stored upload names: content hashes, optional high/low image rendition suffixes, or subtitle hashes. */
+export const UPLOAD_NAME = /^(?:[0-9a-f]{24}(?:-hq)?\.(?:webp|png|jpg|gif)|[0-9a-f]{24}-low\.webp|[0-9a-f]{24}\.vtt)$/;
+const IMAGE_PARENT_NAME = /^[0-9a-f]{24}-hq\.(?:webp|png|jpg|gif)$/;
 const UPLOAD_TYPES = { webp: 'image/webp', png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif', vtt: 'text/vtt; charset=utf-8' };
 /** The Content-Type a stored upload is served with, from its file name. */
 export const uploadType = (name) => UPLOAD_TYPES[String(name).split('.').pop()] || 'application/octet-stream';
 // File name = hash of the content, so identical uploads share one file and URLs never change meaning (and can be cached for a year).
 const hashName = (content, ext) => `${crypto.createHash('sha256').update(content).digest('hex').slice(0, 24)}.${ext}`;
 
-/** Checks an uploaded image (by its bytes) and names it by content hash. Nothing is written. -> { name, path, bytes, type, data } or null if it is not an accepted image. */
-export function describeImage(buf) {
+/** Checks an uploaded image (by its bytes) and names it by content hash. When a low rendition will follow,
+ *  `progressive` gives the full-size file an `-hq` suffix so the app requests its matching `-low.webp` only
+ *  for new, paired uploads. Nothing is written. -> { name, path, bytes, type, data } or null if invalid. */
+export function describeImage(buf, { progressive = false } = {}) {
   // Detect the real image type from its bytes; reject anything that is not WebP/PNG/JPEG/GIF.
   const kind = sniffImage(buf);
   if (!kind) return null;
-  const name = hashName(buf, kind.ext);
+  const hashed = hashName(buf, kind.ext);
+  const name = progressive ? hashed.replace(`.${kind.ext}`, `-hq.${kind.ext}`) : hashed;
+  return { name, path: `uploads/${name}`, bytes: buf.length, type: kind.type, data: buf };
+}
+
+/** Describes the compact WebP child of a newly uploaded high-quality image. The child name is tied to the
+ *  high-quality content hash, so the front end can discover it without adding rendition fields to the catalog. */
+export function describeImageVariant(buf, highName) {
+  const parent = IMAGE_PARENT_NAME.exec(String(highName || ''));
+  const kind = sniffImage(buf);
+  if (!parent || !kind || kind.ext !== 'webp') return null;
+  const name = `${parent[0].slice(0, 24)}-low.webp`;
   return { name, path: `uploads/${name}`, bytes: buf.length, type: kind.type, data: buf };
 }
 

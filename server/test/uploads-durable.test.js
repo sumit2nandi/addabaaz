@@ -11,9 +11,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
-import { describeImage, describeSubtitle, cacheUpload, UPLOAD_NAME, uploadType } from '../src/uploads.js';
+import { describeImage, describeImageVariant, describeSubtitle, cacheUpload, UPLOAD_NAME, uploadType } from '../src/uploads.js';
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), crypto.randomBytes(64)]);
+const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP'), crypto.randomBytes(32)]);
 const NAME = describeImage(PNG).name;
 const VTT = describeSubtitle('WEBVTT\n\n00:00.000 --> 00:01.000\nহ্যালো\n');
 
@@ -69,6 +70,14 @@ test('upload helpers: names are content hashes, types come from the extension, t
   assert.equal(cacheUpload(dir, NAME, PNG), true, 'writing again is harmless');
   const file = path.join(tmp, 'a-file-not-a-folder'); fs.writeFileSync(file, 'x');
   assert.equal(cacheUpload(path.join(file, 'sub'), NAME, PNG), false, 'an unwritable folder is reported, not thrown');
+
+  const high = describeImage(PNG, { progressive: true });
+  const low = describeImageVariant(WEBP, high.name);
+  assert.match(high.name, /^[0-9a-f]{24}-hq\.png$/);
+  assert.equal(low.path, `uploads/${high.name.slice(0, 24)}-low.webp`);
+  assert.match(low.name, UPLOAD_NAME);
+  assert.equal(describeImageVariant(PNG, high.name), null, 'compact variants must really be WebP');
+  assert.equal(describeImageVariant(WEBP, NAME), null, 'a legacy image is not a progressive parent');
 });
 
 test('an image that is missing from the disk is served from MySQL, cached for a year, and copied back to disk', async () => {
@@ -94,6 +103,48 @@ test('an image that is missing from the disk is served from MySQL, cached for a 
   const head = await fetch(`${base}/uploads/${NAME}`, { method: 'HEAD' });
   assert.equal(head.status, 200);
   assert.equal(head.headers.get('content-type'), 'image/png');
+});
+
+test('new catalog image uploads save a compact WebP rendition beside the durable high-quality original', async () => {
+  const { dir, base } = await start();
+  const highBytes = Buffer.concat([PNG, crypto.randomBytes(4096)]);
+  const lowBytes = Buffer.concat([WEBP, crypto.randomBytes(8)]);
+  const upload = (body, headers = {}) => fetch(`${base}/api/v1/admin/uploads/image`, {
+    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'image/png', ...headers }, body,
+  });
+
+  const highResponse = await upload(highBytes, { 'X-Image-Renditions': 'progressive' });
+  assert.equal(highResponse.status, 201, await highResponse.clone().text());
+  const high = await highResponse.json();
+  assert.match(high.path, /^uploads\/[0-9a-f]{24}-hq\.png$/);
+  assert.deepEqual(stored.get(path.basename(high.path)).data, highBytes);
+
+  const badVariant = await upload(Buffer.concat([WEBP, crypto.randomBytes(highBytes.length)]), { 'X-Image-Variant-Of': path.basename(high.path) });
+  assert.equal(badVariant.status, 400, 'a compact variant may not be larger than its original');
+  const compactResponse = await upload(lowBytes, { 'Content-Type': 'image/webp', 'X-Image-Variant-Of': path.basename(high.path) });
+  assert.equal(compactResponse.status, 201, await compactResponse.clone().text());
+  const compact = await compactResponse.json();
+  assert.equal(compact.path, `uploads/${path.basename(high.path).slice(0, 24)}-low.webp`);
+  assert.equal(compact.variant, 'low');
+  assert.deepEqual(stored.get(path.basename(compact.path)).data, lowBytes);
+  assert.equal(stored.get(path.basename(compact.path)).type, 'image/webp');
+  const createTitle = await fetch(`${base}/api/v1/admin/catalog/upcoming`, {
+    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: 'rendition-poster', title: 'Rendition Poster', poster: high.path, backdrop: high.path }),
+  });
+  assert.equal(createTitle.status, 201, await createTitle.clone().text());
+  const publicTitle = ((await (await fetch(`${base}/api/v1/catalog`)).json()).upcoming || []).find((item) => item.id === 'rendition-poster');
+  assert.equal(publicTitle.poster, high.path, 'the content catalog references the full-quality upload');
+  assert.equal(fs.existsSync(path.join(dir, path.basename(high.path))), true);
+  assert.equal(fs.existsSync(path.join(dir, path.basename(compact.path))), true);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+  const lowFetch = await fetch(`${base}/${compact.path}`);
+  assert.equal(lowFetch.status, 200, 'the compact variant is served from MySQL after a disk wipe');
+  assert.equal(lowFetch.headers.get('content-type'), 'image/webp');
+  assert.match(lowFetch.headers.get('cache-control'), /immutable/);
+  assert.deepEqual(Buffer.from(await lowFetch.arrayBuffer()), lowBytes);
+  assert.equal(fs.existsSync(path.join(dir, path.basename(compact.path))), true, 'the cache is repopulated');
 });
 
 test('subtitles are served from MySQL with the right type, and a stored file survives the loss of the whole folder', async () => {
@@ -128,16 +179,26 @@ test('Broadcast photos upload to private R2, avoid the MySQL uploads store, and 
   const { base } = await start({ r2 });
   const image = Buffer.concat([PNG, crypto.randomBytes(32)]);
   const upload = await fetch(`${base}/api/v1/admin/uploads/broadcast-image`, {
-    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'image/png' }, body: image,
+    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'image/png', 'X-Image-Renditions': 'progressive' }, body: image,
   });
   assert.equal(upload.status, 201, await upload.clone().text());
   const result = await upload.json();
-  assert.match(result.path, /^r2-assets\/broadcast\/[0-9a-f]{24}\.png$/);
+  assert.match(result.path, /^r2-assets\/broadcast\/[0-9a-f]{24}-hq\.png$/);
   const name = result.path.split('/').at(-1), key = `broadcast/${name}`;
-  assert.deepEqual(objects.get(key).data, image, 'the image bytes are written to R2');
+  assert.deepEqual(objects.get(key).data, image, 'the high-quality image is written to R2');
   assert.equal(objects.get(key).contentType, 'image/png');
   assert.match(objects.get(key).cacheControl, /immutable/);
   assert.equal(stored.has(name), false, 'Broadcast photos are not copied into MySQL uploaded_files');
+
+  const compactBytes = Buffer.concat([WEBP, crypto.randomBytes(8)]);
+  const compactUpload = await fetch(`${base}/api/v1/admin/uploads/broadcast-image`, {
+    method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'image/webp', 'X-Image-Variant-Of': name }, body: compactBytes,
+  });
+  assert.equal(compactUpload.status, 201, await compactUpload.clone().text());
+  const compact = await compactUpload.json();
+  assert.equal(compact.path, `r2-assets/broadcast/${name.slice(0, 24)}-low.webp`);
+  assert.deepEqual(objects.get(`broadcast/${path.basename(compact.path)}`).data, compactBytes);
+  assert.equal(objects.get(`broadcast/${path.basename(compact.path)}`).contentType, 'image/webp');
 
   const previewResponse = await fetch(`${base}/api/v1/admin/notifications/preview`, {
     method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
@@ -152,6 +213,9 @@ test('Broadcast photos upload to private R2, avoid the MySQL uploads store, and 
   assert.equal(stableUrl.status, 302);
   assert.equal(stableUrl.headers.get('location'), `https://r2.example.test/${key}?ttl=3600`);
   assert.match(stableUrl.headers.get('cache-control'), /max-age=60/);
+  const stableLow = await fetch(`${base}/${compact.path}`, { redirect: 'manual' });
+  assert.equal(stableLow.status, 302, 'the compact Broadcast variant has a public stable R2 URL too');
+  assert.equal(stableLow.headers.get('location'), `https://r2.example.test/broadcast/${path.basename(compact.path)}?ttl=3600`);
   assert.equal((await fetch(`${base}/r2-assets/broadcast/not-an-image.png`, { redirect: 'manual' })).status, 404);
 });
 

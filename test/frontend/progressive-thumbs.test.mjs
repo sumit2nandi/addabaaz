@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { swapToHighQuality } from '../../app/js/ui/progressive.js';
+import { loadHighQuality, lowResolutionSrc, swapToHighQuality } from '../../app/js/ui/progressive.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -20,6 +20,15 @@ function fakePicture(sources) {
   return { tagName: 'PICTURE', querySelectorAll: () => sources };
 }
 
+test('new uploaded high-resolution artwork maps to its saved low WebP sibling', () => {
+  assert.equal(lowResolutionSrc('uploads/0123456789abcdef01234567-hq.jpg'), 'uploads/0123456789abcdef01234567-low.webp');
+  assert.equal(lowResolutionSrc('/uploads/0123456789abcdef01234567-hq.png'), '/uploads/0123456789abcdef01234567-low.webp');
+  assert.equal(lowResolutionSrc('https://api.example.test/uploads/0123456789abcdef01234567-hq.webp'), 'https://api.example.test/uploads/0123456789abcdef01234567-low.webp');
+  assert.equal(lowResolutionSrc('https://site.example.test/r2-assets/broadcast/0123456789abcdef01234567-hq.gif'), 'https://site.example.test/r2-assets/broadcast/0123456789abcdef01234567-low.webp');
+  assert.equal(lowResolutionSrc('uploads/0123456789abcdef01234567.webp'), '', 'legacy uploads do not request a missing compact variant');
+  assert.equal(lowResolutionSrc('media/shows/poster-lg.webp'), '', 'bundled artwork is unchanged');
+});
+
 test('a plain image swaps its low-quality src for the best one, once', () => {
   const img = fakeImg({ src: 'https://i.ytimg.com/vi/x/mqdefault.jpg', hq: 'https://i.ytimg.com/vi/x/maxresdefault.jpg' });
   assert.equal(swapToHighQuality(img), true);
@@ -28,6 +37,26 @@ test('a plain image swaps its low-quality src for the best one, once', () => {
   // The best rendition has loaded: a second load/error event must not touch it again.
   assert.equal(swapToHighQuality(img), false);
   assert.equal(img.src, 'https://i.ytimg.com/vi/x/maxresdefault.jpg');
+});
+
+test('the compact image stays visible until its high-quality replacement has downloaded', () => {
+  const originalImage = globalThis.Image, requests = [];
+  globalThis.Image = class {
+    set src(value) { this.url = value; requests.push(this); }
+  };
+  const img = fakeImg({ src: 'low.webp', hq: 'high.webp' });
+  try {
+    assert.equal(loadHighQuality(img), true);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].url, 'high.webp');
+    assert.equal(img.src, 'low.webp', 'preloading never clears the image already on screen');
+    assert.equal(img.dataset.hq, 'high.webp', 'the upgrade stays pending while bytes are in flight');
+    requests[0].onload();
+    assert.equal(img.src, 'high.webp', 'the crisp image replaces the placeholder after preload completes');
+    assert.equal(img.dataset.hq, undefined);
+  } finally {
+    if (originalImage === undefined) delete globalThis.Image; else globalThis.Image = originalImage;
+  }
 });
 
 test('an image without a best rendition is left alone (existing fallback path)', () => {
@@ -68,9 +97,19 @@ test('catalog.thumb: the low-quality rendition is a real YouTube size', () => {
   assert.match(src, /maxresdefault\|sddefault\|hqdefault\|mqdefault\|default/, 'thumb() accepts every YouTube rendition');
 });
 
+test('admin image uploads generate and persist both compact and full-quality renditions', () => {
+  const admin = read('admin/js/ui.js'), api = read('admin/js/api.js');
+  assert.match(admin, /maxWidth: Math\.min\(480, maxWidth\), quality: 0\.64, webpOnly: true/);
+  assert.match(admin, /await upload\(full, low\)/);
+  assert.match(api, /low\.size < full\.size/);
+  assert.match(api, /X-Image-Renditions': 'progressive'/);
+  assert.match(api, /X-Image-Variant-Of': name/);
+});
+
 test('components build the progressive markup for cards, banners and posters', () => {
   const c = read('app/js/ui/components.js');
   assert.match(c, /lowSrc = ''/, 'img() takes a lowSrc');
+  assert.match(c, /\|\| lowResolutionSrc\(src\)/, 'uploaded full-size images automatically resolve their saved compact sibling');
   assert.match(c, /src="\$\{low \|\| src\}" data-hq="\$\{low \? src : ''\}"/, 'img() shows the low rendition and keeps the best in data-hq');
   assert.match(c, /lowSrc: app\.catalog\.thumb\(v, 'mqdefault'\)/, 'video cards start from YouTube mqdefault (320x180)');
   assert.match(c, /lowThumb = '', lowPoster = ''/, 'heroBg takes low renditions');
@@ -96,11 +135,11 @@ test('every call site that shows a best-quality image also passes a low renditio
 
 test('main.js upgrades on load and runs the upgrade before the data-fb fallback on error', () => {
   const main = read('app/js/main.js');
-  assert.match(main, /import \{ swapToHighQuality \} from '\.\/ui\/progressive\.js';/);
+  assert.match(main, /import \{ loadHighQuality, swapToHighQuality \} from '\.\/ui\/progressive\.js';/);
   const fn = main.match(/function wireImageFallbacks\(\) \{[\s\S]*?\n\}/)?.[0] || '';
   // `load` events never reach window (the event path stops at document): the listener must be on document.
-  assert.match(fn, /document\.addEventListener\('load'[\s\S]*swapToHighQuality\(t\)/, 'load swaps in the best rendition (listened for on document)');
+  assert.match(fn, /document\.addEventListener\('load'[\s\S]*loadHighQuality\(t\)/, 'load prefetches and swaps in the best rendition only after it arrives');
   assert.doesNotMatch(fn, /window\.addEventListener\('load'/, 'a window listener never receives image load events');
-  assert.match(fn, /if \(!\(t instanceof HTMLImageElement\) \|\| swapToHighQuality\(t\)\) return;/, 'error tries the best rendition first');
+  assert.match(fn, /if \(!\(t instanceof HTMLImageElement\) \|\| swapToHighQuality\(t\)\) return;/, 'a failed placeholder jumps straight to the best rendition');
   assert.ok(fn.indexOf('swapToHighQuality(t)) return') < fn.indexOf("t.dataset.fbTried = '1'"), 'before the fallback is marked as tried');
 });

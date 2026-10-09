@@ -109,7 +109,7 @@ self.addEventListener('fetch', (e) => {
     // The management consoles (/admin/ and the Content studio /content/) are never cached or shadowed by
     // the app shell — they must always come from the server, where their strict CSP and no-store apply.
     if (url.pathname.includes('/api/') || ['/admin', '/content'].some((p) => url.pathname === p || url.pathname.startsWith(`${p}/`))) return;
-    if (url.pathname.startsWith('/uploads/')) return e.respondWith(cacheFirst(req, MEDIA));   // admin uploads have content-hash names
+    if (url.pathname.startsWith('/uploads/')) return e.respondWith(cacheFirst(req, MEDIA));   // admin uploads and their immutable rendition siblings
     // Pages: ask the server for the real URL (it answers /show/x with that page's HTML and the right status); offline → the cached app shell.
     if (req.mode === 'navigate') return e.respondWith(fetch(req).catch(() => caches.match('./').then((r) => r || caches.match('index.html'))));
     if (url.pathname.includes('/data/')) return e.respondWith(networkFirst(req, DATA));

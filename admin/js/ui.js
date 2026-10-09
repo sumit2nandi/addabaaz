@@ -227,9 +227,20 @@ export function wireImages(root) {
     const show = () => { prev.innerHTML = input.value.trim() ? `<img alt="" src="${esc(imgSrc(input.value.trim()))}">` : '<span class="muted small">No image</span>'; };
     input.addEventListener('change', show);
     file.addEventListener('change', async () => {
-      const f = file.files[0]; if (!f) return; st.classList.remove('err', 'ok'); st.textContent = 'Uploading…';
-      try { const blob = await prepareImage(f, { maxWidth: Number(box.dataset.maxw) || 1600 }); const r = await upload(blob); input.value = r.path; const EventCtor = input.ownerDocument.defaultView?.Event || Event; input.dispatchEvent(new EventCtor('change', { bubbles: true })); st.classList.add('ok'); st.textContent = `Uploaded ✓ (${Math.round(r.bytes / 1024)} KB)`; }
-      catch (e) { st.classList.add('err'); st.textContent = `✖ ${errMsg(e)}`; toast(errMsg(e), 'err'); } finally { file.value = ''; }
+      const f = file.files[0]; if (!f) return; st.classList.remove('err', 'ok'); st.textContent = 'Preparing two image sizes…';
+      try {
+        const maxWidth = Number(box.dataset.maxw) || 1600;
+        const full = await prepareImage(f, { maxWidth });
+        const low = await prepareImage(f, { maxWidth: Math.min(480, maxWidth), quality: 0.64, webpOnly: true }).catch(() => null);
+        st.textContent = 'Uploading…';
+        const r = await upload(full, low);
+        input.value = r.path;
+        const EventCtor = input.ownerDocument.defaultView?.Event || Event;
+        input.dispatchEvent(new EventCtor('change', { bubbles: true }));
+        st.classList.add('ok');
+        st.textContent = `Uploaded ✓ (${Math.round(r.bytes / 1024)} KB${r.lowPath ? ' · compact + sharp sizes' : ' · full-size'})`;
+      } catch (e) { st.classList.add('err'); st.textContent = `✖ ${errMsg(e)}`; toast(errMsg(e), 'err'); }
+      finally { file.value = ''; }
     });
   }
 }

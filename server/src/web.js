@@ -54,7 +54,7 @@ export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS
   // on each fetch, so push notifications and old e-mails keep working beyond the signature lifetime.
   app.get('/r2-assets/broadcast/:name', wrap(async (req, res) => {
     const name = String(req.params.name || '');
-    if (!/^[0-9a-f]{24}\.(?:webp|png|jpg|gif)$/.test(name) || !r2?.configured || typeof r2.presignGet !== 'function') {
+    if (!/^(?:[0-9a-f]{24}(?:-hq)?\.(?:webp|png|jpg|gif)|[0-9a-f]{24}-low\.webp)$/.test(name) || !r2?.configured || typeof r2.presignGet !== 'function') {
       return res.status(404).type('text/plain').send('Not found');
     }
     return res.set('Cache-Control', 'public, max-age=60').redirect(302, r2.presignGet(`broadcast/${name}`, { ttl: 3600 }));

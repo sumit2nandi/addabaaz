@@ -45,6 +45,23 @@ async function send(method, path, { body, raw, headers = {}, base = '/api/v1/adm
   return data;
 }
 
+// Store the full rendition first, then its compact WebP companion. The `-hq` marker is added only when
+// the companion is ready, so older/single-rendition uploads never make the viewer request a missing file.
+async function uploadImageRenditions(path, full, low) {
+  const paired = low?.type === 'image/webp' && low.size > 0 && low.size < full.size;
+  const saved = await send('POST', path, {
+    raw: full,
+    headers: { 'Content-Type': full.type || 'application/octet-stream', ...(paired ? { 'X-Image-Renditions': 'progressive' } : {}) },
+  });
+  if (!paired) return saved;
+  const name = String(saved.path || '').split('/').pop();
+  const variant = await send('POST', path, {
+    raw: low,
+    headers: { 'Content-Type': low.type, 'X-Image-Variant-Of': name },
+  });
+  return { ...saved, lowPath: variant.path };
+}
+
 // Convenience wrappers: api.get / post / put / patch / del, all under /api/v1/admin.
 export const api = {
   get: (p) => send('GET', p),
@@ -75,10 +92,10 @@ export const api = {
   },
   /** Uploads a .srt/.vtt subtitle file (converted to WebVTT on the server) → { path, cues }. */
   uploadSubtitle: (file) => send('POST', '/uploads/subtitle', { raw: file, headers: { 'Content-Type': 'application/octet-stream' } }),
-  /** Uploads a general admin image (already resized by prepareImage) → { path }. */
-  uploadImage: (blob) => send('POST', '/uploads/image', { raw: blob, headers: { 'Content-Type': blob.type || 'application/octet-stream' } }),
-  /** Uploads a Broadcast image to private R2 (the server validates it and returns a stable public app URL). */
-  uploadBroadcastImage: (blob) => send('POST', '/uploads/broadcast-image', { raw: blob, headers: { 'Content-Type': blob.type || 'application/octet-stream' } }),
+  /** Uploads full + compact admin image renditions → { path, lowPath? }. */
+  uploadImage: (full, low) => uploadImageRenditions('/uploads/image', full, low),
+  /** Uploads both Broadcast image renditions to private R2 and returns the stable high-quality app URL. */
+  uploadBroadcastImage: (full, low) => uploadImageRenditions('/uploads/broadcast-image', full, low),
 };
 
 /** PUT a big file straight to R2 with progress (XHR: fetch has no upload progress). */
@@ -124,15 +141,26 @@ export function putFile(url, file, onProgress, contentType) {
   });
 }
 
-/** Shrinks/re-encodes an image in the browser (WebP) so uploads stay small; GIFs and tiny files are sent as they are. */
-export async function prepareImage(file, { maxWidth = 1600, quality = 0.86 } = {}) {
-  if (!file.type.startsWith('image/')) throw new ApiError(400, 'Choose an image file.');
-  if (file.type === 'image/gif' || file.size < 40_000 && file.type === 'image/webp') return file;
+/** Shrinks/re-encodes the full rendition in the browser (WebP where it saves space). `webpOnly` creates
+ *  the small progressive placeholder; for GIFs that placeholder is a still frame, while the full upload keeps
+ *  its animation. Returns null when this browser cannot encode WebP. */
+export async function prepareImage(file, { maxWidth = 1600, quality = 0.86, webpOnly = false } = {}) {
+  if (!file?.type?.startsWith('image/')) throw new ApiError(400, 'Choose an image file.');
+  if (!webpOnly && (file.type === 'image/gif' || file.size < 40_000 && file.type === 'image/webp')) return file;
   const bmp = await createImageBitmap(file).catch(() => null);
-  if (!bmp) return file;
-  const scale = Math.min(1, maxWidth / bmp.width), w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+  if (!bmp) return webpOnly ? null : file;
+  const sourceWidth = bmp.width;
+  const widthLimit = Math.max(1, Number(maxWidth) || 1600);
+  const scale = Math.min(1, widthLimit / sourceWidth), w = Math.max(1, Math.round(sourceWidth * scale)), h = Math.max(1, Math.round(bmp.height * scale));
   const c = Object.assign(document.createElement('canvas'), { width: w, height: h });
-  c.getContext('2d').drawImage(bmp, 0, 0, w, h);
-  const blob = await new Promise((r) => c.toBlob(r, 'image/webp', quality));
-  return blob && blob.type === 'image/webp' && blob.size < file.size ? blob : file;
+  const context = c.getContext('2d');
+  if (!context) { bmp.close?.(); return webpOnly ? null : file; }
+  context.drawImage(bmp, 0, 0, w, h);
+  bmp.close?.();
+  const blob = await new Promise((resolve) => c.toBlob(resolve, 'image/webp', quality)).catch(() => null);
+  if (!blob) return webpOnly ? null : file;
+  if (webpOnly) return blob.type === 'image/webp' ? blob : null;
+  // Even if WebP happens to be a few bytes larger, a genuinely downscaled output is still the right
+  // full-resolution upload: never let a large original slip past the chosen size limit.
+  return blob.type === 'image/webp' && (blob.size < file.size || sourceWidth > widthLimit) ? blob : file;
 }

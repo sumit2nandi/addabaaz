@@ -14,7 +14,7 @@ import { Router, parseLocation, currentPath, replaceUrl, go } from './router.js'
 import { HISTORY } from './mode.js';
 import { renderShell, renderProfileMenu, markActive } from './ui/shell.js';
 import { syncButtons, scrollRail, toast } from './ui/components.js';
-import { swapToHighQuality } from './ui/progressive.js';
+import { loadHighQuality, swapToHighQuality } from './ui/progressive.js';
 import { initPlatform } from './platform.js';
 import { initConsent, trackPage } from './consent.js';
 import { initErrorReporting, reportClientError, friendly } from './errors.js';
@@ -197,14 +197,14 @@ function networkStatus() {
 }
 
 // Image failure fallbacks (data-fb): used to be inline onerror= handlers, which a strict CSP blocks.
-// Progressive artwork (ui/progressive.js): a small rendition loads first, then the best one replaces it.
-// A small rendition that fails goes straight to the best one; a failed best one uses data-fb as before.
+// Progressive artwork (ui/progressive.js): a small rendition loads first; the best is fetched separately and
+// only replaces it after it has fully arrived. If the small one fails, the best is assigned immediately.
 function wireImageFallbacks() {
   // `load` does not bubble and never reaches window (the event path stops at document), so it is listened for on
   // document in the capture phase. Listening on window here silently did nothing.
   document.addEventListener('load', (e) => {
     const t = e.target;
-    if (t instanceof HTMLImageElement && (t.dataset.hq || t.parentElement?.tagName === 'PICTURE')) swapToHighQuality(t);
+    if (t instanceof HTMLImageElement && (t.dataset.hq || t.parentElement?.tagName === 'PICTURE')) loadHighQuality(t);
   }, true);
   window.addEventListener('error', (e) => {
     const t = e.target;

@@ -2,7 +2,7 @@
 import { app } from '../app.js';
 import { replaceUrl } from '../router.js';
 import { html, $ } from '../util.js';
-import { showCard, videoCard, showMeta, emptyState } from '../ui/components.js';
+import { showCard, videoCard, showMeta, emptyState, img } from '../ui/components.js';
 
 // How many episode cards to show per "Load more".
 const PAGE = 24;
@@ -40,7 +40,7 @@ export default async function browse(ctx) {
     showFilters.innerHTML = html`<div class="filter-group">${chip('All', 'genre', '')}${chip('Premium', 'access', 'premium')}${chip('Free', 'access', 'free')}${cat.genres.map((g) => chip(g, 'genre', g))}</div>`.s;
     const shows = cat.shows.filter((s) => (!st.genre || (s.genres || []).includes(st.genre)) && (!st.access || (s.access || 'free') === st.access));
     showResults.innerHTML = shows.length ? html`<div class="grid grid-shows">${shows.map((s) => html`<div class="show-tile">${showCard(s)}<div class="show-tile-info"><a href="#/show/${s.id}">${s.title}</a>${showMeta(s)}</div></div>`)}</div>
-      ${cat.upcoming.length ? html`<h3 class="sub-h">Coming Soon</h3><div class="grid grid-shows">${cat.upcoming.map((u) => html`<a class="show-tile" href="#/soon/${u.id}"><div class="card card-poster"><div class="poster"><img src="${u.poster}" alt="${u.title}" loading="lazy"><span class="chip chip-soon">Coming Soon</span></div></div><div class="show-tile-info"><span>${u.title}</span></div></a>`)}</div>` : ''}`.s
+      ${cat.upcoming.length ? html`<h3 class="sub-h">Coming Soon</h3><div class="grid grid-shows">${cat.upcoming.map((u) => html`<a class="show-tile" href="#/soon/${u.id}"><div class="card card-poster"><div class="poster">${img(u.poster, u.title)}<span class="chip chip-soon">Coming Soon</span></div></div><div class="show-tile-info"><span>${u.title}</span></div></a>`)}</div>` : ''}`.s
       : emptyState({ title: 'No shows match these filters' }).s;
 
     const episodeShows = cat.shows.filter((s) => cat.episodes(s.id).length);

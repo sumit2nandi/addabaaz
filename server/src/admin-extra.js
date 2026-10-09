@@ -319,9 +319,9 @@ export function normalizeImage(value) {
   const v = typeof value === 'string' ? value.trim().slice(0, 500) : '';
   if (!v) return '';
   if (/^https:\/\/[^\s]+$/.test(v)) return v;
-  // The legacy upload endpoint returns `uploads/<hash>.<ext>` (no leading slash); accept both forms.
+  // Uploads return `uploads/<hash>[-hq].<ext>` (no leading slash); accept both forms.
   const localPath = v.startsWith('/') ? v.slice(1) : v;
   if (/^(uploads|media)\/[A-Za-z0-9._/-]+$/.test(localPath)
-    || /^r2-assets\/broadcast\/[0-9a-f]{24}\.(?:webp|png|jpg|gif)$/.test(localPath)) return `/${localPath}`;
+    || /^r2-assets\/broadcast\/(?:[0-9a-f]{24}(?:-hq)?\.(?:webp|png|jpg|gif)|[0-9a-f]{24}-low\.webp)$/.test(localPath)) return `/${localPath}`;
   return '';
 }

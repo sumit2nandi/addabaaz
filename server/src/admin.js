@@ -8,7 +8,7 @@ import { visibleEmail, plainEmail } from './email-address.js';
 import { sessionForRequest } from './sessions.js';
 import { PLANS, paidPlan } from './plans.js';
 import { validate, TYPES } from './catalog-schema.js';
-import { describeImage, describeSubtitle, cacheUpload, UPLOAD_NAME, videoKey } from './uploads.js';
+import { describeImage, describeImageVariant, describeSubtitle, cacheUpload, UPLOAD_NAME, videoKey } from './uploads.js';
 import { adminExtraRoutes } from './admin-extra.js';
 import { adminPromoRoutes } from './admin-promos.js';
 import { adminMaintenanceRoutes } from './admin-maintenance.js';
@@ -587,10 +587,19 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
   const keepUpload = async (file) => { await db.uploads.put(file.name, file.type, file.data); cacheUpload(uploadDir, file.name, file.data); };
   router.post('/uploads/image', express.raw({ type: () => true, limit: '10mb' }), wrap(async (req, res) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the image file as the request body.');
-    const saved = describeImage(req.body); if (!saved) throw bad('Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
+    const highName = req.get('x-image-variant-of');
+    const saved = highName
+      ? describeImageVariant(req.body, highName)
+      : describeImage(req.body, { progressive: req.get('x-image-renditions') === 'progressive' });
+    if (!saved) throw bad(highName ? 'The compact rendition must be WebP and match a saved high-quality upload.' : 'Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
+    if (highName) {
+      const high = await db.uploads.get(highName);
+      if (!high) throw new HttpError(404, 'image_not_found', 'Upload the high-quality image before its compact rendition.');
+      if (saved.bytes >= high.data.length) throw bad('The compact rendition must be smaller than the high-quality image.', 'invalid_image_variant');
+    }
     await keepUpload(saved);
-    await log(req, 'upload.image', saved.path, { bytes: saved.bytes });
-    res.status(201).json({ path: saved.path, bytes: saved.bytes, type: saved.type });
+    await log(req, highName ? 'upload.image.variant' : 'upload.image', saved.path, { bytes: saved.bytes });
+    res.status(201).json({ path: saved.path, bytes: saved.bytes, type: saved.type, ...(highName ? { variant: 'low' } : {}) });
   }));
   // Broadcast images live in private R2, not uploaded_files/MySQL. Their stable public app URL redirects
   // to a fresh short-lived R2 GET signature whenever a notification or e-mail client fetches the image.
@@ -599,7 +608,11 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
       throw new HttpError(503, 'storage_not_configured', 'Broadcast photo storage (R2) is not configured on this server. Configure R2 with Object Read & Write access, then try again.');
     }
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw bad('Send the image file as the request body.');
-    const saved = describeImage(req.body); if (!saved) throw bad('Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
+    const highName = req.get('x-image-variant-of');
+    const saved = highName
+      ? describeImageVariant(req.body, highName)
+      : describeImage(req.body, { progressive: req.get('x-image-renditions') === 'progressive' });
+    if (!saved) throw bad(highName ? 'The compact rendition must be WebP and match a high-quality upload.' : 'Only WebP, PNG, JPEG or GIF images are accepted.', 'unsupported_image');
     const key = `broadcast/${saved.name}`;
     try {
       await r2.putObject(key, saved.data, { contentType: saved.type, cacheControl: 'public, max-age=31536000, immutable' });
@@ -607,8 +620,8 @@ export function createAdminRouter({ db, billing, catalog, youtubeFeed = null, r2
       throw new HttpError(502, 'r2_upload_failed', `Could not upload the broadcast photo to Cloudflare R2${e?.statusCode ? ` (HTTP ${e.statusCode})` : ''}. Check the R2 credentials and try again.`, { cause: e });
     }
     const publicPath = `r2-assets/${key}`;
-    await log(req, 'upload.broadcast_image', publicPath, { bytes: saved.bytes });
-    res.status(201).json({ path: publicPath, bytes: saved.bytes, type: saved.type });
+    await log(req, highName ? 'upload.broadcast_image.variant' : 'upload.broadcast_image', publicPath, { bytes: saved.bytes });
+    res.status(201).json({ path: publicPath, bytes: saved.bytes, type: saved.type, ...(highName ? { variant: 'low' } : {}) });
   }));
   // Subtitle upload (.vtt or .srt; converted to WebVTT).
   router.post('/uploads/subtitle', express.raw({ type: () => true, limit: '2mb' }), wrap(async (req, res) => {
