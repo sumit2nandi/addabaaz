@@ -66,19 +66,22 @@ test('checkout shows the balance and only spends it when the viewer asks', () =>
   assert.match(read('server/src/routes/billing.js'), /useCredit: req\.body\?\.useCredit === true/, 'the checkout route is opt-in');
 });
 
-test('Account → Refer & earn shows the code, the balance and the people who joined', () => {
+test('Account → Refer & earn keeps rewards/activity, removes the highlighted cards and shares via WhatsApp from the hero', () => {
   assert.match(account, /wireReferral\(root\)/, 'the account page wires the section');
   assert.match(account, /<div id="referSlot" class="account-section"><\/div>/, 'and has a place for it in the responsive Account grid');
   assert.match(account, /Refer &amp; Earn/, 'named plainly');
-  assert.match(account, /Your Invite Code/, 'the code is shown');
-  assert.match(account, /data-copy="\$\{code\}"/, 'with a copy button');
-  assert.match(account, /Have a Friend’s Invite Code\?/, 'and a box to add someone else’s code');
-  assert.match(account, /u\.redeemInvite\(code\)/, 'which reaches the API');
+  assert.match(account, /class="referral-hero-actions"[\s\S]*data-referral-share[\s\S]*class="referral-hero-whatsapp"[\s\S]*href="\$\{whatsapp\}"/, 'the hero pairs its share action with a WhatsApp shortcut');
+  assert.match(account, /aria-label="Share your invite on WhatsApp"/, 'the icon-only WhatsApp shortcut has an accessible name');
+  assert.doesNotMatch(account, /YOUR PERSONAL INVITE|NO HIDDEN MILESTONES|Know someone who’d love ADDABAAZ/, 'the three highlighted sections are removed');
+  assert.doesNotMatch(account, /refLink|refCode/, 'copy fallback no longer depends on fields removed with the personal-invite card');
+  assert.match(account, /Benefits for both of you/, 'the referral benefits remain');
+  assert.match(account, /Friends you invited/, 'the referral activity remains');
+  assert.match(account, /Credit history/, 'the credit ledger remains');
+  assert.match(account, /Have a Friend’s Invite Code\?/, 'the redeem-code option remains available');
+  assert.match(account, /u\.redeemInvite\(code\)/, 'redeeming an invite still reaches the API');
   assert.match(account, /reserved for an unfinished order and returns automatically/, 'credit held by an unfinished order is explained');
   assert.match(account, /u\.promos\(\)/, 'the referral page reads the full viewer summary, not just the balance-only endpoint');
-  assert.match(account, /href="\$\{whatsapp\}"[\s\S]*href="\$\{telegram\}"/, 'WhatsApp and Telegram sharing links are both present');
   assert.match(account, /invitees\.earnedPaise/, 'the all-time referral earnings use the server summary');
-  assert.match(account, /No extra invite threshold or milestone bonus is configured/, 'the page does not invent milestone rewards');
   assert.match(user, /promos\(\) \{ return \(this\.remote \|\| this\.local\)\.promo\(\); \}/, 'user.promos');
   assert.match(user, /credits\(\) \{ return \(this\.remote \|\| this\.local\)\.credits\(\); \}/, 'user.credits');
   assert.match(adapters, /promo\(\) \{ return this\.api\.get\('\/promo'\); \}/, 'GET /promo');
