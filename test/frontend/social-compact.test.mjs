@@ -18,6 +18,7 @@ test('social buttons use official Google icon mode and accessible logo-only cust
   const css = read('app/css/styles.css');
   assert.match(css, /\.social-compact \.btn-social \{ width: 44px; height: 44px;/);
   assert.match(css, /\.social\.social-compact \{ display: flex; flex-wrap: wrap;/);
-  assert.match(css, /\.btn-social\.btn-google \{ background: #fff; border-color: #dadce0; color: #3c4043;.*border-radius: 8px/);
-  assert.match(css, /\.social-compact \.btn-social\.btn-google \{ width: 100%; max-width: 280px;.*border-radius: 8px/);
+  // Google's own light-theme colors (#747775 stroke, #1F1F1F label) and 40px height; up to 400px wide.
+  assert.match(css, /\.btn-social\.btn-google \{ background: #fff; border-color: #747775; color: #1f1f1f;.*border-radius: 4px/);
+  assert.match(css, /\.social-compact \.btn-social\.btn-google \{ width: 100%; max-width: 400px;.*height: 40px;.*border-radius: 4px/);
 });
