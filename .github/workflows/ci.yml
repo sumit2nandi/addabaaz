@@ -16,8 +16,10 @@ jobs:
     # retry timer leaked into the test process), so a red result arrives in minutes, naming the test.
     timeout-minutes: 30
     services:
+      # Pulled via Google's public Docker Hub mirror: the runner's unauthenticated Docker Hub pulls
+      # were rate-limited ("toomanyrequests") and the job failed before any test ran. Same image, same tag.
       mysql:
-        image: mysql:8.0
+        image: mirror.gcr.io/library/mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
         ports: ["3306:3306"]
