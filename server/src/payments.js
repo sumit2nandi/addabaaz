@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { withTimeout, OUTBOUND_TIMEOUT_MS } from './http.js';
 
 /**
  * Payments. Real money goes through Razorpay (INR, UPI/cards/netbanking/wallets):
@@ -9,6 +10,8 @@ import crypto from 'node:crypto';
  * The secret key never leaves the server; a plan is only ever activated after a signature check.
  *
  *   RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET   (dashboard → Settings → API Keys / Webhooks)
+ * Every provider call carries a request budget (HTTP_TIMEOUT_MS, default 15 s): a hung Razorpay must not
+ * leave checkout requests open forever.
  * Without Razorpay keys a clearly-labelled demo provider is used in development only (never in production
  * unless ALLOW_MOCK_PAYMENTS=true).
  */
@@ -20,7 +23,7 @@ const safeEqualHex = (a, b) => { const x = Buffer.from(String(a || ''), 'utf8'),
 export class PaymentError extends Error { constructor(status, code, message, options = {}) { super(message, options); this.name = new.target.name; this.status = status; this.code = code; } }
 
 // Razorpay client (plain HTTPS calls, no SDK). `fetchImpl` is injectable so tests can simulate Razorpay without network access.
-export function createRazorpay({ keyId, keySecret, webhookSecret = '', fetchImpl = fetch }) {
+export function createRazorpay({ keyId, keySecret, webhookSecret = '', fetchImpl = fetch, timeoutMs = OUTBOUND_TIMEOUT_MS }) {
   // Razorpay uses HTTP Basic auth with key id + secret.
   const auth = 'Basic ' + Buffer.from(`${keyId}:${keySecret}`).toString('base64');
   return {
@@ -28,7 +31,7 @@ export function createRazorpay({ keyId, keySecret, webhookSecret = '', fetchImpl
     // Creates a payment order for the amount; the browser then opens Razorpay Checkout with the returned order id.
     async createOrder({ amountPaise, receipt, notes }) {
       let r;
-      try { r = await fetchImpl('https://api.razorpay.com/v1/orders', { method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: amountPaise, currency: 'INR', receipt, notes }) }); }
+      try { r = await fetchImpl('https://api.razorpay.com/v1/orders', withTimeout({ method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: amountPaise, currency: 'INR', receipt, notes }) }, timeoutMs)); }
       catch (cause) { throw new PaymentError(503, 'provider_unavailable', 'Could not reach the payment provider. Please try again.', { cause }); }
       const body = await r.json().catch(() => ({}));
       if (!r.ok || !body.id) {
@@ -40,7 +43,7 @@ export function createRazorpay({ keyId, keySecret, webhookSecret = '', fetchImpl
     /** Refunds (part of) a captured payment. Razorpay answers { id: 'rfnd_…', status: 'pending' | 'processed' | 'failed' }; the final state also arrives by webhook. */
     async createRefund({ paymentId, amountPaise, notes, receipt }) {
       let r;
-      try { r = await fetchImpl(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/refund`, { method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: amountPaise, speed: 'normal', notes, receipt }) }); }
+      try { r = await fetchImpl(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/refund`, withTimeout({ method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: amountPaise, speed: 'normal', notes, receipt }) }, timeoutMs)); }
       catch (cause) { throw new PaymentError(503, 'provider_unavailable', 'Could not reach the payment provider. Please try again.', { cause }); }
       const body = await r.json().catch(() => ({}));
       if (!r.ok || !body.id) {

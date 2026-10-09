@@ -130,7 +130,13 @@ jobs:
   publish:
     name: Publish the download link
     needs: build
-    if: needs.build.result == 'success'
+    # Pushes and manual runs only — never a pull_request. The publish step DELETES the rolling `apk`
+    # release and recreates it from the commit it just built, so allowing a PR job to run it would let
+    # any contributor's unreviewed branch replace the APK that the README points people at. A PR still
+    # gets its own artifact below (Actions → Artifacts); it simply cannot move the shared download.
+    if: >-
+      needs.build.result == 'success' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     # A push and its pull_request run both build the same commit and both publish the SAME rolling
     # release. The publish step deletes the release and recreates it, so two of them at once fight

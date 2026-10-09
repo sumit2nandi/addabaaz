@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { withTimeout, OUTBOUND_TIMEOUT_MS } from './http.js';
 
 /**
  * Cloudflare R2 (S3-compatible) access without an SDK: AWS Signature V4 query-string presigning.
@@ -8,6 +9,12 @@ import crypto from 'node:crypto';
  *
  * The bucket stays PRIVATE. Video APIs issue short-lived signatures after access checks; a narrowly scoped stable route serves only validated Broadcast image keys.
  */
+// An HLS playlist is a few kilobytes of text; anything larger is not a playlist and is refused rather than
+// buffered into memory by the gateway (server/src/routes/media.js).
+const MAX_PLAYLIST_BYTES = 2_000_000;
+// Small-image uploads get a longer budget than a metadata call, but still cannot hang a request forever.
+const PUT_TIMEOUT_MS = Math.max(OUTBOUND_TIMEOUT_MS, 120_000);
+
 // URL encoding exactly as AWS Signature V4 requires (RFC 3986: also escapes ! ' ( ) *).
 const enc = (s) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
 const encPath = (p) => p.split('/').map(enc).join('/');
@@ -61,15 +68,20 @@ export function createR2(env = process.env, { fetchImpl = (...args) => fetch(...
     },
     /** Uploads a small server-validated image to private R2 storage without copying its bytes into MySQL. */
     async putObject(key, body, { contentType = 'application/octet-stream', cacheControl = '', ttl = 900 } = {}) {
-      const response = await fetchImpl(r2.presignPut(key, { ttl }), {
+      const response = await fetchImpl(r2.presignPut(key, { ttl }), withTimeout({
         method: 'PUT',
         headers: { 'Content-Type': contentType, ...(cacheControl ? { 'Cache-Control': cacheControl } : {}) },
         body,
-      });
+      }, PUT_TIMEOUT_MS));
       if (!response.ok) throw Object.assign(new Error(`R2 upload failed (HTTP ${response.status}).`), { statusCode: response.status });
       return { status: response.status, etag: response.headers?.get?.('etag') || null };
     },
-    /** Fetches an object response server-side; used to stream HLS fragments through the API for native WebViews. */
+    /**
+     * Fetches an object response server-side; used to stream HLS fragments through the API for native WebViews.
+     * Deliberately no AbortSignal here: the caller pipes the body straight to the response, and an abort timer
+     * would cut off a legitimate multi-megabyte segment on a slow connection. A dead viewer disconnects the
+     * downstream socket, which ends this request.
+     */
     getObject(key, { ttl = 900, range } = {}) {
       return fetch(r2.presignGet(key, { ttl }), { headers: range ? { Range: range } : {} });
     },
@@ -78,13 +90,19 @@ export function createR2(env = process.env, { fetchImpl = (...args) => fetch(...
       const res = await r2.getObject(key, { ttl: 60 });
       if (res.status === 404 || res.status === 403) return null;
       if (!res.ok) throw new Error(`R2 responded ${res.status}`);
-      return res.text();
+      // Bound what is read into memory: a playlist is tiny, so a huge body is a mistake or an attack,
+      // and the gateway would otherwise buffer it for every viewer of that video.
+      const declared = Number(res.headers.get('content-length'));
+      if (Number.isFinite(declared) && declared > MAX_PLAYLIST_BYTES) throw new Error(`R2 object is too large to be a playlist (${declared} bytes).`);
+      const text = await res.text();
+      if (text.length > MAX_PLAYLIST_BYTES) throw new Error('R2 object is too large to be a playlist.');
+      return text;
     },
     /** For `npm run r2:check` and server verification — HEAD request through a HEAD-presigned URL (with 1-byte Range GET fallback). */
     async head(key) {
-      let res = await fetch(r2.presignHead(key, { ttl: 60 }), { method: 'HEAD' });
+      let res = await fetch(r2.presignHead(key, { ttl: 60 }), withTimeout({ method: 'HEAD' }));
       if (res.status === 403 || res.status === 405 || res.status === 501) {
-        const getRes = await fetch(r2.presignGet(key, { ttl: 60 }), { method: 'GET', headers: { Range: 'bytes=0-0' } });
+        const getRes = await fetch(r2.presignGet(key, { ttl: 60 }), withTimeout({ method: 'GET', headers: { Range: 'bytes=0-0' } }));
         getRes.body?.cancel?.().catch(() => {});
         if (getRes.status === 206 || getRes.status === 200) {
           const cr = getRes.headers.get('content-range') || '';

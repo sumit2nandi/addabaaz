@@ -15,6 +15,7 @@
 // just the status code.
 
 import crypto from 'node:crypto';
+import { withTimeout, OUTBOUND_TIMEOUT_MS } from './http.js';
 
 /** Error for SMS-provider problems (503 unreachable, 502 provider rejected the request). */
 export class SmsError extends Error {
@@ -83,7 +84,7 @@ export const maskPhone = (phone) => {
  * @param {Function} [o.fetchImpl]
  * @param {object} [o.log]
  */
-export function createMsg91({ authKey, templateId, senderId = '', countryCode = '91', endpoint = 'https://control.msg91.com/api/v5/otp', fetchImpl = null, log = console }) {
+export function createMsg91({ authKey, templateId, senderId = '', countryCode = '91', endpoint = 'https://control.msg91.com/api/v5/otp', fetchImpl = null, log = console, timeoutMs = OUTBOUND_TIMEOUT_MS }) {
   const doFetch = fetchImpl || ((...a) => fetch(...a));
   return {
     provider: 'msg91',
@@ -109,11 +110,13 @@ export function createMsg91({ authKey, templateId, senderId = '', countryCode = 
       if (senderId) params.set('sender', senderId);
       let res;
       try {
-        res = await doFetch(`${endpoint}?${params.toString()}`, {
+        // The request is answered inside the viewer's "send code" wait, so it must carry a budget: an
+        // unreachable MSG91 has to surface as a 503 (the catch below), never as a request that hangs open.
+        res = await doFetch(`${endpoint}?${params.toString()}`, withTimeout({
           method: 'POST',
           headers: { authkey: authKey, 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify({ otp: String(code) }),
-        });
+        }, timeoutMs));
       } catch (cause) {
         throw new SmsError(503, 'sms_unavailable', 'We couldn’t send the code right now — please try again in a minute.', { cause });
       }

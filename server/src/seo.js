@@ -4,6 +4,7 @@ import { Catalog } from '../../app/js/data/catalog.js';
 import { matchRoute } from '../../app/js/routes.js';
 import { pageMeta, absUrl, clip, showFullName, videoIndexable, videoDescription, SITE, TYPE_LABEL } from '../../app/js/seo/meta.js';
 import { esc } from '../../app/js/util.js';
+import { safeRedirectLocation } from './http.js';
 import { legalDoc, LEGAL_PAGES, LEGAL_UPDATED } from '../../app/js/legal-text.js';
 
 /**
@@ -24,10 +25,16 @@ const jsonForHtml = (o) => JSON.stringify(o).replace(/</g, '\\u003c').replace(/\
 const showName = (s) => s.titleEn || s.title;
 
 /** Origin used in canonical URLs, the sitemap and structured data. PUBLIC_SITE_URL wins; otherwise what the request said. */
-// Falls back to the request's own host when PUBLIC_SITE_URL is not set.
+// Falls back to the request's own host when PUBLIC_SITE_URL is not set. That value comes from a client
+// supplied `Host` header, so it is only ever accepted as a bare `host[:port]`: a header like
+// `Host: evil.com/x` (or one carrying credentials) must not end up inside `<link rel=canonical>`,
+// `og:url` or sitemap.xml, where it would seed attacker-controlled URLs into search results.
+const SAFE_HOST = /^[A-Za-z0-9.\-_]+(?::\d{1,5})?$/;
 export function siteOrigin(req, configured) {
   if (configured) return configured.replace(/\/+$/, '');
-  return `${req.protocol}://${req.get('host')}`;
+  const host = String(req.get('host') || '');
+  if (!SAFE_HOST.test(host)) return '';                                  // unusable Host → no absolute URLs are emitted for this request
+  return `${req.protocol}://${host}`;
 }
 
 /** The visible-to-crawlers copy of a page (kept visually hidden: the real page is drawn by the app). */
@@ -163,13 +170,30 @@ export function createSeo({ catalog, root, plans, origin: configuredOrigin = '',
     const origin = originOf(req);
     const urlPath = req.path;
     // one URL per page: no trailing slash, no /index.html
-    if (urlPath === '/index.html') return { redirect: '/' + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '') };
-    if (urlPath.length > 1 && urlPath.endsWith('/')) return { redirect: urlPath.replace(/\/+$/, '') + (req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '') };
+    // The target is the request path with the slashes trimmed, so it goes through safeRedirectLocation:
+    // `///evil.com/` would otherwise become `Location: ///evil.com`, which browsers resolve to
+    // https://evil.com (a cross-origin redirect). An unsafe target is simply not redirected — it falls
+    // through to the normal 404 rendering, which is what a path like that deserves anyway.
+    const search = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+    if (urlPath === '/index.html') {
+      const to = safeRedirectLocation('/' + search, '');
+      if (to) return { redirect: to };
+    }
+    if (urlPath.length > 1 && urlPath.endsWith('/')) {
+      const to = safeRedirectLocation(urlPath.replace(/\/+$/, '') + search, '');
+      if (to) return { redirect: to };
+    }
     const { cat, studio } = await view();
     const query = req.query || {};
     // The metadata comes from the same module the browser uses (app/js/seo/meta.js), so both always agree.
-    const m = pageMeta({ path: urlPath, query, cat, studio, origin, plans });
-    if (m.redirect) return { redirect: m.redirect, status: m.status };
+    let m = pageMeta({ path: urlPath, query, cat, studio, origin, plans });
+    // A redirect from the metadata (renamed / duplicate URLs) is built from path segments, so it gets the
+    // same check: an unusable target must never leave this origin — serve the ordinary 404 page instead.
+    if (m.redirect) {
+      const to = safeRedirectLocation(m.redirect, '');
+      if (to) return { redirect: to, status: m.status };
+      m = { ...m, redirect: undefined, status: 404, canonical: null, robots: 'noindex,nofollow' };
+    }
     // Pages that do not exist are rendered as the 404 view (with a real 404 status).
     const route = (m.status === 200 && matchRoute(urlPath)) || { view: '404', params: {} };
     // Fill the placeholders in index.html with the generated head and body.

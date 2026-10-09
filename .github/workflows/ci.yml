@@ -2,6 +2,12 @@ name: CI
 on:
   push:
   pull_request:
+# Explicit least privilege. This workflow executes code from the pull request (npm ci, the test suite,
+# `docker build`/`docker run`), so the automatic GITHUB_TOKEN must never be able to write to the
+# repository — without this line the job inherits the repository default, which is read/write on many
+# projects and would let a PR push commits, create releases or rewrite tags from CI.
+permissions:
+  contents: read
 jobs:
   test:
     runs-on: ubuntu-latest

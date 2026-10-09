@@ -1,6 +1,6 @@
 // Public contact endpoint. Spam protection and persistence are kept behind injected dependencies.
 import crypto from 'node:crypto';
-import { bad, wrap, rateLimit } from '../http.js';
+import { bad, wrap, rateLimit, withTimeout } from '../http.js';
 
 export function registerContactRoutes(api, { db, rate, contactWebhook = '', logger = console }) {
   const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -12,7 +12,9 @@ export function registerContactRoutes(api, { db, rate, contactWebhook = '', logg
     if (String(message).length > 5000 || String(name).length > 100 || String(phone).length > 40 || String(email).length > 254) throw bad('One of the fields is too long.');
     const entry = { id: crypto.randomUUID(), name: String(name).trim(), email: String(email).trim(), phone: String(phone).trim(), message: String(message).trim(), at: new Date().toISOString() };
     await db.contacts.add(entry);
-    if (contactWebhook) fetch(contactWebhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch((e) => logger.warn('[contact] webhook failed:', e));
+    // Fire-and-forget, but with a request budget: a webhook host that accepts the connection and never
+    // answers would otherwise keep one socket per submission open until the process runs out.
+    if (contactWebhook) fetch(contactWebhook, withTimeout({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) })).catch((e) => logger.warn('[contact] webhook failed:', e));
     res.status(202).json({ ok: true });
   }));
 

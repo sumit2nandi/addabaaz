@@ -4,7 +4,7 @@
 import { createApp, APP_VERSION } from './app.js';
 import { createErrorLogger, installProcessErrorHandlers } from './error-reporting.js';
 import { createDb } from './db.js';
-import { dbConfigFromEnv } from './config.js';
+import { dbConfigFromEnv, dbTransportWarnings } from './config.js';
 import { migrate } from './migrate.js';
 import { runScheduledJobs } from './jobs.js';
 import { prepareWebAssets } from './web-assets.js';
@@ -23,6 +23,9 @@ const dbConfig = dbConfigFromEnv();
 console.log(`[db] settings from ${process.env.DATABASE_URL ? 'DATABASE_URL' : 'DB_* variables'}: ${dbConfig.user}@${dbConfig.host}:${dbConfig.port}/${dbConfig.database}`);
 // Say how the connection is secured (no secrets): helps to tell "certificate missing" from "wrong password" in the host's log.
 console.log(`[db] TLS: ${dbConfig.ssl ? (dbConfig.ssl.ca ? `on, trusting the provided CA certificate (${(dbConfig.ssl.ca.match(/BEGIN CERTIFICATE/g) || []).length})` : 'on, NO custom CA certificate (only public CAs are trusted)') : 'off'}`);
+// How the connection to MySQL is protected is a security question, not a connectivity one: warn (loudly,
+// but without refusing to start) about cleartext or unverified TLS in production. See dbTransportWarnings.
+for (const warning of dbTransportWarnings(dbConfig, process.env)) console.warn(`⚠ ${warning}`);
 // Connect to MySQL (creating the database first when DB_CREATE=true) and stop early with a clear message if it is unreachable.
 const db = await createDb({ config: dbConfig, ensureDatabase: process.env.DB_CREATE === 'true' });
 // Create the reporter as soon as a DB handle exists. It can capture migration/startup failures whenever

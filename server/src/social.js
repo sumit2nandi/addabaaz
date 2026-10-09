@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { withTimeout, OUTBOUND_TIMEOUT_MS } from './http.js';
 import { createAppleVerifier } from './apple.js';
 import { SocialError } from './social-errors.js';
 export { SocialError };
@@ -15,14 +16,18 @@ const GOOGLE_ISSUERS = new Set(['https://accounts.google.com', 'accounts.google.
 const b64json = (s) => JSON.parse(Buffer.from(s, 'base64url').toString('utf8'));
 
 /** Fetches (and caches for an hour) Google's public signing keys. */
-export function googleJwks(fetchImpl = fetch) {
+export function googleJwks(fetchImpl = fetch, { timeoutMs = OUTBOUND_TIMEOUT_MS } = {}) {
   // Cache of Google's keys and when they were fetched.
   let keys = null, at = 0;
   return async (kid) => {
     const fresh = () => Date.now() - at < 3_600_000;
     if (!keys || !fresh() || (kid && !keys.some((k) => k.kid === kid))) {
       if (!keys || Date.now() - at > 10_000) {                       // don't hammer Google on bad kids
-        const r = await fetchImpl(GOOGLE_JWKS_URL);
+        // A network failure here must read as "Google is unreachable" (503), never as a 500 and never hang:
+        // the request carries a timeout, and the abort/socket error is converted into the SocialError below.
+        let r;
+        try { r = await fetchImpl(GOOGLE_JWKS_URL, withTimeout({}, timeoutMs)); }
+        catch (cause) { throw new SocialError('provider_unavailable', 'Could not reach Google to verify your sign-in.', { cause }); }
         if (!r.ok) throw new SocialError('provider_unavailable', 'Could not reach Google to verify your sign-in.');
         keys = (await r.json()).keys || []; at = Date.now();
       }
@@ -60,14 +65,14 @@ export function createGoogleVerifier({ clientIds, getKey = googleJwks() }) {
  * Verifies a Facebook user access token: `debug_token` (must be valid AND issued to OUR app) then reads the profile.
  * Requires the app secret (server side only).
  */
-export function createFacebookVerifier({ appId, appSecret, version = 'v21.0', fetchImpl = fetch }) {
+export function createFacebookVerifier({ appId, appSecret, version = 'v21.0', fetchImpl = fetch, timeoutMs = OUTBOUND_TIMEOUT_MS }) {
   // Facebook Graph API base URL (versioned).
   const graph = `https://graph.facebook.com/${version}`;
   return async function verifyFacebook(accessToken) {
     const bad = () => new SocialError('invalid_credential', 'Facebook sign-in failed. Please try again.');
     if (typeof accessToken !== 'string' || accessToken.length < 10 || accessToken.length > 2048) throw bad();
     const get = async (url) => {
-      let r; try { r = await fetchImpl(url); } catch (cause) { throw new SocialError('provider_unavailable', 'Could not reach Facebook to verify your sign-in.', { cause }); }
+      let r; try { r = await fetchImpl(url, withTimeout({}, timeoutMs)); } catch (cause) { throw new SocialError('provider_unavailable', 'Could not reach Facebook to verify your sign-in.', { cause }); }
       if (r.status >= 500) throw new SocialError('provider_unavailable', 'Facebook is unavailable right now. Please try again.');
       return r.ok ? r.json() : null;
     };
