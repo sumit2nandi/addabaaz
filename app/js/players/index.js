@@ -99,7 +99,6 @@ export async function createPlayer(container, video, opts = {}) {
     // Total block (Low Power Mode, aggressive data saver…): even the muted fallback never ran.
     timers.push(setTimeout(() => {
       if (gone || playing || errored) return;          // a broken file is not an autoplay block: the page shows the error instead
-      if (ctl.engine === 'iframe') return;             // plain embed: no state events to inspect
       if (ctl.playPromise) {
         // HTML5: the play() promise is definitive. Pending (slow network) is NOT a block — only a real
         // NotAllowedError/AbortError rejection says the browser refused to start playback at all.
@@ -108,8 +107,8 @@ export async function createPlayer(container, video, opts = {}) {
         });
         return;
       }
-      // YouTube IFrame API: a player that is allowed starts loading within ~1s; still unstarted/cued at
-      // this point means the embed was refused entirely → offer the big "tap to play" affordance.
+      // YouTube's IFrame API and the API-less fallback both report player state; still unstarted/cued
+      // here means the embed was refused entirely → offer the big "tap to play" affordance.
       try { const st = ctl.state?.(); if (st !== 1 && st !== 3) opts.onAutoplayBlocked?.(); } catch { /* player already gone */ }
     }, AUTOPLAY_WAIT_MS * 1.5));
   }
