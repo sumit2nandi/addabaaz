@@ -569,24 +569,21 @@ body.reels-mode { overflow: hidden; padding-bottom: 0; } body.reels-mode .footer
 }
 .toasts { position: fixed; z-index: 500; left: 50%; bottom: calc(var(--tabbar-h) + var(--sab) + 16px); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 24px); pointer-events: none; }
 /* Toast (ui/components.js `toast()`): the small status bar at the bottom of the screen — "Watch history
- * cleared", "Link copied", … A WHITE capsule with DARK-RED text (the brand --accent, #b80000), so the
- * message pops against the dark page instead of sinking into it.
+ * cleared", "Link copied", … A DARK panel capsule (the same --panel-2 family as the menus and dialogs) with
+ * white text, so it sits inside the app's dark theme instead of glaring against it.
  *
- * Size: the message keeps its 14px/1.35 line (18.9px); the capsule carries 9.5px of white above and
- * below it — 37.9px tall, about 40% more than the 26.9px black capsule it replaces, with ALL of the
- * extra height added as breathing room at the top and bottom (4px → 9.5px), never by inflating the
- * words. The 18px side padding and 14px gap are unchanged, so the width rhythm stays. The hairline is
- * an INSET shadow rather than a `border` (a border would add 2px to the size); it keeps a faint edge
- * where the white capsule crosses bright artwork. */
+ * Size: the message keeps its 14px/1.35 line (18.9px); the capsule carries 9.5px above and below it —
+ * 37.9px tall. The 18px side padding and 14px gap are unchanged. The hairline is an INSET shadow rather
+ * than a `border` (a border would add 2px to the size). */
 .toast { display: flex; align-items: center; gap: 14px;
-  background: #fff;
-  color: var(--accent);
+  background: rgba(18,18,22,.97);
+  color: var(--text);
   padding: 9.5px 18px; border-radius: 999px; font-weight: 600; font-size: 14px; line-height: 1.35;
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,.08), 0 10px 40px rgba(0,0,0,.6);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), 0 10px 40px rgba(0,0,0,.6);
   opacity: 0; transform: translateY(12px); transition: .25s var(--ease); pointer-events: auto; }
 .toast.show { opacity: 1; transform: none; }
-/* The optional action ("Restart", "Undo"): white text on a solid dark-red chip — unmistakably a button
-   on the white capsule. 1px padding over a 12.5px/1.2 line = 17px — inside the message's 18.9px line
+/* The optional action ("Restart", "Undo"): white text on a solid brand-red chip — unmistakably a button
+   on the dark capsule. 1px padding over a 12.5px/1.2 line = 17px — inside the message's 18.9px line
    box, so an action never thickens the capsule beyond its padding. */
 .toast button { background: var(--accent); border: 0; border-radius: 999px; color: #fff; font-weight: 800; font-size: 12.5px; line-height: 1.2; padding: 1px 9px; transition: background .2s, color .2s; }
 .toast button:hover, .toast button:focus-visible { background: var(--accent-2); }

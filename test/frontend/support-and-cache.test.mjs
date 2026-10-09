@@ -29,7 +29,7 @@ const web = read('server/src/web.js');
 test('the Support page is reachable everywhere a stuck viewer looks', () => {
   assert.match(routes, /\['\/support', 'support'\]/, 'the router knows /support');
   assert.match(shell, /\['\/about', 'About'\], \['\/services', 'Services'\], \['\/contact', 'Contact'\], \['\/support', 'Support'\]/, 'the Studio menu links to it');
-  assert.match(shell, /<a class="menu-item" href="#\/support">\$\{icon\('chat', \{ size: 18 \}\)\}<span>Help &amp; support<\/span><\/a>/, 'so does the profile menu (shown signed in and out)');
+  assert.match(shell, /<a class="menu-item" href="#\/support">\$\{icon\('chat', \{ size: 18 \}\)\}<span>Help &amp; Support<\/span><\/a>/, 'so does the profile menu (shown signed in and out)');
   assert.match(shell, /support: 'studio'/, 'the nav highlights the right section');
   assert.doesNotMatch(read('app/js/views/account.js'), /#\/support/, 'the decluttered Account page links to it nowhere');
   assert.doesNotMatch(read('app/js/views/account-extra.js'), /supportBtn/, 'nor does the settings list (profile menu + Studio menu cover it)');

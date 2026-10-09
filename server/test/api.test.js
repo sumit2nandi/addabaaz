@@ -44,14 +44,14 @@ test('health + catalog + plans are public', async () => {
 });
 
 test('auth: validation, signup, duplicate, login, me', async () => {
-  assert.equal((await call('POST', '/auth/signup', { name: 'A', email: 'nope', password: 'longenough' })).status, 400);
+  assert.equal((await call('POST', '/auth/signup', { name: 'A', email: 'nope', password: 'LongEnough9!' })).status, 400);
   assert.equal((await call('POST', '/auth/signup', { name: 'A', email: 'a@b.co', password: 'short' })).status, 400);
-  const s = await call('POST', '/auth/signup', { name: 'Rupa Sen', email: 'Rupa@Example.com', password: 'correct horse' });
+  const s = await call('POST', '/auth/signup', { name: 'Rupa Sen', email: 'Rupa@Example.com', password: 'Correct Horse 9!' });
   assert.equal(s.status, 201); assert.ok(s.body.token); assert.equal(s.body.user.email, 'rupa@example.com'); assert.equal(s.body.profiles.length, 1);
   assert.equal(s.body.user.passwordHash, undefined);
-  assert.equal((await call('POST', '/auth/signup', { name: 'X', email: 'rupa@example.com', password: 'correct horse' })).status, 409);
+  assert.equal((await call('POST', '/auth/signup', { name: 'X', email: 'rupa@example.com', password: 'Correct Horse 9!' })).status, 409);
   assert.equal((await call('POST', '/auth/login', { email: 'rupa@example.com', password: 'wrong password' })).status, 401);
-  const l = await call('POST', '/auth/login', { email: 'rupa@example.com', password: 'correct horse' }); assert.equal(l.status, 200);
+  const l = await call('POST', '/auth/login', { email: 'rupa@example.com', password: 'Correct Horse 9!' }); assert.equal(l.status, 200);
   const me = await call('GET', '/me', null, l.body.token); assert.equal(me.body.user.name, 'Rupa Sen'); assert.equal(me.body.subscription.planId, 'free');
 });
 
@@ -61,8 +61,8 @@ test('protected routes reject missing/forged tokens', async () => {
 });
 
 test('profiles + library (list, progress, reminders) are isolated per user', async () => {
-  const a = (await call('POST', '/auth/signup', { name: 'Al', email: 'al@example.com', password: 'password123' })).body;
-  const b = (await call('POST', '/auth/signup', { name: 'Bo', email: 'bo@example.com', password: 'password123' })).body;
+  const a = (await call('POST', '/auth/signup', { name: 'Al', email: 'al@example.com', password: 'Password123!' })).body;
+  const b = (await call('POST', '/auth/signup', { name: 'Bo', email: 'bo@example.com', password: 'Password123!' })).body;
   const pid = a.profiles[0].id;
 
   const np = await call('POST', '/profiles', { name: 'Kids' }, a.token); assert.equal(np.status, 201);
@@ -92,7 +92,7 @@ test('profiles + library (list, progress, reminders) are isolated per user', asy
 });
 
 test('subscription lifecycle (demo provider): prepaid plan with an expiry', async () => {
-  const u = (await call('POST', '/auth/signup', { name: 'Su', email: 'su@example.com', password: 'password123' })).body;
+  const u = (await call('POST', '/auth/signup', { name: 'Su', email: 'su@example.com', password: 'Password123!' })).body;
   assert.equal((await call('POST', '/payments/checkout', { planId: 'nope' }, u.token)).status, 400);
   assert.equal((await call('POST', '/payments/checkout', { planId: 'free' }, u.token)).status, 400);
   assert.equal((await call('POST', '/payments/checkout')).status, 401);
@@ -116,7 +116,7 @@ test('contact form: validates, honeypot ignored, stored', async () => {
 });
 
 test('account deletion removes linked personal data and anonymizes delivery history', async () => {
-  const u = (await call('POST', '/auth/signup', { name: 'Del', email: 'del@example.com', password: 'password123' })).body;
+  const u = (await call('POST', '/auth/signup', { name: 'Del', email: 'del@example.com', password: 'Password123!' })).body;
   const phone = '919876543210';
   await db.pool.query('UPDATE users SET phone = ?, phone_verified_at = UTC_TIMESTAMP(3) WHERE id = ?', [phone, u.user.id]);
   const payment = '88888888-8888-4888-8888-888888888881', invoice = '88888888-8888-4888-8888-888888888882', refund = '88888888-8888-4888-8888-888888888884';
@@ -151,7 +151,7 @@ test('account deletion removes linked personal data and anonymizes delivery hist
 
   assert.equal((await call('DELETE', '/me', null, u.token)).status, 204);
   assert.equal((await call('GET', '/me', null, u.token)).status, 401);
-  assert.equal((await call('POST', '/auth/login', { email: 'del@example.com', password: 'password123' })).status, 401);
+  assert.equal((await call('POST', '/auth/login', { email: 'del@example.com', password: 'Password123!' })).status, 401);
   for (const t of ['profiles', 'subscriptions', 'auth_tokens', 'push_subscriptions', 'push_devices', 'refund_requests', 'error_log', 'notify_sent', 'playback_sessions']) {
     const [[{ n }]] = await db.pool.query(`SELECT COUNT(*) AS n FROM ${t} WHERE user_id = ?`, [u.user.id]); assert.equal(n, 0, `${t} was removed`);
   }
@@ -192,7 +192,7 @@ test('schema: migrations are recorded and re-running is a no-op', async () => {
 });
 
 test('data integrity: case-sensitive ids, Unicode names, cascade delete, profile cap, progress upsert', async () => {
-  const u = (await call('POST', '/auth/signup', { name: 'সুমিত নন্দী', email: 'bn@example.com', password: 'password123' })).body;
+  const u = (await call('POST', '/auth/signup', { name: 'সুমিত নন্দী', email: 'bn@example.com', password: 'Password123!' })).body;
   assert.equal(u.user.name, 'সুমিত নন্দী'); assert.equal(u.profiles[0].name, 'সুমিত');
   assert.equal((await call('GET', '/me', null, u.token)).body.user.name, 'সুমিত নন্দী');       // utf8mb4 round-trip
   const pid = u.profiles[0].id;
@@ -216,12 +216,12 @@ test('data integrity: case-sensitive ids, Unicode names, cascade delete, profile
 });
 
 test('concurrent signups with one email create exactly one account', async () => {
-  const r = await Promise.all(Array.from({ length: 6 }, () => call('POST', '/auth/signup', { name: 'Race', email: 'race@example.com', password: 'password123' })));
+  const r = await Promise.all(Array.from({ length: 6 }, () => call('POST', '/auth/signup', { name: 'Race', email: 'race@example.com', password: 'Password123!' })));
   assert.equal(r.filter((x) => x.status === 201).length, 1); assert.equal(r.filter((x) => x.status === 409).length, 5);
 });
 
 test('progress history is capped at 500 rows per profile', async () => {
-  const u = (await call('POST', '/auth/signup', { name: 'Cap', email: 'cap@example.com', password: 'password123' })).body;
+  const u = (await call('POST', '/auth/signup', { name: 'Cap', email: 'cap@example.com', password: 'Password123!' })).body;
   const pid = u.profiles[0].id;
   const rows = Array.from({ length: 503 }, (_, i) => [pid, 'vid' + i, i, 100, new Date(Date.now() - (503 - i) * 1000)]);
   await db.pool.query('INSERT INTO watch_progress (profile_id, video_id, position_sec, duration_sec, updated_at) VALUES ?', [rows]);

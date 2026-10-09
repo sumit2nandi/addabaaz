@@ -22,7 +22,7 @@ function askCoupon(sel, wantsCredit) {
     let done = false;
     const { el, close } = openDialog(html`<h2>Apply Coupon</h2>
       <form class="form" id="cpn" novalidate>
-        <label>Coupon code<input name="code" autocomplete="off" autocapitalize="characters" maxlength="30" placeholder="Enter code"></label>
+        <label>Coupon Code<input name="code" autocomplete="off" autocapitalize="characters" maxlength="30" placeholder="Enter code"></label>
         <div class="form-status" id="cpnMsg" role="alert"></div>
         <div class="row end"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" type="submit" id="cpnApply">Apply</button></div>
       </form>`, { title: 'Apply Coupon', cls: 'dialog-sm', onClose: () => { if (!done) resolve(null); } });
@@ -45,14 +45,14 @@ function askGst(bill, base) {
   return new Promise((resolve) => {
     let done = false;
     const states = bill.states || [];
-    const { el, close } = openDialog(html`<h2>Billing details</h2>
+    const { el, close } = openDialog(html`<h2>Billing Details</h2>
       <form class="form" id="gst" novalidate>
         <p class="muted small">Needed for your GST invoice — just this once, we remember it.</p>
-        <label>State (for GST)<select name="state" required><option value="">Select your state…</option>${states.map((x) => html`<option value="${x.code}" ${x.code === base.state ? 'selected' : ''}>${x.name}</option>`)}</select></label>
-        <label>Business name (optional)<input name="bname" maxlength="100" value="${base.name || ''}"></label>
-        <label>GSTIN (optional)<input name="gstin" maxlength="15" autocapitalize="characters" placeholder="22AAAAA0000A1Z5" value="${base.gstin || ''}"></label>
+        <label>State (for GST)<select name="state" required><option value="">Select Your State…</option>${states.map((x) => html`<option value="${x.code}" ${x.code === base.state ? 'selected' : ''}>${x.name}</option>`)}</select></label>
+        <label>Business Name (Optional)<input name="bname" maxlength="100" value="${base.name || ''}"></label>
+        <label>GSTIN (Optional)<input name="gstin" maxlength="15" autocapitalize="characters" placeholder="22AAAAA0000A1Z5" value="${base.gstin || ''}"></label>
         <div class="form-status" id="gstMsg" role="alert"></div>
-        <div class="row end"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" type="submit">Save &amp; continue</button></div>
+        <div class="row end"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" type="submit">Save &amp; Continue</button></div>
       </form>`, { title: 'Billing details', cls: 'dialog-sm', onClose: () => { if (!done) resolve(null); } });
     $('#gst', el).addEventListener('submit', (e) => {
       e.preventDefault();
@@ -79,7 +79,7 @@ function celebrate() {
   const bits = Array.from({ length: 28 }, (_, i) => `<i style="left:${(i * 37) % 100}%;background:${colors[i % colors.length]};animation-delay:${((i % 12) * 0.12).toFixed(2)}s"></i>`).join('');
   const d = document.createElement('div');
   d.className = 'celebrate';
-  d.innerHTML = html`<div class="confetti">${raw(bits)}</div><div class="cel-box"><div class="cel-check">${icon('check', { size: 46 })}</div><h2>You’re in!</h2><p>Premium unlocked — enjoy ADDABAAZ <em class="premium-word">premium</em>.</p><button class="btn btn-light" data-cel>Start watching</button></div>`.s;
+  d.innerHTML = html`<div class="confetti">${raw(bits)}</div><div class="cel-box"><div class="cel-check">${icon('check', { size: 46 })}</div><h2>You’re in!</h2><p>Premium Unlocked — Enjoy ADDABAAZ <em class="premium-word">premium</em>.</p><button class="btn btn-light" data-cel>Start Watching</button></div>`.s;
   document.body.appendChild(d);
   document.body.classList.add('no-scroll');
   const done = () => { d.remove(); document.body.classList.remove('no-scroll'); };
@@ -95,7 +95,7 @@ export default async function plans(ctx) {
   const backButton = pageBack(ctx, '/account');
   const next = /^\/(?!\/)/.test(ctx.query.next || '') ? ctx.query.next : '';
   if (!u.supportsAuth) {
-    ctx.root.innerHTML = html`<div class="page">${backButton}<div class="empty">${icon('crown', { size: 44 })}<h2>Plans need the ADDABAAZ server</h2><p>This copy of ADDABAAZ is running without the API, so subscriptions aren’t available. Free episodes and reels work as usual.</p><a class="btn btn-primary" href="#/">Keep watching</a></div></div>`.s; return;
+    ctx.root.innerHTML = html`<div class="page">${backButton}<div class="empty">${icon('crown', { size: 44 })}<h2>Plans Need the ADDABAAZ Server</h2><p>This copy of ADDABAAZ is running without the API, so subscriptions aren’t available. Free episodes and reels work as usual.</p><a class="btn btn-primary" href="#/">Keep Watching</a></div></div>`.s; return;
   }
   const { plans: list, payments, billing: bill } = await u.plans();
   const memo = {};
@@ -154,18 +154,18 @@ export default async function plans(ctx) {
       <ul class="perks">${perks.map((f) => html`<li>${icon('check', { size: 15 })} ${f}</li>`)}</ul>
       <div class="durs" role="radiogroup" aria-label="Billing period">${paid.map((p) => html`<button class="dur ${p.id === sel ? 'is-sel' : ''} ${p.id === cur ? 'is-current' : ''}" data-sel="${p.id}" role="radio" aria-checked="${p.id === sel}">${p.id === 'plus-yearly' ? html`<span class="dur-tag">Best Value</span>` : ''}${p.id === cur ? html`<span class="dur-tag cur">Current</span>` : ''}<b>₹${p.priceINR}</b><small>${p.interval === 'year' ? 'Year' : 'Month'}</small>${p.interval === 'year' ? html`<em>Just ₹${Math.round(p.priceINR / 12)}/month</em>` : ''}</button>`)}</div>
       ${creditPaise > 0 ? html`<label class="check credit-row"><input type="checkbox" name="usec" data-usec ${wantsCredit ? 'checked' : ''}> <span>Use my ${inr(creditPaise)} ADDABAAZ credit on this order</span></label>` : ''}
-      ${guestWeb ? html`<a class="btn btn-primary btn-lg block paybar" href="${signInUrl}">Sign in to subscribe</a>` : sp ? html`<button class="btn btn-primary btn-lg block paybar" data-pay>${pr.payPaise === 0 ? 'Activate for free' : html`${sp.id === cur ? 'Extend' : active ? 'Switch to' : 'Pay'} ${pr.savePaise > 0 ? html`<s>${inr(pr.listPaise)}</s> ` : ''}${inr(pr.payPaise)}`}</button>` : ''}
+      ${guestWeb ? html`<a class="btn btn-primary btn-lg block paybar" href="${signInUrl}">Sign In to Subscribe</a>` : sp ? html`<button class="btn btn-primary btn-lg block paybar" data-pay>${pr.payPaise === 0 ? 'Activate for free' : html`${sp.id === cur ? 'Extend' : active ? 'Switch to' : 'Pay'} ${pr.savePaise > 0 ? html`<s>${inr(pr.listPaise)}</s> ` : ''}${inr(pr.payPaise)}`}</button>` : ''}
       ${guestWeb ? '' : coupon && quote?.coupon ? html`<p class="coupon-line"><b>${quote.coupon.code}</b> applied — you save ${inr(pr ? pr.savePaise : 0)}. <button class="linklike" data-uncoupon>Remove</button></p>` : html`<button class="linklike coupon-link" data-coupon>Apply Coupon</button>`}
       <p class="free-line">Free · ${u.account && cur === 'free' ? 'your current plan' : 'included forever'}</p>
     </div>`;
     // Native apps and payment-less servers: read-only cards (no prices in native builds, no purchase buttons).
     const legacyCards = html`<div class="plans">${list.map((p) => html`<article class="plan ${p.id === cur ? 'current' : ''} ${!isNative && p.id === 'plus-yearly' ? 'best' : ''} ${p.id === 'free' ? 'free' : ''}">
         ${!isNative && p.id === 'plus-yearly' && p.id !== cur ? html`<span class="badge">Best Value</span>` : ''}
-        ${p.id === cur && p.id !== 'free' ? html`<span class="badge cur">Current plan</span>` : ''}
+        ${p.id === cur && p.id !== 'free' ? html`<span class="badge cur">Current Plan</span>` : ''}
         <h2>${p.name}</h2>${!isNative ? html`<div class="price">₹${p.priceINR}<small>/${p.interval}</small></div>` : ''}
         <ul>${p.features.map((f) => html`<li>${icon('check', { size: 16 })} ${f}</li>`)}</ul>
         ${p.id === 'free' ? html`<button class="btn btn-ghost block" disabled>${cur === 'free' ? 'Current plan' : 'Included'}</button>`
-          : !canBuy ? (p.id === cur ? html`<button class="btn btn-ghost block" disabled>Current plan</button>` : '')
+          : !canBuy ? (p.id === cur ? html`<button class="btn btn-ghost block" disabled>Current Plan</button>` : '')
           : html`<button class="btn btn-primary block" data-plan="${p.id}">${p.id === cur ? 'Extend' : active ? 'Switch to' : 'Get'} ${p.interval === 'year' ? 'yearly' : 'monthly'} plan</button>`}
       </article>`)}</div>`;
     ctx.root.innerHTML = html`<div class="page">
@@ -176,11 +176,11 @@ export default async function plans(ctx) {
       ${status}${why}
       ${!isNative && creditPaise > 0 ? html`<div class="notice ok">${icon('gift', { size: 18 })}<span>You have <b>${inr(creditPaise)}</b> of ADDABAAZ credit${offer?.expiryDays ? html` — it expires ${offer.expiryDays} days after it was added` : ''}. Tick “use my credit” at checkout and it comes straight off the price.</span></div>` : ''}
       ${canBuy || guestWeb ? plusCard : legacyCards}
-      ${u.account ? html`<div class="card-panel list plans-bill"><a class="row-link" href="#/billing">${icon('download', { size: 22 })}<span><b>Billing &amp; invoices</b><small>GST invoices, credit notes and refunds</small></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>` : ''}
-      ${s.demo ? html`<p class="muted" style="margin-top:18px"><button class="btn btn-ghost" data-cancel>End demo plan</button></p>` : ''}
+      ${u.account ? html`<div class="card-panel list plans-bill"><a class="row-link" href="#/billing">${icon('download', { size: 22 })}<span><b>Billing &amp; Invoices</b><small>GST Invoices, Credit Notes and Refunds</small></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>` : ''}
+      ${s.demo ? html`<p class="muted" style="margin-top:18px"><button class="btn btn-ghost" data-cancel>End Demo Plan</button></p>` : ''}
       <p class="muted" style="margin-top:18px;font-size:13px">${isNative
-        ? html`No purchase can be started or completed in this app. Existing members can view past invoices and refunds here. ${u.account ? html`<a href="#/billing">Billing & invoices</a>` : ''}`
-        : html`Prices in INR, inclusive of GST. UPI, cards, netbanking and wallets via Razorpay. ${u.account ? html`<a href="#/billing">Billing & invoices</a>` : ''}`}</p>
+        ? html`No purchase can be started or completed in this app. Existing members can view past invoices and refunds here. ${u.account ? html`<a href="#/billing">Billing & Invoices</a>` : ''}`
+        : html`Prices in INR, inclusive of GST. UPI, cards, netbanking and wallets via Razorpay. ${u.account ? html`<a href="#/billing">Billing & Invoices</a>` : ''}`}</p>
     </div>`.s;
   };
   draw();
@@ -246,7 +246,7 @@ export default async function plans(ctx) {
         if (payments.provider === 'razorpay' && wantsCredit) creditPaise = 0;   // spent — don't offer it twice in one visit
         if (next) { go(next, { replace: true }); return; }
         celebrate();
-      } else if (await confirmDialog({ title: 'End demo plan?', text: 'Premium videos will lock again.', confirm: 'End plan' })) { await u.cancelSubscription(); toast('Demo plan ended'); }
+      } else if (await confirmDialog({ title: 'End Demo Plan?', text: 'Premium videos will lock again.', confirm: 'End plan' })) { await u.cancelSubscription(); toast('Demo Plan Ended'); }
     } catch (err) {
       if (!err.cancelled) toast(friendly(err));
     } finally { busy = false; draw(); }

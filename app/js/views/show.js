@@ -63,9 +63,9 @@ export default async function showView(ctx) {
       ${s.description ? html`<section class="show-description" aria-labelledby="showDescriptionTitle"><h2 id="showDescriptionTitle">Description</h2><p>${s.description}</p></section>` : ''}
       ${eps.length ? html`<section class="ep-section" aria-label="Episodes">
         <div class="section-bar"><h2>Episodes <span class="count">${eps.length}</span></h2>
-          <button type="button" class="btn btn-ghost btn-sm" id="sortEps" data-order="asc">${icon('list', { size: 16 })} <span>Oldest first</span></button></div>
+          <button type="button" class="btn btn-ghost btn-sm" id="sortEps" data-order="asc">${icon('list', { size: 16 })} <span>Oldest First</span></button></div>
         <div class="ep-list ep-frame" id="epList" role="region" tabindex="0" aria-label="Episode list">${eps.map((v) => epRow(v))}</div></section>`
-        : html`<div class="empty small">${icon('film', { size: 36 })}<h2>Episodes coming soon</h2><p>Stay tuned — new episodes land here first.</p></div>`}
+        : html`<div class="empty small">${icon('film', { size: 36 })}<h2>Episodes Coming Soon</h2><p>Stay tuned — new episodes land here first.</p></div>`}
       ${rail({ title: 'Trailers, Reels & Clips', items: extras.map((v) => (v.kind === 'reel' ? reelCard(v) : videoCard(v, { showName: false }))), cls: extras.some((v) => v.kind === 'reel') ? 'r-reel' : 'r-video' })}
       ${rail({ title: 'More like this', items: cat.related(s).map((x) => showCard(x)), cls: 'r-poster' })}
     </div>`.s;
@@ -97,6 +97,6 @@ export default async function showView(ctx) {
   });
   $('#shareBtn', ctx.root).addEventListener('click', async () => {
     const r = await shareOrCopy({ title: s.titleEn || s.title, text: s.tagline || s.description, url: shareUrl('/show/' + s.id) });
-    if (r === 'copied') toast('Link copied');
+    if (r === 'copied') toast('Link Copied');
   });
 }

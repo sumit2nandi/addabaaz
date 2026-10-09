@@ -60,7 +60,7 @@ function show(state = {}) {
     <p class="abm-msg" id="abmMsg">${state.message || 'ADDABAAZ is getting a quick upgrade. We’ll be back shortly — thanks for your patience!'}</p>
     <p class="abm-left" id="abmLeft"></p>
     <div class="abm-bar" aria-hidden="true"><i></i></div>
-    <button class="btn btn-primary" id="abmCheck" type="button">Check again</button>
+    <button class="btn btn-primary" id="abmCheck" type="button">Check Again</button>
     <p class="abm-note">Your plan, watchlist and downloads are safe. Payments already made are still settling.</p>
   </div>`.s;
   (document.getElementById('view')?.parentElement || document.body).appendChild(el);

@@ -13,7 +13,7 @@ test('Shows page opens directly on the genre filters, with page-font titles', ()
     '...the section keeps its accessible name without the visible heading');
   assert.doesNotMatch(browse, /class="bn"/,
     'show tiles use the page font — the Tiro Bangla serif override made Latin titles look foreign');
-  assert.match(browse, /<h2 class="sub-h" id="episodesHeading">All episodes<\/h2>/,
+  assert.match(browse, /<h2 class="sub-h" id="episodesHeading">All Episodes<\/h2>/,
     'the episodes section keeps its heading below the shows grid');
   assert.match(browse, /\$\{chip\('All', 'genre', ''\)\}\$\{chip\('Premium', 'access', 'premium'\)\}\$\{chip\('Free', 'access', 'free'\)\}/,
     'Premium and Free capsules sit right after All');

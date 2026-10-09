@@ -10,7 +10,7 @@ import { COUNTRY_CHOICES } from '../data/countries.js';
 export function pickCountry(currentDial = '91') {
   return new Promise((resolve) => {
     let result = null;
-    const { el } = openDialog(html`<h2>Select a country</h2>
+    const { el } = openDialog(html`<h2>Select a Country</h2>
       <input type="search" class="country-search" placeholder="Search" aria-label="Search country or code">
       <div class="country-list" role="listbox" aria-label="Countries"></div>`,
       { title: 'Select a country', cls: 'dialog-sm country-picker', onClose: () => resolve(result) });

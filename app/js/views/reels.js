@@ -70,16 +70,16 @@ export default async function reels(ctx) {
   const gateHtml = (v, state) => {
     const next = encodeURIComponent(`/reels/${v.id}`);
     if (state === 'login') return html`<div class="reel-gate" role="status" aria-live="polite"><div>
-      ${icon('lock', { size: 38 })}<h2>Sign in to watch</h2><p>This is ADDABAAZ Premium. Sign in or create a free account to watch this reel.</p>
-      <div class="row"><a class="btn btn-primary" href="#/signin?next=${next}">Sign in</a><a class="btn btn-glass" href="#/signup?next=${next}">Create account</a></div>
+      ${icon('lock', { size: 38 })}<h2>Sign In to Watch</h2><p>This is ADDABAAZ Premium. Sign in or create a free account to watch this reel.</p>
+      <div class="row"><a class="btn btn-primary" href="#/signin?next=${next}">Sign In</a><a class="btn btn-glass" href="#/signup?next=${next}">Create Account</a></div>
     </div></div>`;
     if (state === 'plan') return html`<div class="reel-gate" role="status" aria-live="polite"><div>
       ${icon('lock', { size: 38 })}<h2>ADDABAAZ <em class="premium-word">premium</em> exclusive</h2><p>This reel needs an active paid plan.</p>
       <a class="btn btn-primary" href="#/plans?next=${next}">${icon('crown', { size: 18 })} See plans</a>
     </div></div>`;
     return html`<div class="reel-gate" role="status" aria-live="polite"><div>
-      ${icon('lock', { size: 38 })}<h2>Premium reel needs an account</h2><p>Sign-in and plan checks need the ADDABAAZ API.</p>
-      <a class="btn btn-glass" href="#/">Back to home</a>
+      ${icon('lock', { size: 38 })}<h2>Premium Reel Needs an Account</h2><p>Sign-in and plan checks need the ADDABAAZ API.</p>
+      <a class="btn btn-glass" href="#/">Back to Home</a>
     </div></div>`;
   };
 
@@ -167,7 +167,7 @@ export default async function reels(ctx) {
           if (!muteHinted) {
             muteHinted = true;
             const b = document.createElement('button'); b.type = 'button'; b.className = 'unmute-pill reel-unmute';
-            b.innerHTML = icon('mute', { size: 18 }).s + '<span>Tap for sound</span>';
+            b.innerHTML = icon('mute', { size: 18 }).s + '<span>Tap for Sound</span>';
             b.onclick = () => { soundOn = true; if (ctl) ctl.unmute(); sections.forEach(setIcon); b.remove(); };
             sec.querySelector('.reel-frame')?.appendChild(b);
             setTimeout(() => b.remove(), 6000);
@@ -214,7 +214,7 @@ export default async function reels(ctx) {
       soundOn = !soundOn; if (ctl) (soundOn ? ctl.unmute() : ctl.mute()); sections.forEach(setIcon);
     }
     const sh = e.target.closest('[data-reel-share]');
-    if (sh) { const r = await shareOrCopy({ title: cat.displayTitle(cat.video(sh.dataset.reelShare)), url: shareUrl('/reels/' + sh.dataset.reelShare) }); if (r === 'copied') toast('Link copied'); }
+    if (sh) { const r = await shareOrCopy({ title: cat.displayTitle(cat.video(sh.dataset.reelShare)), url: shareUrl('/reels/' + sh.dataset.reelShare) }); if (r === 'copied') toast('Link Copied'); }
   });
   feed.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sections[Math.max(0, Math.min(sections.length - 1, active + (e.key === 'ArrowDown' ? 1 : -1)))]?.scrollIntoView({ behavior: 'smooth' }); }

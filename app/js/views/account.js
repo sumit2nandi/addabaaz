@@ -69,6 +69,6 @@ export default async function account(ctx) {
   $('#signout', ctx.root)?.addEventListener('click', async () => {
     if (!(await confirmSignOut())) return;   // confirmation popup first — sign out only on confirm
     try { await u.signOut(); } catch { /* local state is already cleared */ }
-    toast('Signed out'); go('/', { replace: true });
+    toast('Signed Out'); go('/', { replace: true });
   });
 }

@@ -40,7 +40,7 @@ export default async function soon(ctx) {
     </section>
     <div class="page page-tight">
       ${rail({ title: 'Teasers & reels', items: extras.map((v) => (v.kind === 'reel' ? reelCard(v) : videoCard(v, { showName: false }))), cls: 'r-reel' })}
-      ${rail({ title: 'More coming soon', items: cat.upcoming.filter((x) => x.id !== u.id).map((x) => html`<a class="card card-poster card-soon" href="#/soon/${x.id}"><div class="poster">${img(x.poster, x.title)}<span class="chip chip-soon">Coming soon</span></div></a>`), cls: 'r-poster' })}
+      ${rail({ title: 'More coming soon', items: cat.upcoming.filter((x) => x.id !== u.id).map((x) => html`<a class="card card-poster card-soon" href="#/soon/${x.id}"><div class="poster">${img(x.poster, x.title)}<span class="chip chip-soon">Coming Soon</span></div></a>`), cls: 'r-poster' })}
     </div>`.s;
   enhanceRails(ctx.root);
   fitPoster(ctx.root);                                   // the poster keeps its own shape (tiny crop at most)
@@ -55,6 +55,6 @@ export default async function soon(ctx) {
   tapArtwork(ctx.root.querySelector('#detailHero'), art);
   ctx.root.querySelector('#shareBtn').addEventListener('click', async () => {
     const r = await shareOrCopy({ title: u.titleEn || u.title, text: 'Coming soon on ADDABAAZ', url: shareUrl('/soon/' + u.id) });
-    if (r === 'copied') toast('Link copied');
+    if (r === 'copied') toast('Link Copied');
   });
 }

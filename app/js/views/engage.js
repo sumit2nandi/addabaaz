@@ -24,7 +24,7 @@ export async function mountRating(box, { type, id, label = '' }) {
   draw();
   box.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;
-    if (!u.account) { toast('Sign in to rate.', { action: 'Sign in', onAction: () => go('/signin?next=' + encodeURIComponent(location.pathname)) }); return; }
+    if (!u.account) { toast('Sign in to rate.', { action: 'Sign In', onAction: () => go('/signin?next=' + encodeURIComponent(location.pathname)) }); return; }
     if (!u.profile) { toast('Choose a profile first.'); return; }
     const v = Number(b.dataset.v), next = u.ratingOf(type, id) === v ? 0 : v;
     try { counts = await u.rate(type, id, next); draw(); } catch (err) { toast(friendly(err)); }

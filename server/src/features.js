@@ -7,6 +7,7 @@ import { FREE_KINDS } from './catalog-schema.js';
 import { normalizeEmail } from './email-address.js';
 import { isPhoneEmail } from './sms.js';
 import * as mail from './emails.js';
+import { passwordProblem } from '../../app/js/password-rule.js';
 
 // Small shared helpers for this file.
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -14,8 +15,6 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
 const newToken = () => crypto.randomBytes(32).toString('base64url');
 const HOUR = 3600_000;
-// Password rule: 8-128 characters.
-const passwordOk = (p) => typeof p === 'string' && p.length >= 8 && p.length <= 128;
 // A do-nothing middleware, used instead of a rate limiter in tests.
 const noop = (_q, _s, n) => n();
 
@@ -152,7 +151,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       // Password reset step 2: spends the one-time token, sets the new password and signs every other device out.
       api.post('/auth/reset', authLimit, wrap(async (req, res) => {
         const { token, password } = req.body || {};
-        if (!passwordOk(password)) throw bad('Password must be 8–128 characters.', 'weak_password');
+        const pwProblem = passwordProblem(password); if (pwProblem) throw bad(pwProblem, 'weak_password');
         const uid = typeof token === 'string' && token.length >= 20 && token.length <= 200 ? await db.authTokens.consume(sha256(token), 'reset') : null;
         if (!uid) throw new HttpError(400, 'invalid_token', 'This reset link is invalid or has expired. Please request a new one.');
         const user = await db.users.byId(uid); if (!user) throw new HttpError(400, 'invalid_token', 'This reset link is invalid or has expired.');
@@ -314,7 +313,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
       // Change password: needs the current one (unless the account was created via Google/Facebook and has none). All other sessions are signed out.
       api.post('/me/password', authLimit, wrap(async (req, res) => {
         const { currentPassword, newPassword } = req.body || {};
-        if (!passwordOk(newPassword)) throw bad('Password must be 8–128 characters.', 'weak_password');
+        const pwProblem = passwordProblem(newPassword); if (pwProblem) throw bad(pwProblem, 'weak_password');
         if (req.user.passwordHash && !(await verifyPassword(String(currentPassword || ''), req.user.passwordHash))) throw new HttpError(403, 'invalid_credentials', 'Your current password is incorrect.');
         const sv = await db.accounts.setPassword(req.user.id, await hashPassword(newPassword));
         sendMail(req.user.email, mail.passwordChangedEmail({ name: req.user.name, siteUrl, supportEmail: cfg.supportEmail }), `password changed for ${req.user.email}`);

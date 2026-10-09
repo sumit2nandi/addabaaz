@@ -5,6 +5,7 @@ import { hashPassword, verifyPassword, signToken, signJwt, verifyToken, DUMMY_PA
 import { HttpError, bad, wrap } from '../http.js';
 import { normalizeEmail } from '../email-address.js';
 import { SocialError } from '../social-errors.js';
+import { passwordProblem } from '../../../app/js/password-rule.js';
 
 export function registerAuthRoutes(api, { db, secret, social, features, mailer, authLimit, publicUser, notDisabled, sms = null, promos = null, logger = console, signupMailWaitMs = 5000 }) {
   // Create an account with e-mail + password. A verification-mail failure must be visible to the user (the account is still created so they can sign in and retry).
@@ -16,7 +17,7 @@ export function registerAuthRoutes(api, { db, secret, social, features, mailer, 
     // An address that only becomes usable after cleaning ("rupa @example.com", a full-width ＠) is fine:
     // the stored address is always the normalized one.
     if (typeof email !== 'string' || email.length > 254 || !norm.ok || (typeof email === 'string' && email.trim() === '')) throw bad('Please enter a valid email address.', 'invalid_email');
-    if (typeof password !== 'string' || password.length < 8 || password.length > 128) throw bad('Password must be 8–128 characters.', 'weak_password');
+    const pwProblem = passwordProblem(password); if (pwProblem) throw bad(pwProblem, 'weak_password');
     if (typeof name !== 'string' || !name.trim() || name.length > 60) throw bad('Please enter your name.', 'invalid_name');
     // Passwords are hashed (scrypt) before they touch the database.
     const user = { id: crypto.randomUUID(), email: norm.email, emailNorm: norm.email, name: name.trim(), passwordHash: await hashPassword(password) };

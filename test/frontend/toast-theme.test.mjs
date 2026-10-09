@@ -1,8 +1,6 @@
-// Toast redesign. The status bar at the bottom of the screen ("Watch history cleared", "Link copied"…)
-// is a WHITE capsule with DARK-RED text (the brand --accent): the message pops against the dark page
-// instead of sinking into it. The capsule is ~40% taller than the black one it replaces, with ALL of
-// the extra height added as space above and below the words (padding 4px → 9.5px) — the words
-// themselves keep their exact size, side padding and gap.
+// Toast theme. The status bar at the bottom of the screen ("Watch history cleared", "Link copied"…)
+// is a DARK panel capsule with white text, matching the menus and dialogs. Its height is 37.9px
+// (padding 9.5px above and below the unchanged 14px message line).
 //
 // Run: node --test test/frontend/toast-theme.test.mjs
 import { test } from 'node:test';
@@ -30,14 +28,14 @@ const token = (name) => (css.match(new RegExp(`--${name}:\\s*([^;]+);`)) || [])[
 
 /* ---------------------------------------------------------------- the look */
 
-test('the toast is a white capsule with dark-red text', () => {
+test('the toast is a dark panel capsule with white text', () => {
   const toast = ruleText('.toast');
-  assert.match(toast, /background:\s*#fff/, 'the fill is white');
-  assert.match(toast, /color:\s*var\(--accent\)/, 'the message is the brand dark red');
-  assert.equal(token('accent'), '#b80000', 'which is the dark brand red');
+  assert.match(toast, /background:\s*rgba\(18,18,22,\s*\.97\)/, 'the fill is the dark panel colour used by the menus');
+  assert.match(toast, /color:\s*var\(--text\)/, 'the message is white, like the rest of the app');
+  assert.equal(token('accent'), '#b80000', 'the brand red is unchanged');
   // The ring is an INSET shadow, never a border (a border would add 2px to height and width): a faint
   // dark hairline so the white capsule keeps an edge over bright artwork.
-  assert.match(toast, /box-shadow:\s*inset 0 0 0 1px rgba\(0,0,0,\s*\.08\),\s*0 10px 40px rgba\(0,0,0,\.6\)/, 'a faint hairline INSIDE the box, plus the original drop shadow');
+  assert.match(toast, /box-shadow:\s*inset 0 0 0 1px rgba\(255,255,255,\s*\.12\),\s*0 10px 40px rgba\(0,0,0,\.6\)/, 'a faint light hairline INSIDE the box, plus the drop shadow');
   assert.doesNotMatch(toast, /(?:^|[;\s])border:/, 'no border property: it would grow the capsule by 2px');
   assert.doesNotMatch(toast, /backdrop-filter/, 'a solid white fill needs no glass blur');
   // Capsule shape, like the floating menu.
@@ -80,16 +78,16 @@ test('the capsule grew ~40%, all of it as space above and below the words', () =
   assert.ok(b.font * b.line + b.padY * 2 <= s.font * s.line, `the chip (${b.font * b.line + b.padY * 2}px) fits the message's line box (${s.font * s.line}px)`);
 });
 
-test('the optional action is a solid dark-red chip on the white capsule', () => {
+test('the optional action is a solid brand-red chip on the dark capsule', () => {
   const button = ruleText('.toast button');
-  assert.match(button, /background:\s*var\(--accent\)/, 'a solid dark-red chip — unmistakably a button on white');
+  assert.match(button, /background:\s*var\(--accent\)/, 'a solid brand-red chip — unmistakably a button on the dark capsule');
   assert.match(button, /border:\s*0/, 'no border: the capsule keeps its exact size');
   assert.match(button, /color:\s*#fff/, 'white label on the red chip');
   assert.match(button, /border-radius:\s*999px/);
   assert.match(css, /\.toast button:hover,[^}]*background: var\(--accent-2\);/, 'it brightens on hover/focus');
 });
 
-test('dark red on the white capsule reads clearly', () => {
+test('white text on the dark capsule and the red chip reads clearly', () => {
   const red = token('accent');
   assert.equal(red, '#b80000');
   // #abc and #aabbcc both expand to [r, g, b].
@@ -98,8 +96,8 @@ test('dark red on the white capsule reads clearly', () => {
     .reduce((n, c, i) => n + c * [0.2126, 0.7152, 0.0722][i], 0);
   const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
 
-  // Dark red on white clears WCAG AA for normal text, and the white chip label on the red chip too.
-  assert.ok(contrast(red, '#ffffff') >= 4.5, `${red} on the white capsule is AA-legible (${contrast(red, '#ffffff').toFixed(2)}:1)`);
+  // White message on the near-black panel, and white chip label on the brand red, both clear WCAG AA.
+  assert.ok(contrast('#ffffff', '#121216') >= 4.5, `white on the dark capsule is AA-legible (${contrast('#ffffff', '#121216').toFixed(2)}:1)`);
   assert.ok(contrast('#ffffff', red) >= 4.5, 'the chip label reads just as clearly');
 });
 

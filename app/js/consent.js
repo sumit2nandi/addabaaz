@@ -34,7 +34,7 @@ export function setConsent(v) {
 
 // Shared inline privacy controls, also available in the legacy consent dialog.
 export function privacyChoices() {
-  return html`<section class="card-panel" aria-labelledby="privacyChoicesTitle"><h2 id="privacyChoicesTitle">Privacy choices</h2>
+  return html`<section class="card-panel" aria-labelledby="privacyChoicesTitle"><h2 id="privacyChoicesTitle">Privacy Choices</h2>
     <p class="muted">Essential storage keeps you signed in and remembers your profile and settings. It cannot be switched off.</p>
     ${gaId() ? html`<label class="row-switch"><span><b>Analytics (Google Analytics)</b><small>Allow optional analytics. You can change your choice at any time.</small></span><span class="switch"><input type="checkbox" id="privacyAnalytics" ${getConsent() === 'all' ? 'checked' : ''}><span class="track"></span></span></label>` : html`<p class="muted">Optional analytics is not enabled on this site.</p>`}
     <p class="muted small" id="privacyChoiceStatus" role="status"></p>
@@ -50,7 +50,7 @@ export function wirePrivacyChoices(root) {
 // The "Privacy choices" dialog (opened from the footer).
 export function openConsentDialog() {
   const on = getConsent() === 'all', hasGa = !!gaId();
-  const { el, close } = openDialog(html`<h2>Privacy choices</h2>
+  const { el, close } = openDialog(html`<h2>Privacy Choices</h2>
     <p class="muted">ADDABAAZ stores a few things on your device so the site works: your sign-in, your profile and settings, and a copy of the app for offline use. Those are essential and can’t be switched off.</p>
     ${hasGa ? html`<label class="row-switch"><span><b>Analytics (Google Analytics)</b><small>Anonymous page views that help us see what people watch. Off unless you say yes.</small></span><span class="switch"><input type="checkbox" id="gaOn" ${on ? 'checked' : ''}><span class="track"></span></span></label>`
       : html`<p class="muted"><b>Analytics:</b> this site doesn’t use optional analytics cookies. We only count plays and watch time on our own servers, without identifying you.</p>`}
@@ -68,7 +68,7 @@ export function initConsent() {
   if (getConsent() === 'all') loadGa();
   if (getConsent() !== null || !gaId()) return;
   const bar = document.createElement('div'); bar.id = 'consentBar'; bar.className = 'consent-bar'; bar.setAttribute('role', 'region'); bar.setAttribute('aria-label', 'Privacy notice');
-  bar.innerHTML = html`<p>We use essential storage to keep you signed in. May we also use Google Analytics to understand what people watch? <a href="#/privacy">Privacy Policy</a></p><div class="row"><button class="btn btn-ghost btn-sm" data-c="essential">Essential only</button><button class="btn btn-primary btn-sm" data-c="all">Accept analytics</button></div>`.s;
+  bar.innerHTML = html`<p>We use essential storage to keep you signed in. May we also use Google Analytics to understand what people watch? <a href="#/privacy">Privacy Policy</a></p><div class="row"><button class="btn btn-ghost btn-sm" data-c="essential">Essential Only</button><button class="btn btn-primary btn-sm" data-c="all">Accept Analytics</button></div>`.s;
   bar.addEventListener('click', (e) => { const b = e.target.closest('[data-c]'); if (b) setConsent(b.dataset.c); });
   document.body.appendChild(bar);
 }

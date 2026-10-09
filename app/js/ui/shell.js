@@ -82,13 +82,13 @@ export function renderProfileMenu() {
     wrap.innerHTML = html`
       <button type="button" class="avatar-btn" id="profileBtn" aria-haspopup="true" aria-expanded="false" aria-label="Sign in and settings"><span class="avatar" style="--av:#444;width:34px;height:34px">${icon('user', { size: 18 })}</span></button>
       <div class="menu menu-right" id="profileMenu" hidden>
-        <a class="menu-item" href="#/signin">${icon('user', { size: 18 })}<span>Sign in</span></a>
-        <a class="menu-item" href="#/signup">${icon('plus', { size: 18 })}<span>Create account</span></a>
+        <a class="menu-item" href="#/signin">${icon('user', { size: 18 })}<span>Sign In</span></a>
+        <a class="menu-item" href="#/signup">${icon('plus', { size: 18 })}<span>Create Account</span></a>
         <hr>
         <a class="menu-item" href="#/list">${icon('list', { size: 18 })}<span>My List</span></a>
         <a class="menu-item" href="#/plans">${icon('crown', { size: 18 })}<span>Plans</span></a>
         <a class="menu-item" href="#/account">${icon('edit', { size: 18 })}<span>Settings &amp; privacy</span></a>
-        <a class="menu-item" href="#/support">${icon('chat', { size: 18 })}<span>Help &amp; support</span></a>
+        <a class="menu-item" href="#/support">${icon('chat', { size: 18 })}<span>Help &amp; Support</span></a>
       </div>`.s;
     return;
   }
@@ -96,15 +96,15 @@ export function renderProfileMenu() {
     <button type="button" class="avatar-btn" id="profileBtn" aria-haspopup="true" aria-expanded="false" aria-label="Profile menu">${p ? avatar(p, { size: 34 }) : html`<span class="avatar" style="--av:#444;width:34px;height:34px">${icon('user', { size: 18 })}</span>`}</button>
     <div class="menu menu-right" id="profileMenu" hidden>
       ${u.profiles.map((x) => html`<button type="button" class="menu-item ${x.id === u.activeId ? 'current' : ''}" data-switch-profile="${x.id}">${avatar(x, { size: 26 })}<span>${x.name}</span>${x.id === u.activeId ? icon('check', { size: 16 }) : ''}</button>`)}
-      <a class="menu-item" href="#/profiles?manage=1">${icon('edit', { size: 18 })}<span>Manage profiles</span></a>
+      <a class="menu-item" href="#/profiles?manage=1">${icon('edit', { size: 18 })}<span>Manage Profiles</span></a>
       <hr>
       <a class="menu-item" href="#/list">${icon('list', { size: 18 })}<span>My List</span></a>
       <a class="menu-item" href="#/account">${icon('user', { size: 18 })}<span>Account &amp; settings</span></a>
-      <a class="menu-item" href="#/support">${icon('chat', { size: 18 })}<span>Help &amp; support</span></a>
+      <a class="menu-item" href="#/support">${icon('chat', { size: 18 })}<span>Help &amp; Support</span></a>
       ${u.supportsAuth ? html`<a class="menu-item" href="#/plans">${icon('crown', { size: 18 })}<span>Plans</span></a>` : ''}
       ${u.supportsAuth ? (u.account
         ? html`<button type="button" class="menu-item" data-signout>${icon('logout', { size: 18 })}<span>Sign out</span></button>`
-        : html`<a class="menu-item" href="#/signin">${icon('user', { size: 18 })}<span>Sign in</span></a>`) : ''}
+        : html`<a class="menu-item" href="#/signin">${icon('user', { size: 18 })}<span>Sign In</span></a>`) : ''}
     </div>`.s;
 }
 
@@ -125,7 +125,7 @@ function wireMenus() {
       // Signing out ends the viewer's session — ask first, in the app's confirmation popup.
       confirmSignOut().then((ok) => {
         if (!ok) return;
-        app.user.signOut().catch(() => {}).then(() => { toast('Signed out'); go('/'); });
+        app.user.signOut().catch(() => {}).then(() => { toast('Signed Out'); go('/'); });
       });
       return;
     }

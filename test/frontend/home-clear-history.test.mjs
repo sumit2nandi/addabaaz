@@ -52,7 +52,7 @@ test('home renders the bin at the right end of the Continue Watching heading and
     const railEl = root.querySelector('#cw-rail');
     const bin = railEl?.querySelector('button[data-clear-history]');
     assert.ok(bin, 'the Continue Watching heading carries a bin button');
-    assert.equal(bin.getAttribute('aria-label'), 'Clear watch history');
+    assert.equal(bin.getAttribute('aria-label'), 'Clear Watch History');
     assert.ok(bin.querySelector('svg'), 'the bin renders as an icon-only button');
     const head = bin.parentElement;
     assert.ok(head.classList.contains('rail-head'), 'the bin is a child of the heading row');
@@ -63,7 +63,7 @@ test('home renders the bin at the right end of the Continue Watching heading and
     bin.click();
     await tick();
     const dlg = document.querySelector('dialog.dialog');
-    assert.match(dlg.textContent, /Clear watch history\?/);
+    assert.match(dlg.textContent, /Clear Watch History\?/);
     dlg.querySelector('[data-close]').dispatchEvent(new window.Event('click', { bubbles: true }));
     await tick();
     assert.equal(cleared, 0, 'Cancel keeps the history');
@@ -76,7 +76,7 @@ test('home renders the bin at the right end of the Continue Watching heading and
     assert.equal(cleared, 1, 'confirming clears the profile watch history');
     assert.equal(root.querySelector('#cw-rail'), null, 'the empty Continue Watching rail is removed');
     assert.equal(root.querySelector('#byw-rail'), null, 'any history-seeded rail goes too');
-    assert.match(document.querySelector('#toasts').textContent, /Watch history cleared/);
+    assert.match(document.querySelector('#toasts').textContent, /Watch History Cleared/);
 
     cleanup();
     const before = cleared;
@@ -96,9 +96,9 @@ test('the shared rail helper accepts heading extras and home wires the destructi
   assert.match(components, /\$\{headExtra\}/);
   const view = read('app/js/views/home.js');
   assert.match(view, /id: 'cw-rail'/);
-  assert.match(view, /data-clear-history aria-label="Clear watch history"/);
-  assert.match(view, /confirmDialog\(\{ title: 'Clear watch history\?', text: 'This removes Continue Watching for this profile\.', confirm: 'Clear', danger: true \}\)/);
-  assert.match(view, /u\.clearHistory\(\);\s*toast\('Watch history cleared'\)/);
+  assert.match(view, /data-clear-history aria-label="Clear Watch History"/);
+  assert.match(view, /confirmDialog\(\{ title: 'Clear Watch History\?', text: 'This removes Continue Watching for this profile\.', confirm: 'Clear', danger: true \}\)/);
+  assert.match(view, /u\.clearHistory\(\);\s*toast\('Watch History Cleared'\)/);
   assert.match(view, /ctx\.onCleanup\(\(\) => ctx\.root\.removeEventListener\('click', onClear\)\)/);
 });
 
@@ -120,5 +120,5 @@ test('home puts the history bin in the right-end slot, exactly like a rail\'s "S
   assert.match(clear, /align-self: center/, 'centred on the heading text');
   assert.doesNotMatch(clear, /--gold/, 'the gold ring is gone');
   assert.match(read('app/css/styles.css'), /\.rail-clear::after \{ content: ''; position: absolute; inset: -6px; \}/, 'the tap target is a separate layer');
-  assert.match(read('app/js/views/home.js'), /class="rail-clear" data-clear-history aria-label="Clear watch history">\$\{icon\('trash', \{ size: 18 \}\)\}/);
+  assert.match(read('app/js/views/home.js'), /class="rail-clear" data-clear-history aria-label="Clear Watch History">\$\{icon\('trash', \{ size: 18 \}\)\}/);
 });

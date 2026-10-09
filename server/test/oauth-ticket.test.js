@@ -46,7 +46,7 @@ test('native-page is a CSP-safe page that shows the website\'s own Google button
 });
 
 test('a ticket mints a session exactly once; garbage and reuse are refused', async () => {
-  const s = await call('POST', '/auth/signup', { name: 'OAuth Tester', email: 'oauth@example.com', password: 'correct horse' });
+  const s = await call('POST', '/auth/signup', { name: 'OAuth Tester', email: 'oauth@example.com', password: 'Correct Horse 9!' });
   assert.equal(s.status, 201);
   const userId = s.body.user.id;
 

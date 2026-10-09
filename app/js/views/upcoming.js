@@ -28,7 +28,7 @@ export default async function upcoming(ctx) {
     ${cat.upcoming.length ? html`<div class="grid grid-upcoming">${cat.upcoming.map((u) => html`
       <div class="show-tile">
         <a class="card card-poster card-soon" href="#/soon/${u.id}" aria-label="${u.titleEn || u.title} — coming soon">
-          <div class="poster upcoming-page-poster">${img(u.poster, 'Coming soon poster', { cls: 'upcoming-page-image', lazy: false })}<span class="chip chip-soon">Coming soon</span></div>
+          <div class="poster upcoming-page-poster">${img(u.poster, 'Coming soon poster', { cls: 'upcoming-page-image', lazy: false })}<span class="chip chip-soon">Coming Soon</span></div>
         </a>
         <div class="show-tile-info">${remindBtn(u.id, { cls: 'btn btn-ghost btn-sm' })}</div>
       </div>`)}</div>` : html`<p class="empty small">No upcoming releases have been announced yet.</p>`}

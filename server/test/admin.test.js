@@ -53,7 +53,7 @@ const call = async (method, p, body, token, { raw, headers } = {}) => {
   return { status: r.status, body: json, text, buf, headers: r.headers };
 };
 // Helper: register a new user and return their token (most tests start with this).
-async function signup(email, name = 'Test User') { const r = await call('POST', '/auth/signup', { name, email, password: 'password123' }); return { ...r.body, email, token: r.body.token, id: r.body.user.id }; }
+async function signup(email, name = 'Test User') { const r = await call('POST', '/auth/signup', { name, email, password: 'Password123!' }); return { ...r.body, email, token: r.body.token, id: r.body.user.id }; }
 const A = (m, p, b, opts) => call(m, '/admin' + p, b, admin.token, opts);
 const audit = async (action) => (await A('GET', `/audit?action=${encodeURIComponent(action)}`)).body.entries;
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), crypto.randomBytes(64)]);
@@ -167,7 +167,7 @@ test('users: search, filters, detail, rename, complimentary access, revoke, disa
   // disable → cannot use the site with an old token, cannot log in; enable → works again
   assert.equal((await A('PATCH', `/users/${viewer.id}`, { disabled: true })).body.user.disabledAt !== null, true);
   assert.equal((await call('GET', '/me', null, viewer.token)).body.error.code, 'account_disabled');
-  const lg = await call('POST', '/auth/login', { email: 'viewer@example.com', password: 'password123' }); assert.equal(lg.status, 403); assert.equal(lg.body.error.code, 'account_disabled');
+  const lg = await call('POST', '/auth/login', { email: 'viewer@example.com', password: 'Password123!' }); assert.equal(lg.status, 403); assert.equal(lg.body.error.code, 'account_disabled');
   assert.equal((await A('GET', '/users?filter=disabled')).body.total, 1);
   await A('PATCH', `/users/${viewer.id}`, { disabled: false }); assert.equal((await call('GET', '/me', null, viewer.token)).status, 200);
   // guards
@@ -447,7 +447,7 @@ test('one address = one account: duplicates are reported and can be merged', asy
 
     // A new account for that address is impossible from now on — in either spelling.
     for (const email of [viewerEmail, nbEmail]) {
-      const again = await call('POST', '/auth/signup', { name: 'Copy Cat', email, password: 'password123' });
+      const again = await call('POST', '/auth/signup', { name: 'Copy Cat', email, password: 'Password123!' });
       assert.equal(again.status, 409, `${email} → ${JSON.stringify(again.body)}`);
       assert.equal(again.body.error.code, 'email_taken');
     }

@@ -21,12 +21,12 @@ export default async function deletion(ctx) {
     ${sectionHeader({ tag: 'Account & privacy', title: 'Delete your account', subtitle: name })}
     <p class="lead">You can permanently delete your ADDABAAZ account and request deletion even if you can no longer sign in.</p>
 
-    <section class="card-panel"><h2>Delete from the app</h2>
-      <p>Sign in, read the details below, then use <b>Delete account</b> at the bottom of this page and confirm. This removes the account and linked profiles, library, viewing activity, ratings, device registrations and support conversations from our service.</p>
+    <section class="card-panel"><h2>Delete From the App</h2>
+      <p>Sign in, read the details below, then use <b>Delete Account</b> at the bottom of this page and confirm. This removes the account and linked profiles, library, viewing activity, ratings, device registrations and support conversations from our service.</p>
       <p>Account deletion is permanent and you will not be able to sign in again with that account.</p>
     </section>
 
-    <section class="card-panel"><h2>Cannot sign in?</h2>
+    <section class="card-panel"><h2>Cannot Sign In?</h2>
       <p>Email <a href="mailto:${email}?subject=${subject}&amp;body=${body}">${email}</a> with the subject “${name} account deletion request”. Tell us the account’s registered email address or phone number so we can locate it. We may ask for reasonable information to verify that you own the account.</p>
       <p><b>Do not include your password, SMS/email one-time code, card number or UPI PIN.</b> If you do not have an email app, write to ${email} from another email service. We aim to acknowledge a verified request within 7 days.</p>
     </section>
@@ -38,7 +38,7 @@ export default async function deletion(ctx) {
     </section>
 
     <p class="muted small">Privacy contact: <a href="mailto:${email}">${email}</a><br>${address}</p>
-    ${app.user.account ? html`<div class="deletion-actions"><button type="button" class="btn btn-danger" id="delAcc">Delete account</button></div>` : html`<p><a class="btn btn-primary" href="#/signin?next=/delete-account">Sign in to delete your account</a></p>`}
+    ${app.user.account ? html`<div class="deletion-actions"><button type="button" class="btn btn-danger" id="delAcc">Delete Account</button></div>` : html`<p><a class="btn btn-primary" href="#/signin?next=/delete-account">Sign In to Delete Your Account</a></p>`}
   </article>`.s;
   wireAccountDeletion(ctx.root);
 }
