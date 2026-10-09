@@ -77,6 +77,9 @@ test('Account → Refer & earn keeps rewards/activity, removes highlighted cards
   assert.doesNotMatch(account, /YOUR PERSONAL INVITE|NO HIDDEN MILESTONES|Know someone who’d love ADDABAAZ/, 'the three highlighted sections are removed');
   assert.doesNotMatch(account, /refLink|refCode/, 'copy fallback no longer depends on fields removed with the personal-invite card');
   assert.match(account, /Benefits for both of you/, 'the referral benefits remain');
+  assert.match(account, /A win-win for everyone/, 'the benefits section uses the design subtitle');
+  assert.match(account, /referral-benefit--you[\s\S]*YOU GET[\s\S]*referral-benefit--friend[\s\S]*YOUR FRIEND GETS/, 'the two-column benefits cards distinguish the inviter and friend');
+  assert.match(account, /referral-benefit-check/, 'benefits use the checkmark list treatment');
   assert.match(account, /Friends you invited/, 'the referral activity remains');
   assert.match(account, /Credit history/, 'the credit ledger remains');
   assert.match(account, /Have a Friend’s Invite Code\?/, 'the redeem-code option remains available');

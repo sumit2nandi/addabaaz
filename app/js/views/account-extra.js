@@ -135,6 +135,19 @@ function wireReferral(root) {
     const inviteSummary = rewardPaise
       ? `Your friend gets ${inr(rewardPaise)} in ADDABAAZ credit when they use your code. You earn the same after they ${offer.hold === 'signup' ? 'join' : offer.hold === 'payment' ? 'make their first plan payment' : 'confirm their email or phone'}.`
       : 'Your invite code is ready to share, but no referral-credit amount is configured right now.';
+    const inviterBenefits = [
+      [rewardPaise ? `${inr(rewardPaise)} Credit` : 'Referral credit', rewardPaise ? 'for every qualifying friend.' : 'No referral-credit amount is configured right now.'],
+      ...(rewardPaise ? [['Reward timing', `Your credit unlocks ${hold}.`]] : []),
+      ['More to watch', 'Use referral credit toward an eligible plan at checkout.'],
+      ['Track your invites', 'Follow friend sign-ups and reward progress below.'],
+    ];
+    const inviteeBenefits = [
+      [rewardPaise ? `${inr(rewardPaise)} ADDABAAZ Credit` : 'Referral credit', rewardPaise ? 'when they join with your invite code.' : 'No referral-credit amount is configured right now.'],
+      ...(welcomePaise ? [[`${inr(welcomePaise)} Welcome Bonus`, 'for eligible new accounts.']] : []),
+      ...(rewardPaise ? [['Available right away', 'Their invite credit is ready to use at signup.']] : []),
+      ['More to enjoy', 'Use available credit toward an eligible ADDABAAZ plan.'],
+    ];
+    const benefitRows = (items) => items.map(([title, detail]) => html`<li class="referral-benefit-row"><span class="referral-benefit-check">${icon('check', { size: 18 })}</span><span class="referral-benefit-copy"><b>${title}</b><small>${detail}</small></span></li>`);
 
     slot.innerHTML = html`<h2 class="sub-h referral-page-heading">Refer &amp; Earn</h2>
       <div class="referral-shell">
@@ -174,12 +187,20 @@ function wireReferral(root) {
           ${heldPaise ? html`<p class="referral-wallet-status">${icon('info', { size: 15 })}${inr(heldPaise)} is reserved for an unfinished order and returns automatically if it isn’t completed.</p>` : ''}
         </section>
 
-        <section class="referral-panel" aria-labelledby="referralBenefitsTitle">
-          <div class="referral-panel-heading"><span class="referral-eyebrow">A LITTLE SOMETHING FOR BOTH</span><h2 id="referralBenefitsTitle">Benefits for both of you</h2></div>
+        <section class="referral-panel referral-benefits-panel" aria-labelledby="referralBenefitsTitle">
+          <div class="referral-benefits-heading">
+            <span class="referral-benefits-heading-icon">${icon('gift', { size: 38 })}</span>
+            <div><span class="referral-eyebrow">A LITTLE SOMETHING FOR BOTH</span><h2 id="referralBenefitsTitle">Benefits for both of you</h2><p>A win-win for everyone</p></div>
+          </div>
           <div class="referral-benefits">
-            <article class="referral-benefit"><span class="referral-benefit-icon">${icon('user', { size: 19 })}</span><div><span class="referral-benefit-label">YOUR FRIEND GETS</span><b>${rewardPaise ? inr(rewardPaise) : 'No amount set'}</b><p>${rewardPaise ? 'in referral credit when they use your code to join.' : 'No referral-credit amount is configured at the moment.'}</p>
-              ${welcomePaise ? html`<small>New accounts may also receive a ${inr(welcomePaise)} welcome bonus, if eligible.</small>` : ''}</div></article>
-            <article class="referral-benefit"><span class="referral-benefit-icon">${icon('gift', { size: 19 })}</span><div><span class="referral-benefit-label">YOU GET</span><b>${rewardPaise ? inr(rewardPaise) : 'No amount set'}</b><p>${rewardPaise ? `in referral credit ${hold}.` : 'No referral-credit amount is configured at the moment.'}</p></div></article>
+            <article class="referral-benefit referral-benefit--you" aria-labelledby="referralYouTitle">
+              <h3 class="referral-benefit-title" id="referralYouTitle">YOU GET</h3>
+              <ul class="referral-benefit-list">${benefitRows(inviterBenefits)}</ul>
+            </article>
+            <article class="referral-benefit referral-benefit--friend" aria-labelledby="referralFriendTitle">
+              <h3 class="referral-benefit-title" id="referralFriendTitle">YOUR FRIEND GETS</h3>
+              <ul class="referral-benefit-list">${benefitRows(inviteeBenefits)}</ul>
+            </article>
           </div>
           <p class="referral-footnote">Referral credit can be used toward plans; it is not a cash payout.</p>
         </section>
