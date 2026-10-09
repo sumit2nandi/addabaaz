@@ -135,17 +135,17 @@ test('social: Google creates a passwordless account, repeat logins reuse it', as
   const me = (await call('GET', '/me', null, b.body.token)).body;
   assert.deepEqual(me.providers, ['google']); assert.equal(me.hasPassword, false);
   // no password login for a social-only account, and sign-up with that email explains why
-  assert.equal((await call('POST', '/auth/login', { email: 'gina@example.com', password: 'anything at all' })).status, 401);
-  const dup = await call('POST', '/auth/signup', { name: 'G', email: 'gina@example.com', password: 'password123' });
+  assert.equal((await call('POST', '/auth/login', { email: 'gina@example.com', password: 'Anything At All 9!' })).status, 401);
+  const dup = await call('POST', '/auth/signup', { name: 'G', email: 'gina@example.com', password: 'Password123!' });
   assert.equal(dup.status, 409); assert.match(dup.body.error.message, /Google\/Facebook/);
 });
 
 test('social: a verified email matching a password account links to it; unverified emails are refused', async () => {
-  const pw = (await call('POST', '/auth/signup', { name: 'Existing User', email: 'existing@example.com', password: 'password123' })).body;
+  const pw = (await call('POST', '/auth/signup', { name: 'Existing User', email: 'existing@example.com', password: 'Password123!' })).body;
   const g = (await call('POST', '/auth/google', { idToken: 'g-existing' })).body;
   assert.equal(g.isNew, false); assert.equal(g.user.id, pw.user.id);
   const me = (await call('GET', '/me', null, g.token)).body; assert.deepEqual(me.providers, ['google']); assert.equal(me.hasPassword, true);
-  assert.equal((await call('POST', '/auth/login', { email: 'existing@example.com', password: 'password123' })).status, 200);   // password still works
+  assert.equal((await call('POST', '/auth/login', { email: 'existing@example.com', password: 'Password123!' })).status, 200);   // password still works
   const un = await call('POST', '/auth/google', { idToken: 'g-unverified' }); assert.equal(un.status, 400); assert.equal(un.body.error.code, 'email_unverified');
 });
 
@@ -173,7 +173,7 @@ test('social: deleting the account removes linked identities', async () => {
 });
 
 // Helper: register a new user and return their token (most tests start with this).
-const signup = async (email) => (await call('POST', '/auth/signup', { name: 'Vee', email, password: 'password123' })).body;
+const signup = async (email) => (await call('POST', '/auth/signup', { name: 'Vee', email, password: 'Password123!' })).body;
 const pay = (token) => call('POST', '/payments/checkout', { planId: 'plus-monthly' }, token);          // demo provider: instant
 const paidUser = async (email) => { const u = await signup(email); await pay(u.token); return u; };
 

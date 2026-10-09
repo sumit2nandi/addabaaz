@@ -57,7 +57,7 @@ const call = async (method, p, body, token, url = root, raw) => {
   return { status: r.status, body: json };
 };
 // Helper: register a new user and return their token (most tests start with this).
-const signup = async (email) => { const b = (await call('POST', '/auth/signup', { name: 'Pay Er', email, password: 'password123' })).body; await db.accounts.markVerified(b.user.id); return b; };
+const signup = async (email) => { const b = (await call('POST', '/auth/signup', { name: 'Pay Er', email, password: 'Password123!' })).body; await db.accounts.markVerified(b.user.id); return b; };
 const stream = (token) => call('POST', '/videos/prem/stream', null, token);
 const checkout = (token, planId = 'plus-monthly') => call('POST', '/payments/checkout', { planId }, token);
 const goodSig = (o, p) => hmac(KEY_SECRET, `${o}|${p}`);
@@ -160,7 +160,7 @@ test('webhook: signed captures activate the plan even if the browser never retur
 test('account deletion keeps the payment record for accounting but drops the user link', async () => {
   const u = await signup('leaver@example.com'); const c = await checkout(u.token);
   await call('POST', '/payments/verify', { orderId: c.body.orderId, paymentId: 'pay_leave', signature: goodSig(c.body.orderId, 'pay_leave') }, u.token);
-  assert.equal((await call('DELETE', '/me', { password: 'password123' }, u.token)).status, 204);
+  assert.equal((await call('DELETE', '/me', { password: 'Password123!' }, u.token)).status, 204);
   const [[row]] = await db.pool.query("SELECT user_id, status FROM payments WHERE provider_order_id = ?", [c.body.orderId]);
   assert.equal(row.user_id, null); assert.equal(row.status, 'paid');
 });

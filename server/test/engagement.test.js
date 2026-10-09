@@ -42,7 +42,7 @@ const call = async (method, p, body, token, headers = {}) => {
 };
 let n = 0;
 // Helper: register a new user and return their token (most tests start with this).
-const signup = async (email = `e${++n}@example.com`, password = 'password123') => { const r = await call('POST', '/auth/signup', { name: 'Eng Test', email, password }); return { ...r.body, email, password, token: r.body.token }; };
+const signup = async (email = `e${++n}@example.com`, password = 'Password123!') => { const r = await call('POST', '/auth/signup', { name: 'Eng Test', email, password }); return { ...r.body, email, password, token: r.body.token }; };
 const linkFrom = (mail, path) => new URL(String(mail.text).match(new RegExp(`https?://\\S+${path}\\?token=[\\w-]+`))[0]).searchParams.get('token');
 const lastMailTo = async (email, subjectRe) => { for (let i = 0; i < 40; i++) { const m = [...mails].reverse().find((x) => x.to === email && subjectRe.test(x.subject)); if (m) return m; await new Promise((r) => setTimeout(r, 25)); } throw new Error(`no mail to ${email} matching ${subjectRe}`); };
 
@@ -71,13 +71,13 @@ test('password reset: neutral answer, one-hour single-use link, signs out other 
   const m = await lastMailTo('rita@example.com', /Reset your/); const token = linkFrom(m, '/reset');
   assert.equal(mails.filter((x) => x.to === 'nobody@example.com').length, 0);
   assert.equal((await call('POST', '/auth/reset', { token, password: 'short' })).status, 400);
-  assert.equal((await call('POST', '/auth/reset', { token: 'y'.repeat(43), password: 'brand new pass' })).status, 400);
-  const r = await call('POST', '/auth/reset', { token, password: 'brand new pass' }); assert.equal(r.status, 200); assert.ok(r.body.token); assert.equal(r.body.user.emailVerified, true);
-  assert.equal((await call('POST', '/auth/reset', { token, password: 'another pass 1' })).status, 400, 'single use');
+  assert.equal((await call('POST', '/auth/reset', { token: 'y'.repeat(43), password: 'Brand New Pass 9!' })).status, 400);
+  const r = await call('POST', '/auth/reset', { token, password: 'Brand New Pass 9!' }); assert.equal(r.status, 200); assert.ok(r.body.token); assert.equal(r.body.user.emailVerified, true);
+  assert.equal((await call('POST', '/auth/reset', { token, password: 'Another Pass 1!' })).status, 400, 'single use');
   assert.equal((await call('GET', '/me', null, old)).status, 401, 'old sessions are signed out');
   assert.equal((await call('GET', '/me', null, r.body.token)).status, 200, 'the new session works');
-  assert.equal((await call('POST', '/auth/login', { email: 'rita@example.com', password: 'password123' })).status, 401);
-  const login = await call('POST', '/auth/login', { email: 'rita@example.com', password: 'brand new pass' }); assert.equal(login.status, 200); assert.equal((await call('GET', '/me', null, login.body.token)).status, 200);
+  assert.equal((await call('POST', '/auth/login', { email: 'rita@example.com', password: 'Password123!' })).status, 401);
+  const login = await call('POST', '/auth/login', { email: 'rita@example.com', password: 'Brand New Pass 9!' }); assert.equal(login.status, 200); assert.equal((await call('GET', '/me', null, login.body.token)).status, 200);
   await lastMailTo('rita@example.com', /password was changed/);
 });
 
@@ -86,7 +86,7 @@ test('a newer reset link replaces the older one; expired links fail; requests ar
   await call('POST', '/auth/forgot', { email: u.email }); const first = linkFrom(await lastMailTo(u.email, /Reset your/), '/reset');
   await call('POST', '/auth/forgot', { email: u.email }); assert.equal(mails.filter((x) => x.to === u.email && /Reset your/.test(x.subject)).length, 1, 'one email a minute');
   await db.pool.query("UPDATE auth_tokens SET expires_at = UTC_TIMESTAMP(3) - INTERVAL 1 MINUTE WHERE user_id = ? AND purpose = 'reset'", [u.user.id]);
-  assert.equal((await call('POST', '/auth/reset', { token: first, password: 'whatever123' })).status, 400, 'expired');
+  assert.equal((await call('POST', '/auth/reset', { token: first, password: 'Whatever123!' })).status, 400, 'expired');
 });
 
 // The website must never claim an email was sent when it wasn't: a failing provider and a missing
@@ -105,7 +105,7 @@ test('forgot/resend fail loudly instead of pretending an email was sent', async 
   };
   try {
     const em = `honest${Date.now()}@example.com`;
-    const su = await callOn(sFlaky, 'POST', '/auth/signup', { name: 'Honest', email: em, password: 'password123' });
+    const su = await callOn(sFlaky, 'POST', '/auth/signup', { name: 'Honest', email: em, password: 'Password123!' });
     assert.equal(su.status, 201, 'the account remains usable even if delivery fails');
     assert.equal(su.body.verificationEmailSent, false, 'signup reports the failed verification mail instead of silently claiming success');
     const [[{ verifyTokens }]] = await db.pool.query("SELECT COUNT(*) AS verifyTokens FROM auth_tokens WHERE user_id = ? AND purpose = 'verify'", [su.body.user.id]);
@@ -135,7 +135,7 @@ test('forgot/resend fail loudly instead of pretending an email was sent', async 
     const prev = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
     try {
-      const noMailSignup = await callOn(sNone, 'POST', '/auth/signup', { name: 'No Mail', email: `missing${Date.now()}@example.com`, password: 'password123' });
+      const noMailSignup = await callOn(sNone, 'POST', '/auth/signup', { name: 'No Mail', email: `missing${Date.now()}@example.com`, password: 'Password123!' });
       assert.equal(noMailSignup.status, 201);
       assert.equal(noMailSignup.body.verificationEmailSent, false, 'production signup reports missing SMTP configuration');
       for (const address of [em, 'nobody@example.com']) {           // identical for every address (no enumeration)
@@ -162,7 +162,7 @@ test('signup answers while the confirmation mail is still in flight instead of w
   try {
     const em = `slow${Date.now()}@example.com`;
     const started = Date.now();
-    const su = await callOn('POST', '/auth/signup', { name: 'Slow Mail', email: em, password: 'password123' });
+    const su = await callOn('POST', '/auth/signup', { name: 'Slow Mail', email: em, password: 'Password123!' });
     const elapsed = Date.now() - started;
     assert.equal(su.status, 201, 'the account is created');
     assert.ok(elapsed < 1000, `signup answered in ${elapsed}ms instead of waiting for the hanging SMTP server`);

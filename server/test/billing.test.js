@@ -83,7 +83,7 @@ const call = async (method, p, body, token, { url = root, raw, admin } = {}) => 
 };
 let emailN = 0;
 // Helper: register a new user and return their token (most tests start with this).
-const signup = async (email = `u${++emailN}@example.com`) => { const b = (await call('POST', '/auth/signup', { name: 'Pay Er', email, password: 'password123' })).body; await db.accounts.markVerified(b.user.id); return { ...b, email }; };   // (buying needs a confirmed email when SMTP is on)
+const signup = async (email = `u${++emailN}@example.com`) => { const b = (await call('POST', '/auth/signup', { name: 'Pay Er', email, password: 'Password123!' })).body; await db.accounts.markVerified(b.user.id); return { ...b, email }; };   // (buying needs a confirmed email when SMTP is on)
 const stream = (t) => call('POST', '/videos/prem/stream', null, t);
 const adm = (method, p, body) => call(method, '/admin' + p, body, null, { admin: ADMIN });
 const MH = { state: 'Maharashtra' }, KA = { state: '29' };
@@ -478,7 +478,7 @@ test('sales register CSV: invoices positive, credit notes negative, GSTIN and pl
 test('deleting an account keeps its invoices for the statutory period, detached from the user', async () => {
   const u = await signup('leaver@example.com'); await buy(u); await billing.idle();
   const inv = (await invoicesOf(u))[0].invoice;
-  assert.equal((await call('DELETE', '/me', { password: 'password123' }, u.token)).status, 204);
+  assert.equal((await call('DELETE', '/me', { password: 'Password123!' }, u.token)).status, 204);
   const row = await db.invoices.byId(inv.id); assert.equal(row.userId, null); assert.equal(row.doc.buyer.email, 'leaver@example.com'); assert.equal(row.number, inv.number);
   assert.equal((await call('GET', `/invoices/${inv.id}/pdf`, null, u.token)).status, 401);
 });

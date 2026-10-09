@@ -35,9 +35,9 @@ const call = async (method, p, body, token) => {
 };
 
 test('watch progress follows the account across two devices (resume anywhere)', async () => {
-  const s = await call('POST', '/auth/signup', { name: 'Two Devices', email: 'two@example.com', password: 'password123' });
+  const s = await call('POST', '/auth/signup', { name: 'Two Devices', email: 'two@example.com', password: 'Password123!' });
   const phone = s.body.token, pid = s.body.profiles[0].id;
-  const tv = (await call('POST', '/auth/login', { email: 'two@example.com', password: 'password123' })).body.token;   // a second, independent session
+  const tv = (await call('POST', '/auth/login', { email: 'two@example.com', password: 'Password123!' })).body.token;   // a second, independent session
   const vid = (await call('GET', '/catalog')).body.videos.find((v) => v.kind === 'episode');
   assert.equal((await call('PUT', `/profiles/${pid}/progress/${vid.id}`, { position: 321, duration: vid.duration || 900 }, phone)).status, 204);
   const seen = (await call('GET', `/profiles/${pid}/library`, null, tv)).body;
@@ -53,7 +53,7 @@ async function counts() {
 }
 
 test('backup → wipe → restore round-trips every table and uploaded file (encrypted)', async () => {
-  const s = await call('POST', '/auth/signup', { name: 'Round Trip', email: 'rt@example.com', password: 'password123' });
+  const s = await call('POST', '/auth/signup', { name: 'Round Trip', email: 'rt@example.com', password: 'Password123!' });
   const ticketId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
   await db.pool.query('INSERT INTO support_tickets (id, user_id, name, email, category, subject, body) VALUES (?,?,?,?,?,?,?)', [ticketId, s.body.user.id, 'Round Trip', 'rt@example.com', 'other', 'Unicode backup', 'দারুণ! 🎉 emoji and “quotes”']);
   await db.pool.query("INSERT INTO error_log (source, message) VALUES ('client', 'boom')");
@@ -92,8 +92,8 @@ test('backup → wipe → restore round-trips every table and uploaded file (enc
   assert.deepEqual(fs.readFileSync(path.join(uploads2, 'a.bin')), Buffer.from([0, 1, 2, 250, 251, 252, 255]), 'binary uploads are byte-identical');
   assert.match(fs.readFileSync(path.join(uploads2, 'sub', 'b.vtt'), 'utf8'), /হ্যালো/);
   // and the restored accounts can sign in
-  assert.equal((await call('POST', '/auth/login', { email: 'rt@example.com', password: 'password123' })).status, 200);
-  assert.equal((await call('POST', '/auth/login', { email: 'two@example.com', password: 'password123' })).status, 200);
+  assert.equal((await call('POST', '/auth/login', { email: 'rt@example.com', password: 'Password123!' })).status, 200);
+  assert.equal((await call('POST', '/auth/login', { email: 'two@example.com', password: 'Password123!' })).status, 200);
 });
 
 test('a truncated or tampered backup is refused before anything is deleted', async () => {
