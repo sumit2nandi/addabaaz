@@ -5,6 +5,7 @@ import { icon } from '../icons.js';
 import { go } from '../router.js';
 import { toast } from '../ui/components.js';
 import { friendly } from '../errors.js';
+import { passwordProblem, PASSWORD_HINT } from '../password-rule.js';
 
 // Shared page frame and card for the three screens.
 const shell = (ctx, inner) => { ctx.root.innerHTML = html`<div class="auth-page"><a href="#/" class="auth-brand"><img src="media/icons/icon-96.png" width="56" height="56" alt=""><span class="brand-text"><b>ADDA</b><i>BAAZ</i></span></a>${inner}</div>`.s; };
@@ -59,14 +60,14 @@ export default async function recover(ctx) {
   if (ctx.path === '/reset' && token) {
     ctx.setTitle('Choose a new password');
     shell(ctx, html`<form class="auth-card form" id="rf" novalidate><h1>Choose a new password</h1><p class="muted">You’ll be signed out on your other devices.</p>
-      <label>New password<span class="pw"><input name="p1" type="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters"><button type="button" class="icon-btn" id="pwt" aria-label="Show password">${icon('eye', { size: 18 })}</button></span></label>
+      <label>New password<span class="pw"><input name="p1" type="password" autocomplete="new-password" required minlength="8" placeholder="${PASSWORD_HINT}"><button type="button" class="icon-btn" id="pwt" aria-label="Show password">${icon('eye', { size: 18 })}</button></span></label>
       <label>Repeat password<input name="p2" type="password" autocomplete="new-password" required minlength="8"></label>
       <div class="form-status" id="rs" role="alert"></div><button class="btn btn-primary btn-lg block" type="submit" id="rsub">Save password &amp; sign in</button></form>`);
     $('#pwt', ctx.root).addEventListener('click', () => { const i = $('[name=p1]', ctx.root); i.type = i.type === 'password' ? 'text' : 'password'; });
     $('#rf', ctx.root).addEventListener('submit', async (e) => {
       e.preventDefault(); const f = new FormData(e.target), st = $('#rs', ctx.root), btn = $('#rsub', ctx.root);
       const p1 = String(f.get('p1')), p2 = String(f.get('p2'));
-      if (p1.length < 8) { st.textContent = 'Password must be at least 8 characters.'; return; }
+      const pwProblem = passwordProblem(p1); if (pwProblem) { st.textContent = pwProblem; return; }
       if (p1 !== p2) { st.textContent = 'The two passwords don’t match.'; return; }
       btn.disabled = true; st.textContent = '';
       try { await u.resetPassword(token, p1); toast('Password changed — you’re signed in'); go(u.needsProfileChoice() ? '/profiles' : '/', { replace: true }); }

@@ -13,6 +13,7 @@ import { go } from '../router.js';
 import { toast } from '../ui/components.js';
 import { mountSocialButtons } from '../social.js';
 import { friendly } from '../errors.js';
+import { passwordProblem, PASSWORD_HINT } from '../password-rule.js';
 import { wirePhoneSplits } from '../ui/phone-field.js';
 
 const RESEND_SECONDS = 60;   // matches the server's one-a-minute limit
@@ -71,7 +72,7 @@ export default async function auth(ctx) {
         <div class="or" id="or" hidden><span>or use your email</span></div>
         ${signup ? html`<label class="auth-icon-field"><span class="auth-field-label">Your name</span>${icon('user', { size: 18 })}<input name="name" autocomplete="name" required maxlength="60" placeholder="Full name"></label>` : ''}
         <label class="auth-icon-field"><span class="auth-field-label">Email</span>${icon('mail', { size: 18 })}<input name="email" type="email" autocomplete="email" required placeholder="Email address" inputmode="email"></label>
-        <label class="auth-icon-field"><span class="auth-field-label">Password</span>${icon('lock', { size: 18 })}<span class="pw"><input name="password" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" required minlength="8" placeholder="${signup ? 'Password (8+ characters)' : 'Password'}"><button type="button" class="icon-btn" id="pwt" aria-label="Show password">${icon('eye', { size: 18 })}</button></span></label>
+        <label class="auth-icon-field"><span class="auth-field-label">Password</span>${icon('lock', { size: 18 })}<span class="pw"><input name="password" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" required minlength="8" placeholder="${signup ? 'Password (8+ chars, upper, lower, number, symbol)' : 'Password'}"><button type="button" class="icon-btn" id="pwt" aria-label="Show password">${icon('eye', { size: 18 })}</button></span></label>
         ${signup ? '' : html`<a class="forgot-link" href="#/forgot">Forgot password?</a>`}
         <button class="btn btn-primary btn-lg block" type="submit" id="asub">${signup ? 'Create account' : 'Sign in'}${icon('arrow-right', { size: 18 })}</button>
       </div>
@@ -206,7 +207,8 @@ export default async function auth(ctx) {
     const body = { email: String(f.get('email')).trim(), password: String(f.get('password')) };
     if (signup) { body.name = String(f.get('name')).trim(); if (ref) body.ref = ref; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) { setStatus('Please enter a valid email address.'); return; }
-    if (body.password.length < 8) { setStatus('Password must be at least 8 characters.'); return; }
+    if (signup) { const pwProblem = passwordProblem(body.password); if (pwProblem) { setStatus(pwProblem); return; } }
+    else if (!body.password) { setStatus('Please enter your password.'); return; }
     if (signup && !body.name) { setStatus('Please enter your name.'); return; }
     const btn = $('#asub', ctx.root);
     btn.disabled = true; setStatus('');

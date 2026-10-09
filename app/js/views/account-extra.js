@@ -9,6 +9,7 @@ import { toast, emptyState } from '../ui/components.js';
 import { openDialog, confirmDialog, pinPrompt } from '../ui/dialog.js';
 import { pushState, enablePush, disablePush, setPushPrefs, pushSupported } from '../push.js';
 import { friendly } from '../errors.js';
+import { passwordProblem, PASSWORD_HINT } from '../password-rule.js';
 import { go } from '../router.js';
 import { isNative } from '../platform.js';
 
@@ -226,12 +227,12 @@ function wireSecurity(root) {
     }
     const { el, close } = openDialog(html`<h2>Change Password</h2><form class="form" id="pwf" novalidate>
       <label>Current Password<input name="cur" type="password" autocomplete="current-password" required></label>
-      <label>New Password<input name="p1" type="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters"></label>
+      <label>New Password<input name="p1" type="password" autocomplete="new-password" required minlength="8" placeholder="${PASSWORD_HINT}"></label>
       <label>Repeat New Password<input name="p2" type="password" autocomplete="new-password" required minlength="8"></label>
       <div class="form-status" id="pws" role="alert"></div><div class="row end"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" type="submit">Change Password</button></div></form>`, { cls: 'dialog-sm' });
     $('#pwf', el).addEventListener('submit', async (e) => {
       e.preventDefault(); const f = new FormData(e.target), st = $('#pws', el);
-      if (String(f.get('p1')).length < 8) { st.textContent = 'The new password must be at least 8 characters.'; return; }
+      const pwProblem = passwordProblem(String(f.get('p1'))); if (pwProblem) { st.textContent = pwProblem; return; }
       if (f.get('p1') !== f.get('p2')) { st.textContent = 'The two new passwords don’t match.'; return; }
       try { await u.changePassword(String(f.get('cur')), String(f.get('p1'))); close(); toast('Password changed. Other devices were signed out.'); } catch (err) { st.textContent = friendly(err); }
     });
