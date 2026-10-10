@@ -134,9 +134,9 @@ test('components build the progressive markup for cards, banners and posters', (
 test('every call site that shows a best-quality image also passes a low rendition', () => {
   const pairs = [
     ['app/js/views/show.js', /\$\{img\(cat\.thumb\(v, 'maxresdefault'\), '', \{[^}]*lowSrc: cat\.thumb\(v, 'mqdefault'\)/],
-    ['app/js/views/show.js', /heroBg\(cat\.thumb\(latest, 'maxresdefault'\), s\.posterLg \|\| s\.poster, \{ fallback: `\$\{s\.posterLg \|\| s\.poster\}\|\$\{cat\.thumb\(latest, 'hqdefault'\)}`, blurUp: false \}\)/],
+    ['app/js/views/show.js', /heroBg\(bgSrc, s\.posterLg \|\| s\.poster, \{ fallback: bgFallback, blurUp: false \}\)/],
     ['app/js/views/show.js', /img\(s\.posterLg \|\| s\.poster, s\.title, \{ lazy: false, lowSrc: s\.poster \}\)/],
-    ['app/js/views/home.js', /heroBg\(cat\.thumb\(latest, 'maxresdefault'\), show\.posterLg \|\| show\.poster, \{ lazy: i > 0, fallback: `\$\{show\.posterLg \|\| show\.poster\}\|\$\{cat\.thumb\(latest, 'hqdefault'\)}`, blurUp: false \}\)/],
+    ['app/js/views/home.js', /heroBg\(bgSrc, show\.posterLg \|\| show\.poster, \{ lazy: i > 0, fallback: bgFallback, blurUp: false \}\)/],
     ['app/js/views/home.js', /img\(show\.posterLg \|\| show\.poster, '', \{ lazy: i > 0, lowSrc: show\.poster \}\)/],
     ['app/js/views/soon.js', /img\(u\.posterLg \|\| u\.poster, u\.title, \{ lazy: false, lowSrc: u\.poster \}\)/],
     ['app/js/views/soon.js', /img\(u\.backdrop \|\| u\.posterLg \|\| u\.poster, '', \{ lazy: false \}\)/],
@@ -167,11 +167,11 @@ test('main.js upgrades on load and runs the upgrade before the data-fb fallback 
 
 test('the home hero walks down to its sharp local poster when YouTube has no max-resolution still', () => {
   const home = read('app/js/views/home.js');
-  const call = home.match(/heroBg\(cat\.thumb\(latest, 'maxresdefault'\)[\s\S]*?\)\}<\/div>/)?.[0] || '';
+  const call = home.match(/heroBg\(bgSrc[\s\S]*?\)\}<\/div>/)?.[0] || '';
   assert.ok(call, 'the hero banner call exists');
   assert.match(call, /blurUp: false/, 'no soft placeholder on the first paint');
-  assert.match(call, /fallback: `\$\{show\.posterLg \|\| show\.poster\}\|\$\{cat\.thumb\(latest, 'hqdefault'\)}`/,
-    'missing maxresdefault steps to the sharp uploaded poster (then hqdefault), so the banner never stays blurred');
+  assert.match(home, /const bgFallback = \[show\.backdrop \? cat\.thumb\(latest, 'maxresdefault'\) : '', show\.posterLg \|\| show\.poster, cat\.thumb\(latest, 'hqdefault'\)\]\.filter\(Boolean\)\.join\('\|'\);/,
+    'missing art steps to maxresdefault (only when a backdrop led), then the sharp uploaded poster, then hqdefault — never stays blurred');
   // Every full-bleed hero banner opts out of the soft placeholder, not just the home one.
   assert.doesNotMatch(read('app/js/views/show.js'), /lowThumb: cat\.thumb\(latest, 'mqdefault'\)/,
     'the show hero banner never shows a soft placeholder either');
@@ -179,4 +179,25 @@ test('the home hero walks down to its sharp local poster when YouTube has no max
     'a show without episodes still draws its banner sharp');
   assert.doesNotMatch(read('app/js/views/soon.js'), /img\(u\.backdrop \|\| u\.posterLg \|\| u\.poster, '', \{ lazy: false, lowSrc/,
     'the coming-soon hero renders its uploaded art sharp from the first paint');
+});
+
+test('home and show heroes prefer the show\'s wide backdrop over the 1280x720 YouTube still', () => {
+  // maxresdefault is only 1280x720; a desktop hero upscales it 1.25-1.5x and it reads as blur.
+  const home = read('app/js/views/home.js'), show = read('app/js/views/show.js');
+  assert.match(home, /const bgSrc = show\.backdrop \|\| cat\.thumb\(latest, 'maxresdefault'\);/, 'home: backdrop first, YouTube still second');
+  assert.match(show, /const bgSrc = s\.backdrop \|\| \(latest \? cat\.thumb\(latest, 'maxresdefault'\) : ''\);/, 'show: backdrop first, YouTube still second');
+  assert.match(show, /const bgFallback = \[s\.backdrop && latest \? cat\.thumb\(latest, 'maxresdefault'\) : '', s\.posterLg \|\| s\.poster, latest \? cat\.thumb\(latest, 'hqdefault'\) : ''\]\.filter\(Boolean\)\.join\('\|'\);/,
+    'show: a failing backdrop walks to maxresdefault, the sharp poster, then hqdefault');
+  // No full-bleed hero ever paints a soft placeholder first.
+  for (const [file, src] of [['app/js/views/home.js', home], ['app/js/views/show.js', show]]) {
+    const calls = src.match(/heroBg\([^\n]*?\}\)/g) || [];
+    assert.ok(calls.length, `${file} draws a hero banner`);
+    for (const c of calls) {
+      assert.doesNotMatch(c, /lowThumb|lowSrc/, `${file}: hero banner passes no low placeholder: ${c}`);
+      assert.match(c, /blurUp: false/, `${file}: hero banner opts out of blur-up: ${c}`);
+    }
+  }
+  // The field exists end to end: schema accepts it and the admin form offers it.
+  assert.match(read('server/src/catalog-schema.js'), /'posterLg', 'backdrop', 'access', 'rating'\], 'A show'/);
+  assert.match(read('admin/js/views/content.js'), /\{ k: 'backdrop', label: 'Backdrop \(wide 16:9, 1920px\+\)', type: 'image', wide: true,/);
 });

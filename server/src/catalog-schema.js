@@ -87,10 +87,13 @@ const ref = (r, ctx, k, sets) => {
 // ---- One validator per document type. Each returns a reader whose `.out` is the cleaned document. ----
 // Show / series.
 function show(input, ctx) {
-  const r = reader(input, ['id', 'title', 'titleEn', 'type', 'genres', 'tagline', 'description', 'cast', 'language', 'year', 'status', 'featured', 'poster', 'posterLg', 'access', 'rating'], 'A show', ctx);
+  const r = reader(input, ['id', 'title', 'titleEn', 'type', 'genres', 'tagline', 'description', 'cast', 'language', 'year', 'status', 'featured', 'poster', 'posterLg', 'backdrop', 'access', 'rating'], 'A show', ctx);
   r.id(); r.str('title', { req: true }); r.str('titleEn'); r.oneOf('type', SHOW_TYPES, { dflt: 'series' }); r.list('genres', { max: 30, maxItems: 10 });
   r.str('tagline', { max: 300 }); r.str('description', { req: true, max: 3000 }); r.list('cast', { max: 60 }); r.str('language', { max: 40 });
   r.int('year', { min: 1900, max: 2100 }); r.oneOf('status', STATUSES, { dflt: 'ongoing' }); r.bool('featured'); r.img('poster', { req: true }); r.img('posterLg');
+  // Optional wide landscape key art. The full-bleed home/show hero prefers it over the latest episode's YouTube
+  // still, because YouTube's best rendition (maxresdefault) is only 1280x720 and gets upscaled on desktop heroes.
+  r.img('backdrop');
   r.oneOf('access', ACCESS, { dflt: 'free' }); r.oneOf('rating', RATINGS);
   return r;
 }

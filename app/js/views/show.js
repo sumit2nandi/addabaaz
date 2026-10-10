@@ -30,10 +30,14 @@ export default async function showView(ctx) {
   const label = !t ? 'Play' : t.resume ? `Resume ${cat.label(t.video)}` : t.continued ? `Continue ${cat.label(t.video)}` : `Play ${cat.label(t.video)}`;
   const trailer = extras.find((v) => v.kind === 'trailer');
   ctx.setTitle(s.titleEn || s.title);
+  // Hero art: the show's wide backdrop first (YouTube's maxresdefault is only 1280x720), then the episode still,
+  // the sharp poster and hqdefault as the fallback chain.
+  const bgSrc = s.backdrop || (latest ? cat.thumb(latest, 'maxresdefault') : '');
+  const bgFallback = [s.backdrop && latest ? cat.thumb(latest, 'maxresdefault') : '', s.posterLg || s.poster, latest ? cat.thumb(latest, 'hqdefault') : ''].filter(Boolean).join('|');
 
   ctx.root.innerHTML = html`
     <section class="detail-hero" id="detailHero">
-      <div class="hero-bg">${latest ? heroBg(cat.thumb(latest, 'maxresdefault'), s.posterLg || s.poster, { fallback: `${s.posterLg || s.poster}|${cat.thumb(latest, 'hqdefault')}`, blurUp: false }) : heroBg(s.posterLg || s.poster, '', { blurUp: false })}</div>
+      <div class="hero-bg">${latest ? heroBg(bgSrc, s.posterLg || s.poster, { fallback: bgFallback, blurUp: false }) : heroBg(s.posterLg || s.poster, '', { blurUp: false })}</div>
       <div class="hero-shade"></div>
       ${s.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
       <div class="hero-inner">

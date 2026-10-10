@@ -10,6 +10,23 @@ test('R2 catalog-photo paths are accepted offline and can be checked by the admi
   assert.match(validate('show', show, { r2FileExists: () => false }).errors.join(' '), /R2 photo .* does not exist/);
 });
 
+test('A show may carry an optional wide backdrop for the full-bleed hero (validated like any image)', () => {
+  // The home/show hero prefers it over YouTube's maxresdefault, which is only 1280x720 and looks soft upscaled.
+  const base = { id: 'wide-show', title: 'Wide show', description: 'A description', poster: 'media/shows/wide-show.webp' };
+  const withBackdrop = validate('show', { ...base, backdrop: 'media/shows/wide-show-backdrop.webp' });
+  assert.deepEqual(withBackdrop.errors, [], 'a media/… backdrop is accepted (not an unknown field)');
+  assert.equal(withBackdrop.doc.backdrop, 'media/shows/wide-show-backdrop.webp');
+  const r2 = validate('show', { ...base, backdrop: 'r2-assets/catalog/0123456789abcdef01234567-hq.webp' });
+  assert.deepEqual(r2.errors, [], 'an uploaded R2 catalog photo works as a backdrop too');
+  const without = validate('show', base);
+  assert.deepEqual(without.errors, []);
+  assert.equal('backdrop' in without.doc, false, 'no backdrop stays absent — heroes fall back to the YouTube still');
+  for (const bad of ['../secret/backdrop.webp', 'javascript:alert(1)', 'http://insecure.example.test/b.jpg', 42]) {
+    const r = validate('show', { ...base, backdrop: bad });
+    assert.match(r.errors.join(' '), /backdrop must be an uploaded image, a media\/… path or an https:\/\/ URL/, `rejects ${bad}`);
+  }
+});
+
 test('R2 video-thumbnail paths allow generated nested WebP renditions and check object existence online', () => {
   const thumbnail = 'r2-assets/video-thumbnails/premium/show-name/0123456789abcdef01234567-hq.webp';
   const video = {
