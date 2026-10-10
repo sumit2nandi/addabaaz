@@ -9,7 +9,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createApp } from '../src/app.js';
-import { render, DEMO } from '../../scripts/build-email-preview.mjs';
+import { render, DEMO, SHIPPED } from '../../scripts/build-email-preview.mjs';
+import { welcomeEmail } from '../src/welcome-email.js';
 
 const PREVIEW = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../preview');
 
@@ -42,6 +43,11 @@ test('the e-mail preview is served unlisted: no-store, noindex, no viewer chrome
     // resolves to /email.html — so nothing in the page may be referenced relatively.
     assert.doesNotMatch(r.text, /(?:src|href)="(?!\/|#|mailto:|https?:)[^"]*\.html"/, 'every asset path is root-absolute');
     assert.equal((await s.get('/preview/')).status, 200, 'with or without the trailing slash');
+    // The mailer's own document, for comparison (see `Mailer output` in the harness) — same rules apply.
+    const shipped = await s.get('/preview/email-shipped.html');
+    assert.equal(shipped.status, 200);
+    assert.match(shipped.headers.get('cache-control') || '', /no-store/);
+    assert.match(shipped.headers.get('x-robots-tag') || '', /noindex/);
   } finally { await s.close(); }
 });
 
@@ -81,9 +87,12 @@ test('the e-mail document carries no script, and the template keeps its merge fi
 
     const template = await s.get('/preview/welcome-email.html');
     assert.equal(template.status, 200);
-    for (const field of ['{{first_name}}', '{{site_url}}', '{{media_url}}', '{{credit_rupees}}', '{{balance_rupees}}', '{{invite_code}}', '{{support_email}}'])
+    for (const field of ['{{first_name}}', '{{site_url}}', '{{verify_url}}', '{{media_url}}', '{{credit_rupees}}', '{{balance_rupees}}', '{{invite_code}}', '{{support_email}}'])
       assert.ok(template.text.includes(field), `the sendable template still carries ${field}`);
     assert.doesNotMatch(template.text, /href="\/#/, 'links are absolute: a mail is never opened from the site');
+    // The primary button of the letter is that link; if the harness ever loses it, the design a reviewer
+    // approved is no longer the design that ships.
+    assert.match(template.text, /<a href="\{\{verify_url\}\}"/, 'the confirmation link is the primary CTA');
   } finally { await s.close(); }
 });
 
@@ -121,6 +130,21 @@ test('preview/email.html is exactly the template with the demo values filled in'
   for (const [field, value] of Object.entries(DEMO)) assert.ok(!built.includes(`{{${field}}}`), `${field} was not filled in`);
 });
 
+// The harness shows two documents: the tuned template and the letter `welcomeEmail()` actually builds. The
+// second one is generated too, and the two are compared part by part — a design change that never reaches the
+// mailer (or a mailer edit that the review never saw) fails here rather than in somebody's inbox.
+test('the mailer output shown in the harness is the mailer output, part for part with the design', () => {
+  const design = fs.readFileSync(path.join(PREVIEW, 'email.html'), 'utf8');
+  const shipped = fs.readFileSync(path.join(PREVIEW, 'email-shipped.html'), 'utf8');
+  assert.equal(shipped, welcomeEmail(SHIPPED).html, 'preview/email-shipped.html is stale — run `npm run email:preview`');
+  assert.doesNotMatch(shipped, /<script|<iframe|\{\{\w+\}\}/, 'a standalone document: no script, no leftover field');
+  const parts = (doc) => new Set([...doc.matchAll(/class="([^"]+)"/g)].flatMap((m) => m[1].split(/\s+/)).filter(Boolean));
+  assert.deepEqual([...parts(shipped)].sort(), [...parts(design)].sort(), 'the letter and the reviewed design use the same parts');
+  for (const label of ['New-account credit', 'Confirm', 'Start with these three', 'Four things worth knowing', 'Pass it on', 'Lake Gardens']) {
+    assert.ok(shipped.includes(label) && design.includes(label), `“${label}” is in one document but not the other`);
+  }
+});
+
 test('preview/README.md is never served, and PREVIEW_PAGES=0 takes the whole area down', async () => {
   const s = await boot();
   try {
@@ -130,6 +154,6 @@ test('preview/README.md is never served, and PREVIEW_PAGES=0 takes the whole are
   // unknown file (no database, no SEO render) instead of answering with the design page.
   const off = await boot({ previewPages: '0' });
   try {
-    for (const p of ['/preview/email.html', '/preview/welcome-email.html']) assert.equal((await off.get(p)).status, 404, `${p} is gone`);
+    for (const p of ['/preview/email.html', '/preview/email-shipped.html', '/preview/welcome-email.html']) assert.equal((await off.get(p)).status, 404, `${p} is gone`);
   } finally { await off.close(); }
 });

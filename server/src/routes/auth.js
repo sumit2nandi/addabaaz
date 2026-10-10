@@ -29,32 +29,44 @@ export function registerAuthRoutes(api, { db, secret, social, features, mailer, 
       const ex = await db.users.byEmail(user.email);
       throw new HttpError(409, 'email_taken', ex && !ex.passwordHash ? 'This email is already registered — use “Continue with Google/Facebook” to sign in.' : 'An account with this email already exists.');
     }
-    // The confirmation mail must never stall the sign-up screen. SMTP gets a short budget (SIGNUP_EMAIL_WAIT_MS)
-    // to finish inside the request — a healthy provider still reports an accurate `verificationEmailSent` — and a
-    // slow or hanging mail server turns into "still on its way" (`verificationEmailPending`): the answer goes out
-    // right away while the send continues in the background. The account exists either way, and a failure stays
-    // visible (the client offers Resend from Account) instead of freezing the form behind a dead mail server.
+    // Promotions run BEFORE the greeting, so the letter can quote the money the account really got rather than
+    // the number an admin might have changed a minute ago. `mail: 'welcome'` tells promos to skip its own credit
+    // note: one message per sign-up, and the inviter's referral mail is unaffected. A promotion must never break
+    // an account creation, so `onSignup` swallows its own errors.
+    const created = (await db.users.byId(user.id)) || user;
+    const bonus = promos ? await promos.onSignup({ user: created, code: ref, mail: 'welcome' }) : { welcomePaise: 0 };
+    const creditPaise = (bonus.welcomePaise || 0) + (bonus.inviteePaise || 0);
+    // The balance strip quotes what the Account page will show. If the ledger is unreachable the strip is simply
+    // left out — the letter still says what this sign-up earned, it just does not guess at a total.
+    const balancePaise = creditPaise ? await db.credits.summary(user.id).then((b) => b.availablePaise).catch(() => 0) : 0;
+    // The "pass it on" strip needs this account's own code, which is minted on first use (the Account page asks
+    // for it the same way); a missing one only costs the strip, never the mail.
+    const inviteCode = created.referralCode || (promos ? await promos.ensureCode(created).catch(() => '') : '');
+    const { referralPaise = 0 } = promos ? await promos.offer().catch(() => ({})) : {};
+    // The welcome letter is also the confirmation mail (see welcome-email.js). It must never stall the sign-up
+    // screen: SMTP gets a short budget (SIGNUP_EMAIL_WAIT_MS) to finish inside the request — a healthy provider
+    // still reports an accurate `verificationEmailSent` — and a slow or hanging mail server turns into "still on
+    // its way" (`verificationEmailPending`): the answer goes out right away while the send continues in the
+    // background. The account exists either way, and a failure stays visible (the client offers Resend from
+    // Account) instead of freezing the form behind a dead mail server.
     let verificationEmailSent = false, verificationEmailPending = false, mailFailure = null;
-    const verification = features.sendVerification({ ...user, emailVerifiedAt: null }, { strict: true });
+    const verification = features.sendWelcome({ ...created, emailVerifiedAt: null }, { strict: true, creditPaise, balancePaise, inviteCode, referralPaise });
     // `settled` never rejects: it folds the outcome into true/false and keeps the error for logging, so the
     // background continuation after an expired budget can never become an unhandled rejection.
     const settled = verification.then(() => true, (e) => { mailFailure = e; return false; });
     let budget;
     const finished = await Promise.race([settled, new Promise((resolve) => { budget = setTimeout(() => resolve(null), signupMailWaitMs); })]);
     clearTimeout(budget);
-    const warnMail = (where) => logger.warn(`[auth] verification email failed${where}${mailFailure?.code ? ` (${mailFailure.code})` : ''}:`, mailFailure);
+    const warnMail = (where) => logger.warn(`[auth] welcome email failed${where}${mailFailure?.code ? ` (${mailFailure.code})` : ''}:`, mailFailure);
     if (finished === null) {
       verificationEmailPending = true;                          // still in flight — the response must not wait for it
       settled.then((ok) => { if (!ok) warnMail(' in the background'); });
     } else if (finished) verificationEmailSent = mailer.provider === 'smtp';
     // Keep the newly created account usable, but don't silently pretend its confirmation mail went out.
     else warnMail('');
-    // Promotions: the welcome bonus, and the referral bonus for both sides when a code came with the sign-up.
-    // A promotion must never break an account creation, so `onSignup` swallows its own errors.
-    const bonus = promos ? await promos.onSignup({ user: await db.users.byId(user.id) || user, code: ref }) : { welcomePaise: 0 };
     res.status(201).json({
       token: signToken(user.id, secret), user: publicUser(user), profiles: [profile], verificationEmailSent, verificationEmailPending,
-      ...(bonus.welcomePaise || bonus.inviteePaise ? { creditPaise: bonus.welcomePaise + bonus.inviteePaise } : {}),
+      ...(creditPaise ? { creditPaise } : {}),
       ...(bonus.inviterPaise ? { referral: { inviterPaise: bonus.inviterPaise, hold: bonus.hold || null } } : {}),
       ...(bonus.skipped ? { referralSkipped: bonus.skipped } : {}),
     });
@@ -123,8 +135,17 @@ export function registerAuthRoutes(api, { db, secret, social, features, mailer, 
     let bonus = null;
     if (isNew && promos) {
       const fresh = (await db.users.byId(user.id)) || user;
-      bonus = await promos.onSignup({ user: fresh, code: opts.ref });
+      bonus = await promos.onSignup({ user: fresh, code: opts.ref, mail: 'welcome' });
       await promos.qualify(fresh, { reason: 'verified' });
+      // Same greeting, minus the confirmation link: `fresh` was read after `markVerified`, so the letter opens
+      // straight onto "Start watching". Fire-and-forget — a dead mail server must not undo a sign-in.
+      const credit = (bonus.welcomePaise || 0) + (bonus.inviteePaise || 0);
+      const balancePaise = credit ? await db.credits.summary(fresh.id).then((b) => b.availablePaise).catch(() => 0) : 0;
+      const { referralPaise = 0 } = await promos.offer().catch(() => ({}));
+      await features.sendWelcome?.(fresh, {
+        creditPaise: credit, balancePaise, referralPaise,
+        inviteCode: fresh.referralCode || (await promos.ensureCode(fresh).catch(() => '')),
+      });
     }
     // Native apps: instead of handing the session to the (external) browser that did the OAuth
     // dance, hand back a 2-minute single-use ticket the app exchanges for its own session.

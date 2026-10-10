@@ -6,17 +6,17 @@ folders, so this one never reaches a viewer, a static host or either mobile app.
 
 | Path | What it is |
 | --- | --- |
-| `/preview` | The harness: the e-mail in a 600px frame, a 402px phone frame, an images-off switch, and a link to the template. |
-| `/preview/email.html` | **Generated.** The body with the demo merge values filled in — what a subscriber sees. |
-| `/preview/welcome-email.html` | **The source.** The same markup with `{{merge_fields}}`: this is what goes into the mailer. |
+| `/preview` | The harness: the e-mail at 600px, 390px and 320px, an images-off switch, and a Design ↔ Mailer-output switch. |
+| `/preview/email.html` | **Generated.** `welcome-email.html` with the demo merge values filled in. |
+| `/preview/email-shipped.html` | **Generated.** The document `server/src/welcome-email.js` actually returns for the same numbers. |
+| `/preview/welcome-email.html` | **The source.** The same markup with `{{merge_fields}}`: what a reviewer tunes. |
 
-`email.html` is derived, never edited: change `welcome-email.html`, then
+Both generated files are derived, never edited:
 
 ```bash
-npm run email:preview        # rewrite preview/email.html
+npm run email:preview        # rewrite preview/email.html + email-shipped.html
+npm run email:check          # CI does this; a stale preview fails
 ```
-
-`server/test/preview-pages.test.js` asserts the two are in step, so a stale preview fails CI.
 
 Served by `mountWebsite()` in `server/src/web.js`: the files are read from disk on every request with
 `Cache-Control: no-store` — edit an HTML file, reload the tab, nothing to build. Locally:
@@ -28,49 +28,47 @@ then 404 like any unknown file.
 Dark, because that is the product: `#08080a` page, `#0e0e12` card, `#111116` panels, `#14141a` for the money —
 the site's own ramp — with studio red (`#b80000`→`#d00000`, drawn as three solid cells because Outlook ignores
 `linear-gradient`) and premium gold `#f5c518`, which is how the plans page marks value. Structure: masthead →
-headline → the Rs. 100 credit as a perforated ticket → one primary CTA → three numbered titles with posters →
-four feature cards → the referral strip → a Bengali sign-off → footer.
+headline → the credit as a perforated ticket → the calls to action → three numbered titles with posters → four
+things worth knowing → the referral strip → a Bengali sign-off → footer.
 
-Written to the rules the existing templates follow: tables only, **every style inline**, `<img>` with `alt` and
-explicit `width`/`height`, absolute URLs everywhere, no `<script>`, no inline event handler, no external
-stylesheet. The `<style>` block in `<head>` carries only the 520px media query; clients that strip it still get
-a correct (if single-width) layout.
+Written to the rules the other templates in `server/src/emails.js` follow: tables only, **every style inline**,
+`<img>` with `alt` and explicit `width`/`height`, absolute URLs everywhere, no `<script>`, no inline event
+handler, no external stylesheet, and `Rs.` instead of `₹`. The `<style>` block in `<head>` carries only the
+520px media query; clients that strip it still get a correct (if single-width) layout.
 
 **The phone rule:** at 520px and below the media query may resize, repad and hide — it may never *restack*.
 A `display:block` (or `width:100%`) on a `<td>` breaks the row's box, so the panel's border wraps one cell while
 the others overflow it, and a cell widened to 100% squeezes its neighbour into ten words per line. Both look
-fine at 600px. So every section here is built to survive both widths without changing shape: the ticket's
-balance is a strip under the amount, the four facts are a hairline list, a show card keeps its 68px poster
-beside the text. The one thing that does reflow is the pair of buttons, and they are `<table>`s — a table
-shrink-wraps its content, so making it `display:block;width:100%` stretches the whole pill.
-`preview-pages.test.js` enforces that invariant and fails on any dead rule the query leaves behind.
+fine at 600px, which is how it slipped past review twice. So every section is built to survive both widths
+without changing shape: the ticket's balance is a strip under the amount, the four facts are a hairline list, a
+show card keeps its 68px poster beside the text. The one thing that does reflow is the pair of buttons, and they
+are `<table>`s — a table shrink-wraps its content, so `display:block;width:100%` stretches the whole pill (fill
+and border both live on the inner `<td>`, or one button spans the card and the other stays a short outline).
+`server/test/preview-pages.test.js` enforces that invariant on the template and fails on any rule the query
+leaves unused; `server/test/welcome-email.test.js` runs the same check on the markup the mailer builds.
 
-Written to the rules the existing templates follow: tables only, **every style inline**, `<img>` with `alt` and
-explicit `width`/`height`, absolute URLs everywhere, no `<script>`, no inline event handler, no external
-stylesheet. The `<style>` block in `<head>` carries only the 520px media query; clients that strip it still get
-a correct (if single-width) layout.
+## Where it is sent from
 
-**The stacking rule:** a `<tr>` stacks *all* of its cells or *none* of them. Half-stacking — one cell
-`display:block` beside a sibling that still carries an inline `width` — is the classic way an e-mail "fits" on
-desktop and squeezes into ten words per line on a phone, and it is what `preview-pages.test.js` now asserts
-against the template. Concretely: the ticket and the feature list never restack; the show cards keep a 68px
-poster beside the text at every width, because that is the arrangement that still reads at 320px.
+`server/src/welcome-email.js` exports `welcomeEmail(o)` → `{ subject, text, html }` (re-exported as
+`mail.welcomeEmail`) and `welcomeStyle`, the phone rules above — **the same block, shared**, so what is reviewed
+here is what is sent. `features.sendWelcome(user, { strict, creditPaise, balancePaise, inviteCode, referralPaise })`
+calls it, and `POST /auth/signup` awaits that inside the usual `SIGNUP_EMAIL_WAIT_MS` budget.
 
-## Turning it into a real template
+Three things the harness cannot show, because they are data, not layout:
 
-1. Add `welcomeEmail(o)` to `server/src/emails.js`, next to `receiptEmail()`. Escape anything user-provided with
-   the module's `esc()` — the same contract the other mails use, `{ subject, text, html }`.
-2. Money stays `Rs. 100`, not `₹100`: that choice is deliberate in `emails.js` ("plain Rs. for maximum client
-   compatibility"). `{{credit_rupees}}` / `{{balance_rupees}}` come from the credit ledger, `{{invite_code}}`
-   from `referrals`, `{{site_url}}` from `PUBLIC_SITE_URL`, `{{support_email}}` from `SUPPORT_EMAIL`.
-3. Trigger it after sign-up — `routes/auth.js` and `routes/otp.js` where `promos.onSignup()` runs, or by
-   extending `notifyCredit()` in `server/src/promos.js`. Skip placeholder addresses (`…@phone.addabaaz.in`)
-   exactly as `notifyCredit()` does today.
-4. Posters are `media/shows/*-sm.webp`, and **Outlook desktop cannot render WebP** — export a mail copy per show
-   (or point `{{media_url}}` at a CDN that serves JPEG). Nothing depends on the images: every panel has a solid
-   background, which is what the harness's *Images off* switch is for.
-5. Fonts: `Plus Jakarta Sans` and `Tiro Bangla` lead each stack because the app ships them; each element falls
-   back to Arial plus the system Bengali faces (`Noto Sans Bengali`, `Nirmala UI`, `Bangla Sangam MN`), which is
-   what mail clients actually use.
+* **The confirmation link is this mail's primary button.** Sign-up used to send a `Confirm your email` note and
+  let `promos.notifyCredit()` send a second note about the credit; now one letter carries both, and
+  `onSignup({ mail: 'welcome' })` keeps promos quiet for that account. `/me/verify/resend` still sends the short
+  template, so a letter that never arrived is recoverable.
+* **Sections appear only when the numbers exist.** No credit (`PROMO_SIGNUP_CREDIT_INR=0`) → no ticket; no
+  referral code → no strip; an address the provider already confirmed (Google, Facebook, Apple) → no
+  confirmation link and *Start watching* moves up to primary. A mail must never promise `Rs. 0`.
+* **Phone-only accounts are skipped** — their `…@phone.addabaaz.in` address is a placeholder, exactly as
+  `notifyCredit()` already treats it.
+
+Two client limits worth remembering before changing the artwork: **Outlook desktop cannot render WebP**, so
+posters (`media/shows/*-sm.webp`) are decoration — every panel has a solid background, which is what the
+*Images off* switch is for; and `Plus Jakarta Sans` / `Tiro Bangla` lead each font stack only because the app
+ships them, falling back to Arial plus the system Bengali faces that mail clients actually have.
 
 Then check the render in a real inbox (Litmus, Mail-Tester, or your own Gmail) before it goes to anyone.

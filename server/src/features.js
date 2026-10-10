@@ -77,6 +77,36 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
     return true;
   }
 
+  /**
+   * The single mail a new account receives: the welcome letter, with the confirmation link inside it
+   * (`welcome-email.js`). Sign-up used to send a bare "confirm your email" note and let the promos module send a
+   * second note about the credit; one greeting that carries both is what an account creation should look like in
+   * an inbox. Returns false when there is nothing to greet: a phone-only account's `email` is a placeholder
+   * address, and an address the provider already confirmed gets no link.
+   *
+   * `creditPaise` / `balancePaise` / `inviteCode` / `referralPaise` come from the promo module so the letter quotes money the
+   * account actually has. `strict` keeps `sendVerification`'s promise: the mail must really leave before the
+   * token is stored, so a failed send never mints a confirmation link nobody was told about. The token is issued
+   * exactly as before (`verify`, 3 days, hash only) — `/auth/verify` and "Resend email" keep working untouched.
+   */
+  async function sendWelcome(user, { strict = false, creditPaise = 0, balancePaise = 0, inviteCode = '', referralPaise = 0 } = {}) {
+    if (!user?.email || isPhoneEmail(user.email)) return false;
+    const needsVerify = !user.emailVerifiedAt;
+    const token = needsVerify ? newToken() : '';
+    const verifyUrl = needsVerify ? `${siteUrl}/verify?token=${token}` : '';
+    const built = mail.welcomeEmail({ name: user.name, siteUrl, creditPaise, balancePaise, inviteCode, referralPaise, verifyUrl, supportEmail: cfg.supportEmail });
+    const note = `welcome mail for ${user.email}${verifyUrl ? ` — confirm link ${verifyUrl}` : ''}`;
+    if (strict) {
+      requireMail();
+      await sendMailStrict(user.email, built, note);
+      if (needsVerify) await db.authTokens.issue(user.id, 'verify', sha256(token), 3 * 24 * HOUR);
+      return true;
+    }
+    if (needsVerify) await db.authTokens.issue(user.id, 'verify', sha256(token), 3 * 24 * HOUR);
+    sendMail(user.email, built, note);
+    return true;
+  }
+
   // Throws 403 `email_unverified` when verification is required (only when SMTP is configured) and the user has not confirmed yet.
   const requireVerified = (user) => { if (cfg.requireVerifiedForBilling && !user.emailVerifiedAt) throw new HttpError(403, 'email_unverified', 'Please confirm your email address first — we sent you a link. You can resend it from Account.'); };
 
@@ -102,7 +132,7 @@ export function createFeatures({ db, secret, mailer, push, catalog, siteUrl, rat
 
   // What the module exposes to app.js.
   return {
-    cfg, sendVerification, requireVerified, requirePin, checkPin, deviceOf,
+    cfg, sendVerification, sendWelcome, requireVerified, requirePin, checkPin, deviceOf,
 
     /** Registered by app.js after the sign-in step of signup: sends the confirmation email. */
     public(api) {

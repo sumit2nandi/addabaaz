@@ -66,11 +66,16 @@
 <div class="bar">
   <div class="id"><b>ADDA<span>BAAZ</span></b><i>Welcome e-mail · body review</i></div>
   <div class="grow"></div>
-  <div class="seg" role="group" aria-label="Preview width">
+  <div class="seg" id="widths" role="group" aria-label="Preview width">
     <button type="button" data-w="desktop" aria-pressed="true">Desktop · 600px</button>
     <button type="button" data-w="phone" aria-pressed="false">Phone · 390px</button>
     <button type="button" data-w="small" aria-pressed="false">Small · 320px</button>
     <button type="button" data-w="full" aria-pressed="false">Full</button>
+  </div>
+  <!-- The same letter from two ends: the template a human tuned, and the document the mailer builds. -->
+  <div class="seg" id="source" role="group" aria-label="Which document">
+    <button type="button" data-src="/preview/email.html" aria-pressed="true">Design</button>
+    <button type="button" data-src="/preview/email-shipped.html" aria-pressed="false">Mailer output</button>
   </div>
   <label class="pill"><input type="checkbox" id="noimg"> Images off</label>
   <a class="pill" href="/preview/welcome-email.html">Merge-field template ↗</a>
@@ -78,7 +83,7 @@
 
 <div class="stage">
   <div class="device" id="device">
-    <div class="caption"><span>Demo values filled in — Riya · Rs. 100 · AB12CD34</span><em id="cap2">600px is the sent width</em></div>
+    <div class="caption"><span id="cap1">Design template, demo values filled in — Riya · Rs. 100 · AB12CD34</span><em id="cap2">600px is the sent width</em></div>
     <div class="frame"><iframe id="fr" src="/preview/email.html" title="ADDABAAZ welcome e-mail body"></iframe></div>
   </div>
 </div>
@@ -89,7 +94,11 @@
   same layout works at 600px and 320px — the ticket keeps its balance as a strip under the amount, the four
   facts are a list, a show card keeps its 68px poster beside the text; only paddings and sizes change, plus the
   two buttons, which are <code>&lt;table&gt;</code>s and may therefore stretch. <b>Small · 320px</b> is the
-  width that actually breaks table layouts, so check that one too.
+  width that actually breaks table layouts, so check that one too. <b>Mailer output</b> switches the frame from
+  the tuned template to what <code>server/src/welcome-email.js</code> actually returns for the same numbers —
+  the letter a subscriber receives, confirmation link and all (with the credit ticket when the offer is on, and
+  without the link once an address is confirmed). Both documents must carry the same sections and the same phone
+  rules; <code>server/test/preview-pages.test.js</code> fails if they stop agreeing.
   <b>Images off</b> hides every <code>&lt;img&gt;</code> — Outlook desktop cannot render the WebP artwork
   in <code>media/shows</code>, so the design has to read well without it, which is why every panel carries a
   solid background colour. The markup the mailer sends, with its <code>{{merge_fields}}</code>, is
@@ -99,14 +108,31 @@
 
 <script>
   const fr = document.getElementById('fr'), dev = document.getElementById('device'), cap2 = document.getElementById('cap2');
+  const cap1 = document.getElementById('cap1');
+  // Two independent segmented controls (width and source), each toggling `aria-pressed` only inside its group.
+  const press = (group, b) => group.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
   // Width switching: the e-mail lives in an iframe so its own @media rules react to the frame's width,
   // not to the reviewer's browser window.
-  for (const b of document.querySelectorAll('.seg button')) {
+  const widths = document.getElementById('widths');
+  for (const b of widths.querySelectorAll('button')) {
     b.addEventListener('click', () => {
       dev.className = 'device' + (b.dataset.w === 'phone' ? ' phone' : b.dataset.w === 'small' ? ' small' : b.dataset.w === 'full' ? ' full' : '');
-      document.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      press(widths, b);
       cap2.textContent = b.dataset.w === 'full' ? 'the media query is off below 520px'
         : `${b.dataset.w === 'small' ? 320 : 390}px viewport → the 520px query fires`;
+    });
+  }
+  // Source switching: `Design` is preview/email.html (the tuned template, filled with demo values); `Mailer
+  // output` is preview/email-shipped.html, the document server/src/welcome-email.js returns for the same
+  // numbers. A test compares their structure, so the two cannot drift apart unnoticed.
+  const source = document.getElementById('source');
+  for (const b of source.querySelectorAll('button')) {
+    b.addEventListener('click', () => {
+      press(source, b);
+      fr.src = b.dataset.src;
+      cap1.textContent = b.dataset.src.includes('shipped')
+        ? 'welcomeEmail() output · Rs. 100 credit · AB12CD34 · with a confirmation link'
+        : 'Design template, demo values filled in — Riya · Rs. 100 · AB12CD34';
     });
   }
   // Same-origin document, so the toggle reaches into it instead of keeping a second copy of the e-mail.

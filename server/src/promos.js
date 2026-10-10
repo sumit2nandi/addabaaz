@@ -204,8 +204,10 @@ export function createPromos({ db, config = promosConfigFromEnv(), mailer = null
    * Called from signup (password and phone) and from `redeem` — it is safe to call twice: the welcome bonus
    * is granted once per account, and `referrals.invitee_id` is unique so a person is referred only once.
    * Never throws: a broken promotion must not stop somebody creating an account.
+   * `mail: 'welcome'` suppresses the credit note for the new account, because that account is about to be
+   * greeted by the welcome letter (`features.sendWelcome`) which states the amount.
    */
-  async function onSignup({ user, code = null, redeeming = false }) {
+  async function onSignup({ user, code = null, redeeming = false, mail = null }) {
     const s = await settings();
     const out = { welcomePaise: 0, inviteePaise: 0, inviterPaise: 0, referralId: null, inviter: null, skipped: null };
     if (!s.enabled) { out.skipped = 'disabled'; return out; }
@@ -225,7 +227,9 @@ export function createPromos({ db, config = promosConfigFromEnv(), mailer = null
     } catch (e) {
       log.error?.('[promos] signup bonus failed:', e);
     }
-    if (out.welcomePaise || out.inviteePaise) await notifyCredit(user, { welcomePaise: out.welcomePaise, inviteePaise: out.inviteePaise, inviter: out.inviter, settings: s });
+    // `mail: 'welcome'` = the caller is sending the welcome letter, which quotes this credit itself; a separate
+    // "you got credit" note for the same sign-up would be one message too many. The inviter still gets theirs.
+    if ((out.welcomePaise || out.inviteePaise) && mail !== 'welcome') await notifyCredit(user, { welcomePaise: out.welcomePaise, inviteePaise: out.inviteePaise, inviter: out.inviter, settings: s });
     return out;
   }
 

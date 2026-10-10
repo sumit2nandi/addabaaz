@@ -10,13 +10,18 @@
 <meta name="supported-color-schemes" content="dark light">
 <title>ADDABAAZ · welcome</title>
 <style type="text/css">
-  /* Only the phone layout lives here — everything that must survive a client stripping <style> is inline. */
+  /* The one <style> block in this mail, and the one source of the phone rules: server/src/welcome-email.js
+     exports it verbatim for the letters it builds, so what a reviewer checks here is what a subscriber gets.
+     Only the phone layout lives here — everything that must survive a client stripping <style> is inline. */
   @media only screen and (max-width:520px){
-    /* One rule for the whole file: at phone width a <td> never changes its display type, and never takes
-       `width:100%`. A `display:block` cell inside a table row breaks the row's box — the border of the panel
-       then wraps one cell while the others overflow it — and a cell widened to 100% squeezes the stacked
-       neighbour beside it into ten words per line. Both looked fine at 600px. So sections here are built to
-     */
+    /* One rule for the whole file: at phone width no <td> changes its display type and none takes width:100%.
+       A block-level cell inside a table row breaks that row's box - the panel border wraps one cell while the
+       others overflow it - and a cell widened to 100% squeezes the stacked neighbour beside it to ten words a
+       line. Both looked fine at 600px, which is why the preview has a phone button. Sections are therefore
+       built so they never need restacking: a strip sits under its panel instead of beside it, and a row whose
+       two halves do different jobs is laid out side-by-side. Only the buttons reflow, and they are tables.
+       server/test/preview-pages.test.js and server/test/welcome-email.test.js fail on any td-coupled
+       display or width rule, and the block is shared with the mailer (see below). */
     .pad{padding-left:18px !important;padding-right:18px !important}
     .h1{font-size:26px !important;line-height:1.15 !important;letter-spacing:-.5px !important}
     .lede{font-size:15px !important}
@@ -110,24 +115,30 @@
   </td></tr>
 
   <!-- ================= calls to action ================= -->
-  <!-- Each pill is its own shrink-wrapping table, so they sit side by side; the colour and the outline are on
-       the inner <td> (not the table) so that at phone width, where the table goes full width, the fill and the
-       border stretch with it. Split them the other way and one button spans the card while the other stays a
-       short outline around its own words. -->
+  <!-- The primary button is the confirmation link: this letter IS the verify mail (features.sendWelcome mints the
+       same one-time /verify?token=… link that "Resend email" uses, so /verify keeps working untouched). For an
+       account the provider already verified — Google, Facebook, Apple — the letter has no link and Start
+       watching moves up to primary. Each pill is its own shrink-wrapping table, so they sit side by side; the
+       colour and the outline are on the inner <td> (not the table) so that at phone width, where the table goes
+       full width, the fill and the border stretch with it. Split them the other way and one button spans the card
+       while the other stays a short outline around its own words. -->
   <tr><td class="pad" style="padding:26px 28px 0">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="left" class="cta" style="border-radius:999px">
       <tr><td align="center" bgcolor="#d00000" style="padding:0;background:#d00000;border-radius:999px">
-        <a href="{{site_url}}/#/" style="display:inline-block;padding:14px 30px;font-size:14.5px;font-weight:bold;letter-spacing:.3px;color:#ffffff;text-decoration:none">Start&nbsp;watching</a>
+        <a href="{{verify_url}}" style="display:inline-block;padding:14px 30px;font-size:14.5px;font-weight:bold;letter-spacing:.3px;color:#ffffff;text-decoration:none">Confirm&nbsp;my&nbsp;email</a>
       </td></tr>
     </table>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="left" class="cta ctaGhost" style="margin-left:10px;border-radius:999px">
       <tr><td align="center" bgcolor="#111116" style="padding:0;background:#111116;border:1px solid rgba(255,255,255,.14);border-radius:999px">
-        <a href="{{site_url}}/#/plans" style="display:inline-block;padding:13px 24px;font-size:14px;font-weight:bold;letter-spacing:.3px;color:#d6d6de;text-decoration:none">Plans&nbsp;&amp;&nbsp;pricing</a>
+        <a href="{{site_url}}/#/" style="display:inline-block;padding:13px 24px;font-size:14px;font-weight:bold;letter-spacing:.3px;color:#d6d6de;text-decoration:none">Start&nbsp;watching</a>
       </td></tr>
     </table>
     <div style="clear:both;line-height:0;font-size:0">&nbsp;</div>
+    <p style="margin:14px 0 0;font-size:12.5px;line-height:1.6;color:#9a9aa6">
+      The link above works once and expires in three days. Until it is used, buying a plan stays blocked —
+      watching is open right now.
+    </p>
   </td></tr>
-
   <!-- ================= what to watch first ================= -->
   <tr><td class="pad" style="padding:38px 28px 0">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
