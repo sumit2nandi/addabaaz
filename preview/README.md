@@ -36,10 +36,24 @@ explicit `width`/`height`, absolute URLs everywhere, no `<script>`, no inline ev
 stylesheet. The `<style>` block in `<head>` carries only the 520px media query; clients that strip it still get
 a correct (if single-width) layout.
 
+**The phone rule:** at 520px and below the media query may resize, repad and hide — it may never *restack*.
+A `display:block` (or `width:100%`) on a `<td>` breaks the row's box, so the panel's border wraps one cell while
+the others overflow it, and a cell widened to 100% squeezes its neighbour into ten words per line. Both look
+fine at 600px. So every section here is built to survive both widths without changing shape: the ticket's
+balance is a strip under the amount, the four facts are a hairline list, a show card keeps its 68px poster
+beside the text. The one thing that does reflow is the pair of buttons, and they are `<table>`s — a table
+shrink-wraps its content, so making it `display:block;width:100%` stretches the whole pill.
+`preview-pages.test.js` enforces that invariant and fails on any dead rule the query leaves behind.
+
+Written to the rules the existing templates follow: tables only, **every style inline**, `<img>` with `alt` and
+explicit `width`/`height`, absolute URLs everywhere, no `<script>`, no inline event handler, no external
+stylesheet. The `<style>` block in `<head>` carries only the 520px media query; clients that strip it still get
+a correct (if single-width) layout.
+
 **The stacking rule:** a `<tr>` stacks *all* of its cells or *none* of them. Half-stacking — one cell
 `display:block` beside a sibling that still carries an inline `width` — is the classic way an e-mail "fits" on
 desktop and squeezes into ten words per line on a phone, and it is what `preview-pages.test.js` now asserts
-against the template. Concretely: the credit ticket and the feature grid stack; the show cards keep a 68px
+against the template. Concretely: the ticket and the feature list never restack; the show cards keep a 68px
 poster beside the text at every width, because that is the arrangement that still reads at 320px.
 
 ## Turning it into a real template

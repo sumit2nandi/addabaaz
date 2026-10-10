@@ -85,8 +85,12 @@
 
 <p class="notes">
   <b>What this is.</b> The welcome e-mail body, at the width it is sent at. <b>Phone</b> is what fires the
-  520px media query: the credit ticket splits, the feature cards go one per row and the “Watch ›” links drop
-  out. <b>Images off</b> hides every <code>&lt;img&gt;</code> — Outlook desktop cannot render the WebP artwork
+  520px media query, and that query follows one rule: <b>nothing restacks</b>. Every section is built so the
+  same layout works at 600px and 320px — the ticket keeps its balance as a strip under the amount, the four
+  facts are a list, a show card keeps its 68px poster beside the text; only paddings and sizes change, plus the
+  two buttons, which are <code>&lt;table&gt;</code>s and may therefore stretch. <b>Small · 320px</b> is the
+  width that actually breaks table layouts, so check that one too.
+  <b>Images off</b> hides every <code>&lt;img&gt;</code> — Outlook desktop cannot render the WebP artwork
   in <code>media/shows</code>, so the design has to read well without it, which is why every panel carries a
   solid background colour. The markup the mailer sends, with its <code>{{merge_fields}}</code>, is
   <a href="/preview/welcome-email.html">welcome-email.html</a>; regenerate the rendered copy with

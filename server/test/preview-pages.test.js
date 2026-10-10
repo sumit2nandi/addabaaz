@@ -88,48 +88,31 @@ test('the e-mail document carries no script, and the template keeps its merge fi
 });
 
 // The reviewer's copy is generated, so it can never drift away from the template it came from.
-// One invariant for the phone layout: a <tr> stacks ALL of its cells or NONE of them. The bug this guards:
-// `.thumb{width:100%}` with no display rule sitting beside a sibling that WAS display:block — the unstacked
-// cell swallows the row and squeezes its neighbour into ten words per line, which is exactly what a 390px
-// screenshot shows and a 600px one never would.
-test('no row half-stacks in the phone media query', () => {
+// The phone media query may only resize, repad and hide things — it must never RESTACK a cell. A
+// `display:block` (or `width:100%`) on a <td> breaks the row's box: the panel's border then wraps one cell while
+// the others overflow it, and a cell widened to 100% squeezes its neighbour into ten words per line. Both
+// looked fine at 600px, which is how this slipped past a desktop review twice.
+test('nothing is restacked at phone width — only tables reflow', () => {
   const src = fs.readFileSync(path.join(PREVIEW, 'welcome-email.html'), 'utf8');
   const mq = /@media only screen and \(max-width:\d+px\)\{([\s\S]*?)\n  \}/.exec(src)?.[1] || '';
   assert.ok(mq, 'the template has a phone media query');
-  const css = mq.replace(/\/\*[\s\S]*?\*\//g, '');           // comments would otherwise be read as part of the next selector
-  const display = new Map();                                   // class → 'block' | 'none'
-  for (const [, sel, body] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
-    const d = /display:\s*(block|none)/.exec(body)?.[1];
-    if (!d) continue;
-    for (const one of sel.split(',')) { const c = /^\s*\.([\w-]+)\s*$/.exec(one)?.[1]; if (c) display.set(c, d); }
-  }
-  // Walk the tables, collecting each <tr>'s OWN cells: a <td> inside a nested table belongs to that table's
-  // row, not the outer one — which is why the depth is recorded when the row opens.
-  let depth = 0; const rows = []; const open = [];
-  for (const m of src.matchAll(/<(\/)?(table|tr|td)\b([^>]*)/gi)) {
-    const closing = m[1] === '/', tag = m[2].toLowerCase();
-    if (tag === 'table') { depth += closing ? -1 : 1; continue; }
-    if (tag === 'tr') { if (!closing) open.push({ cells: [], depth }); else { const r = open.pop(); if (r) rows.push(r.cells); } continue; }
-    if (tag === 'td' && !closing) { const r = open[open.length - 1]; if (r && r.depth === depth) r.cells.push(m[3]); }
-  }
-  assert.ok(rows.length > 10, `the scan should see every row of the document (saw ${rows.length})`);
-
-  const stateOf = (attrs) => {
-    const cls = (/"([^"]*)"/.exec(/class="[^"]*"/.exec(attrs)?.[0] || '') || [])[1]?.split(/\s+/) || [];
-    const d = cls.map((c) => display.get(c)).filter(Boolean);
-    return { stacks: d.includes('block'), hidden: d.every((x) => x === 'none') && d.length > 0, any: d.length > 0, fixedWidth: /width:\s*\d/.test(attrs) };
-  };
-  let checked = 0;
-  for (const cells of rows) {
-    const states = cells.map(stateOf);
-    if (!states.some((x) => x.stacks)) continue;
-    checked++;
-    for (const [i, x] of states.entries()) {
-      assert.ok(x.stacks || x.hidden || !x.fixedWidth,
-        `a row stacks ${states.filter((y) => y.stacks).length} of ${states.length} cells while cell ${i + 1} keeps an inline width — the stacked layout will squeeze its neighbours`);
+  const rules = new Map();                                                 // class → its phone declarations
+  for (const [, sel, body] of mq.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    for (const one of sel.split(',')) {
+      const cls = /^\s*\.([\w-]+)\s*$/.exec(one)?.[1];
+      if (cls) rules.set(cls, (rules.get(cls) || '') + body);
     }
   }
-  assert.ok(checked >= 2, `expected the ticket and the feature grid to stack (found ${checked} stacking rows)`);
+  assert.ok(rules.size >= 8, `expected the phone rules to cover the layout (saw ${rules.size} classes)`);
+  for (const [cls, body] of rules) {
+    const on = (pattern) => [...src.matchAll(new RegExp(pattern, 'g'))].length;
+    assert.ok(on(`class="[^"]*\\b${cls}\\b`) > 0, `.${cls} is styled at phone width but used nowhere — dead rule`);
+    if (/display:\s*block/.test(body) || /width:\s*100%/.test(body)) {
+      // Legal on a <table> (a table shrink-wraps, so going full width stretches the whole widget), fatal on a cell.
+      const cells = on(`<td[^>]*class="[^"]*\\b${cls}\\b`);
+      assert.equal(cells, 0, `.${cls} is on a <td> and the phone query restacks it — build the section so it never needs restacking`);
+    }
+  }
 });
 
 test('preview/email.html is exactly the template with the demo values filled in', () => {

@@ -12,29 +12,26 @@
 <style type="text/css">
   /* Only the phone layout lives here — everything that must survive a client stripping <style> is inline. */
   @media only screen and (max-width:520px){
+    /* One rule for the whole file: at phone width a <td> never changes its display type, and never takes
+       `width:100%`. A `display:block` cell inside a table row breaks the row's box — the border of the panel
+       then wraps one cell while the others overflow it — and a cell widened to 100% squeezes the stacked
+       neighbour beside it into ten words per line. Both looked fine at 600px. So sections here are built to
+     */
     .pad{padding-left:18px !important;padding-right:18px !important}
     .h1{font-size:26px !important;line-height:1.15 !important;letter-spacing:-.5px !important}
     .lede{font-size:15px !important}
-    /* One rule for the whole file: a row either stacks entirely or not at all. Half-stacking is what makes
-       a cell that keeps `width:100%` squeeze its stacked neighbour into ten words per line. */
-    .tickEdge{display:none !important}                    /* a 3px vertical edge is meaningless once the ticket stacks */
-    .tickCol{display:block !important;width:100% !important;text-align:left !important;
-              border-left:0 !important;border-radius:0 !important;padding:16px 18px !important}
-    .tickMain{border-bottom:1px dashed rgba(245,197,24,.3) !important}
-    .tickStub{background-color:#14141a !important}
     .figure{font-size:32px !important}
+    /* The buttons are the one thing that does reflow, and they are <table>s: a table shrink-wraps its
+       content, so making it block-level and full-width stretches the pill without touching its cells. */
     .cta{display:block !important;width:100% !important}
     .cta a{display:block !important}
     .ctaGhost{margin-left:0 !important;margin-top:10px !important}
-    .half{display:block !important;width:100% !important}
-    .gap{display:block !important;width:100% !important;height:10px !important;line-height:10px !important}
-    /* The show cards deliberately DO stack-stack nothing: a 68px poster beside text is the one arrangement
-       that still reads at 320px, so only the numbers shrink. */
+    /* Show cards keep their 68px poster beside the text at every width — only the numbers shrink. */
     .cardThumb{width:68px !important;padding:12px 0 12px 12px !important}
     .cardThumb img{width:68px !important;height:auto !important}
     .cardText{padding:13px 10px 14px 13px !important}
     .cardTitle{font-size:17px !important;line-height:1.3 !important}
-    .kicker{letter-spacing:1.5px !important;white-space:nowrap !important}   /* '01 · SERIES' must not break in half */
+    .kicker{letter-spacing:1.5px !important;white-space:nowrap !important}
     .hide{display:none !important}
   }
 </style>
@@ -84,36 +81,47 @@
   </td></tr>
 
   <!-- ================= the credit ticket ================= -->
+  <!-- Two rows, never two columns: the balance strip is full width on a 600px desktop too, which is what a
+       real ticket looks like and what removes any need to restack this panel on a phone. -->
   <tr><td class="pad" style="padding:28px 28px 0">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#14141a" class="ticket" style="background:#14141a;border:1px solid rgba(245,197,24,.26);border-radius:16px">
-      <tr>
-        <td class="tickEdge" bgcolor="#f5c518" width="3" style="width:3px;background:#f5c518;border-radius:16px 0 0 16px;font-size:0;line-height:0">&nbsp;</td>
-        <td class="tickCol tickMain" valign="top" style="padding:20px 18px 20px 20px">
-          <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;line-height:1;color:#f5c518">New-account credit</p>
-          <p class="figure" style="margin:12px 0 0;font-size:38px;font-weight:bold;line-height:1;letter-spacing:-1px;color:#ffffff">Rs. {{credit_rupees}}</p>
-          <p style="margin:12px 0 0;font-size:13.5px;line-height:1.65;color:#9a9aa6">
-            It comes straight off the price of any plan at checkout, and it stays in your account until you
-            spend it. Nothing to activate, no card to add first.
-          </p>
-        </td>
-        <td class="tickCol tickStub" valign="middle" align="right" width="126" bgcolor="#1a1a22" style="width:126px;background:#1a1a22;border-left:1px solid rgba(255,255,255,.07);border-radius:0 16px 16px 0;padding:20px 18px">
-          <p style="margin:0 0 7px;font-size:9.5px;font-weight:bold;letter-spacing:1.8px;text-transform:uppercase;line-height:1;color:#7d7d8a">Balance</p>
-          <p style="margin:0;font-size:21px;font-weight:bold;line-height:1;color:#f5c518">Rs. {{balance_rupees}}</p>
-          <p style="margin:10px 0 0;font-size:11px;line-height:1.45;color:#6f6f7c">Account › Credit</p>
-        </td>
-      </tr>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#14141a" style="background:#14141a;border:1px solid rgba(245,197,24,.26);border-radius:16px">
+      <tr><td style="padding:20px 20px 18px">
+        <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;line-height:1;color:#f5c518">New-account credit</p>
+        <p class="figure" style="margin:12px 0 0;font-size:38px;font-weight:bold;line-height:1;letter-spacing:-1px;color:#ffffff">Rs. {{credit_rupees}}</p>
+        <p style="margin:12px 0 0;font-size:13.5px;line-height:1.65;color:#9a9aa6">
+          It comes straight off the price of any plan at checkout, and it stays in your account until you
+          spend it. Nothing to activate, no card to add first.
+        </p>
+      </td></tr>
+      <tr><td bgcolor="#1a1a22" style="background:#1a1a22;border-top:1px dashed rgba(245,197,24,.3);border-radius:0 0 16px 16px;padding:13px 20px 14px">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td valign="middle" style="padding:0">
+              <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.8px;text-transform:uppercase;line-height:1;color:#7d7d8a">Balance</p>
+              <p style="margin:6px 0 0;font-size:11px;line-height:1.4;color:#6f6f7c">Account › Credit</p>
+            </td>
+            <td valign="middle" align="right" style="padding:0">
+              <p style="margin:0;font-size:21px;font-weight:bold;line-height:1;letter-spacing:-.4px;color:#f5c518">Rs. {{balance_rupees}}</p>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
     </table>
   </td></tr>
 
   <!-- ================= calls to action ================= -->
+  <!-- Each pill is its own shrink-wrapping table, so they sit side by side; the colour and the outline are on
+       the inner <td> (not the table) so that at phone width, where the table goes full width, the fill and the
+       border stretch with it. Split them the other way and one button spans the card while the other stays a
+       short outline around its own words. -->
   <tr><td class="pad" style="padding:26px 28px 0">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="left" bgcolor="#d00000" class="cta" style="background:#d00000;border-radius:999px">
-      <tr><td align="center" style="padding:0;border-radius:999px">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="left" class="cta" style="border-radius:999px">
+      <tr><td align="center" bgcolor="#d00000" style="padding:0;background:#d00000;border-radius:999px">
         <a href="{{site_url}}/#/" style="display:inline-block;padding:14px 30px;font-size:14.5px;font-weight:bold;letter-spacing:.3px;color:#ffffff;text-decoration:none">Start&nbsp;watching</a>
       </td></tr>
     </table>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="left" class="cta ctaGhost" style="margin-left:10px;border-radius:999px">
-      <tr><td align="center" style="padding:0;border:1px solid rgba(255,255,255,.16);border-radius:999px">
+      <tr><td align="center" bgcolor="#111116" style="padding:0;background:#111116;border:1px solid rgba(255,255,255,.14);border-radius:999px">
         <a href="{{site_url}}/#/plans" style="display:inline-block;padding:13px 24px;font-size:14px;font-weight:bold;letter-spacing:.3px;color:#d6d6de;text-decoration:none">Plans&nbsp;&amp;&nbsp;pricing</a>
       </td></tr>
     </table>
@@ -187,34 +195,30 @@
   </td></tr>
 
   <!-- ================= four things worth knowing ================= -->
+  <!-- A list of four hairline-separated rows rather than a 2×2 grid of cards: the grid has to become a column
+       on a phone, and that restacking is exactly where table layouts break. This reads the same at 600px and
+       at 320px, and it is about the same height either way. -->
   <tr><td class="pad" style="padding:38px 28px 0">
     <p style="margin:0;font-size:19px;font-weight:bold;letter-spacing:-.3px;line-height:1.2;color:#ffffff">Four things worth knowing</p>
   </td></tr>
-  <tr><td class="pad" style="padding:16px 28px 0">
+  <tr><td class="pad" style="padding:6px 28px 0">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-      <tr>
-        <td class="half" valign="top" bgcolor="#111116" width="50%" style="width:50%;background:#111116;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px 16px 18px">
-          <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1;color:#d00000">Continue watching</p>
-          <p style="margin:9px 0 0;font-size:13px;line-height:1.62;color:#9a9aa6">Stop mid-episode on the phone, finish it on the laptop — autoplay hands you the next one.</p>
-        </td>
-        <td class="gap" width="12" style="width:12px;font-size:0;line-height:12px">&nbsp;</td>
-        <td class="half" valign="top" bgcolor="#111116" width="50%" style="width:50%;background:#111116;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px 16px 18px">
-          <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1;color:#d00000">My List &amp; reminders</p>
-          <p style="margin:9px 0 0;font-size:13px;line-height:1.62;color:#9a9aa6">Save anything for later; on a Coming Soon title, tap Remind me and we tell you the day it lands.</p>
-        </td>
-      </tr>
-      <tr><td colspan="3" style="height:10px;line-height:10px;font-size:0">&nbsp;</td></tr>
-      <tr>
-        <td class="half" valign="top" bgcolor="#111116" width="50%" style="width:50%;background:#111116;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px 16px 18px">
-          <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1;color:#d00000">Who’s watching?</p>
-          <p style="margin:9px 0 0;font-size:13px;line-height:1.62;color:#9a9aa6">A profile each, with its own list — and a PIN-locked kids profile when you want one.</p>
-        </td>
-        <td class="gap" width="12" style="width:12px;font-size:0;line-height:12px">&nbsp;</td>
-        <td class="half" valign="top" bgcolor="#111116" width="50%" style="width:50%;background:#111116;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px 16px 18px">
-          <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1;color:#d00000">Installs itself</p>
-          <p style="margin:9px 0 0;font-size:13px;line-height:1.62;color:#9a9aa6">Open it in the browser and choose Add to Home screen — an app on Android, iOS and desktop.</p>
-        </td>
-      </tr>
+      <tr><td style="padding:15px 0 16px;">
+        <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1;color:#d00000">Continue watching</p>
+        <p style="margin:8px 0 0;font-size:13.5px;line-height:1.62;color:#9a9aa6">Stop mid-episode on the phone, finish it on the laptop — we keep the timestamp and autoplay hands you the next one.</p>
+      </td></tr>
+      <tr><td style="padding:15px 0 16px;border-top:1px solid rgba(255,255,255,.06);">
+        <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1;color:#d00000">My List &amp; reminders</p>
+        <p style="margin:8px 0 0;font-size:13.5px;line-height:1.62;color:#9a9aa6">Save anything for later. On a Coming Soon title, tap Remind me and we tell you the day it lands.</p>
+      </td></tr>
+      <tr><td style="padding:15px 0 16px;border-top:1px solid rgba(255,255,255,.06);">
+        <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1;color:#d00000">Who’s watching?</p>
+        <p style="margin:8px 0 0;font-size:13.5px;line-height:1.62;color:#9a9aa6">A profile each, with its own list — and a PIN-locked kids profile whenever you want one.</p>
+      </td></tr>
+      <tr><td style="padding:15px 0 16px;border-top:1px solid rgba(255,255,255,.06);">
+        <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1;color:#d00000">Installs itself</p>
+        <p style="margin:8px 0 0;font-size:13.5px;line-height:1.62;color:#9a9aa6">Open it in the browser and choose Add to Home screen — it becomes an app on Android, iOS and desktop.</p>
+      </td></tr>
     </table>
   </td></tr>
 
