@@ -12,7 +12,7 @@ import { parseHTML } from 'linkedom';
 
 const read = (path) => fs.readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
-test('a Coming Soon page highlights Shows in the floating menu (and Coming Soon in the top bar)', async () => {
+test('a Coming Soon page highlights Shows in mobile tabs and Coming Soon in the desktop rail', async () => {
   const { document, window } = parseHTML('<!doctype html><html><body><header id="topbar" class="topbar"></header><nav id="tabbar" class="tabbar"></nav><main id="view"></main></body></html>');
   globalThis.document = document;
   globalThis.window = window;
@@ -37,7 +37,7 @@ test('a Coming Soon page highlights Shows in the floating menu (and Coming Soon 
   for (const path of ['/soon/mayer-golpo', '/upcoming']) {
     markActive({ path });
     assert.deepEqual(activeTab(), ['/shows'], `${path} lights up Shows in the floating menu`);
-    assert.deepEqual(activeNav(), ['upcoming'], `${path} still lights up Coming Soon in the top bar`);
+    assert.deepEqual(activeNav(), ['upcoming'], `${path} still lights up Coming Soon in the desktop rail`);
   }
 
   // Released shows, the home page and the other tabs keep their own highlight.

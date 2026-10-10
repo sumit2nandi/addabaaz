@@ -108,11 +108,11 @@ test('the floating menu is slim: a 54px pill with compact icons and labels', () 
   assert.match(shell, /icon\(ic, \{ size: 22 \}\)/, 'and 22px icons instead of 24px');
 });
 
-test('header search hides at the floating-menu breakpoint, while both search links remain available in their layouts', () => {
+test('search stays labeled in the desktop rail and available from the mobile floating tabs', () => {
   const css = fs.readFileSync(new URL('../../app/css/styles.css', import.meta.url), 'utf8');
   const shell = fs.readFileSync(new URL('../../app/js/ui/shell.js', import.meta.url), 'utf8');
   assert.match(css, /@media \(max-width: 899px\) \{\s*\/\*[^]*?\*\/\s*\.topbar \.search-link \{ display: none; \}/);
   assert.match(css, /@media \(min-width: 900px\) \{[^}]*\} \.tabbar \{ display: none; \}/);
-  assert.match(shell, /\['\/search', 'Search', 'search'\]/);
-  assert.match(shell, /class="icon-btn search-link" href="#\/search"/);
+  assert.match(shell, /\['\/search', 'Search', 'search', 'search'\]/, 'desktop Search has a label and icon in the vertical rail');
+  assert.match(shell, /const TABS = \[\['\/', 'Home', 'home'\][^;]*\['\/search', 'Search', 'search'\]\]/, 'the floating mobile tabs still include Search');
 });

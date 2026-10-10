@@ -1616,3 +1616,117 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 @media (prefers-reduced-motion: reduce) {
 .referral-ledger-count .i { transition: none; }
 }
+
+/* ---------- desktop streaming-style navigation rail ---------- */
+/* These affordances only exist in the desktop side rail; phones keep the compact topbar + floating tabs. */
+.sidebar-premium, .sidebar-account-link, .desktop-profile-arrow { display: none; }
+.sidebar-account-row { display: flex; align-items: center; }
+.mobile-avatar { display: inline-flex; }
+
+@media (min-width: 900px) {
+  :root { --desktop-nav-width: clamp(198px, 14vw, 228px); --desktop-content-left: calc(var(--desktop-nav-width) + 28px); }
+
+  /* The header becomes an always-visible, translucent left rail, overlaid on the same full-bleed artwork. */
+  .topbar {
+    right: auto; width: var(--desktop-nav-width); height: 100vh; height: 100dvh;
+    padding: calc(26px + var(--sat)) 18px calc(20px + var(--sab)) calc(16px + var(--sal));
+    align-items: stretch; flex-direction: column; gap: 0;
+    background: linear-gradient(90deg, rgba(5,5,5,.99) 0%, rgba(5,5,5,.96) 72%, rgba(5,5,5,.78) 89%, rgba(5,5,5,.1) 100%);
+    box-shadow: none; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  }
+  .topbar.scrolled,
+  body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) .topbar {
+    background: linear-gradient(90deg, rgba(5,5,5,.99) 0%, rgba(5,5,5,.96) 72%, rgba(5,5,5,.78) 89%, rgba(5,5,5,.1) 100%);
+    box-shadow: none; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  }
+  .topbar .brand { gap: 9px; width: 100%; }
+  .topbar .brand img { width: 38px; height: 38px; }
+  .topbar .brand-text { font-size: 17px; letter-spacing: 1.2px; }
+  .sidebar-premium {
+    display: inline-flex; align-self: flex-start; align-items: center; gap: 7px;
+    max-width: 100%; min-height: 32px; margin-top: 12px; padding: 5px 10px;
+    border: 1px solid rgba(245,197,24,.23); border-radius: 8px;
+    background: rgba(245,197,24,.1); color: var(--gold);
+    font-size: 10px; font-weight: 800; letter-spacing: .08em; line-height: 1.2; text-transform: uppercase;
+    transition: background .18s, border-color .18s, color .18s;
+  }
+  .sidebar-premium .i { opacity: .95; }
+  .sidebar-premium:hover, .sidebar-premium.is-premium, .sidebar-premium.active { background: rgba(245,197,24,.2); border-color: rgba(245,197,24,.42); color: #ffe38a; }
+
+  .nav.primary-nav {
+    display: flex; flex-direction: column; align-items: stretch; gap: 3px;
+    width: 100%; margin-top: 28px;
+  }
+  .primary-nav .nav-link {
+    display: flex; align-items: center; justify-content: flex-start; gap: 13px;
+    width: 100%; min-height: 47px; padding: 0 10px;
+    border: 0; border-radius: 10px; background: transparent;
+    color: rgba(255,255,255,.62); font-size: 15px; font-weight: 600; text-align: left;
+    transition: color .18s, background .18s, transform .18s;
+  }
+  .primary-nav .nav-link > svg:first-child { width: 22px; height: 22px; flex: none; opacity: .95; }
+  .primary-nav .nav-link > span { flex: 1; min-width: 0; }
+  .primary-nav .nav-link:hover, .primary-nav .nav-link:focus-visible {
+    color: #fff; background: rgba(255,255,255,.085);
+  }
+  .primary-nav .nav-link.active, .primary-nav .nav-drop-btn.active {
+    color: #fff; background: rgba(255,255,255,.075); font-weight: 800;
+  }
+  .topbar .primary-nav .nav-link.active::after, .topbar .primary-nav .nav-drop-btn.active::after { display: none; }
+  .primary-nav .nav-link.active > svg:first-child, .primary-nav .nav-drop-btn.active > svg:first-child { color: #fff; stroke-width: 2.4; }
+  .primary-nav .nav-drop { width: 100%; }
+  .primary-nav .nav-drop-btn { cursor: pointer; }
+  .primary-nav .sidebar-caret { width: 16px; height: 16px; color: var(--muted); transition: transform .18s; }
+  .primary-nav .nav-drop-btn[aria-expanded="true"] .sidebar-caret { transform: rotate(180deg); }
+  /* Studio opens inline, so the destinations remain reachable without a second hover-only flyout. */
+  .primary-nav .nav-drop .menu {
+    position: static; min-width: 0; margin: 3px 0 6px; padding: 4px 0 4px 34px;
+    border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  }
+  .primary-nav .nav-drop .menu a {
+    min-height: 38px; padding: 8px 10px; border-radius: 8px;
+    color: rgba(255,255,255,.66) !important; font-size: 13px; font-weight: 600;
+  }
+  .primary-nav .nav-drop .menu a:hover, .primary-nav .nav-drop .menu a:focus-visible {
+    background: rgba(255,255,255,.085); color: #fff !important;
+  }
+
+  .top-actions { display: flex; flex-direction: column; align-items: stretch; gap: 12px; width: 100%; margin: auto 0 0; }
+  .top-actions #installBtn { width: 100%; justify-content: flex-start; }
+  #profileWrap { position: relative; width: 100%; }
+  .sidebar-account-row { width: 100%; gap: 4px; padding: 3px; border: 1px solid var(--border); border-radius: 13px; background: rgba(255,255,255,.035); }
+  .sidebar-account-link { display: flex; align-items: center; flex: 1; gap: 11px; min-width: 0; min-height: 42px; padding: 0 8px; border-radius: 9px; color: rgba(255,255,255,.72); font-size: 14px; font-weight: 700; transition: background .18s, color .18s; }
+  .sidebar-account-link:hover, .sidebar-account-link.active { background: rgba(255,255,255,.08); color: #fff; }
+  .sidebar-account-link.active { font-weight: 800; }
+  .sidebar-account-link > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar-account-avatar { display: inline-grid; place-items: center; width: 30px; height: 30px; flex: none; }
+  .sidebar-account-avatar .avatar { width: 30px !important; height: 30px !important; font-size: 14px !important; }
+  #profileWrap .avatar-btn { display: grid; place-items: center; width: 36px; height: 40px; flex: none; border: 0; border-radius: 9px; background: transparent; color: var(--muted); }
+  #profileWrap .avatar-btn:hover { border: 0; background: rgba(255,255,255,.08); color: #fff; }
+  #profileWrap .mobile-avatar { display: none; }
+  #profileWrap .desktop-profile-arrow { display: grid; place-items: center; }
+  #profileWrap .menu-right { top: auto; right: auto; bottom: calc(100% + 10px); left: 0; width: 100%; min-width: 220px; max-height: min(68dvh, 520px); overflow-y: auto; overscroll-behavior: contain; }
+
+  /* Keep the main stage full-bleed, but start its titles, controls and shelves beyond the fixed rail. */
+  .hero-dock { left: var(--desktop-content-left); }
+  .hero-inner { padding-left: var(--desktop-content-left); }
+  .hero-dots { left: var(--desktop-content-left); }
+  .premium-mark-hero { left: var(--desktop-content-left); }
+  .page { padding-left: var(--desktop-content-left); }
+  .cta-band { margin-left: var(--desktop-content-left); }
+  .rail-head { padding-left: var(--desktop-content-left); }
+  .home-release-showcase { margin-left: var(--desktop-content-left); }
+  .rail-track { padding-left: var(--desktop-content-left); scroll-padding-left: var(--desktop-content-left); }
+  .watch { padding-left: var(--desktop-content-left); }
+  .watch-info { padding-left: 0; }
+  .watch-side { padding-left: 0; padding-right: 0; }
+  .footer { margin-left: var(--desktop-nav-width); padding-left: 28px; }
+  .auth-page.auth-entry { padding-left: var(--desktop-content-left); }
+  .profiles-page { padding-left: var(--desktop-content-left); padding-right: var(--pad); }
+  body[data-route="reels"] #view { padding-top: 0 !important; }
+  .reels-feed { height: 100dvh; }
+}
+
+@media print {
+  .topbar, .tabbar, .footer { display: none !important; }
+}
