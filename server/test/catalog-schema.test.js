@@ -23,6 +23,18 @@ test('R2 video-thumbnail paths allow generated nested WebP renditions and check 
   assert.match(validate('video', { ...video, thumbnail: 'r2-assets/video-thumbnails/premium/../0123456789abcdef01234567-hq.webp' }).errors.join(' '), /thumbnail must be an uploaded image/);
 });
 
+test('R2 forced format must match the object: "Force HLS" needs a .m3u8 master playlist key', () => {
+  // Error report #861: "Force HLS" on a single uploaded video file sent MP4 bytes to hls.js as a manifest
+  // ("no EXTM3U delimiter" on desktop). The schema now blocks the mismatch at save time with a recipe.
+  const base = { id: 'fmt-check', kind: 'episode', title: 'Format check', duration: 60, publishedAt: '2026-01-01', access: 'free', thumbnail: 'https://images.example.test/thumb.webp' };
+  const errors = (source) => validate('video', { ...base, source }).errors;
+  assert.deepEqual(errors({ type: 'r2', key: 'premium/x/master.m3u8', format: 'hls' }), [], 'HLS package with a matching flag is fine');
+  assert.deepEqual(errors({ type: 'r2', key: 'premium/x/video.mp4', format: 'mp4' }), [], 'video file with a matching flag is fine');
+  assert.deepEqual(errors({ type: 'r2', key: 'premium/x/video.mp4' }), [], 'no flag = detection from the file name');
+  assert.match(errors({ type: 'r2', key: 'premium/x/video.mp4', format: 'hls' }).join(' '), /Force HLS needs the key of an HLS master playlist ending in \.m3u8/);
+  assert.match(errors({ type: 'r2', key: 'premium/x/master.m3u8', format: 'mp4' }).join(' '), /can't be format mp4/);
+});
+
 test('Premium show and video access are independent of the media source', () => {
   const youtubeChild = { id: 'youtube-child', showId: 'premium-show', source: { type: 'youtube', id: 'abcdefghijk' } };
   const show = validate('show', {

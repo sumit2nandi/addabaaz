@@ -6,11 +6,12 @@ import { pipeline } from 'node:stream/promises';
 import { HttpError, wrap } from '../http.js';
 import { signJwt, verifyToken } from '../auth.js';
 import { FREE_KINDS } from '../catalog-schema.js';
+import { detectR2Format, normalizePlaylist, isHlsPlaylist } from '../hls.js';
 
 const CAPACITOR_ORIGIN = 'https://app.addabaaz.in';
 const isNativeWebView = (req) => req.get('origin') === CAPACITOR_ORIGIN || /\bwv\b/i.test(req.get('user-agent') || '');
 
-export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, r2, catalog, features, userFromRequest }) {
+export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, r2, catalog, features, userFromRequest, log = console }) {
   const checkObject = mediaHeadCache((key) => r2.head(key));
   // Small helpers: catalog lookup, the public base URL for links we hand out, and mp4-vs-HLS detection.
   const findVideo = (id) => catalog.video(id);
@@ -22,7 +23,23 @@ export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, 
     return snapshot.shows.some((s) => s.id === v.showId && s.access === 'premium');
   };
   const originOf = (req) => (publicApiUrl || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
-  const r2Format = (src) => src.format || (/\.m3u8$/i.test(src.key) ? 'hls' : 'mp4');
+  // The effective format comes from the object itself: HLS is a package of .m3u8 playlists plus segments, so a
+  // forced `format` that contradicts the key can never be honoured. The old behaviour trusted the flag, which let
+  // "Force HLS" on a single uploaded video file send MP4 bytes to hls.js as a manifest — a fatal
+  // "no EXTM3U delimiter" on desktop while lenient players kept playing. The key wins; the mismatch is flagged
+  // (once per key) so the video's format gets corrected in the admin console.
+  const warnedFormats = new Set();
+  const r2Format = (src) => {
+    const detected = detectR2Format(src.key);
+    if (src.format && src.format !== detected) {
+      if (!warnedFormats.has(src.key)) {
+        if (warnedFormats.size < 500) warnedFormats.add(src.key);
+        log.warn?.(`[media] source.format "${src.format}" contradicts the R2 key "${src.key}" — serving the video as ${detected}. Fix the format in the admin console (HLS needs a master playlist key ending in .m3u8).`);
+      }
+      return detected;
+    }
+    return src.format || detected;
+  };
   /** Returns a playable URL for a video hosted in R2. Premium titles need a signed-in account with an active paid plan. */
   api.post('/videos/:id/stream', wrap(async (req, res) => {
     const v = await findVideo(req.params.id);
@@ -74,9 +91,20 @@ export function registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, 
     if (/\.m3u8$/i.test(target)) {
       const text = await r2.getText(target);
       if (text == null) throw new HttpError(404, 'not_found', 'Not found.');
+      // hls.js (desktop Chrome/Edge) fails fatally ("no EXTM3U delimiter") unless the body STARTS with #EXTM3U,
+      // while lenient players (iOS Safari) still play manifests saved with a BOM or a leading blank line — the same
+      // object can therefore break on a laptop and work on a phone. Normalize once here so every engine sees the
+      // same clean bytes, and refuse to ship a "playlist" that still isn't one: a clear 502 beats 200 bytes that
+      // every player reports differently. The cause chain lands in Admin → Errors.
+      const playlist = normalizePlaylist(text);
+      if (!isHlsPlaylist(playlist)) {
+        throw new HttpError(502, 'invalid_manifest', 'This video isn’t available right now — please try again later.', {
+          cause: new Error(`Stored HLS playlist ${target} is not playable: ${playlist ? `begins with ${JSON.stringify(playlist.slice(0, 48))}` : 'it is empty.'} Re-upload the HLS package (npm run encode:hls -- <video> --upload).`),
+        });
+      }
       // Playlists of an encoded video don't change, and the token URL is private to this viewer: let the browser reuse them for a few minutes
       // (replays, re-opening a reel) instead of two server-to-R2 trips every time.
-      return res.set({ 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'private, max-age=300' }).send(text);
+      return res.set({ 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'private, max-age=300' }).send(playlist);
     }
     // Capacitor WebViews can fail XHR on the cross-origin 302 to R2 even when the bucket CORS rule is correct.
     // Stream only native-app fragments through the API; desktop browsers keep the bandwidth-saving direct redirect.

@@ -22,10 +22,12 @@ test('website checkout is one Plus card with duration tiles and a single pay but
     'paying reuses the existing purchase flow with the selected plan');
   // Guests on the website see the same selector (prices plus a "Sign In to Subscribe" CTA) — see
   // plans-guest.test.mjs; only the native apps fall back to the legacy cards.
-  assert.match(plans, /\$\{canBuy \|\| guestWeb \? plusCard : legacyCards\}/,
-    'the selector renders whenever there is something to show');
-  assert.match(plans, /\$\{canBuy \|\| guestWeb \? plusCard : legacyCards\}\s*\$\{u\.account \? html`<div class="card-panel list plans-bill">/,
-    'a billing shortcut sits directly below the plan options for signed-in viewers');
+  assert.match(plans, /const billingPanel = u\.account \? html`<div class="card-panel list plans-bill">/,
+    'a billing shortcut panel is built once for signed-in viewers');
+  assert.match(plans, /\$\{canBuy \|\| guestWeb \? html`<div class="plans-layout">\$\{pitch\}<div class="plans-checkout">\$\{plusCard\}\$\{billingPanel\}<\/div><\/div>` : html`\$\{legacyCards\}\$\{billingPanel\}`\}/,
+    'web checkout renders as brand column + checkout column; native/no-payments keep the legacy cards');
+  assert.match(plans, /<aside class="plans-pitch">/,
+    'a desktop-only brand column carries the lockup and perks');
   assert.match(plans, /<a class="row-link" href="#\/billing">.*Billing &amp; Invoices/,
     '...leading to Billing & Invoices');
   assert.match(css, /\.plans-bill \{[^}]*max-width: 680px/,
@@ -38,6 +40,12 @@ test('website checkout is one Plus card with duration tiles and a single pay but
     'the Plus card wears the dark-gold panel');
   assert.match(css, /\.plan\.best \{[^}]*background-image: var\(--gold-panel\)/,
     'so does the legacy best-value card');
+  assert.match(css, /\.plans-pitch \{ display: none; \}/,
+    'the brand column is hidden on phones');
+  assert.match(css, /@media \(min-width: 900px\) \{[\s\S]*?\.plans-pitch \{ display: block/,
+    '...and appears from 900px up');
+  assert.match(css, /\.plus-card h2, \.plus-card > p\.muted, \.plus-card \.perks \{ display: none; \}/,
+    'on desktop the purchase card defers branding + perks to the pitch and shows only the checkout');
 });
 
 test('buying skips straight to payment: coupon popup, cancel screen, celebration', () => {

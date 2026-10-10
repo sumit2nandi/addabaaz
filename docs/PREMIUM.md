@@ -76,6 +76,8 @@ Add (or change) a video in `data/catalog.json`; `access: "premium"` is what requ
 - `source.format` is inferred (`.m3u8` ⇒ `hls`, otherwise `mp4`); for HLS the `key` is the **master playlist**, and every other file must sit in the same folder (or below it).
 - `thumbnail` must be a public image (put it in `media/…`); R2 videos have no YouTube thumbnail. `npm run validate:catalog` checks all of this.
 - An R2 video may also be `"access": "free"`: it's then playable without login (still delivered through signed URLs) — handy for hosting free titles yourself.
+- **The format flag must match the file** (Admin → video → “Format”): `hls` is only valid on a master-playlist key ending in `.m3u8`. HLS is a *package* of playlists + segments (`npm run encode:hls -- <video> --upload`), never a single file — forcing HLS on a single uploaded video is rejected at save time, and legacy rows like that fall back to progressive MP4 at play time (with a `[media]` warning to fix them).
+- Playlists are validated as they leave the media gateway: after trimming a BOM/leading blank lines, the body must start with `#EXTM3U` or the request answers `502 invalid_manifest` (logged to Admin → Errors with the exact R2 key) instead of shipping players unplayable bytes. Save playlists as UTF‑8 without BOM.
 
 ## Access rules
 

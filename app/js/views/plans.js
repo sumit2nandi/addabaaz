@@ -165,6 +165,20 @@ export default async function plans(ctx) {
       ${guestWeb ? '' : coupon && quote?.coupon ? html`<p class="coupon-line"><b>${quote.coupon.code}</b> applied — you save ${inr(pr ? pr.savePaise : 0)}. <button class="linklike" data-uncoupon>Remove</button></p>` : html`<button class="linklike coupon-link" data-coupon>Apply Coupon</button>`}
       <p class="free-line">Free · ${u.account && cur === 'free' ? 'your current plan' : 'included forever'}</p>
     </div>`;
+    // Billing shortcut below the plan options (shared by the checkout column and the legacy cards).
+    const billingPanel = u.account ? html`<div class="card-panel list plans-bill"><a class="row-link" href="#/billing">${icon('download', { size: 22 })}<span><b>Billing &amp; Invoices</b><small>GST Invoices, Credit Notes and Refunds</small></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>` : '';
+    // Desktop-only brand column: on wide screens it carries the lockup, perks and trust points so the
+    // purchase card can focus on checkout; on phones it is display:none and the page keeps its card layout.
+    const pitch = html`<aside class="plans-pitch">
+      <h2><span class="brand-lockup"><b>ADDA</b><i>BAAZ</i> <em class="premium-word">premium</em></span></h2>
+      <p class="plans-tag">Premium originals, early access &amp; ad-free viewing — on every screen you own.</p>
+      <ul class="perks plans-perks">${perks.map((f) => html`<li>${icon('check', { size: 16 })} ${f}</li>`)}</ul>
+      <ul class="plans-trust">
+        <li>${icon('lock', { size: 16 })}<span>UPI, cards, netbanking &amp; wallets — secure Razorpay checkout</span></li>
+        <li>${icon('gift', { size: 16 })}<span>Credits &amp; coupons come straight off the price</span></li>
+        <li>${icon('download', { size: 16 })}<span>GST invoices under Billing &amp; Invoices</span></li>
+      </ul>
+    </aside>`;
     // Native apps and payment-less servers: read-only cards (no prices in native builds, no purchase buttons).
     const legacyCards = html`<div class="plans">${list.map((p) => html`<article class="plan ${p.id === cur ? 'current' : ''} ${!isNative && p.id === 'plus-yearly' ? 'best' : ''} ${p.id === 'free' ? 'free' : ''}">
         ${!isNative && p.id === 'plus-yearly' && p.id !== cur ? html`<span class="badge">Best Value</span>` : ''}
@@ -175,14 +189,13 @@ export default async function plans(ctx) {
           : !canBuy ? (p.id === cur ? html`<button class="btn btn-ghost block" disabled>Current Plan</button>` : '')
           : html`<button class="btn btn-primary block" data-plan="${p.id}">${p.id === cur ? 'Extend' : active ? 'Switch to' : 'Get'} ${p.interval === 'year' ? 'yearly' : 'monthly'} plan</button>`}
       </article>`)}</div>`;
-    ctx.root.innerHTML = html`<div class="page">
+    ctx.root.innerHTML = html`<div class="page plans-page">
       ${sectionHeader(isNative
         ? { title: 'Your access', subtitle: 'View the access currently linked to your ADDABAAZ account.', back: backButton }
         : { title: 'Choose your plan', subtitle: 'Pay once for the period — no auto-renewal, nothing to cancel.', back: backButton })}
       ${status}${why}
       ${!isNative && creditPaise > 0 ? html`<div class="notice ok">${icon('gift', { size: 18 })}<span>You have <b>${inr(creditPaise)}</b> of ADDABAAZ credit${offer?.expiryDays ? html` — it expires ${offer.expiryDays} days after it was added` : ''}. Tick “use my credit” at checkout and it comes straight off the price.</span></div>` : ''}
-      ${canBuy || guestWeb ? plusCard : legacyCards}
-      ${u.account ? html`<div class="card-panel list plans-bill"><a class="row-link" href="#/billing">${icon('download', { size: 22 })}<span><b>Billing &amp; Invoices</b><small>GST Invoices, Credit Notes and Refunds</small></span>${icon('right', { size: 18, cls: 'chev' })}</a></div>` : ''}
+      ${canBuy || guestWeb ? html`<div class="plans-layout">${pitch}<div class="plans-checkout">${plusCard}${billingPanel}</div></div>` : html`${legacyCards}${billingPanel}`}
       ${s.demo ? html`<p class="muted" style="margin-top:18px"><button class="btn btn-ghost" data-cancel>End Demo Plan</button></p>` : ''}
       <p class="muted" style="margin-top:18px;font-size:13px">${isNative
         ? html`No purchase can be started or completed in this app. Existing members can view past invoices and refunds here. ${u.account ? html`<a href="#/billing">Billing & Invoices</a>` : ''}`
