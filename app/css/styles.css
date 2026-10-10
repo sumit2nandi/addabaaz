@@ -1618,96 +1618,137 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 }
 
 /* ---------- desktop streaming-style navigation rail ---------- */
-/* These affordances only exist in the desktop side rail; phones keep the compact topbar + floating tabs. */
-.sidebar-premium, .sidebar-account-link, .desktop-profile-arrow { display: none; }
+/* Keep only the icons visible at rest; labels slide out when the pointer or keyboard enters the rail. */
+.sidebar-account-link, .desktop-profile-arrow { display: none; }
 .sidebar-account-row { display: flex; align-items: center; }
 .mobile-avatar { display: inline-flex; }
 
 @media (min-width: 900px) {
   :root { --desktop-nav-width: clamp(198px, 14vw, 228px); --desktop-content-left: calc(var(--desktop-nav-width) + 28px); }
 
-  /* The header becomes an always-visible, translucent left rail, overlaid on the same full-bleed artwork. */
+  /* A translucent overlay sits over the full-bleed artwork, like the reference streaming sidebar. */
   .topbar {
     right: auto; width: var(--desktop-nav-width); height: 100vh; height: 100dvh;
     padding: calc(26px + var(--sat)) 18px calc(20px + var(--sab)) calc(16px + var(--sal));
     align-items: stretch; flex-direction: column; gap: 0;
-    background: linear-gradient(90deg, rgba(5,5,5,.99) 0%, rgba(5,5,5,.96) 72%, rgba(5,5,5,.78) 89%, rgba(5,5,5,.1) 100%);
-    box-shadow: none; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    background: linear-gradient(90deg, rgba(5,5,5,.84) 0%, rgba(5,5,5,.73) 70%, rgba(5,5,5,.43) 88%, rgba(5,5,5,.06) 100%);
+    box-shadow: none; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+    transition: background .25s, box-shadow .25s;
   }
   .topbar.scrolled,
   body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) .topbar {
-    background: linear-gradient(90deg, rgba(5,5,5,.99) 0%, rgba(5,5,5,.96) 72%, rgba(5,5,5,.78) 89%, rgba(5,5,5,.1) 100%);
-    box-shadow: none; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    background: linear-gradient(90deg, rgba(5,5,5,.84) 0%, rgba(5,5,5,.73) 70%, rgba(5,5,5,.43) 88%, rgba(5,5,5,.06) 100%);
+    box-shadow: none; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
   }
-  .topbar .brand { gap: 9px; width: 100%; }
+  .topbar .brand { gap: 9px; width: 100%; padding-left: 10px; justify-content: flex-start; }
   .topbar .brand img { width: 38px; height: 38px; }
-  .topbar .brand-text { font-size: 17px; letter-spacing: 1.2px; }
-  .sidebar-premium {
-    display: inline-flex; align-self: flex-start; align-items: center; gap: 7px;
-    max-width: 100%; min-height: 32px; margin-top: 12px; padding: 5px 10px;
-    border: 1px solid rgba(245,197,24,.23); border-radius: 8px;
-    background: rgba(245,197,24,.1); color: var(--gold);
-    font-size: 10px; font-weight: 800; letter-spacing: .08em; line-height: 1.2; text-transform: uppercase;
-    transition: background .18s, border-color .18s, color .18s;
+  .topbar .brand-text {
+    max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0; transform: translateX(-8px); pointer-events: none;
+    font-size: 17px; letter-spacing: 1.2px;
+    transition: max-width .28s var(--ease), opacity .18s ease, transform .28s var(--ease);
   }
-  .sidebar-premium .i { opacity: .95; }
-  .sidebar-premium:hover, .sidebar-premium.is-premium, .sidebar-premium.active { background: rgba(245,197,24,.2); border-color: rgba(245,197,24,.42); color: #ffe38a; }
+  .topbar:hover .brand-text, .topbar:focus-within .brand-text { max-width: 180px; opacity: 1; transform: none; pointer-events: auto; }
 
   .nav.primary-nav {
     display: flex; flex-direction: column; align-items: stretch; gap: 3px;
-    width: 100%; margin-top: 28px;
+    width: 100%; margin-top: 42px;
   }
   .primary-nav .nav-link {
-    display: flex; align-items: center; justify-content: flex-start; gap: 13px;
+    display: flex; align-items: center; justify-content: flex-start; gap: 0;
     width: 100%; min-height: 47px; padding: 0 10px;
     border: 0; border-radius: 10px; background: transparent;
-    color: rgba(255,255,255,.62); font-size: 15px; font-weight: 600; text-align: left;
+    color: rgba(255,255,255,.67); font-size: 15px; font-weight: 600; text-align: left;
     transition: color .18s, background .18s, transform .18s;
   }
   .primary-nav .nav-link > svg:first-child { width: 22px; height: 22px; flex: none; opacity: .95; }
-  .primary-nav .nav-link > span { flex: 1; min-width: 0; }
-  .primary-nav .nav-link:hover, .primary-nav .nav-link:focus-visible {
-    color: #fff; background: rgba(255,255,255,.085);
+  .primary-nav .nav-link > span {
+    flex: 0 1 0; width: 0; max-width: 0; overflow: hidden; opacity: 0; white-space: nowrap;
+    transform: translateX(-8px); pointer-events: none;
+    transition: max-width .28s var(--ease), opacity .18s ease, transform .28s var(--ease);
   }
-  .primary-nav .nav-link.active, .primary-nav .nav-drop-btn.active {
-    color: #fff; background: rgba(255,255,255,.075); font-weight: 800;
+  .topbar:hover .primary-nav .nav-link > span, .topbar:focus-within .primary-nav .nav-link > span {
+    flex: 1 1 auto; max-width: 180px; opacity: 1; transform: none; pointer-events: auto;
   }
+  .topbar:hover .primary-nav .nav-link, .topbar:focus-within .primary-nav .nav-link { gap: 13px; }
+  .primary-nav .nav-link:hover, .primary-nav .nav-link:focus-visible { color: #fff; background: rgba(255,255,255,.07); }
+  /* The active destination is bold and bright, not boxed in by a selected pill. */
+  .primary-nav .nav-link.active, .primary-nav .nav-drop-btn.active { color: #fff; background: transparent; font-weight: 800; }
   .topbar .primary-nav .nav-link.active::after, .topbar .primary-nav .nav-drop-btn.active::after { display: none; }
   .primary-nav .nav-link.active > svg:first-child, .primary-nav .nav-drop-btn.active > svg:first-child { color: #fff; stroke-width: 2.4; }
-  .primary-nav .nav-drop { width: 100%; }
+  .primary-nav .nav-drop { position: relative; width: 100%; }
   .primary-nav .nav-drop-btn { cursor: pointer; }
-  .primary-nav .sidebar-caret { width: 16px; height: 16px; color: var(--muted); transition: transform .18s; }
+  .primary-nav .sidebar-caret {
+    width: 0; height: 16px; flex: none; opacity: 0; color: var(--muted); transform: translateX(-5px);
+    transition: width .22s var(--ease), opacity .18s ease, transform .22s var(--ease);
+  }
+  .topbar:hover .primary-nav .sidebar-caret, .topbar:focus-within .primary-nav .sidebar-caret {
+    width: 16px; opacity: 1; transform: none;
+  }
   .primary-nav .nav-drop-btn[aria-expanded="true"] .sidebar-caret { transform: rotate(180deg); }
-  /* Studio opens inline, so the destinations remain reachable without a second hover-only flyout. */
+  /* Studio links stay out of the way until hover/focus, then glide out as a compact flyout. */
   .primary-nav .nav-drop .menu {
-    position: static; min-width: 0; margin: 3px 0 6px; padding: 4px 0 4px 34px;
-    border: 0; border-radius: 0; background: transparent; box-shadow: none;
+    position: absolute; top: 0; left: calc(100% + 12px); min-width: 190px; margin: 0; padding: 8px;
+    opacity: 0; visibility: hidden; transform: translateX(-8px);
+    pointer-events: none; transition: opacity .18s ease, transform .22s var(--ease), visibility 0s linear .22s;
+  }
+  .primary-nav .nav-drop.open .menu,
+  .primary-nav .nav-drop:hover .menu,
+  .primary-nav .nav-drop:focus-within .menu {
+    opacity: 1; visibility: visible; transform: none; pointer-events: auto;
+    transition: opacity .18s ease, transform .22s var(--ease), visibility 0s;
   }
   .primary-nav .nav-drop .menu a {
     min-height: 38px; padding: 8px 10px; border-radius: 8px;
-    color: rgba(255,255,255,.66) !important; font-size: 13px; font-weight: 600;
+    color: rgba(255,255,255,.78) !important; font-size: 13px; font-weight: 600;
   }
   .primary-nav .nav-drop .menu a:hover, .primary-nav .nav-drop .menu a:focus-visible {
     background: rgba(255,255,255,.085); color: #fff !important;
   }
 
   .top-actions { display: flex; flex-direction: column; align-items: stretch; gap: 12px; width: 100%; margin: auto 0 0; }
-  .top-actions #installBtn { width: 100%; justify-content: flex-start; }
   #profileWrap { position: relative; width: 100%; }
-  .sidebar-account-row { width: 100%; gap: 4px; padding: 3px; border: 1px solid var(--border); border-radius: 13px; background: rgba(255,255,255,.035); }
-  .sidebar-account-link { display: flex; align-items: center; flex: 1; gap: 11px; min-width: 0; min-height: 42px; padding: 0 8px; border-radius: 9px; color: rgba(255,255,255,.72); font-size: 14px; font-weight: 700; transition: background .18s, color .18s; }
-  .sidebar-account-link:hover, .sidebar-account-link.active { background: rgba(255,255,255,.08); color: #fff; }
+  .sidebar-account-row { width: 100%; gap: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+  .sidebar-account-link {
+    display: flex; align-items: center; justify-content: flex-start; flex: 1; gap: 0;
+    min-width: 0; min-height: 42px; padding: 0 10px; border-radius: 9px;
+    color: rgba(255,255,255,.72); font-size: 14px; font-weight: 700; transition: color .18s;
+  }
+  .sidebar-account-link:hover, .sidebar-account-link.active { background: transparent; color: #fff; }
   .sidebar-account-link.active { font-weight: 800; }
-  .sidebar-account-link > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sidebar-account-avatar { display: inline-grid; place-items: center; width: 30px; height: 30px; flex: none; }
   .sidebar-account-avatar .avatar { width: 30px !important; height: 30px !important; font-size: 14px !important; }
-  #profileWrap .avatar-btn { display: grid; place-items: center; width: 36px; height: 40px; flex: none; border: 0; border-radius: 9px; background: transparent; color: var(--muted); }
+  .sidebar-account-link > span:last-child {
+    flex: 0 1 0; width: 0; max-width: 0; overflow: hidden; opacity: 0; white-space: nowrap;
+    transform: translateX(-8px); pointer-events: none;
+    transition: max-width .28s var(--ease), opacity .18s ease, transform .28s var(--ease);
+  }
+  .topbar:hover .sidebar-account-link > span:last-child, .topbar:focus-within .sidebar-account-link > span:last-child {
+    flex: 1 1 auto; max-width: 180px; opacity: 1; transform: none; pointer-events: auto;
+  }
+  .topbar:hover .sidebar-account-link, .topbar:focus-within .sidebar-account-link { gap: 11px; }
+  #profileWrap .avatar-btn {
+    display: grid; place-items: center; width: 0; height: 40px; flex: none; padding: 0; border: 0; border-radius: 9px;
+    background: transparent; color: var(--muted); opacity: 0; overflow: hidden; pointer-events: none;
+    transition: width .22s var(--ease), opacity .18s ease, background .18s;
+  }
+  .topbar:hover #profileWrap .avatar-btn, .topbar:focus-within #profileWrap .avatar-btn {
+    width: 36px; opacity: 1; pointer-events: auto;
+  }
   #profileWrap .avatar-btn:hover { border: 0; background: rgba(255,255,255,.08); color: #fff; }
   #profileWrap .mobile-avatar { display: none; }
-  #profileWrap .desktop-profile-arrow { display: grid; place-items: center; }
+  #profileWrap .desktop-profile-arrow { display: none; place-items: center; }
+  .topbar:hover #profileWrap .desktop-profile-arrow, .topbar:focus-within #profileWrap .desktop-profile-arrow { display: grid; }
+  .top-actions #installBtn {
+    width: 100%; max-height: 0; margin: 0; padding-top: 0; padding-bottom: 0; border-width: 0;
+    justify-content: flex-start; opacity: 0; overflow: hidden; pointer-events: none;
+    transition: max-height .22s var(--ease), opacity .18s ease, padding .22s var(--ease), border-width .22s;
+  }
+  .topbar:hover .top-actions #installBtn:not([hidden]), .topbar:focus-within .top-actions #installBtn:not([hidden]) {
+    max-height: 48px; padding-top: 7px; padding-bottom: 7px; border-width: 1px; opacity: 1; pointer-events: auto;
+  }
   #profileWrap .menu-right { top: auto; right: auto; bottom: calc(100% + 10px); left: 0; width: 100%; min-width: 220px; max-height: min(68dvh, 520px); overflow-y: auto; overscroll-behavior: contain; }
 
-  /* Keep the main stage full-bleed, but start its titles, controls and shelves beyond the fixed rail. */
+  /* Keep the main stage full-bleed, but start titles, controls and shelves beyond the full rail. */
   .hero-dock { left: var(--desktop-content-left); }
   .hero-inner { padding-left: var(--desktop-content-left); }
   .hero-dots { left: var(--desktop-content-left); }

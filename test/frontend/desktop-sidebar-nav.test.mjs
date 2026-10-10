@@ -34,7 +34,7 @@ test('desktop rail includes labeled destinations, a Free filter, Studio submenu 
   assert.equal(nav.querySelector('[href="#/shows?access=free"]').dataset.nav, 'free');
   assert.ok(nav.querySelector('[data-nav="search"] svg'), 'Search has a visible icon');
   assert.ok(nav.querySelector('[data-nav="home"] svg'), 'Home has a visible icon');
-  assert.ok(nav.querySelector('.nav-drop .menu[hidden] a[href="#/support"]'), 'Studio destinations remain available in its submenu');
+  assert.ok(nav.querySelector('.nav-drop .studio-menu[aria-hidden="true"] a[href="#/support"]'), 'Studio destinations start hidden in the flyout');
   assert.equal(document.querySelector('#profileWrap .sidebar-account-link').getAttribute('href'), '#/account');
   assert.equal(document.querySelector('#tabbar').querySelectorAll('a').length, 5, 'the mobile tabs remain present and profile-aware');
 });
@@ -57,15 +57,16 @@ test('desktop rail updates active items and opens both accessible menus', async 
   assert.equal(document.querySelector('#topbar [data-nav="shows"]').classList.contains('active'), false);
   assert.equal(document.querySelector('#topbar [data-nav="free"]').getAttribute('aria-current'), 'page');
   markActive({ path: '/plans' });
-  assert.equal(document.querySelector('#sidebarPlan').classList.contains('active'), true, 'Plans highlights its subscription CTA');
-  assert.equal(document.querySelector('#profileWrap .sidebar-account-link').classList.contains('active'), false);
+  assert.equal(document.querySelector('#sidebarPlan'), null, 'the extra Premium section is removed from the rail');
+  assert.equal(document.querySelector('#profileWrap .sidebar-account-link').classList.contains('active'), true,
+    'Plans stays associated with the account entry in the sidebar');
 
   const studioButton = document.querySelector('.nav-drop-btn');
   studioButton.dispatchEvent(new window.Event('click', { bubbles: true }));
   assert.equal(studioButton.getAttribute('aria-expanded'), 'true');
-  assert.equal(document.querySelector('.nav-drop .menu').hidden, false);
-  studioButton.dispatchEvent(new window.Event('click', { bubbles: true }));
-  assert.equal(document.querySelector('.nav-drop .menu').hidden, true);
+  assert.equal(document.querySelector('.nav-drop .studio-menu').getAttribute('aria-hidden'), 'false');
+  document.querySelector('.nav-drop').dispatchEvent(new window.Event('pointerleave', { bubbles: false }));
+  assert.equal(studioButton.getAttribute('aria-expanded'), 'false', 'the flyout closes smoothly when the pointer leaves');
 
   const profileButton = document.querySelector('#profileBtn');
   profileButton.dispatchEvent(new window.Event('click', { bubbles: true }));
@@ -79,10 +80,20 @@ test('desktop-only styling makes a fixed left rail without changing phone naviga
   assert.match(rail, /@media \(min-width: 900px\)/);
   assert.match(rail, /--desktop-nav-width:\s*clamp\(/);
   assert.match(rail, /\.topbar\s*\{[^}]*width:\s*var\(--desktop-nav-width\)[^}]*height:\s*100vh/s);
+  assert.match(rail, /background: linear-gradient\(90deg, rgba\(5,5,5,\.84\)/,
+    'the rail background is translucent over the page artwork');
   assert.match(rail, /\.nav\.primary-nav\s*\{[^}]*flex-direction:\s*column/);
   assert.match(rail, /\.hero-inner\s*\{\s*padding-left:\s*var\(--desktop-content-left\)/);
-  assert.match(rail, /\.sidebar-premium, \.sidebar-account-link, \.desktop-profile-arrow \{ display: none; \}/,
-    'desktop-only labels and CTA are hidden in the default mobile shell');
+  assert.match(rail, /\.primary-nav \.nav-link > span \{[^}]*max-width: 0;[^}]*opacity: 0;/,
+    'menu labels are hidden at rest');
+  assert.match(rail, /\.topbar:hover \.primary-nav \.nav-link > span[\s\S]*max-width: 180px; opacity: 1;/,
+    'hover reveals the labels with a transition');
+  assert.match(rail, /\.primary-nav \.nav-drop \.menu \{[^}]*opacity: 0; visibility: hidden; transform: translateX\(-8px\)/,
+    'Studio details start hidden');
+  assert.match(rail, /\.primary-nav \.nav-drop:hover \.menu[\s\S]*opacity: 1; visibility: visible;/,
+    'and pop out from the Studio item on hover');
+  assert.match(rail, /\.primary-nav \.nav-link\.active, \.primary-nav \.nav-drop-btn\.active \{ color: #fff; background: transparent;/,
+    'active sections no longer get a highlighted pill');
   assert.match(css, /\.tabbar \{ display: none; \}/, 'desktop hides the floating phone tabs using the existing responsive rule');
   assert.match(css, /@media \(max-width: 899px\) \{\s*\/\* Search is already available in the floating mobile navigation\. \*\/\s*\.topbar \.search-link \{ display: none; \}/,
     'mobile keeps its compact topbar and bottom navigation');

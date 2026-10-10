@@ -42,10 +42,7 @@ const tick = () => { try { if (typeof navigator !== 'undefined') navigator.vibra
 
 // The header brand wears a superscript premium word for paid subscribers. Synced on boot, on account changes and after every navigation.
 function syncBrandPremium() {
-  const premium = !!app.user?.isPremium;
-  const s = $('#brandPremium'); if (s) s.hidden = !premium;
-  const label = $('#sidebarPlanLabel'); if (label) label.textContent = premium ? 'Premium' : 'Subscribe';
-  $('#sidebarPlan')?.classList.toggle('is-premium', premium);
+  const s = $('#brandPremium'); if (s) s.hidden = !app.user?.isPremium;
 }
 
 // Draw the frame and hook up menus and the search box.
@@ -54,12 +51,11 @@ export function renderShell() {
   if (version) version.textContent = `App Version ${CONFIG.version}`;
   $('#topbar').innerHTML = html`
     <a class="brand" href="#/" aria-label="ADDABAAZ home"><img src="media/icons/logo-96.webp" alt="" width="36" height="36"><span class="brand-text"><b>ADDA</b><i>BAAZ</i><em class="premium-word premium-sup" id="brandPremium" aria-hidden="true" hidden>premium</em></span></a>
-    <a class="sidebar-premium" id="sidebarPlan" href="#/plans" data-nav="plans" aria-label="View ADDABAAZ subscription plans">${icon('crown', { size: 16 })}<span id="sidebarPlanLabel">Subscribe</span></a>
     <nav class="nav primary-nav" aria-label="Primary">
       ${NAV.map(([p, l, k, ic]) => html`<a class="nav-link ${k === 'search' ? 'search-link' : ''}" href="#${p}" data-nav="${k}" ${k === 'search' ? html`title="Search (/)" aria-label="Search"` : ''}>${icon(ic, { size: 22 })}<span>${l}</span></a>`)}
       <div class="nav-drop">
-        <button type="button" class="nav-drop-btn nav-link" data-nav="studio" aria-haspopup="true" aria-expanded="false">${icon('film', { size: 22 })}<span>Studio</span>${icon('chev-down', { size: 16, cls: 'sidebar-caret' })}</button>
-        <div class="menu" hidden>${STUDIO.map(([p, l]) => html`<a href="#${p}">${l}</a>`)}</div>
+        <button type="button" class="nav-drop-btn nav-link" data-nav="studio" aria-haspopup="true" aria-expanded="false" aria-controls="studioMenu">${icon('film', { size: 22 })}<span>Studio</span>${icon('chev-down', { size: 16, cls: 'sidebar-caret' })}</button>
+        <div class="menu studio-menu" id="studioMenu" aria-hidden="true">${STUDIO.map(([p, l]) => html`<a href="#${p}">${l}</a>`)}</div>
       </div>
     </nav>
     <div class="top-actions">
@@ -133,13 +129,40 @@ export function renderProfileMenu() {
 
 // Open/close dropdowns on click, and close them on outside click or Escape. Leaving a Kids profile asks for the PIN first.
 function wireMenus() {
-  const closeAll = () => $$('.menu').forEach((m) => { m.hidden = true; m.parentElement.querySelector('[aria-expanded]')?.setAttribute('aria-expanded', 'false'); });
+  const studioMenu = $('#studioMenu'), studioDrop = studioMenu?.parentElement;
+  const studioButton = studioDrop?.querySelector('.nav-drop-btn');
+  const setStudioOpen = (open) => {
+    if (!studioMenu || !studioDrop || !studioButton) return;
+    studioDrop.classList.toggle('open', open);
+    studioButton.setAttribute('aria-expanded', String(open));
+    studioMenu.setAttribute('aria-hidden', String(!open));
+  };
+  const closeAll = () => $$('.menu').forEach((m) => {
+    if (m.id === 'studioMenu') { setStudioOpen(false); return; }
+    m.hidden = true;
+    m.parentElement.querySelector('[aria-expanded]')?.setAttribute('aria-expanded', 'false');
+  });
+
+  // Studio is a hover flyout on desktop, with the same state reflected for keyboard and touch users.
+  studioDrop?.addEventListener('pointerenter', (e) => {
+    if (e.pointerType === 'touch') return;
+    closeAll(); setStudioOpen(true);
+  });
+  studioDrop?.addEventListener('pointerleave', () => {
+    if (!studioDrop.contains(document.activeElement)) setStudioOpen(false);
+  });
+  studioDrop?.addEventListener('focusin', () => { closeAll(); setStudioOpen(true); });
+  studioDrop?.addEventListener('focusout', (e) => {
+    if (!studioDrop.contains(e.relatedTarget)) setStudioOpen(false);
+  });
+
   document.addEventListener('click', (e) => {
     if (e.target.closest('#tabbar a, #topbar a, #topbar button')) tick();
     const btn = e.target.closest('#profileBtn, .nav-drop-btn');
     if (btn) {
       const menu = btn.closest('#profileWrap, .nav-drop')?.querySelector('.menu');
       if (!menu) return;
+      if (menu.id === 'studioMenu') { closeAll(); setStudioOpen(true); return; }
       const open = menu.hidden;
       closeAll(); menu.hidden = !open; btn.setAttribute('aria-expanded', String(open)); return;
     }
@@ -164,7 +187,7 @@ function markTabs(path) { const sec = tabSection(path); $$('#tabbar a').forEach(
 export function markActive({ path, query = {} }) {
   lastPath = path;
   syncBrandPremium();
-  const sec = path === '/shows' && query.access === 'free' ? 'free' : path === '/plans' ? 'plans' : section(path);
+  const sec = path === '/shows' && query.access === 'free' ? 'free' : section(path);
   $$('#topbar [data-nav]').forEach((a) => {
     const active = a.dataset.nav === sec;
     a.classList.toggle('active', active);
