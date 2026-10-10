@@ -80,10 +80,13 @@ test('desktop-only styling makes a fixed left rail without changing phone naviga
   const css = read('app/css/styles.css');
   const rail = css.slice(css.lastIndexOf('/* ---------- desktop streaming-style navigation rail ---------- */'));
   assert.match(rail, /@media \(min-width: 900px\)/);
-  assert.match(rail, /--desktop-nav-width:\s*clamp\(/);
-  assert.match(rail, /\.topbar\s*\{[^}]*width:\s*var\(--desktop-nav-width\)[^}]*height:\s*100vh/s);
-  assert.match(rail, /background: linear-gradient\(90deg, rgba\(5,5,5,\.92\) 0%, rgba\(5,5,5,\.86\) 48%, rgba\(5,5,5,\.62\) 72%[^;]*rgba\(5,5,5,0\) 100%/,
-    'the rail fades smoothly from a readable dark edge into the page artwork');
+  assert.match(rail, /--desktop-nav-width:\s*80px; --desktop-nav-open-width:\s*156px; --desktop-content-left:\s*var\(--desktop-nav-width\)/,
+    'main content begins just after the collapsed icon rail');
+  assert.match(rail, /\.topbar\s*\{[^}]*width:\s*var\(--desktop-nav-width\)[^}]*height:\s*100vh[^}]*background:\s*transparent[^}]*backdrop-filter:\s*none/s);
+  assert.match(rail, /\.topbar::before \{[^}]*opacity: 0; visibility: hidden;[^}]*linear-gradient\(90deg, rgba\(5,5,5,\.24\)[^}]*rgba\(5,5,5,0\) 100%/,
+    'the subtle backdrop has a transparent edge and is hidden by default');
+  assert.match(rail, /\.topbar:has\(\.primary-nav \.nav-link:hover[^}]*::before[\s\S]*opacity: 1; visibility: visible;/,
+    'the fading backdrop appears only when a menu row is hovered or focused');
   assert.match(rail, /\.topbar \.brand-text \{[^}]*max-width: none;[^}]*opacity: 1; transform: none;/,
     'the Addabaaz wordmark stays visible while the menu labels are collapsed');
   assert.doesNotMatch(rail, /\.topbar:hover \.brand-text/,
@@ -92,8 +95,12 @@ test('desktop-only styling makes a fixed left rail without changing phone naviga
   assert.match(rail, /\.hero-inner\s*\{\s*padding-left:\s*var\(--desktop-content-left\)/);
   assert.match(rail, /\.primary-nav \.nav-link > span \{[^}]*max-width: 0;[^}]*opacity: 0;/,
     'menu labels are hidden at rest');
-  assert.match(rail, /\.topbar:hover \.primary-nav \.nav-link > span[\s\S]*max-width: 180px; opacity: 1;/,
-    'hover reveals the labels with a transition');
+  assert.match(rail, /\.primary-nav \.nav-link:hover, \.primary-nav \.nav-link:focus-visible \{[^}]*width: calc\(var\(--desktop-nav-open-width\)/,
+    'the hovered menu row expands to the yellow edge');
+  assert.match(rail, /\.primary-nav \.nav-link:hover > span, \.primary-nav \.nav-link:focus-visible > span \{[^}]*max-width: 180px; opacity: 1;/,
+    'only the hovered or keyboard-focused row reveals its label');
+  assert.doesNotMatch(rail, /\.topbar:hover \.primary-nav \.nav-link > span/,
+    'hovering the faded area alone does not reveal menu details');
   assert.match(rail, /\.primary-nav \.nav-link\.active \{ color: var\(--accent-2\); background: transparent;/,
     'desktop active links use the same red as the mobile floating menu');
   assert.match(rail, /\.sidebar-account-link:hover, \.sidebar-account-link\.active \{ background: transparent; color: var\(--accent-2\); \}/,

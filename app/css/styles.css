@@ -1624,21 +1624,31 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .mobile-avatar { display: inline-flex; }
 
 @media (min-width: 900px) {
-  :root { --desktop-nav-width: clamp(228px, 14vw, 252px); --desktop-content-left: calc(var(--desktop-nav-width) + 28px); }
+  :root { --desktop-nav-width: 80px; --desktop-nav-open-width: 156px; --desktop-content-left: var(--desktop-nav-width); }
 
-  /* A translucent overlay sits over the full-bleed artwork, like the reference streaming sidebar. */
+  /* Keep the compact icon rail clear at rest over the full-bleed page artwork. */
   .topbar {
     right: auto; width: var(--desktop-nav-width); height: 100vh; height: 100dvh;
-    padding: calc(26px + var(--sat)) 18px calc(20px + var(--sab)) calc(16px + var(--sal));
+    padding: calc(26px + var(--sat)) 0 calc(20px + var(--sab)) calc(16px + var(--sal));
     align-items: stretch; flex-direction: column; gap: 0;
-    background: linear-gradient(90deg, rgba(5,5,5,.92) 0%, rgba(5,5,5,.86) 48%, rgba(5,5,5,.62) 72%, rgba(5,5,5,.25) 88%, rgba(5,5,5,0) 100%);
-    box-shadow: none; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
-    transition: background .25s, box-shadow .25s;
+    background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+    overflow: visible; isolation: isolate;
   }
+  /* The backdrop fades in only while a navigation row is hovered/focused. Its transparent edge avoids a hard vertical seam. */
+  .topbar::before {
+    content: ''; position: absolute; z-index: 0; top: 0; bottom: 0; left: 0;
+    width: var(--desktop-nav-open-width); pointer-events: none; opacity: 0; visibility: hidden;
+    background: linear-gradient(90deg, rgba(5,5,5,.24) 0%, rgba(5,5,5,.15) 55%, rgba(5,5,5,.05) 82%, rgba(5,5,5,0) 100%);
+    transition: opacity .22s ease, visibility 0s linear .22s;
+  }
+  .topbar:has(.primary-nav .nav-link:hover, #profileWrap .sidebar-account-row:hover)::before,
+  .topbar:has(.primary-nav .nav-link:focus-visible, #profileWrap:focus-within)::before {
+    opacity: 1; visibility: visible; transition: opacity .22s ease, visibility 0s;
+  }
+  .topbar > * { position: relative; z-index: 1; }
   .topbar.scrolled,
   body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) .topbar {
-    background: linear-gradient(90deg, rgba(5,5,5,.92) 0%, rgba(5,5,5,.86) 48%, rgba(5,5,5,.62) 72%, rgba(5,5,5,.25) 88%, rgba(5,5,5,0) 100%);
-    box-shadow: none; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+    background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
   }
   .topbar .brand { gap: 8px; width: max-content; padding-left: 10px; justify-content: flex-start; }
   .topbar .brand img { width: 34px; height: 34px; flex: none; }
@@ -1657,7 +1667,7 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
     width: 100%; min-height: 47px; padding: 0 10px;
     border: 0; border-radius: 10px; background: transparent;
     color: var(--muted); font-size: 15px; font-weight: 600; text-align: left;
-    transition: color .18s, background .18s, transform .18s;
+    transition: width .24s var(--ease), gap .24s var(--ease), color .18s, background .18s, transform .18s;
   }
   .primary-nav .nav-link > svg:first-child { width: 22px; height: 22px; flex: none; opacity: .95; }
   .primary-nav .nav-link > span {
@@ -1665,12 +1675,12 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
     transform: translateX(-8px); pointer-events: none;
     transition: max-width .28s var(--ease), opacity .18s ease, transform .28s var(--ease);
   }
-  .topbar:hover .primary-nav .nav-link > span, .topbar:focus-within .primary-nav .nav-link > span {
-    flex: 1 1 auto; max-width: 180px; opacity: 1; transform: none; pointer-events: auto;
-  }
-  .topbar:hover .primary-nav .nav-link, .topbar:focus-within .primary-nav .nav-link { gap: 13px; }
   .primary-nav .nav-link:hover, .primary-nav .nav-link:focus-visible {
-    color: var(--accent-2); background: rgba(var(--accent-rgb),.1);
+    width: calc(var(--desktop-nav-open-width) - 16px - var(--sal)); gap: 13px;
+    color: var(--accent-2); background: transparent;
+  }
+  .primary-nav .nav-link:hover > span, .primary-nav .nav-link:focus-visible > span {
+    flex: 1 1 auto; max-width: 180px; opacity: 1; transform: none; pointer-events: auto;
   }
   /* Match the floating mobile menu's red active state without restoring a highlighted pill. */
   .primary-nav .nav-link.active { color: var(--accent-2); background: transparent; font-weight: 800; }
@@ -1679,7 +1689,13 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 
   .top-actions { display: flex; flex-direction: column; align-items: stretch; gap: 12px; width: 100%; margin: auto 0 0; }
   #profileWrap { position: relative; width: 100%; }
-  .sidebar-account-row { width: 100%; gap: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+  .sidebar-account-row {
+    width: calc(var(--desktop-nav-width) - 16px - var(--sal)); gap: 0; padding: 0;
+    border: 0; border-radius: 0; background: transparent; transition: width .24s var(--ease);
+  }
+  .sidebar-account-row:hover, #profileWrap:focus-within {
+    width: calc(var(--desktop-nav-open-width) - 16px - var(--sal));
+  }
   .sidebar-account-link {
     display: flex; align-items: center; justify-content: flex-start; flex: 1; gap: 0;
     min-width: 0; min-height: 42px; padding: 0 10px; border-radius: 9px;
@@ -1694,28 +1710,30 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
     transform: translateX(-8px); pointer-events: none;
     transition: max-width .28s var(--ease), opacity .18s ease, transform .28s var(--ease);
   }
-  .topbar:hover .sidebar-account-link > span:last-child, .topbar:focus-within .sidebar-account-link > span:last-child {
+  .sidebar-account-row:hover .sidebar-account-link > span:last-child,
+  #profileWrap:focus-within .sidebar-account-link > span:last-child {
     flex: 1 1 auto; max-width: 180px; opacity: 1; transform: none; pointer-events: auto;
   }
-  .topbar:hover .sidebar-account-link, .topbar:focus-within .sidebar-account-link { gap: 11px; }
+  .sidebar-account-row:hover .sidebar-account-link, #profileWrap:focus-within .sidebar-account-link { gap: 11px; }
   #profileWrap .avatar-btn {
     display: grid; place-items: center; width: 0; height: 40px; flex: none; padding: 0; border: 0; border-radius: 9px;
     background: transparent; color: var(--muted); opacity: 0; overflow: hidden; pointer-events: none;
     transition: width .22s var(--ease), opacity .18s ease, background .18s;
   }
-  .topbar:hover #profileWrap .avatar-btn, .topbar:focus-within #profileWrap .avatar-btn {
+  #profileWrap:hover .avatar-btn, #profileWrap:focus-within .avatar-btn {
     width: 36px; opacity: 1; pointer-events: auto;
   }
   #profileWrap .avatar-btn:hover { border: 0; background: rgba(var(--accent-rgb),.12); color: var(--accent-2); }
   #profileWrap .mobile-avatar { display: none; }
   #profileWrap .desktop-profile-arrow { display: none; place-items: center; }
-  .topbar:hover #profileWrap .desktop-profile-arrow, .topbar:focus-within #profileWrap .desktop-profile-arrow { display: grid; }
+  #profileWrap:hover .desktop-profile-arrow, #profileWrap:focus-within .desktop-profile-arrow { display: grid; }
   .top-actions #installBtn {
     width: 100%; max-height: 0; margin: 0; padding-top: 0; padding-bottom: 0; border-width: 0;
     justify-content: flex-start; opacity: 0; overflow: hidden; pointer-events: none;
-    transition: max-height .22s var(--ease), opacity .18s ease, padding .22s var(--ease), border-width .22s;
+    transition: width .24s var(--ease), max-height .22s var(--ease), opacity .18s ease, padding .22s var(--ease), border-width .22s;
   }
-  .topbar:hover .top-actions #installBtn:not([hidden]), .topbar:focus-within .top-actions #installBtn:not([hidden]) {
+  .top-actions #installBtn:not([hidden]):focus-visible {
+    width: calc(var(--desktop-nav-open-width) - 16px - var(--sal));
     max-height: 48px; padding-top: 7px; padding-bottom: 7px; border-width: 1px; opacity: 1; pointer-events: auto;
   }
   #profileWrap .menu-right { top: auto; right: auto; bottom: calc(100% + 10px); left: 0; width: 100%; min-width: 220px; max-height: min(68dvh, 520px); overflow-y: auto; overscroll-behavior: contain; }
