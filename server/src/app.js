@@ -217,7 +217,7 @@ export function createApp({
   // Before every other route on this router: the guard must see viewer calls first. Health/status,
   // client diagnostics, consoles, auth, payment webhooks and unsubscribe links remain reachable during maintenance.
   api.use(maintenance.guard());
-  registerSystemRoutes(api, { db, catalog, payments, billing, r2, version: VERSION, release, maintenance });
+  registerSystemRoutes(api, { db, catalog, payments, billing, r2, version: VERSION, release, maintenance, viewer: userFromRequest });
   // Rate limit for sign-up/login endpoints: 20 requests per minute per IP (disabled in tests with rate:false).
   const authLimit = rate ? rateLimit('auth', 20, 60_000) : (_q, _s, n) => n();
   // The user fields that are safe to send to the browser (no password hash).

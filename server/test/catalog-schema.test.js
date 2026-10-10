@@ -35,6 +35,20 @@ test('R2 forced format must match the object: "Force HLS" needs a .m3u8 master p
   assert.match(errors({ type: 'r2', key: 'premium/x/master.m3u8', format: 'mp4' }).join(' '), /can't be format mp4/);
 });
 
+test('"Show to Admins only" is a video flag that only survives while the video is hidden', () => {
+  const base = { id: 'staff-only', kind: 'episode', title: 'Staff review cut', duration: 60, publishedAt: '2026-01-01', access: 'free', source: { type: 'youtube', id: 'abcdefghijk' } };
+  const hidden = validate('video', { ...base, hidden: true, adminsOnly: true });
+  assert.deepEqual(hidden.errors, []);
+  assert.equal(hidden.doc.adminsOnly, true, 'a hidden video may carry the admins-only flag');
+  const shown = validate('video', { ...base, hidden: false, adminsOnly: true });
+  assert.deepEqual(shown.errors, [], 'the flag on an unhidden video is not an error…');
+  assert.equal(shown.doc.adminsOnly, false, '…but it is cleared there, so a public video never carries a widened audience');
+  assert.equal(validate('video', { ...base, hidden: true }).doc.adminsOnly, false, 'hidden without the flag stays hidden from everybody');
+  assert.equal(validate('video', base).doc.adminsOnly, false, 'the flag defaults to off');
+  assert.match(validate('video', { ...base, adminsOnly: true, mystery: 1 }).errors.join(' '), /Unknown field "mystery"/,
+    'the field is part of the video schema, so typos around it still fail');
+});
+
 test('Premium show and video access are independent of the media source', () => {
   const youtubeChild = { id: 'youtube-child', showId: 'premium-show', source: { type: 'youtube', id: 'abcdefghijk' } };
   const show = validate('show', {

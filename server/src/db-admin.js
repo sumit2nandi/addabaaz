@@ -99,7 +99,8 @@ export function adminDb({ q, tx, self, iso }) {
       const row = (await q('SELECT checked_at, expires_at, videos FROM youtube_preview_snapshots WHERE snapshot_id = ? AND actor = ? AND expires_at > UTC_TIMESTAMP(3)', [snapshotId, String(actor).slice(0, 254)]))[0];
       return row ? { snapshotId, checkedAt: iso(row.checked_at), expiresAt: iso(row.expires_at), videos: json(row.videos) } : null;
     },
-    /** Hides/restores matching videos without changing their other catalog attributes. */
+    /** Hides/restores matching videos without changing their other catalog attributes. Restoring also drops
+     *  "Show to Admins only", so a video bulk-hidden again later starts from the plain hidden state. */
     async setVideosHidden(ids, hidden) {
       const unique = [...new Set(ids)]; if (!unique.length) return [];
       return tx(async (t) => {
@@ -107,7 +108,10 @@ export function adminDb({ q, tx, self, iso }) {
         const rows = await t.query(`SELECT id FROM catalog_items WHERE type = 'video' AND id IN (${marks}) FOR UPDATE`, unique);
         const found = rows.map((r) => r.id); if (!found.length) return [];
         const foundMarks = found.map(() => '?').join(',');
-        await t.query(`UPDATE catalog_items SET doc = JSON_SET(doc, '$.hidden', JSON_EXTRACT(?, '$')), updated_at = UTC_TIMESTAMP(3) WHERE type = 'video' AND id IN (${foundMarks})`, [hidden ? 'true' : 'false', ...found]);
+        const doc = hidden
+          ? `JSON_SET(doc, '$.hidden', JSON_EXTRACT(?, '$'))`
+          : `JSON_SET(doc, '$.hidden', JSON_EXTRACT(?, '$'), '$.adminsOnly', false)`;
+        await t.query(`UPDATE catalog_items SET doc = ${doc}, updated_at = UTC_TIMESTAMP(3) WHERE type = 'video' AND id IN (${foundMarks})`, [hidden ? 'true' : 'false', ...found]);
         await bump(t);
         return found;
       });

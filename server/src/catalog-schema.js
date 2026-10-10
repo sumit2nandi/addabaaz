@@ -97,7 +97,7 @@ function show(input, ctx) {
 
 // Video or episode. The `source` decides where it plays from: YouTube id, Cloudflare R2 object, or a direct mp4/hls URL; premium access is independent of source.
 function video(input, ctx) {
-  const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'description', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access', 'rating', 'subtitles', 'publishAt', 'hidden', 'topRank'], 'A video', ctx);
+  const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'description', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access', 'rating', 'subtitles', 'publishAt', 'hidden', 'adminsOnly', 'topRank'], 'A video', ctx);
   r.id(); r.oneOf('kind', KINDS, { req: true }); r.str('showId', { max: 64, pattern: ID, nullable: true }); ref(r, ctx, 'showId', [ctx.showIds, ctx.upcomingIds].filter(Boolean));
   r.int('episode', { min: 1, max: 100000, nullable: true }); if (r.out.kind && r.out.kind !== 'episode') r.out.episode = null;
   r.str('title', { req: true, max: 300 }); r.str('shortTitle', { max: 120 }); r.str('description', { max: 500 });
@@ -121,6 +121,11 @@ function video(input, ctx) {
   }
   r.img('thumbnail'); r.int('duration', { req: true, max: 86400 }); r.date('publishedAt', { req: true }); r.int('views', { dflt: 0 });
   r.oneOf('access', ACCESS, { req: true }); r.oneOf('rating', RATINGS); r.date('publishAt'); r.bool('hidden', false);
+  // "Show to Admins only": a hidden video that signed-in admin accounts may still see and play on the live
+  // website/apps while everybody else (and Google) keeps seeing nothing. Only meaningful while hidden —
+  // an unhidden video is public anyway, so the flag is cleared there instead of lingering for a later hide.
+  r.bool('adminsOnly', false);
+  if (!r.out.hidden) r.out.adminsOnly = false;
   // The homepage "Top 10 Episodes" rail: an editor's pick, 1 = first (Content studio → Top 10).
   r.int('topRank', { min: 1, max: 10, nullable: true });
   if (r.out.topRank && r.out.kind !== 'episode') r.out.topRank = null;   // only episodes can be ranked

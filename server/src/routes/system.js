@@ -1,9 +1,11 @@
-// Unauthenticated discovery/read endpoints. These do not receive viewer identity.
+// Unauthenticated discovery/read endpoints. These do not receive viewer identity — except /catalog, which
+// optionally resolves it so signed-in ADMIN accounts can also receive the videos hidden with "Show to
+// Admins only" (see catalog.js publicView); guests and search engines keep the plain visitor view.
 import { HttpError, wrap } from '../http.js';
 import { PLANS } from '../plans.js';
 import { STATES } from '../gst.js';
 
-export function registerSystemRoutes(api, { db, catalog, payments, billing, r2, version, release = '', maintenance = null }) {
+export function registerSystemRoutes(api, { db, catalog, payments, billing, r2, version, release = '', maintenance = null, viewer = null }) {
   const releaseSha = /^[0-9a-f]{7,40}$/i.test(String(release || '')) ? String(release).toLowerCase() : null;
   const releaseInfo = releaseSha ? { commit: releaseSha } : {};
   // Endpoints below need no sign-in.
@@ -26,7 +28,14 @@ export function registerSystemRoutes(api, { db, catalog, payments, billing, r2, 
   }));
   // The app fetches this after a page reload so edits made in Admin appear immediately, including
   // when the request lands on another server with an in-memory catalog snapshot.
-  api.get('/catalog', wrap(async (_req, res) => { res.set('Cache-Control', 'no-store, max-age=0'); res.json((await catalog.get({ fresh: true })).catalog); }));
+  api.get('/catalog', wrap(async (req, res) => {
+    res.set('Cache-Control', 'no-store, max-age=0');
+    // Optional identity: only an enabled ADMIN account changes the answer (hidden "admins only" videos join
+    // the list). The resolver returns null for guests and for invalid or disabled sessions, so the public
+    // payload — and everything search engines see — is untouched for everybody else.
+    const user = viewer ? await viewer(req) : null;
+    res.json((await catalog.get({ fresh: true, staff: !!user?.isAdmin })).catalog);
+  }));
   api.get('/studio', wrap(async (_req, res) => {
     const s = (await catalog.get()).studio; if (!s) throw new HttpError(404, 'not_found', 'No studio profile.');
     res.set('Cache-Control', 'public, max-age=15'); res.json(s);
