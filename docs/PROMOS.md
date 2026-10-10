@@ -34,6 +34,16 @@ order abandoned  ──► the held credit is returned automatically (within a d
 refund processed ──► the credit spent on that order comes back
 ```
 
+**The one letter a new account receives** is the welcome e-mail (`server/src/welcome-email.js`): it carries the
+confirmation link *and* the credit ticket, so sign-up does not also produce a "confirm your email" note and a
+separate "you got credit" note. The route therefore runs the promotions first and calls
+`onSignup({ user, code, mail: 'welcome' })` — with `mail: 'welcome'` the module skips its own `notifyCredit` for
+that account (the inviter still gets their referral mail). `features.sendWelcome()` is the sender: it mints the
+same one-time `verify` token `POST /me/verify/resend` would have minted, so `/auth/verify`, the resend throttle
+and the billing gate are unchanged. A phone-only account (`…@phone.addabaaz.in`) has no inbox to greet and
+returns early; with `PROMO_SIGNUP_CREDIT_INR=0` the letter goes out without the ticket rather than promising
+Rs. 0, and a social sign-in — already confirmed by its provider — gets it without a confirmation link.
+
 * **Qualifying** means the invited friend confirmed their identity — by default their e-mail or phone. With
   `PROMO_REFERRAL_HOLD=payment` the inviter is only paid after the friend buys their first plan; with
   `signup` both sides are paid the moment the friend creates the account.

@@ -2,6 +2,11 @@
 // and returns `{ subject, text, html }`; mailer.js sends them. To change wording, edit the text here.
 import { rupees } from './gst.js';
 
+// The welcome mail is its own module because it is the only message here that ships a designed layout rather than
+// a table of fields; re-exported so callers keep importing `mail` and nothing else. It is also the confirmation
+// mail for a new address — see sendWelcome in features.js and the note at the top of welcome-email.js.
+export { welcomeEmail } from './welcome-email.js';
+
 // HTML-escapes user-provided text so names or reasons can never inject markup.
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // Formats a date the way Indian customers expect, in IST (e.g. 30 Sep 2026).

@@ -2,8 +2,10 @@
 //
 // A hanging or dead SMTP server used to freeze the sign-up screen behind the confirmation email. The server
 // now answers as soon as the account exists: the verification mail gets a short budget (SIGNUP_EMAIL_WAIT_MS)
-// inside the request and otherwise finishes in the background, reported as `verificationEmailPending`; promo
-// mails (welcome bonus, referral) are dispatched without being awaited. The browser side must say "on its way"
+// inside the request and otherwise finishes in the background, reported as `verificationEmailPending`; the mail
+// that is sent is the welcome letter, which carries the confirmation link *and* the credit the account just
+// earned, so `promos` is told not to add a second note. Referral and admin-granted credit mails are still
+// dispatched without being awaited. The browser side must say "on its way"
 // for a pending mail and keep the resend hint for a real failure — and the Account page really has the resend
 // button the message points to. The behavioural test with a hanging transport lives in
 // server/test/engagement.test.js; these are source pins for the contract between the two sides.
@@ -37,6 +39,17 @@ test('the server budgets the verification mail inside the sign-up request', () =
   assert.match(routes, /verificationEmailPending,/, 'and the response always carries the flag');
   assert.match(routes, /settled\.then\(\(ok\) => \{ if \(!ok\) warnMail/, 'a background failure is still logged, never unhandled');
   assert.match(app, /signupMailWaitMs = Number\(process\.env\.SIGNUP_EMAIL_WAIT_MS\) \|\| 5000/, 'the budget is SIGNUP_EMAIL_WAIT_MS, 5 s by default');
+});
+
+// One message per sign-up is the point of the welcome letter: pin the swap, so a future edit cannot quietly put
+// the bare confirmation note back and give a new account two e-mails again.
+test('the confirmation link travels inside the welcome letter', () => {
+  assert.match(routes, /features\.sendWelcome\(\{ \.\.\.created, emailVerifiedAt: null \}, \{ strict: true/, 'the greeting is the mail that carries the link');
+  assert.doesNotMatch(routes, /features\.sendVerification\(/, 'sign-up sends no separate confirmation note');
+  assert.match(routes, /mail: 'welcome'/, 'and promos is told the credit is already announced');
+  assert.match(promos, /mail !== 'welcome'/, 'the credit note is skipped on exactly that path');
+  assert.match(read('server/src/features.js'), /db\.authTokens\.issue\(user\.id, 'verify', sha256\(token\), 3 \* 24 \* HOUR\)/, 'the token is the same kind /auth/verify accepts');
+  assert.match(read('server/src/welcome-email.js'), /welcomeStyle/, 'and the phone rules are the reviewed ones');
 });
 
 test('promo mails are handed to the transport without being awaited', () => {

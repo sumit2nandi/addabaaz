@@ -48,7 +48,11 @@ const lastMailTo = async (email, subjectRe) => { for (let i = 0; i < 40; i++) { 
 
 test('email verification: link confirms the account; tokens are single-use; resend is throttled', async () => {
   const u = await signup(); assert.equal(u.user.emailVerified, false); assert.equal(u.verificationEmailSent, true);
-  const m = await lastMailTo(u.email, /Confirm your email/); const token = linkFrom(m, '/verify');
+  // The confirmation link is carried by the welcome letter itself (`welcome-email.js`), so sign-up produces one
+  // message in the inbox instead of a bare "confirm your email" note plus a separate note about the credit.
+  const m = await lastMailTo(u.email, /Welcome to ADDABAAZ/); const token = linkFrom(m, '/verify');
+  assert.match(m.text, /confirm this is your address/i, 'and the letter explains why it is there');
+  assert.equal(mails.filter((x) => x.to === u.email).length, 1, 'exactly one mail to a new account');
   assert.equal((await call('POST', '/auth/verify', { token: 'x'.repeat(30) })).status, 400);
   assert.equal((await call('POST', '/auth/verify', { token })).body.verified, true);
   assert.equal((await call('POST', '/auth/verify', { token })).status, 400, 'a token can be used once');
@@ -175,8 +179,8 @@ test('signup answers while the confirmation mail is still in flight instead of w
       [[{ verifyTokens }]] = await db.pool.query("SELECT COUNT(*) AS verifyTokens FROM auth_tokens WHERE user_id = ? AND purpose = 'verify'", [su.body.user.id]);
       if (!verifyTokens) await new Promise((r) => setTimeout(r, 25));
     }
-    const verifyMail = delivered.find((m) => /Confirm your email/.test(m.subject));
-    assert.ok(verifyMail, 'the verification mail finished in the background');
+    const verifyMail = delivered.find((m) => /Welcome to ADDABAAZ/.test(m.subject));
+    assert.ok(verifyMail, 'the welcome letter — which carries the confirmation link — finished in the background');
     assert.equal(verifyTokens, 1, 'the token was issued once the send completed');
     const token = linkFrom(verifyMail, '/verify');
     assert.equal((await callOn('POST', '/auth/verify', { token })).body.verified, true, 'the link really confirms the account');

@@ -47,7 +47,10 @@ test('an invite link carries the code through sign-up, whichever method is used'
   assert.match(auth, /u\.signInOtp\(`\$\{country\}\$\{phoneSent\.replace\(\/\\D\/g, ''\)\}`, code, name \|\| undefined, ref\)/, 'and again when the code is verified');
   assert.match(adapters, /requestOtp\(phone, ref = ''\)/, 'the adapter passes it on');
   assert.match(auth, /u\.signInSocial\(provider, cred, ref\)/, 'Google/Facebook/Apple sign-up carries it too');
-  assert.match(read('server/src/routes/auth.js'), /bonus = await promos\.onSignup\(\{ user: fresh, code: opts\.ref \}\)/, 'and the server applies it for a new social account');
+  // `mail: 'welcome'` is on both paths: the credit is announced by the welcome letter, so promos must not send
+  // a second note for the same sign-up (the inviter's referral mail is a different person and still goes out).
+  assert.match(read('server/src/routes/auth.js'), /bonus = await promos\.onSignup\(\{ user: fresh, code: opts\.ref, mail: 'welcome' \}\)/, 'and the server applies it for a new social account');
+  assert.match(read('server/src/routes/auth.js'), /promos\.onSignup\(\{ user: created, code: ref, mail: 'welcome' \}\)/, 'the e-mail sign-up carries it too');
   assert.match(read('server/src/routes/auth.js'), /ref = '' \} = req\.body/, 'the server accepts it at sign-up');
   assert.match(read('server/src/routes/otp.js'), /code: req\.body\?\.ref/, 'and at phone verification');
   assert.match(promo, /export const referralLink = \(siteUrl, code\) =>/, 'the share link is built in one place');
