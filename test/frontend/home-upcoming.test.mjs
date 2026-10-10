@@ -219,8 +219,8 @@ test('release slides show the whole landscape artwork, uncovered, using the wide
       'backdrop first, then the large poster, then the card poster (the same order as the title page)');
     for (const slide of slides) {
       assert.equal(slide.querySelectorAll('img.home-release-art').length, 1, 'exactly one artwork image per slide');
-      assert.equal(slide.querySelector('img.home-release-bg')?.getAttribute('src'), art(slide), 'the blurred fill is a copy of the same artwork');
-      assert.equal(slide.querySelector('img.home-release-bg')?.getAttribute('alt'), '', 'the blurred fill is decorative');
+      assert.equal(slide.querySelector('img.home-release-bg'), null, 'no blurred backdrop copy sits behind the artwork');
+      assert.equal(slide.querySelectorAll('img').length, 1, 'the slide carries the artwork and nothing else');
       assert.equal(slide.querySelector('.home-release-title, .home-release-badge, .home-release-shade'), null,
         'nothing is drawn over the poster: it already carries its own title and logo');
     }
@@ -258,7 +258,8 @@ test('the slideshow frame is a 16:9 landscape box that never crops the artwork',
   assert.match(css, /\.home-release-slide\.after \{ transform: translateX\(100%\); \}/, 'the next poster waits on the right');
   assert.match(block('.home-release-carousel'), /touch-action:\s*pan-y/, 'horizontal swipes remain available while vertical page scrolling stays native');
   assert.match(block('.home-release-art'), /object-fit:\s*contain/, 'the artwork is contained, never cropped');
-  assert.match(block('.home-release-bg'), /filter:\s*blur/, 'any leftover space is a blurred copy of the artwork');
+  assert.equal(/home-release-bg/.test(css), false, 'the blurred backdrop copy is gone from the stylesheet');
+  assert.doesNotMatch(css, /filter:\s*blur\(24px\)/, 'the release banner carries no blur effect');
   assert.equal(/\.home-release-(title|badge|shade)/.test(css), false, 'no overlay rules are left behind');
   assert.match(css, /\.home-release-slide\.dragging \{ transition: none; \}/, 'a dragged release follows the finger with no easing in between');
   assert.match(css, /\.home-release-slide\.peek \{ visibility: visible; z-index: 2; \}/, 'the incoming release is on screen while it is being dragged in');

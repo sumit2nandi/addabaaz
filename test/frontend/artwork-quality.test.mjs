@@ -65,9 +65,10 @@ test('the artwork lift is applied to artwork only, never to text or the lightbox
   assert.match(css, /\.poster img, \.thumb img \{[^}]*filter: var\(--art-pop\); \}/, 'poster and thumbnail cards use it');
   assert.match(css, /\.ep-thumb img, \.reel-slot > img \{ filter: var\(--art-pop\); \}/, 'episode rows and reel covers use it');
   assert.match(css, /\.hero-bg img \{[^}]*filter: var\(--art-pop-hero\); \}/, 'the banner artwork uses it');
-  // The blurred player wall and the darkened release carousel mirror keep their own deliberate filters.
+  // The blurred player wall keeps its own deliberate filter; the release carousel's blurred mirror is gone.
   assert.match(css, /img\.player-wall-art \{[^}]*filter: brightness\(\.55\) saturate\(\.9\);[^}]*\}/, 'the player wall stays dim');
-  assert.match(css, /\.home-release-bg \{[^}]*filter: blur\(24px\) brightness\(\.55\);[^}]*\}/, 'the blurred release mirror stays dim');
+  assert.doesNotMatch(css, /home-release-bg/, 'the release banner no longer carries a blurred backdrop copy');
+  assert.doesNotMatch(css, /filter: blur\(24px\)/, 'no 24px blur mirror is left anywhere in the sheet');
   // The lightbox shows the file as uploaded: no filter on it (it is the "check the colour" view).
   const lightbox = css.match(/\.lightbox img \{[^}]*\}/)?.[0] || '';
   assert.ok(lightbox, 'the lightbox image rule exists');

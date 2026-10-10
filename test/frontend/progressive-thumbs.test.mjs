@@ -125,7 +125,9 @@ test('components build the progressive markup for cards, banners and posters', (
   assert.match(c, /\|\| lowResolutionSrc\(src\)/, 'uploaded full-size images automatically resolve their saved compact sibling');
   assert.match(c, /src="\$\{low \|\| src\}" data-hq="\$\{low \? src : ''\}"/, 'img() shows the low rendition and keeps the best in data-hq');
   assert.match(c, /lowSrc: app\.catalog\.thumb\(v, 'mqdefault'\)/, 'video cards start from YouTube mqdefault (320x180)');
-  assert.match(c, /lowThumb = '', lowPoster = ''/, 'heroBg takes low renditions');
+  assert.match(c, /lowThumb = '', lowPoster = '', blurUp = true/, 'heroBg takes low renditions and a blur-up opt-out');
+  assert.match(c, /blurUp \? \(\(lowThumb && lowThumb !== thumb \? lowThumb : ''\) \|\| lowResolutionSrc\(thumb\)\) : ''/,
+    'blurUp: false skips the low placeholder entirely, so the banner renders sharp from the first paint');
   assert.match(c, /srcset="\$\{lp \|\| poster\}" data-hq="\$\{lp \? poster : ''\}"/, 'the banner poster source starts low on phones');
 });
 
@@ -134,7 +136,7 @@ test('every call site that shows a best-quality image also passes a low renditio
     ['app/js/views/show.js', /\$\{img\(cat\.thumb\(v, 'maxresdefault'\), '', \{[^}]*lowSrc: cat\.thumb\(v, 'mqdefault'\)/],
     ['app/js/views/show.js', /heroBg\(cat\.thumb\(latest, 'maxresdefault'\)[\s\S]*?lowThumb: cat\.thumb\(latest, 'mqdefault'\), lowPoster: s\.poster/],
     ['app/js/views/show.js', /img\(s\.posterLg \|\| s\.poster, s\.title, \{ lazy: false, lowSrc: s\.poster \}\)/],
-    ['app/js/views/home.js', /lowThumb: cat\.thumb\(latest, 'mqdefault'\), lowPoster: show\.poster/],
+    ['app/js/views/home.js', /heroBg\(cat\.thumb\(latest, 'maxresdefault'\), show\.posterLg \|\| show\.poster, \{ lazy: i > 0, fallback: cat\.thumb\(latest, 'hqdefault'\), blurUp: false \}\)/],
     ['app/js/views/home.js', /img\(show\.posterLg \|\| show\.poster, '', \{ lazy: i > 0, lowSrc: show\.poster \}\)/],
     ['app/js/views/soon.js', /img\(u\.posterLg \|\| u\.poster, u\.title, \{ lazy: false, lowSrc: u\.poster \}\)/],
     ['app/js/views/soon.js', /img\(u\.backdrop \|\| u\.posterLg \|\| u\.poster, '', \{ lazy: false, lowSrc: u\.poster \}\)/],
@@ -144,6 +146,8 @@ test('every call site that shows a best-quality image also passes a low renditio
   ];
   for (const [file, re] of pairs) assert.match(read(file), re, `${file} passes a low rendition: ${re}`);
   assert.match(read('app/js/views/reels.js'), /low: cat\.thumb\(v, 'mqdefault'\)/, 'reel covers compute the low rendition');
+  assert.doesNotMatch(read('app/js/views/home.js'), /lowThumb: cat\.thumb\(latest, 'mqdefault'\)/,
+    'the home hero is the one banner that never shows a soft placeholder — it opts out of blur-up');
 });
 
 test('main.js upgrades on load and runs the upgrade before the data-fb fallback on error', () => {

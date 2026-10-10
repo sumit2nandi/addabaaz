@@ -384,11 +384,11 @@ img.img-failed { opacity: 0; }
 .home-release-slide.dragging { transition: none; }
 .home-release-slide.peek { visibility: visible; z-index: 2; }
 .home-release-carousel.is-dragging { user-select: none; -webkit-user-select: none; }
-/* The whole artwork is always visible. `contain` shows 16:9 art edge to edge; any other shape (e.g. a portrait poster) sits centred over a
-   blurred copy of itself, so nothing is ever cropped. Nothing is drawn over the art: release posters carry their own title and logo. */
+/* The whole artwork is always visible: `contain` shows 16:9 art edge to edge, and any other shape (e.g. a
+   portrait poster) sits centred on the carousel's own panel background — no blurred mirror copy, nothing
+   cropped. Nothing is drawn over the art: release posters carry their own title and logo. */
 .home-release-slide > img { position: absolute; inset: 0; width: 100%; height: 100%; }
 .home-release-art { object-fit: contain; }
-.home-release-bg { object-fit: cover; filter: blur(24px) brightness(.55); transform: scale(1.12); }
 .home-release-arrows { position: absolute; z-index: 2; inset: 0; padding: 0 10px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
 .home-release-arrow { pointer-events: auto; display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--border-2); border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: background .2s, transform .2s; }
 .home-release-arrow:hover { background: var(--accent); transform: scale(1.06); }

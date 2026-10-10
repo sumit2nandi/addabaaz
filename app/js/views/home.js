@@ -173,7 +173,7 @@ function heroHtml(slides) {
       const entry = entries[i];
       return html`<article class="hero-slide ${initialSlideClass(i, slides.length)}" data-i="${i}" data-show-id="${show.id}" data-watch-id="${entry.watch}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
         <a class="hero-banner-link" href="#/show/${show.id}" aria-label="View ${show.titleEn || show.title} details">
-          <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault'), lowThumb: cat.thumb(latest, 'mqdefault'), lowPoster: show.poster })}</div>
+          <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault'), blurUp: false })}</div>
         </a>
         <div class="hero-shade"></div>
         ${show.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
@@ -321,14 +321,13 @@ function recentlyAddedSection(cat, N) {
 const releaseArt = (item) => item.backdrop || item.posterLg || item.poster;
 
 // Landscape (16:9) slideshow. `contain` keeps the entire artwork visible; if a poster is not 16:9 (say a portrait one) it is centred
-// over a blurred copy of itself instead of being cropped. The heading above the slideshow already says "Releasing This Month".
+// on the carousel's own background instead of being cropped — no blurred mirror copy behind it. The heading above already says "Releasing This Month".
 function releaseSlideshow(items) {
   return html`<div class="home-release-showcase">
     <div class="home-release-carousel" data-release-carousel role="region" aria-roledescription="carousel" aria-label="Releasing This Month">
       ${items.map((item, i) => {
         const title = item.titleEn || item.title, art = releaseArt(item);
         return html`<a class="home-release-slide ${initialSlideClass(i, items.length)}" data-release-slide="${i}" href="#/soon/${item.id}" aria-label="${title} — Releasing This Month" aria-hidden="${i !== 0}">
-          ${img(art, '', { cls: 'home-release-bg', lazy: i > 0 })}
           ${img(art, `${title} — Releasing This Month`, { cls: 'home-release-art', lazy: i > 0 })}
         </a>`;
       })}
