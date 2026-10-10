@@ -6,7 +6,7 @@ import { parseHTML } from 'linkedom';
 const seedCatalog = () => JSON.parse(fs.readFileSync(new URL('../../data/catalog.json', import.meta.url), 'utf8'));
 
 // Renders the home page for a catalog (plain JSON) in a minimal DOM and hands the root element to `check`.
-async function withHome(catalogJson, check) {
+async function withHome(catalogJson, check, userOverrides = {}) {
   const { document, window } = parseHTML('<!doctype html><html><body></body></html>');
   globalThis.document = document;
   globalThis.window = window;
@@ -33,6 +33,7 @@ async function withHome(catalogJson, check) {
       fraction: () => 0,
       inList: () => false,
       hasReminder: () => false,
+      ...userOverrides,
     };
     const root = document.createElement('main');
     await home({ root, setTitle() {}, onCleanup(fn) { cleanup = fn; } });
@@ -227,6 +228,18 @@ test('release slides show the whole landscape artwork, uncovered, using the wide
     assert.equal(slides[0].querySelector('img.home-release-art').getAttribute('loading'), null, 'the first slide loads at once');
     assert.equal(slides[1].querySelector('img.home-release-art').getAttribute('loading'), 'lazy', 'later slides load lazily');
   });
+});
+
+test('an upcoming title in My List keeps its remove-from-list tick, same as shows and videos', async () => {
+  const seed = seedCatalog();
+  const upcomingId = seed.upcoming[0].id;
+
+  await withHome(seed, async (root) => {
+    const myListRail = [...root.querySelectorAll('.rail')].find((section) => section.querySelector('h2')?.textContent.trim() === 'My List');
+    const soonCardEl = myListRail.querySelector(`a[href="#/soon/${upcomingId}"]`);
+    assert.ok(soonCardEl, 'the saved upcoming title renders in the My List rail');
+    assert.ok(soonCardEl.querySelector('.card-quick .list-btn'), 'it carries the same tick/remove button as saved shows and videos');
+  }, { listItems: () => [{ type: 'upcoming', id: upcomingId }] });
 });
 
 test('the slideshow frame is a 16:9 landscape box that never crops the artwork', () => {

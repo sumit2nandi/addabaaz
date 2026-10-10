@@ -362,7 +362,7 @@ export default async function home(ctx) {
   // less often (at most 2 of the 10). Accounts that already watch mature content keep the full ranking.
   const demoteMature = !u.account || !Object.keys(u.lib.progress || {}).some((id) => cat.isMature(cat.video(id)));
   const cw = u.continueWatching(cat);
-  const mine = u.listItems().map((x) => (x.type === 'show' ? cat.show(x.id) && showCard(cat.show(x.id)) : x.type === 'video' ? cat.video(x.id) && videoCard(cat.video(x.id)) : cat.soon(x.id) && soonCard(cat.soon(x.id), { fill: true }))).filter(Boolean);
+  const mine = u.listItems().map((x) => (x.type === 'show' ? cat.show(x.id) && showCard(cat.show(x.id)) : x.type === 'video' ? cat.video(x.id) && videoCard(cat.video(x.id)) : cat.soon(x.id) && soonCard(cat.soon(x.id), { saved: true, fill: true }))).filter(Boolean);
   const slides = heroSlides();
   const N = CONFIG.homeRailSize;
   const rec = u.recommendations(cat, N);
