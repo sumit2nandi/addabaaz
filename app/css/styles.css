@@ -1634,11 +1634,11 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
     background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
     overflow: visible; isolation: isolate;
   }
-  /* The backdrop fades in only while a navigation row is hovered/focused. Its transparent edge avoids a hard vertical seam. */
+  /* Keep the navigation backdrop hidden at rest, then darken the expanded area enough for its labels to read. */
   .topbar::before {
     content: ''; position: absolute; z-index: 0; top: 0; bottom: 0; left: 0;
     width: var(--desktop-nav-open-width); pointer-events: none; opacity: 0; visibility: hidden;
-    background: linear-gradient(90deg, rgba(5,5,5,.24) 0%, rgba(5,5,5,.15) 55%, rgba(5,5,5,.05) 82%, rgba(5,5,5,0) 100%);
+    background: linear-gradient(90deg, rgba(5,5,5,.68) 0%, rgba(5,5,5,.56) 45%, rgba(5,5,5,.38) 78%, rgba(5,5,5,.16) 94%, rgba(5,5,5,0) 100%);
     transition: opacity .22s ease, visibility 0s linear .22s;
   }
   .topbar:has(.primary-nav .nav-link:hover, #profileWrap .sidebar-account-row:hover)::before,
@@ -1650,7 +1650,14 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
   body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) .topbar {
     background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
   }
-  .topbar .brand { gap: 8px; width: max-content; padding-left: 10px; justify-content: flex-start; }
+  .topbar .brand { position: relative; isolation: isolate; gap: 8px; width: max-content; padding-left: 10px; justify-content: flex-start; }
+  /* Always give the ADDABAAZ / premium lockup its own soft backing, even when the nav is idle. */
+  .topbar .brand::before {
+    content: ''; position: absolute; z-index: -1; inset: -15px -40px -15px -16px; pointer-events: none; border-radius: 0 14px 14px 0;
+    background: linear-gradient(90deg, rgba(5,5,5,.7) 0%, rgba(5,5,5,.56) 56%, rgba(5,5,5,.3) 82%, rgba(5,5,5,0) 100%);
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 78%, transparent 100%);
+    mask-image: linear-gradient(180deg, transparent 0%, #000 22%, #000 78%, transparent 100%);
+  }
   .topbar .brand img { width: 34px; height: 34px; flex: none; }
   /* Keep the wordmark visible even while the destination labels are collapsed. */
   .topbar .brand-text {
@@ -1664,12 +1671,12 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
   }
   .primary-nav .nav-link {
     display: flex; align-items: center; justify-content: flex-start; gap: 0;
-    width: 100%; min-height: 47px; padding: 0 10px;
+    width: 100%; min-height: 50px; padding: 0 10px;
     border: 0; border-radius: 10px; background: transparent;
-    color: var(--muted); font-size: 15px; font-weight: 600; text-align: left;
+    color: var(--muted); font-size: 16px; font-weight: 600; text-align: left;
     transition: width .24s var(--ease), gap .24s var(--ease), color .18s, background .18s, transform .18s;
   }
-  .primary-nav .nav-link > svg:first-child { width: 22px; height: 22px; flex: none; opacity: .95; }
+  .primary-nav .nav-link > svg:first-child { width: 26px; height: 26px; flex: none; opacity: .98; }
   .primary-nav .nav-link > span {
     flex: 0 1 0; width: 0; max-width: 0; overflow: hidden; opacity: 0; white-space: nowrap;
     transform: translateX(-8px); pointer-events: none;
@@ -1698,13 +1705,13 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
   }
   .sidebar-account-link {
     display: flex; align-items: center; justify-content: flex-start; flex: 1; gap: 0;
-    min-width: 0; min-height: 42px; padding: 0 10px; border-radius: 9px;
-    color: var(--muted); font-size: 14px; font-weight: 700; transition: color .18s;
+    min-width: 0; min-height: 44px; padding: 0 10px; border-radius: 9px;
+    color: var(--muted); font-size: 15px; font-weight: 700; transition: color .18s;
   }
   .sidebar-account-link:hover, .sidebar-account-link.active { background: transparent; color: var(--accent-2); }
   .sidebar-account-link.active { font-weight: 800; }
-  .sidebar-account-avatar { display: inline-grid; place-items: center; width: 30px; height: 30px; flex: none; }
-  .sidebar-account-avatar .avatar { width: 30px !important; height: 30px !important; font-size: 14px !important; }
+  .sidebar-account-avatar { display: inline-grid; place-items: center; width: 32px; height: 32px; flex: none; }
+  .sidebar-account-avatar .avatar { width: 32px !important; height: 32px !important; font-size: 15px !important; }
   .sidebar-account-link > span:last-child {
     flex: 0 1 0; width: 0; max-width: 0; overflow: hidden; opacity: 0; white-space: nowrap;
     transform: translateX(-8px); pointer-events: none;

@@ -83,15 +83,21 @@ test('desktop-only styling makes a fixed left rail without changing phone naviga
   assert.match(rail, /--desktop-nav-width:\s*80px; --desktop-nav-open-width:\s*156px; --desktop-content-left:\s*var\(--desktop-nav-width\)/,
     'main content begins just after the collapsed icon rail');
   assert.match(rail, /\.topbar\s*\{[^}]*width:\s*var\(--desktop-nav-width\)[^}]*height:\s*100vh[^}]*background:\s*transparent[^}]*backdrop-filter:\s*none/s);
-  assert.match(rail, /\.topbar::before \{[^}]*opacity: 0; visibility: hidden;[^}]*linear-gradient\(90deg, rgba\(5,5,5,\.24\)[^}]*rgba\(5,5,5,0\) 100%/,
-    'the subtle backdrop has a transparent edge and is hidden by default');
+  assert.match(rail, /\.topbar::before \{[^}]*opacity: 0; visibility: hidden;[^}]*linear-gradient\(90deg, rgba\(5,5,5,\.68\)[^}]*rgba\(5,5,5,0\) 100%/,
+    'the stronger navigation backdrop stays hidden at rest and fades to a transparent edge');
   assert.match(rail, /\.topbar:has\(\.primary-nav \.nav-link:hover[^}]*::before[\s\S]*opacity: 1; visibility: visible;/,
     'the fading backdrop appears only when a menu row is hovered or focused');
   assert.match(rail, /\.topbar \.brand-text \{[^}]*max-width: none;[^}]*opacity: 1; transform: none;/,
     'the Addabaaz wordmark stays visible while the menu labels are collapsed');
+  assert.match(rail, /\.topbar \.brand::before \{[^}]*background: linear-gradient\(90deg, rgba\(5,5,5,\.7\)[^}]*mask-image: linear-gradient\(180deg/,
+    'the header lockup keeps a readable fade whether premium text is shown or not');
   assert.doesNotMatch(rail, /\.topbar:hover \.brand-text/,
     'the wordmark does not depend on menu hover');
   assert.match(rail, /\.nav\.primary-nav\s*\{[^}]*flex-direction:\s*column/);
+  assert.match(rail, /\.primary-nav \.nav-link \{[^}]*min-height: 50px;[^}]*font-size: 16px;/,
+    'desktop menu text is larger and gets a little more vertical room');
+  assert.match(rail, /\.primary-nav \.nav-link > svg:first-child \{ width: 26px; height: 26px;/,
+    'desktop navigation icons are larger');
   assert.match(rail, /\.hero-inner\s*\{\s*padding-left:\s*var\(--desktop-content-left\)/);
   assert.match(rail, /\.primary-nav \.nav-link > span \{[^}]*max-width: 0;[^}]*opacity: 0;/,
     'menu labels are hidden at rest');
