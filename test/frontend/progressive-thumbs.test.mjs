@@ -202,3 +202,9 @@ test('no full-bleed hero passes a low-resolution placeholder (lowThumb / lowPost
     }
   }
 });
+
+test('the show backdrop upload keeps 1920px+ artwork: its size limit is above the 1600px default', () => {
+  const content = read('admin/js/views/content.js');
+  assert.match(content, /\{ k: 'backdrop', label: 'Backdrop \(wide 16:9, 1920px\+\)', type: 'image', maxWidth: 2400, wide: true/,
+    'the backdrop field downscales only above 2400px, so a 1920px backdrop is stored at full size');
+});

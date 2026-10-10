@@ -57,7 +57,7 @@ export default async function content(root, [section], ctx) {
     ratingField,
     { k: 'featured', label: 'Feature on the home page (needs at least one episode)', type: 'bool', wide: true },
     { k: 'poster', label: 'Poster (card)', type: 'image', req: true, maxWidth: 700, wide: true }, { k: 'posterLg', label: 'Poster (large / hero)', type: 'image', maxWidth: 1600, wide: true },
-    { k: 'backdrop', label: 'Backdrop (wide 16:9, 1920px+)', type: 'image', wide: true, help: 'Original landscape key art for the full-screen hero banners on Home and the show page. YouTube’s best thumbnail is only 1280×720, so on desktop heroes it is upscaled and looks soft — uploading a 1920-wide backdrop keeps them sharp.' },
+    { k: 'backdrop', label: 'Backdrop (wide 16:9, 1920px+)', type: 'image', maxWidth: 2400, wide: true, help: 'Original landscape key art for the full-screen hero banners on Home and the show page. YouTube’s best thumbnail is only 1280×720, so on desktop heroes it is upscaled and looks soft — uploading a 1920-wide backdrop keeps them sharp.' },
   ];
   const editShow = (s) => {
     const create = !s;
