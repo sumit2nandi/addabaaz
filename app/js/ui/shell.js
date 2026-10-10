@@ -7,18 +7,13 @@ import { avatar, toast, confirmSignOut } from './components.js';
 import { CONFIG } from '../config.js';
 import { mayLeaveKids } from './parental.js';
 
-// Keep the shared primary destinations in the same order as the mobile floating bar; desktop-only links follow.
-// Free is the existing Shows filter, not a separate content catalogue.
+// The desktop rail mirrors the mobile floating menu; keep the shared destinations in exactly the same order.
 const NAV = [
   ['/', 'Home', 'home', 'home'],
   ['/shows', 'Shows', 'shows', 'tv'],
   ['/reels', 'Reels', 'reels', 'reels'],
   ['/search', 'Search', 'search', 'search'],
-  ['/shows?access=free', 'Free', 'free', 'gift'],
-  ['/upcoming', 'Coming Soon', 'upcoming', 'clock'],
-  ['/list', 'My List', 'list', 'list'],   // the photo gallery is hidden (app/js/views/gallery.js redirects home)
 ];
-const STUDIO = [['/about', 'About'], ['/services', 'Services'], ['/contact', 'Contact'], ['/support', 'Support']];
 const TABS = [['/', 'Home', 'home'], ['/shows', 'Shows', 'tv'], ['/reels', 'Reels', 'reels'], ['/search', 'Search', 'search']];
 // Keep a personal destination in the floating bar for every visitor: guests get Sign in; everyone else gets Profile.
 const isGuest = () => !!app.user?.supportsAuth && !app.user?.account;
@@ -32,9 +27,7 @@ const section = (path) => {
     about: 'studio', services: 'studio', contact: 'studio', support: 'studio', search: 'search', account: 'account', profiles: 'account', plans: 'account', billing: 'account', signin: 'account', signup: 'account' }[seg] || '';
 };
 
-/* The floating bar has no Coming Soon item of its own, and upcoming titles are shows too — so a viewer who
- * taps a Coming Soon banner on the home page (or browses #/upcoming) sees the Shows tab light up there,
- * exactly as they would after tapping a released show. The desktop rail keeps Coming Soon separate. */
+/* The shared rail and floating bar have no separate Coming Soon destination; upcoming titles are shows too. */
 const tabSection = (path) => { const sec = section(path); return sec === 'upcoming' ? 'shows' : sec; };
 
 // Light haptic tick on menu taps. Only vibrate-capable devices (mostly Android) respond — everywhere else this is a silent no-op.
@@ -53,10 +46,6 @@ export function renderShell() {
     <a class="brand" href="#/" aria-label="ADDABAAZ home"><img src="media/icons/logo-96.webp" alt="" width="36" height="36"><span class="brand-text"><b>ADDA</b><i>BAAZ</i><em class="premium-word premium-sup" id="brandPremium" aria-hidden="true" hidden>premium</em></span></a>
     <nav class="nav primary-nav" aria-label="Primary">
       ${NAV.map(([p, l, k, ic]) => html`<a class="nav-link ${k === 'search' ? 'search-link' : ''}" href="#${p}" data-nav="${k}" ${k === 'search' ? html`title="Search (/)" aria-label="Search"` : ''}>${icon(ic, { size: 22 })}<span>${l}</span></a>`)}
-      <div class="nav-drop">
-        <button type="button" class="nav-drop-btn nav-link" data-nav="studio" aria-haspopup="true" aria-expanded="false" aria-controls="studioMenu">${icon('film', { size: 22 })}<span>Studio</span>${icon('chev-down', { size: 16, cls: 'sidebar-caret' })}</button>
-        <div class="menu studio-menu" id="studioMenu" aria-hidden="true">${STUDIO.map(([p, l]) => html`<a href="#${p}">${l}</a>`)}</div>
-      </div>
     </nav>
     <div class="top-actions">
       <button type="button" class="btn btn-sm btn-ghost" id="installBtn" hidden>${icon('download', { size: 16 })} Install app</button>
@@ -81,7 +70,7 @@ export function renderTabbar() {
   markTabs(lastPath);
 }
 
-// The profile menu keeps the familiar mobile avatar; on desktop its companion label is also a direct Login/Profile link.
+// The profile menu keeps the familiar mobile avatar; on desktop its companion label is also a direct Sign in/Profile link.
 export function renderProfileMenu() {
   syncBrandPremium();
   const u = app.user; const wrap = $('#profileWrap'); if (!wrap) return;
@@ -94,7 +83,7 @@ export function renderProfileMenu() {
   if (guest) {
     wrap.innerHTML = html`
       <div class="sidebar-account-row">
-        <a class="sidebar-account-link" href="#/signin" data-nav="account"><span class="sidebar-account-avatar">${face}</span><span>Login</span></a>
+        <a class="sidebar-account-link" href="#/signin" data-nav="account"><span class="sidebar-account-avatar">${face}</span><span>Sign in</span></a>
         <button type="button" class="avatar-btn" id="profileBtn" aria-haspopup="true" aria-expanded="false" aria-label="Sign in and settings"><span class="mobile-avatar">${face}</span><span class="desktop-profile-arrow">${icon('chev-down', { size: 17 })}</span></button>
       </div>
       <div class="menu menu-right" id="profileMenu" hidden>
@@ -129,43 +118,17 @@ export function renderProfileMenu() {
 
 // Open/close dropdowns on click, and close them on outside click or Escape. Leaving a Kids profile asks for the PIN first.
 function wireMenus() {
-  const studioMenu = $('#studioMenu'), studioDrop = studioMenu?.parentElement;
-  const studioButton = studioDrop?.querySelector('.nav-drop-btn');
-  const setStudioOpen = (open) => {
-    if (!studioMenu || !studioDrop || !studioButton) return;
-    studioDrop.classList.toggle('open', open);
-    studioButton.setAttribute('aria-expanded', String(open));
-    studioMenu.setAttribute('aria-hidden', String(!open));
-  };
   const closeAll = () => $$('.menu').forEach((m) => {
-    if (m.id === 'studioMenu') { setStudioOpen(false); return; }
     m.hidden = true;
     m.parentElement.querySelector('[aria-expanded]')?.setAttribute('aria-expanded', 'false');
   });
 
-  // Studio is a hover flyout on desktop, with the same state reflected for keyboard and touch users.
-  studioDrop?.addEventListener('pointerenter', (e) => {
-    if (e.pointerType === 'touch') return;
-    closeAll(); setStudioOpen(true);
-  });
-  studioDrop?.addEventListener('pointerleave', () => {
-    if (!studioMenu.contains(document.activeElement)) setStudioOpen(false);
-  });
-  studioDrop?.addEventListener('focusin', () => { closeAll(); setStudioOpen(true); });
-  studioDrop?.addEventListener('focusout', (e) => {
-    if (!studioDrop.contains(e.relatedTarget)) setStudioOpen(false);
-  });
-
   document.addEventListener('click', (e) => {
     if (e.target.closest('#tabbar a, #topbar a, #topbar button')) tick();
-    const btn = e.target.closest('#profileBtn, .nav-drop-btn');
+    const btn = e.target.closest('#profileBtn');
     if (btn) {
-      const menu = btn.closest('#profileWrap, .nav-drop')?.querySelector('.menu');
+      const menu = btn.closest('#profileWrap')?.querySelector('.menu');
       if (!menu) return;
-      if (menu.id === 'studioMenu') {
-        const open = studioButton.getAttribute('aria-expanded') !== 'true';
-        closeAll(); if (open) setStudioOpen(true); return;
-      }
       const open = menu.hidden;
       closeAll(); menu.hidden = !open; btn.setAttribute('aria-expanded', String(open)); return;
     }
@@ -187,10 +150,10 @@ function wireMenus() {
 
 // Highlight the current section in both navigation systems after each navigation.
 function markTabs(path) { const sec = tabSection(path); $$('#tabbar a').forEach((a) => a.classList.toggle('active', tabSection(a.dataset.tab) === sec)); }
-export function markActive({ path, query = {} }) {
+export function markActive({ path }) {
   lastPath = path;
   syncBrandPremium();
-  const sec = path === '/shows' && query.access === 'free' ? 'free' : section(path);
+  const sec = tabSection(path);
   $$('#topbar [data-nav]').forEach((a) => {
     const active = a.dataset.nav === sec;
     a.classList.toggle('active', active);

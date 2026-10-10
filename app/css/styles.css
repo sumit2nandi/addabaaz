@@ -1656,7 +1656,7 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
     display: flex; align-items: center; justify-content: flex-start; gap: 0;
     width: 100%; min-height: 47px; padding: 0 10px;
     border: 0; border-radius: 10px; background: transparent;
-    color: rgba(255,255,255,.67); font-size: 15px; font-weight: 600; text-align: left;
+    color: var(--muted); font-size: 15px; font-weight: 600; text-align: left;
     transition: color .18s, background .18s, transform .18s;
   }
   .primary-nav .nav-link > svg:first-child { width: 22px; height: 22px; flex: none; opacity: .95; }
@@ -1669,38 +1669,13 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
     flex: 1 1 auto; max-width: 180px; opacity: 1; transform: none; pointer-events: auto;
   }
   .topbar:hover .primary-nav .nav-link, .topbar:focus-within .primary-nav .nav-link { gap: 13px; }
-  .primary-nav .nav-link:hover, .primary-nav .nav-link:focus-visible { color: #fff; background: rgba(255,255,255,.07); }
-  /* The active destination is bold and bright, not boxed in by a selected pill. */
-  .primary-nav .nav-link.active, .primary-nav .nav-drop-btn.active { color: #fff; background: transparent; font-weight: 800; }
-  .topbar .primary-nav .nav-link.active::after, .topbar .primary-nav .nav-drop-btn.active::after { display: none; }
-  .primary-nav .nav-link.active > svg:first-child, .primary-nav .nav-drop-btn.active > svg:first-child { color: #fff; stroke-width: 2.4; }
-  .primary-nav .nav-drop { position: relative; width: 100%; }
-  .primary-nav .nav-drop-btn { cursor: pointer; }
-  .primary-nav .sidebar-caret {
-    width: 0; height: 16px; flex: none; opacity: 0; color: var(--muted); transform: translateX(-5px);
-    transition: width .22s var(--ease), opacity .18s ease, transform .22s var(--ease);
+  .primary-nav .nav-link:hover, .primary-nav .nav-link:focus-visible {
+    color: var(--accent-2); background: rgba(var(--accent-rgb),.1);
   }
-  .topbar:hover .primary-nav .sidebar-caret, .topbar:focus-within .primary-nav .sidebar-caret {
-    width: 16px; opacity: 1; transform: none;
-  }
-  .primary-nav .nav-drop-btn[aria-expanded="true"] .sidebar-caret { transform: rotate(180deg); }
-  /* Studio links stay out of the way until hover/focus, then glide out as a compact flyout. */
-  .primary-nav .nav-drop .menu {
-    position: absolute; top: 0; left: calc(100% + 12px); min-width: 190px; margin: 0; padding: 8px;
-    opacity: 0; visibility: hidden; transform: translateX(-8px);
-    pointer-events: none; transition: opacity .18s ease, transform .22s var(--ease), visibility 0s linear .22s;
-  }
-  .primary-nav .nav-drop.open .menu {
-    opacity: 1; visibility: visible; transform: none; pointer-events: auto;
-    transition: opacity .18s ease, transform .22s var(--ease), visibility 0s;
-  }
-  .primary-nav .nav-drop .menu a {
-    min-height: 38px; padding: 8px 10px; border-radius: 8px;
-    color: rgba(255,255,255,.78) !important; font-size: 13px; font-weight: 600;
-  }
-  .primary-nav .nav-drop .menu a:hover, .primary-nav .nav-drop .menu a:focus-visible {
-    background: rgba(255,255,255,.085); color: #fff !important;
-  }
+  /* Match the floating mobile menu's red active state without restoring a highlighted pill. */
+  .primary-nav .nav-link.active { color: var(--accent-2); background: transparent; font-weight: 800; }
+  .topbar .primary-nav .nav-link.active::after { display: none; }
+  .primary-nav .nav-link.active > svg:first-child { color: var(--accent-2); stroke-width: 2.4; }
 
   .top-actions { display: flex; flex-direction: column; align-items: stretch; gap: 12px; width: 100%; margin: auto 0 0; }
   #profileWrap { position: relative; width: 100%; }
@@ -1708,9 +1683,9 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
   .sidebar-account-link {
     display: flex; align-items: center; justify-content: flex-start; flex: 1; gap: 0;
     min-width: 0; min-height: 42px; padding: 0 10px; border-radius: 9px;
-    color: rgba(255,255,255,.72); font-size: 14px; font-weight: 700; transition: color .18s;
+    color: var(--muted); font-size: 14px; font-weight: 700; transition: color .18s;
   }
-  .sidebar-account-link:hover, .sidebar-account-link.active { background: transparent; color: #fff; }
+  .sidebar-account-link:hover, .sidebar-account-link.active { background: transparent; color: var(--accent-2); }
   .sidebar-account-link.active { font-weight: 800; }
   .sidebar-account-avatar { display: inline-grid; place-items: center; width: 30px; height: 30px; flex: none; }
   .sidebar-account-avatar .avatar { width: 30px !important; height: 30px !important; font-size: 14px !important; }
@@ -1731,7 +1706,7 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
   .topbar:hover #profileWrap .avatar-btn, .topbar:focus-within #profileWrap .avatar-btn {
     width: 36px; opacity: 1; pointer-events: auto;
   }
-  #profileWrap .avatar-btn:hover { border: 0; background: rgba(255,255,255,.08); color: #fff; }
+  #profileWrap .avatar-btn:hover { border: 0; background: rgba(var(--accent-rgb),.12); color: var(--accent-2); }
   #profileWrap .mobile-avatar { display: none; }
   #profileWrap .desktop-profile-arrow { display: none; place-items: center; }
   .topbar:hover #profileWrap .desktop-profile-arrow, .topbar:focus-within #profileWrap .desktop-profile-arrow { display: grid; }

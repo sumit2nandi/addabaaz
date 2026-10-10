@@ -132,6 +132,46 @@ test('Reels ignore an initial paused event until autoplay has actually started',
   }
 });
 
+test('desktop mouse-wheel gestures advance the Reels feed by exactly one reel', async () => {
+  const originalUser = app.user, originalMatchMedia = window.matchMedia;
+  const originalScrollIntoView = Element.prototype.scrollIntoView;
+  const targets = [];
+  Element.prototype.scrollIntoView = function () { if (this.classList?.contains('reel')) targets.push(this.dataset.i); };
+  window.matchMedia = () => ({ matches: false });
+  app.user = await guestUser();
+  const { default: reels } = await import('../../app/js/views/reels.js');
+  const root = document.createElement('main'); document.body.appendChild(root);
+  let cleanup;
+  const wheel = (deltaY) => {
+    const event = new window.Event('wheel', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'deltaY', { value: deltaY });
+    root.querySelector('#feed').dispatchEvent(event);
+    return event;
+  };
+
+  try {
+    await reels({ root, params: { id: 'premium-reel' }, setTitle() {}, onCleanup(fn) { cleanup = fn; } });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    targets.length = 0;
+    const touchScroll = wheel(-120);
+    assert.equal(touchScroll.defaultPrevented, false, 'narrow/mobile viewports are left to native scrolling');
+    assert.deepEqual(targets, []);
+
+    window.matchMedia = () => ({ matches: true });
+    const first = wheel(-120);
+    const momentum = wheel(-640);
+    assert.equal(first.defaultPrevented, true, 'desktop wheel input is captured for snap navigation');
+    assert.equal(momentum.defaultPrevented, true);
+    assert.deepEqual(targets, ['0'], 'many wheel events from one gesture move only to the adjacent reel');
+  } finally {
+    cleanup?.();
+    app.user = originalUser;
+    Element.prototype.scrollIntoView = originalScrollIntoView;
+    if (originalMatchMedia === undefined) delete window.matchMedia;
+    else window.matchMedia = originalMatchMedia;
+  }
+});
+
 test('Reels record a first-party view when an active reel starts playing', async () => {
   const user = await guestUser(), previousRemote = user.remote, events = [];
   user.remote = { playEvent: (...args) => events.push(args) };

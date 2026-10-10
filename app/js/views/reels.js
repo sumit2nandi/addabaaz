@@ -122,6 +122,20 @@ export default async function reels(ctx) {
     return true;
   };
   let active = -1, ctl = null, host = null, token = 0, hasPlayed = false, revealTimer = null;
+  let wheelGestureLocked = false, wheelGestureTimer = 0;
+  const handleDesktopWheel = (e) => {
+    if (e.ctrlKey || !e.deltaY || !window.matchMedia?.('(min-width: 900px)').matches) return;
+    e.preventDefault();
+    if (!wheelGestureLocked) {
+      wheelGestureLocked = true;
+      const current = active >= 0 ? active : startIdx;
+      const next = Math.max(0, Math.min(sections.length - 1, current + Math.sign(e.deltaY)));
+      if (next !== current) sections[next]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    // Trackpad inertia can emit many wheel events for one gesture; keep those events on one reel step.
+    clearTimeout(wheelGestureTimer);
+    wheelGestureTimer = setTimeout(() => { wheelGestureLocked = false; }, 420);
+  };
   /* The player stays transparent until its first frame arrives (onState 'playing'), so the cover image
    * covers the otherwise black iframe. An embed that starts but never reports that state (a slow or
    * API-less YouTube frame) would look like a dead reel: reveal it anyway after a short grace period. */
@@ -208,7 +222,10 @@ export default async function reels(ctx) {
   // Account and plan data can arrive after the first reel was checked: a reel locked before then unlocks now.
   const unlockWhenAccountChanges = () => { if (active >= 0 && sections[active]?.classList.contains('locked')) activate(active, true); };
   const offAccount = [app.user.on('account', unlockWhenAccountChanges), app.user.on('subscription', unlockWhenAccountChanges)];
-  ctx.onCleanup(() => { io.disconnect(); token++; clearTimeout(revealTimer); ctl?.destroy(); host?.remove(); offAccount.forEach((off) => off()); });
+  ctx.onCleanup(() => {
+    io.disconnect(); token++; clearTimeout(revealTimer); clearTimeout(wheelGestureTimer);
+    feed.removeEventListener('wheel', handleDesktopWheel); ctl?.destroy(); host?.remove(); offAccount.forEach((off) => off());
+  });
 
   feed.addEventListener('click', async (e) => {
     if (e.target.closest('[data-reel-tap]')) {
@@ -224,6 +241,7 @@ export default async function reels(ctx) {
     const sh = e.target.closest('[data-reel-share]');
     if (sh) { const r = await shareOrCopy({ title: cat.displayTitle(cat.video(sh.dataset.reelShare)), url: shareUrl('/reels/' + sh.dataset.reelShare) }); if (r === 'copied') toast('Link Copied'); }
   });
+  feed.addEventListener('wheel', handleDesktopWheel, { passive: false });
   feed.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sections[Math.max(0, Math.min(sections.length - 1, active + (e.key === 'ArrowDown' ? 1 : -1)))]?.scrollIntoView({ behavior: 'smooth' }); }
   });

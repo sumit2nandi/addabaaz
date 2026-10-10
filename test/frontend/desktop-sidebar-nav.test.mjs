@@ -24,60 +24,51 @@ async function shellFixture(user = {}) {
   return { document, window, markActive };
 }
 
-test('desktop rail includes labeled destinations, a Free filter, Studio submenu and direct profile link', async () => {
+test('desktop rail mirrors only the mobile floating-menu destinations and order', async () => {
   const { document } = await shellFixture();
   const nav = document.querySelector('#topbar .primary-nav');
   assert.equal(nav.getAttribute('aria-label'), 'Primary');
   const desktopLinks = [...nav.querySelectorAll(':scope > a')].map((a) => a.textContent.trim());
-  assert.deepEqual(desktopLinks, [
-    'Home', 'Shows', 'Reels', 'Search', 'Free', 'Coming Soon', 'My List',
-  ]);
-  const desktopCore = [...desktopLinks.slice(0, 4), document.querySelector('#profileWrap .sidebar-account-link > span:last-child').textContent.trim()];
+  assert.deepEqual(desktopLinks, ['Home', 'Shows', 'Reels', 'Search']);
+  const desktopMenu = [...desktopLinks, document.querySelector('#profileWrap .sidebar-account-link > span:last-child').textContent.trim()];
   const floatingMenu = [...document.querySelectorAll('#tabbar a')].map((a) => a.querySelector('span').textContent.trim());
-  assert.deepEqual(desktopCore, floatingMenu, 'shared desktop destinations and Profile follow the mobile floating-menu order');
-  assert.equal(nav.querySelector('[href="#/shows?access=free"]').dataset.nav, 'free');
+  assert.deepEqual(desktopMenu, floatingMenu, 'desktop and mobile expose exactly the same destinations in the same order');
+  assert.equal(nav.querySelectorAll(':scope > a').length, 4, 'no desktop-only destinations appear in the rail');
+  assert.equal(nav.querySelector('.nav-drop'), null, 'the Studio dropdown is not in the navigation rail');
   assert.ok(nav.querySelector('[data-nav="search"] svg'), 'Search has a visible icon');
   assert.ok(nav.querySelector('[data-nav="home"] svg'), 'Home has a visible icon');
-  assert.ok(nav.querySelector('.nav-drop .studio-menu[aria-hidden="true"] a[href="#/support"]'), 'Studio destinations start hidden in the flyout');
   assert.equal(document.querySelector('#profileWrap .sidebar-account-link').getAttribute('href'), '#/account');
   assert.equal(document.querySelector('#tabbar').querySelectorAll('a').length, 5, 'the mobile tabs remain present and profile-aware');
 });
 
-test('guest rail provides a direct Login link and retains the sign-in menu', async () => {
+test('guest rail mirrors the mobile Sign in destination and retains its menu', async () => {
   const { document, window } = await shellFixture({ account: null });
   const login = document.querySelector('#profileWrap .sidebar-account-link');
   assert.equal(login.getAttribute('href'), '#/signin');
-  assert.equal(login.textContent.trim(), 'Login');
+  assert.equal(login.querySelector(':scope > span:last-child').textContent.trim(), 'Sign in');
   assert.equal(document.querySelector('#tabbar [data-tab="/signin"]').textContent.trim(), 'Sign in');
+  const desktopMenu = [...document.querySelectorAll('#topbar .primary-nav > a')].map((a) => a.textContent.trim());
+  desktopMenu.push(login.querySelector(':scope > span:last-child').textContent.trim());
+  const floatingMenu = [...document.querySelectorAll('#tabbar a')].map((a) => a.querySelector('span').textContent.trim());
+  assert.deepEqual(desktopMenu, floatingMenu, 'guest navigation uses the same destinations and labels on desktop and mobile');
   document.querySelector('#profileBtn').dispatchEvent(new window.Event('click', { bubbles: true }));
   assert.equal(document.querySelector('#profileMenu').hidden, false);
   assert.ok(document.querySelector('#profileMenu a[href="#/signup"]'), 'Create Account remains available');
 });
 
-test('desktop rail updates active items and opens both accessible menus', async () => {
+test('desktop rail mirrors active sections from mobile and keeps the profile menu accessible', async () => {
   const { document, window, markActive } = await shellFixture();
   markActive({ path: '/shows', query: { access: 'free' } });
-  assert.equal(document.querySelector('#topbar [data-nav="free"]').classList.contains('active'), true);
-  assert.equal(document.querySelector('#topbar [data-nav="shows"]').classList.contains('active'), false);
-  assert.equal(document.querySelector('#topbar [data-nav="free"]').getAttribute('aria-current'), 'page');
+  assert.equal(document.querySelector('#topbar [data-nav="shows"]').classList.contains('active'), true,
+    'the Free filter shares the Shows destination like it does on mobile');
+  assert.equal(document.querySelector('#topbar [data-nav="shows"]').getAttribute('aria-current'), 'page');
+  assert.equal(document.querySelector('#topbar [data-nav="free"]'), null);
+  markActive({ path: '/upcoming' });
+  assert.equal(document.querySelector('#topbar [data-nav="shows"]').classList.contains('active'), true,
+    'upcoming titles also map to Shows in both menus');
   markActive({ path: '/plans' });
-  assert.equal(document.querySelector('#sidebarPlan'), null, 'the extra Premium section is removed from the rail');
   assert.equal(document.querySelector('#profileWrap .sidebar-account-link').classList.contains('active'), true,
-    'Plans stays associated with the account entry in the sidebar');
-
-  const studioDrop = document.querySelector('.nav-drop');
-  const studioButton = document.querySelector('.nav-drop-btn');
-  studioDrop.dispatchEvent(new window.Event('pointerenter'));
-  assert.equal(studioButton.getAttribute('aria-expanded'), 'true', 'hover opens the Studio flyout');
-  assert.equal(document.querySelector('.nav-drop .studio-menu').getAttribute('aria-hidden'), 'false');
-  studioDrop.dispatchEvent(new window.Event('pointerleave'));
-  assert.equal(studioButton.getAttribute('aria-expanded'), 'false', 'the flyout closes when the pointer leaves');
-  studioDrop.dispatchEvent(new window.Event('focusin'));
-  assert.equal(studioButton.getAttribute('aria-expanded'), 'true', 'keyboard focus also opens the flyout');
-  studioDrop.dispatchEvent(new window.Event('focusout'));
-  assert.equal(studioButton.getAttribute('aria-expanded'), 'false', 'the flyout closes when keyboard focus leaves');
-  studioButton.dispatchEvent(new window.Event('click', { bubbles: true }));
-  assert.equal(studioButton.getAttribute('aria-expanded'), 'true', 'click remains available as a fallback');
+    'account routes stay associated with the Profile entry');
 
   const profileButton = document.querySelector('#profileBtn');
   profileButton.dispatchEvent(new window.Event('click', { bubbles: true }));
@@ -103,14 +94,12 @@ test('desktop-only styling makes a fixed left rail without changing phone naviga
     'menu labels are hidden at rest');
   assert.match(rail, /\.topbar:hover \.primary-nav \.nav-link > span[\s\S]*max-width: 180px; opacity: 1;/,
     'hover reveals the labels with a transition');
-  assert.match(rail, /\.primary-nav \.nav-drop \.menu \{[^}]*opacity: 0; visibility: hidden; transform: translateX\(-8px\)/,
-    'Studio details start hidden');
-  assert.match(rail, /\.primary-nav \.nav-drop\.open \.menu \{[^}]*opacity: 1; visibility: visible;/,
-    'the Studio flyout transitions into view when opened');
-  assert.match(read('app/js/ui/shell.js'), /studioDrop\?\.addEventListener\('pointerenter'/,
-    'hovering the Studio row opens the flyout');
-  assert.match(rail, /\.primary-nav \.nav-link\.active, \.primary-nav \.nav-drop-btn\.active \{ color: #fff; background: transparent;/,
-    'active sections no longer get a highlighted pill');
+  assert.match(rail, /\.primary-nav \.nav-link\.active \{ color: var\(--accent-2\); background: transparent;/,
+    'desktop active links use the same red as the mobile floating menu');
+  assert.match(rail, /\.sidebar-account-link:hover, \.sidebar-account-link\.active \{ background: transparent; color: var\(--accent-2\); \}/,
+    'the desktop Profile entry uses the same red active state');
+  assert.doesNotMatch(rail, /\.nav-drop|\.studio-menu/,
+    'desktop-only dropdown menus are absent from the rail');
   assert.match(css, /\.tabbar \{ display: none; \}/, 'desktop hides the floating phone tabs using the existing responsive rule');
   assert.match(css, /@media \(max-width: 899px\) \{\s*\/\* Search is already available in the floating mobile navigation\. \*\/\s*\.topbar \.search-link \{ display: none; \}/,
     'mobile keeps its compact topbar and bottom navigation');
