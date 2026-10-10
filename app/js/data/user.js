@@ -86,7 +86,16 @@ export class User extends Emitter {
   async resetPassword(token, password) { const r = await this.remote.resetPassword(token, password); await this.#afterAuth(r); return r; }
   async changePassword(cur, next) { await this.remote.changePassword(cur, next); }
   async signOutEverywhere() { await this.remote.signOutEverywhere(); }
-  async refreshAccount() { const s = await this.remote.init(); if (s.account) { this.account = s.account; this.emit('account'); } }
+  // Re-reads the signed-in session (account + subscription) from the server, without touching profiles
+  // or the local library. Subscription is included: a plan bought or cancelled elsewhere (another device,
+  // the payment provider's own page) only ever reaches this tab through a call like this one — nothing
+  // pushes it in on its own. Used after editing account details, and by pull-to-refresh (main.js
+  // `softRefresh`) so stale header/plan state (e.g. the premium mark beside the logo) catches up.
+  async refreshAccount() {
+    const s = await this.remote.init();
+    if (s.account) { this.account = s.account; this.emit('account'); }
+    if (s.subscription) { this.subscription = s.subscription; this.emit('subscription'); }
+  }
   providers() { return this.remote ? this.remote.providers() : Promise.resolve({ password: false }); }
   /** Can this viewer play `video` right now? Premium access may come from its parent series. */
   gateFor(video, catalog) {

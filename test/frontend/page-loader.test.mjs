@@ -1,9 +1,9 @@
 // A page that takes a moment to fetch shows the centred page loader: a SMALL, brand-red Material-style
 // indeterminate arc (grow-and-shrink sweep, round caps, faint track) pinned in the centre of the SCREEN.
 //
-// It is laid over the page you are leaving instead of blanking it, it never blocks the floating menu
-// (pointer-events: none, and the bar paints above it), and the shapes browser-side share (the
-// pull-to-refresh / dialog `.spinner`) keep their own look.
+// It is laid over the page you are leaving instead of blanking it, and it never blocks the floating menu
+// (pointer-events: none, and the bar paints above it). Pull-to-refresh uses the same Material arc (just a
+// touch thicker); dialogs/other busy states keep the plain border-ring `.spinner`.
 //
 // Run: node --test test/frontend/page-loader.test.mjs
 import { test } from 'node:test';
@@ -47,10 +47,23 @@ test('a slow page shows a small red Material loader centred in the screen', () =
   assert.match(rule('.page-loader svg'), /animation: spin/, 'while the whole ring revolves');
 });
 
-test('the shared spinner keeps its own look for pull-to-refresh and dialogs', () => {
+test('the border-ring spinner keeps its own look for dialogs/busy states', () => {
   assert.match(rule('.spinner'), /width: 34px; height: 34px/, 'the small border-ring spinner is untouched');
-  assert.match(read('app/js/ui/ptr.js'), /<div class="spinner"><\/div>/, 'pull-to-refresh still uses it');
   // The boot splash is a separate mark and must not be caught by the page loader's rules.
   assert.doesNotMatch(css, /\.boot, \.page-loading/, 'the old combined boot/page-loading rule is gone');
   assert.match(rule('.boot'), /min-height: 70vh/, 'the boot splash keeps its own sizing');
+});
+
+test('pull-to-refresh uses its own, slightly heavier Material indeterminate arc', () => {
+  const ptr = read('app/js/ui/ptr.js');
+  // Same Material arc markup as the page loader (SVG track + dash-animated arc), not the plain border-ring spinner.
+  assert.match(ptr, /<svg viewBox="0 0 40 40" aria-hidden="true"><circle class="tr"[^>]*><\/circle><circle class="arc"[^>]*><\/circle><\/svg>/);
+  assert.doesNotMatch(ptr, /<div class="spinner">/, 'no longer the plain border-ring spinner');
+  assert.match(rule('.ptr svg'), /width: 34px; height: 34px/);
+  assert.match(rule('.ptr svg'), /animation: spin/, 'the whole ring revolves');
+  assert.match(rule('.ptr circle'), /stroke-width: 5/, 'a bit thicker than the page loader\'s stroke-width: 4');
+  assert.match(rule('.ptr circle'), /stroke-linecap: round/, 'Material round caps');
+  assert.match(rule('.ptr .tr'), /stroke: rgba\(255,255,255/, 'a faint track behind the arc');
+  assert.match(rule('.ptr .arc'), /stroke: var\(--accent\)/, 'brand red');
+  assert.match(rule('.ptr .arc'), /animation: loaderarc/, 'the same grow-and-shrink sweep as the page loader');
 });

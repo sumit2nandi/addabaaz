@@ -137,6 +137,12 @@ export async function softRefresh() {
   // views/studio.js; dropping it makes the pages re-read it while they are redrawn, exactly as a
   // reload would — while a page that does not use it is unaffected.
   app.studio = null;
+  // A signed-in viewer's account/subscription is not part of the catalog, so re-reading just that above
+  // would never pick up a plan bought or cancelled elsewhere (another device, the payment provider's own
+  // page) — the header's premium mark beside the logo, and anything else gated on it, would sit stale
+  // until the app was fully restarted. Best-effort: a failure here must never turn a working catalog
+  // refresh into a failed one.
+  if (app.user.account) await app.user.refreshAccount().catch((err) => console.warn('[refresh] account sync failed', err));
   // The sign-in and sign-up pages show no catalog data. Redrawing them rebuilds the Google button, which
   // Google draws in only after its script loads, so the viewer saw it jump on every pull. Leave them as they are.
   if (/^\/(signin|signup)\/?$/.test(parseLocation().path)) return 'refreshed';

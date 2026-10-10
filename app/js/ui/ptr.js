@@ -33,7 +33,7 @@ const ensure = () => {
   el = document.createElement('div');
   el.id = 'ptr';
   el.className = 'ptr';
-  el.innerHTML = '<div class="spinner"></div>';
+  el.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true"><circle class="tr" cx="20" cy="20" r="15.9155"></circle><circle class="arc" cx="20" cy="20" r="15.9155"></circle></svg>';
   document.body.appendChild(el);
   return el;
 };
