@@ -104,24 +104,12 @@ test('show details keep all four hero controls in one row on phones', () => {
     'the other three controls use equal compact columns');
   assert.match(css, /\.detail-hero \.hero-actions > \.btn-lg\.icon-only \{ flex-basis: 44px; width: 44px; \}/,
     'the compact controls narrow further on very small phones without shrinking in height');
-  // On phones the show and Coming Soon banners use the same lower-only fade as the home hero: the
-  // artwork above stays clear and the darkening starts where the text and the action row begin.
-  assert.match(css, /\.hero-shade, \.detail-hero \.hero-shade \{ background: var\(--hero-fade-mobile\); \}/,
-    'the detail banners share the home hero’s phone fade');
-  const fade = css.match(/--hero-fade-mobile:\s*([^;]+);/)?.[1] || '';
-  assert.ok(fade, 'the shared phone fade is defined once, as a token');
-  assert.match(fade, /^linear-gradient\(0deg/, 'it is a lower-only fade, not a top-down wash');
-  assert.doesNotMatch(fade, /180deg|90deg|270deg/, 'nothing darkens the poster from the top or from either side');
-  // The lower half still needs to be a real scrim under the text and actions — but it was lightened from .72
-  // to .62 on purpose, so pin the band rather than one number.
-  const mid = Number(fade.match(/rgba\(5,5,5,\.(\d+)\) 46%/)?.[1]);
-  assert.ok(mid >= 55 && mid <= 72, `the lower half still darkens enough for the hero text and actions (got .${mid})`);
-  assert.match(fade, /rgba\(5,5,5,0\) 78%/, 'and it is gone by the upper third, so the artwork up there stays clear');
-  const phones = css.slice(css.indexOf('@media (max-width: 759px)'));
-  assert.ok(phones.indexOf('--hero-fade-mobile') > 0, 'the fade only applies on phones');
-  assert.doesNotMatch(phones, /^\s*\.detail-hero \.hero-shade \{[^}]*background:/m, 'the detail banner keeps no separate phone scrim');
-  assert.match(css.slice(0, css.indexOf('@media (max-width: 759px)')), /\.hero-shade \{[^}]*linear-gradient\(180deg/,
-    'desktops keep the banner scrim they always had');
+  // Phones show the banner artwork unfaded: the show and Coming Soon banners have no scrim gradient.
+  assert.match(css, /\.hero-shade, \.detail-hero \.hero-shade \{ background: none; \}/,
+    'the detail banners have no phone fade');
+  assert.doesNotMatch(css, /--hero-fade-mobile/, 'no phone fade token remains');
+  assert.match(css.slice(0, css.indexOf('@media (max-width: 759px)')), /\.hero-shade \{ position: absolute; inset: 0; z-index: -1; background: none; \}/,
+    'desktops show the artwork with no scrim gradient');
 });
 
 test('show facts sit below the banner and the tagline uses the page font', () => {
