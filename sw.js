@@ -1,14 +1,16 @@
 /* ADDABAAZ service worker — offline-capable app shell.
  * - App shell + JS/CSS: stale-while-revalidate (fast, self-updating)
  * - data/*.json:        network-first, falls back to cache when offline
- * - media/*:            cache-first (immutable artwork)
+ * - media/*, uploads/*, r2-assets/*: cache-first (immutable artwork — content-hash-named, so a given
+ *   URL's bytes never change; R2's own redirect target changes behind the scenes, but this app-level
+ *   route is what the cache key is built from)
  * - YouTube thumbnails: stale-while-revalidate (opaque responses allowed)
  * - /api/*, /admin/*, YouTube player, analytics: never intercepted
  * The admin console can also invalidate every client's cache on demand (bump `client_cache_version` via
  * POST /api/v1/admin/cache/purge): this worker checks GET /api/v1/client-version on activation and on every
  * message, and throws away its caches when the number it stored is stale.
  * Bump VERSION (or run `npm run build:www`, which stamps it) to force a refresh. */
-const VERSION = 'v2.17.2';   // iPhone autoplay: WebKit only grants a muted first play, and the API-less YouTube embed now reports state (app/js/players)
+const VERSION = 'v2.18.0';   // R2 catalog/video-thumbnail images (/r2-assets/) are now cache-first instead of falling through to the app-shell's always-revalidate strategy
 // One cache per kind of content, all tagged with the version so old caches are deleted when the version changes.
 const SHELL = `ab-shell-${VERSION}`, DATA = `ab-data-${VERSION}`, MEDIA = `ab-media-${VERSION}`, THUMBS = `ab-thumbs-${VERSION}`;
 // Files downloaded at install so the app shell opens offline. A missing file is skipped rather than failing the install.
@@ -110,6 +112,11 @@ self.addEventListener('fetch', (e) => {
     // the app shell — they must always come from the server, where their strict CSP and no-store apply.
     if (url.pathname.includes('/api/') || ['/admin', '/content'].some((p) => url.pathname === p || url.pathname.startsWith(`${p}/`))) return;
     if (url.pathname.startsWith('/uploads/')) return e.respondWith(cacheFirst(req, MEDIA));   // admin uploads and their immutable rendition siblings
+    // R2-backed catalog/video-thumbnail (and broadcast-photo) images: every name is a content hash, so the
+    // same URL never means different bytes. Falling through to the app shell's stale-while-revalidate (as
+    // this used to) re-fetched the full image from R2 on every single page load; cache-first here means a
+    // thumbnail is downloaded once and then served from this cache, exactly like /media/ and /uploads/.
+    if (url.pathname.startsWith('/r2-assets/')) return e.respondWith(cacheFirst(req, MEDIA));
     // Pages: ask the server for the real URL (it answers /show/x with that page's HTML and the right status); offline → the cached app shell.
     if (req.mode === 'navigate') return e.respondWith(fetch(req).catch(() => caches.match('./').then((r) => r || caches.match('index.html'))));
     if (url.pathname.includes('/data/')) return e.respondWith(networkFirst(req, DATA));
