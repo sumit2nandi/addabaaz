@@ -23,8 +23,9 @@ export function createYouTubePlayer(container, videoId, opts) {
     }, sc.bufferingAfterMs));
   }
   return {
-    engine: 'youtube',
-    state: () => state,
+    engine: sc.engine || 'youtube',
+    // `unknownState`: an embed (e.g. the API-less fallback) that never reports what it is doing.
+    state: () => (sc.unknownState ? null : state),
     time: () => 0, duration: () => 0,
     seek() {}, pause() {},
     play() {

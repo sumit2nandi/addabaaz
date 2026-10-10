@@ -137,7 +137,7 @@ test('YouTube autoplay explicitly mutes the iOS iframe before asking it to play 
   } finally { restore(); }
 });
 
-test('YouTube iframe fallback honors the requested sound-first mode when the API script fails', async () => {
+test('YouTube iframe fallback starts muted for autoplay when the API script fails', async () => {
   const restore = saveGlobals(['document', 'location', 'window']);
   globalThis.document = {
     createElement() { return { appendChild() {} }; },
@@ -150,7 +150,8 @@ test('YouTube iframe fallback honors the requested sound-first mode when the API
     const ctl = await createYouTubePlayer(container, 'test-video', { autoplay: true, muted: false, controls: true });
     assert.equal(ctl.engine, 'iframe', 'slow/blocked API does not hold the video behind its 8-second timeout');
     assert.match(container.innerHTML, /autoplay=1/);
-    assert.match(container.innerHTML, /mute=0/, 'fallback does not force the viewer into muted autoplay');
+    assert.match(container.innerHTML, /mute=1/, 'an API-less embed cannot retry a refused sound-first attempt, so it starts muted');
+    assert.equal(ctl.isMuted(), true);
     assert.match(container.innerHTML, /playsinline=1/);
     assert.match(container.innerHTML, /controls=1/, 'the fallback keeps YouTube controls available');
     assert.match(container.innerHTML, /fs=1/, 'the fallback keeps YouTube fullscreen enabled');
@@ -174,7 +175,7 @@ test('YouTube does not wait for the API network timeout before using its iframe 
     const container = { innerHTML: '', appendChild() {}, querySelector() { return null; } };
     const ctl = await createYouTubePlayer(container, 'slow-api-video', { autoplay: true, muted: false, controls: false });
     assert.equal(ctl.engine, 'iframe', 'the playback budget expires while the API script request is still pending');
-    assert.match(container.innerHTML, /mute=0/, 'fallback honors the requested unmuted mode when the API is still loading');
+    assert.match(container.innerHTML, /mute=1/, 'fallback starts muted so the video actually begins while the API is still loading');
     ctl.destroy();
   } finally { restore(); }
 });
@@ -320,5 +321,71 @@ test('YouTube embeds keep native controls and offer app-owned settings for speed
     assert.equal(document.body.classList.contains('player-settings-open'), false);
     ctl.destroy();
     assert.equal(document.body.querySelector('.ytp-settings-overlay'), null, 'destroy removes the portal');
+  } finally { restore(); }
+});
+
+test('YouTube autoplay on iPhone mutes before the very first play command', async () => {
+  /* WebKit grants or refuses autoplay at the moment play() runs and does not reconsider, so the
+   * mute-after-refusal retry that revives playback on Android leaves an iPhone on the poster. */
+  const restore = saveGlobals(['document', 'location', 'window', 'navigator']);
+  const actions = [];
+  let config;
+  class FakePlayer {
+    constructor(_mount, options) { config = options; setTimeout(() => options.events.onReady({ target: this }), 0); }
+    mute() { actions.push('mute'); }
+    playVideo() { actions.push('play'); }
+    unMute() { actions.push('unmute'); }
+    setVolume() {}
+    getPlayerState() { return 5; }
+    getCurrentTime() { return 0; }
+    getDuration() { return 30; }
+    destroy() {}
+  }
+  globalThis.document = { createElement() { return {}; } };
+  globalThis.location = { protocol: 'https:', origin: 'https://addabaaz.example' };
+  globalThis.window = { YT: { Player: FakePlayer, PlayerState: { PLAYING: 1, PAUSED: 2, ENDED: 0, BUFFERING: 3, CUED: 5 } } };
+  Object.defineProperty(globalThis, 'navigator', {
+    value: { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148', platform: 'iPhone', maxTouchPoints: 5 },
+    configurable: true,
+  });
+  try {
+    const container = { innerHTML: '', appendChild() {} };
+    const ctl = await createYouTubePlayer(container, 'iphone-video', { autoplay: true, muted: false, controls: false });
+    assert.equal(config.playerVars.mute, 1, 'the embed is built muted: WebKit decides at the first play()');
+    assert.equal(config.playerVars.playsinline, 1, 'inline playback is required on iOS too');
+    assert.deepEqual(actions, ['mute', 'play'], 'sound is never requested first on iOS');
+    ctl.destroy();
+  } finally { restore(); }
+});
+
+test('the API-less fallback embed reports state and position through the widget channel', async () => {
+  const restore = saveGlobals(['document', 'location', 'window']);
+  const listeners = {};
+  const frame = { contentWindow: {}, addEventListener() {}, removeEventListener() {} };
+  const container = { innerHTML: '', appendChild() {}, querySelector: () => frame };
+  globalThis.document = {
+    createElement() { return { appendChild() {} }; },
+    head: { appendChild(script) { setTimeout(() => script.onerror?.(), 0); } },
+  };
+  globalThis.location = { protocol: 'https:', origin: 'https://addabaaz.example' };
+  globalThis.window = {
+    addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); },
+    removeEventListener: (type, fn) => { listeners[type] = (listeners[type] || []).filter((f) => f !== fn); },
+  };
+  try {
+    const states = [];
+    const ctl = await createYouTubePlayer(container, 'fallback-video', {
+      autoplay: true, muted: false, controls: false, onState: (s) => states.push(s), onProgress: () => {},
+    });
+    assert.equal(ctl.engine, 'iframe');
+    const send = (payload) => (listeners.message || []).forEach((fn) => fn({ source: frame.contentWindow, data: JSON.stringify(payload) }));
+    assert.equal(ctl.state(), null, 'no state is invented before the frame reports one');
+    send({ event: 'infoDelivery', info: { currentTime: 4, duration: 30, playerState: 1 } });
+    assert.deepEqual(states, ['playing'], 'the page learns the embed started, so a reel reveals its first frame');
+    assert.equal(ctl.time(), 4, 'position is reported for Continue Watching');
+    assert.equal(ctl.duration(), 30);
+    assert.equal(ctl.state(), 1);
+    ctl.destroy();
+    assert.equal((listeners.message || []).length, 0, 'the message listener is removed with the player');
   } finally { restore(); }
 });
