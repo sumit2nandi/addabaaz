@@ -112,6 +112,7 @@ function video(input, ctx) {
       if (!/^[\w\-./]+$/.test(key) || key.includes('..') || key.startsWith('/') || key.endsWith('/')) r.errors.push('source.key must be a safe R2 object key (e.g. premium/shahid-ep6/master.m3u8).');
       else if (s.format && !['mp4', 'hls'].includes(s.format)) r.errors.push('source.format must be mp4 or hls.');
       else if (/\.m3u8$/i.test(key) && s.format === 'mp4') r.errors.push("A .m3u8 key can't be format mp4.");
+      else if (!/\.m3u8$/i.test(key) && s.format === 'hls') r.errors.push('Force HLS needs the key of an HLS master playlist ending in .m3u8. A single video file plays as MP4 — use "detect from the file name" instead. To serve real HLS, encode a playlist package first (npm run encode:hls).');
       else r.out.source = { type: 'r2', key, ...(s.format ? { format: s.format } : {}) };
       if (!r.has('thumbnail')) r.errors.push('R2 videos need a public thumbnail image.');
     } else if (t === 'mp4' || t === 'hls') {

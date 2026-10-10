@@ -12,7 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { LADDER, pickLadder, ffmpegArgs, probeInfo, contentType } from '../server/src/hls.js';
+import { LADDER, pickLadder, ffmpegArgs, probeInfo, contentType, normalizePlaylist, isHlsPlaylist } from '../server/src/hls.js';
 import { createR2 } from '../server/src/r2.js';
 
 // Command-line parsing: the first non-flag argument is the input file; `opt('name', default)` reads `--name value`.
@@ -49,5 +49,13 @@ if (argv.includes('--upload')) {
     if (!res.ok) { console.error(`✖ upload of ${key} failed (${res.status}). Does the token have write access?`); process.exit(1); }
     if (++n % 20 === 0) console.log(`  ${n}/${files.length} files…`);
   }
-  console.log(`✔ uploaded ${files.length} files.\n  In the admin: Video source → Private Cloudflare R2 → key  premium/${name}/master.m3u8`);
+  // Verify the master playlist arrived intact: the playback gateway refuses manifests that don't start with
+  // #EXTM3U, so a silent upload problem would otherwise only surface later as a viewer's playback error.
+  const masterKey = `premium/${name}/master.m3u8`;
+  const master = await r2.getText(masterKey).catch(() => null);
+  if (!isHlsPlaylist(normalizePlaylist(master || ''))) {
+    console.error(`✖ ${masterKey} did not read back as a valid HLS playlist (it must start with #EXTM3U). Viewers would see a playback error — check the R2 object and re-run with --upload.`);
+    process.exit(1);
+  }
+  console.log(`✔ uploaded ${files.length} files; master playlist reads back as valid HLS.\n  In the admin: Video source → Private Cloudflare R2 → key  premium/${name}/master.m3u8`);
 } else console.log(`Next: upload the folder to R2 under premium/${name}/ (or re-run with --upload) and use  premium/${name}/master.m3u8  as the key.`);

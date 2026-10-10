@@ -11,7 +11,10 @@ const loadHls = () => hlsPromise || (hlsPromise = new Promise((res, rej) => {
 
 // Warm the engine in parallel with URL authorization, without fetching protected media or taking a seat.
 export function prepareHtml5Player(source = {}) {
-  const hls = source.type === 'hls' || (source.type === 'r2' && (source.format === 'hls' || /\.m3u8$/i.test(source.key || '')));
+  // Trust the object, not the admin's forced format flag: HLS is a package of .m3u8 playlists, so an R2 source
+  // is only HLS when its key is one (the stream endpoint applies the same rule; a "Force HLS" flag on a single
+  // video file still plays — as MP4).
+  const hls = source.type === 'hls' || (source.type === 'r2' && /\.m3u8$/i.test(source.key || ''));
   if (!hls) return Promise.resolve();
   const probe = document.createElement('video');
   const chromium = /\b(?:Chrome|Chromium|Edg(?:A|iOS)?|OPR|SamsungBrowser)\//i.test(globalThis.navigator?.userAgent || '');

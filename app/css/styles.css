@@ -641,13 +641,10 @@ input, textarea, select { font: inherit; }
 .avatar-preview { display: grid; justify-items: center; } .swatches { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; } .swatch { width: 34px; height: 34px; border-radius: 50%; border: 3px solid transparent; padding: 0; } .swatch.on { border-color: #fff; box-shadow: 0 0 0 2px var(--bg); }
 body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.bare { padding-bottom: 0; } body.bare #view { padding-top: 0 !important; } body.bare .toasts { bottom: 24px; }
 .auth-page { min-height: 100dvh; display: grid; place-content: center; gap: 24px; padding: 30px 16px; justify-items: center; background: radial-gradient(60% 50% at 50% 0%, rgba(var(--accent-rgb),.18), transparent); } .auth-brand { display: flex; gap: 12px; align-items: center; } .auth-brand img { border-radius: 50%; }
-.auth-card { position: relative; width: min(440px, 100%); background: rgba(17,17,20,.92); border: 1px solid var(--border-2); border-radius: 20px; padding: 32px 28px; } .auth-card h1 { font-size: 26px; padding-right: 40px; } .switch-auth { text-align: center; color: var(--muted); font-size: 14px; } .switch-auth a { color: #fff; font-weight: 700; text-decoration: underline; } .skip { text-align: center; color: var(--muted); font-size: 13px; }
+.auth-card { position: relative; width: min(440px, 100%); background: rgba(17,17,20,.92); border: 1px solid var(--border-2); border-radius: 20px; padding: 32px 28px; } .auth-card h1 { font-size: 26px; } .switch-auth { text-align: center; color: var(--muted); font-size: 14px; } .switch-auth a { color: #fff; font-weight: 700; text-decoration: underline; } .skip { text-align: center; color: var(--muted); font-size: 13px; }
 /* Loading cover while a Google/Facebook/Apple sign-in finishes: hides the form (still intact underneath)
  * until the session is established and the router moves on to the home page. */
 .auth-busy { position: absolute; inset: 0; z-index: 6; border-radius: 20px; background: rgba(17,17,20,.96); display: grid; place-content: center; gap: 14px; justify-items: center; padding: 24px; color: var(--muted); font-weight: 600; text-align: center; } .auth-busy[hidden] { display: none; }
-/* Small round × at the top-right corner of the sign-in / create-account form. */
-.auth-close { position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border-2); background: rgba(255,255,255,.06); color: var(--text-2); transition: background .2s, border-color .2s, color .2s, transform .3s var(--ease); }
-.auth-close:hover { background: var(--accent); border-color: var(--accent); color: #fff; transform: rotate(90deg); }
 .plans { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); margin-top: 20px; max-width: 680px; } .plan { position: relative; background: var(--panel); border: 1px solid var(--border-2); border-radius: 20px; padding: 24px 22px; display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; align-items: center; align-content: start; } .plan h2 { font-size: 20px; letter-spacing: .02em; text-transform: uppercase; } .plan.best { background-color: #2c2310; background-image: var(--gold-panel); border: 1px solid rgba(245,197,24,.38); box-shadow: 0 8px 28px rgba(0,0,0,.45); } .plan.current { box-shadow: 0 0 0 2px var(--accent); } .plan.best.current { box-shadow: 0 8px 28px rgba(0,0,0,.45), 0 0 0 2px var(--gold); } .plan.free { opacity: .88; }
 .badge.cur { background: var(--ok); color: #04120a; }
 /* Plans checkout card: one Premium card with duration tiles + a single pay button (Zee-style). */
@@ -675,6 +672,33 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 .coupon-line { margin-top: 10px; text-align: center; font-size: 13.5px; color: var(--text-2); }
 .coupon-line b { color: var(--gold); } .coupon-line .linklike { color: var(--muted); font-size: 13px; }
 .paybar s { opacity: .65; font-weight: 500; margin-right: 6px; }
+/* Desktop pricing page: a brand/perks column on the left, the purchase card on the right. On phones the
+   pitch is display:none and the page keeps today's single-card layout. */
+.plans-pitch { display: none; }
+@media (min-width: 900px) {
+  .plans-page { max-width: 1160px; }
+  .plans-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 470px); gap: clamp(28px, 4vw, 60px); align-items: start; margin-top: 6px; }
+  .plans-pitch { display: block; position: sticky; top: calc(var(--topbar-h) + 24px); padding-top: 4px; }
+  .plans-pitch .brand-lockup { font-size: clamp(28px, 2.8vw, 38px); letter-spacing: 2px; }
+  .plans-pitch .brand-lockup .premium-word { font-size: 16px; }
+  .plans-tag { margin: 14px 0 0; color: var(--text-2); font-size: 15.5px; max-width: 46ch; }
+  .plans-perks { margin: 28px 0 0; grid-template-columns: 1fr; gap: 0; }
+  .plans-perks li { font-size: 15px; margin-bottom: 13px; }
+  .plans-perks li svg { width: 17px; height: 17px; margin-top: 2px; }
+  .plans-trust { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--border); display: grid; gap: 11px; }
+  .plans-trust li { display: flex; gap: 10px; align-items: flex-start; color: var(--muted); font-size: 13.5px; }
+  .plans-trust svg { color: var(--gold); flex: none; margin-top: 2px; }
+  /* The card becomes a focused checkout panel — brand + perks live in the pitch now. */
+  .plans-checkout { display: grid; align-content: start; min-width: 0; }
+  .plus-card { margin-top: 0; max-width: none; padding: 26px 24px; }
+  .plus-card h2, .plus-card > p.muted, .plus-card .perks { display: none; }
+  .durs { grid-template-columns: 1fr 1fr; gap: 14px; }
+  .dur { border-radius: 16px; padding: 22px 12px 18px; }
+  .dur b { font-size: 30px; }
+  .dur small { font-size: 13.5px; }
+  .paybar { margin-top: 18px; }
+  .plans-bill { max-width: none; margin-top: 18px; }
+}
 .btn-outline { background: transparent; border: 1px solid rgba(255,255,255,.5); color: #fff; border-radius: 999px; }
 .btn-outline:hover { border-color: #fff; }
 .dlg-fail .dlg-body { text-align: center; padding: 32px 24px 28px; }
@@ -1059,7 +1083,7 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .account-content .row-link > svg, .account-content .switch { flex-shrink: 0; }
 .profile-id { overflow-wrap: anywhere; }
 @media (min-width: 1024px) {
-  .profile-page, .settings-page, .support-page { max-width: 1200px; padding-top: 36px; }
+  .profile-page, .settings-page, .support-page, .account-details-page { max-width: 1200px; padding-top: 36px; }
   .profile-page .profile-head { padding: 0 0 28px; gap: 18px; }
   .profile-page .group-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 0; background: none; border: 0; box-shadow: none; }
   .profile-page .group-list .row-link { min-height: 104px; padding: 24px; border: 1px solid var(--border); border-radius: 16px; background: var(--panel); transition: background .15s, border-color .15s; }
@@ -1238,7 +1262,7 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 @media (max-width: 599px) {
   .auth-page.auth-entry { min-height: 0; align-content: start; gap: 12px; padding: 20px var(--pad) 40px; }
   .auth-entry .auth-card { width: 100%; padding: 8px 0; border-radius: 0; }
-  .auth-entry .auth-card h1 { font-size: 23px; padding-right: 36px; }
+  .auth-entry .auth-card h1 { font-size: 23px; }
   .auth-entry #authSub { font-size: 13px; line-height: 1.4; }
   .auth-entry #af { gap: 10px; }
   .auth-entry #af #emailPane, .auth-entry #af #otpPane,
@@ -1254,7 +1278,6 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
   .auth-entry .fine, .auth-entry .skip { font-size: 11px; line-height: 1.45; }
   .auth-entry .auth-footer-links { gap: 4px; }
   .auth-entry .auth-footer-links a { display: inline-block; padding-block: 5px; }
-  .auth-entry .auth-close { top: 12px; right: 12px; }
   .auth-entry .seg button { min-height: 40px; font-size: 12px; }
 }
 
@@ -1283,6 +1306,11 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 
 /* Placeholder-led auth fields retain labels for assistive technology. */
 .auth-entry .auth-field-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* Desktop brand panel for sign-in / sign-up. On phones the panel is hidden and the wrapper collapses
+   (display: contents), so the compact single-column flow above is untouched. The >=900px two-panel
+   block lives further down, after the compact fixes, so it wins the cascade. */
+.auth-side { display: none; }
+.auth-main { display: contents; }
 .auth-entry .auth-icon-field { position: relative; }
 .auth-entry .auth-icon-field > svg { position: absolute; left: 0; top: 13px; color: var(--muted); pointer-events: none; }
 .auth-entry .form .auth-icon-field input:not([type=checkbox]) { padding-left: 30px; }
@@ -1382,11 +1410,31 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 .auth-entry .or { margin: 0; }
 .auth-entry .fine { margin: 0; }
 
+/* Desktop two-panel card. This block must stay below the compact fixes above so every value (page
+   column, paddings, h1 size, card gap) wins at >=900px. The page column must widen past its 440px
+   compact cap here, or the form pane collapses and spills outside the card. */
+@media (min-width: 900px) {
+  .auth-page.auth-entry { padding: 56px var(--pad) 72px; grid-template-columns: minmax(0, 980px); }
+  .auth-entry .auth-card { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); align-items: stretch; width: min(980px, 100%); background: var(--panel); border: 1px solid var(--border-2); border-radius: 24px; padding: 0; box-shadow: 0 30px 80px rgba(0,0,0,.55); }
+  .auth-entry #af { gap: 0; }
+  .auth-entry .auth-side { display: flex; flex-direction: column; gap: 14px; padding: 46px 38px 38px; border-right: 1px solid var(--border); border-radius: 24px 0 0 24px; background: radial-gradient(120% 70% at 0% 0%, rgba(var(--accent-rgb), .34), transparent 62%), linear-gradient(165deg, #1c0505 0%, #340404 52%, #150404 100%); }
+  .auth-entry .auth-side .brand-lockup { font-size: 22px; letter-spacing: 2px; }
+  .auth-entry .auth-side h2 { font-size: clamp(26px, 2.6vw, 34px); font-weight: 800; line-height: 1.15; margin-top: 8px; }
+  .auth-entry .auth-side p { color: var(--text-2); font-size: 14px; line-height: 1.6; }
+  .auth-entry .auth-side ul { margin-top: auto; display: grid; gap: 10px; padding-top: 24px; }
+  .auth-entry .auth-side li { display: flex; gap: 10px; align-items: flex-start; color: var(--muted); font-size: 13.5px; }
+  .auth-entry .auth-side li svg { color: var(--gold); flex: none; margin-top: 2px; }
+  .auth-entry .auth-main { display: grid; align-content: start; gap: 12px; padding: 46px 48px 34px; min-width: 0; }
+  .auth-entry .auth-card h1 { font-size: 28px; margin: 0; }
+  .auth-entry .auth-busy { border-radius: 24px; }
+}
+
 
 /* ---------- Refer & earn: responsive referral dashboard ---------- */
 .referral-shell { display: grid; gap: 18px; min-width: 0; }
 .referral-eyebrow { display: block; color: var(--gold); font-size: 10.5px; font-weight: 800; letter-spacing: .16em; line-height: 1.4; text-transform: uppercase; }
-.referral-hero { position: relative; isolation: isolate; display: flex; align-items: center; min-height: 310px; overflow: hidden; padding: clamp(24px, 4vw, 46px); border: 1px solid rgba(255,255,255,.13); border-radius: 22px; background: #080809; box-shadow: 0 18px 46px rgba(0,0,0,.28); }
+/* overflow: clip (not hidden) — same visual crop, but it can never turn the hero into a scroll container. */
+.referral-hero { position: relative; isolation: isolate; display: flex; align-items: center; min-height: 310px; overflow: clip; padding: clamp(24px, 4vw, 46px); border: 1px solid rgba(255,255,255,.13); border-radius: 22px; background: #080809; box-shadow: 0 18px 46px rgba(0,0,0,.28); }
 .referral-hero-image { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; object-position: right center; }
 .referral-hero::after { content: ''; position: absolute; z-index: 1; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(5,5,5,.98) 0%, rgba(5,5,5,.91) 32%, rgba(5,5,5,.67) 51%, rgba(5,5,5,.18) 83%, rgba(5,5,5,.1) 100%), linear-gradient(0deg, rgba(5,5,5,.32), transparent 44%); }
 .referral-hero-copy { position: relative; z-index: 2; width: min(62%, 590px); }

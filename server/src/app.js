@@ -250,7 +250,7 @@ export function createApp({
 
   registerUnsubscribeRoute(api, { db, unsubscribeSignature: unsubSig, logger });
   /* ---------- Cloudflare R2 video streaming ---------- */
-  registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, r2, catalog, features, userFromRequest });
+  registerMediaRoutes(api, { db, secret, publicApiUrl, streamTtl, r2, catalog, features, userFromRequest, log: logger });
   registerContactRoutes(api, { db, rate, contactWebhook, logger });
   registerPaymentWebhook(api, { db, billing, payments, logger });
   /* ---------- admin console API (admin accounts, or ADMIN_TOKEN for scripts) — see server/src/admin.js ---------- */

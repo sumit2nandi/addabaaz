@@ -9,6 +9,7 @@ import { avatar, toast, confirmSignOut } from '../ui/components.js';
 import { go } from '../router.js';
 import { isNative } from '../platform.js';
 import { accountGroup, wireAccountAccordion } from '../ui/account-accordion.js';
+import { accountNav } from '../ui/account-nav.js';
 import { verifyBanner, settingGroups, settingSection, wireSetting } from './account-extra.js';
 import { friendly } from '../errors.js';
 
@@ -19,7 +20,10 @@ export default async function account(ctx) {
   ctx.setTitle('Account');
   const p = u.profile;
   const identity = u.supportsAuth ? 'Browsing as a guest — sign in to sync across devices.' : 'Your list and progress are saved on this device.';
+  // Desktop gets the shared sidebar + content shell (settings/support use it too); on phones the sidebar is
+  // display:none and the wrappers collapse to today's single-column flow.
   ctx.root.innerHTML = html`<div class="page page-narrow account-page profile-page">
+    <div class="account-layout">${accountNav(settingGroups(), 'overview')}<div class="account-content">
     ${!u.supportsAuth ? html`<section class="card-panel notice" role="status"><div>${icon('info', { size: 22 })}</div><div><b>Local-Only Mode</b><p class="muted">This app isn’t connected to ADDABAAZ cloud. Profiles and settings stay on this phone; sign-in, sync, and push notifications need a cloud connection.</p></div></section>` : ''}
     ${verifyBanner()}
     ${u.supportsAuth && !u.isPremium && !isNative ? html`<section class="card-panel subscribe-banner"><div><h2>Subscribe to <em class="premium-word">premium</em></h2><p>Premium Originals, Early Access</p></div><a class="btn btn-light" href="#/plans">Subscribe</a></section>` : ''}
@@ -38,6 +42,7 @@ export default async function account(ctx) {
     <footer class="profile-footer">
       ${u.account ? html`<button class="logout-link" id="signout">Sign Out</button>` : ''}
     </footer>
+    </div></div>
   </div>`.s;
 
   ctx.onCleanup(u.on('library', () => {

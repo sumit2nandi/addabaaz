@@ -23,7 +23,11 @@ test('guest Account visits redirect to Sign in before rendering or accessing pro
   }
 });
 
-test('closing Sign in for a protected Account destination returns guests home', () => {
+test('guests sent to Sign in for a protected Account destination can still get home', () => {
   const source = readFileSync(new URL('../../app/js/views/auth.js', import.meta.url), 'utf8');
-  assert.ok(source.includes("go(!u.account && /^\\/account(?:[/?]|$)/.test(next) ? '/' : next)"));
+  // These pages are full pages, not popups: there is no close button any more.
+  assert.ok(!source.includes('authClose') && !source.includes('auth-close'));
+  // The guest escape hatch still lands people home instead of bouncing them at /account again.
+  assert.match(source, /guest-btn[^>]*href=\\?"#\/\\?"/, 'Browse as Guest links home');
+  assert.ok(source.includes('guest-btn'));
 });
