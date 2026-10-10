@@ -78,12 +78,9 @@ test('the artwork lift is applied to artwork only, never to text or the lightbox
   assert.doesNotMatch(players, /filter\s*[:=]/, 'no filter is applied to the playing video');
 });
 
-test('the banner scrim was lightened but stays dark enough for white text', () => {
+test('the banner shows the artwork unfaded: no scrim gradient on desktop or phones', () => {
   const shade = css.match(/\.hero-shade \{ position: absolute;[^}]*\}/)?.[0] || '';
   assert.ok(shade, 'the banner shade rule exists');
-  const left = Number(shade.match(/rgba\(5,5,5,\.(\d+)\) 0%/)?.[1]);
-  assert.ok(left >= 85 && left <= 92, `the left edge stays near-solid for the title (got .${left})`);
-  assert.doesNotMatch(shade, /\.94|\.70|\.15/, 'the old, heavier scrim is gone');
-  const mobile = css.match(/--hero-fade-mobile:[^;]+;/)?.[0] || '';
-  assert.match(mobile, /rgba\(5,5,5,\.86\) 26%/, 'phone banners keep a fading (not flat) scrim');
+  assert.match(shade, /background: none/, 'the banner has no gradient over the artwork');
+  assert.doesNotMatch(css, /--hero-fade-mobile/, 'no phone fade token remains');
 });
