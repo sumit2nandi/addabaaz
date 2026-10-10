@@ -62,6 +62,13 @@ const touch = (type, y) => {
   e.touches = y == null ? [] : [{ clientY: y }];
   document.dispatchEvent(e);
 };
+// Like `touch` above, but with a real clientX too, for the horizontal-vs-vertical tests below.
+const touchXY = (type, x, y) => {
+  const e = new window.Event(type, { cancelable: true });
+  e.touches = y == null ? [] : [{ clientX: x, clientY: y }];
+  document.dispatchEvent(e);
+  return e;
+};
 // A completed pull spins the indicator while it refreshes, and holds it for a beat (MIN_SPIN) so the
 // gesture feels acknowledged even when the data lands instantly.
 const settle = () => new Promise((r) => setTimeout(r, 520));
@@ -184,6 +191,33 @@ test('no pull-to-refresh while a video is playing', async () => {
   await settle();
   assert.equal(calls.length, 1, 'a paused/stopped player lets the refresh through again');
   assert.equal(reloads - before, 0);
+});
+
+// Regression: whichever side calls preventDefault() first on a touch sequence wins the gesture. The
+// gesture used to wait until the indicator was about to appear (dy > 4, with nothing prevented before
+// that) to claim it — long enough, on some devices/browsers, for their own native pull-to-refresh to
+// already have committed to running instead, so the same pull sometimes soft-refreshed and sometimes
+// fell through to a real page reload. It must now be claimed on the very first touchmove that reads as
+// a downward pull, not deferred any further.
+test('a vertical pull is claimed (preventDefault) on its first qualifying move, not deferred until the indicator shows', () => {
+  app.softRefresh = async () => 'refreshed';
+  touchXY('touchstart', 100, 20);
+  const first = touchXY('touchmove', 100, 30);   // dy = 10, dx = 0: unmistakably a downward pull
+  assert.equal(first.defaultPrevented, true, 'claimed immediately — no window where the browser could win the race');
+  touchXY('touchend');
+});
+
+test('a horizontal swipe (rails/carousels) at the top of the page is handed back to the browser untouched', async () => {
+  const calls = [];
+  app.softRefresh = async () => { calls.push('refresh'); return 'refreshed'; };
+  touchXY('touchstart', 100, 20);
+  const horizontal = touchXY('touchmove', 180, 24);   // dx = 80, dy = 4: clearly horizontal
+  assert.equal(horizontal.defaultPrevented, false, 'a horizontal swipe is never captured');
+  const later = touchXY('touchmove', 260, 140);       // even if the same gesture later drifts well downward
+  assert.equal(later.defaultPrevented, false, 'once handed back, the rest of that gesture is left alone too');
+  touchXY('touchend');
+  await settle();
+  assert.equal(calls.length, 0, 'and it never turns into a refresh');
 });
 
 test('all app platforms use the gesture, while the browser-native PTR stays disabled', () => {
