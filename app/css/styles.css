@@ -1078,6 +1078,8 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 
 /* Account pages keep the single-column phone flow; desktop gets room to navigate and work. */
 .account-sidebar { display: none; }
+/* The Current Plan summary on Account Overview exists for desktop-width browsers only; phones never draw it. */
+.account-plan-overview { display: none; }
 .account-content { min-width: 0; }
 .account-content .row-link > span, .account-content .row-switch > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 .account-content .row-link > svg, .account-content .switch { flex-shrink: 0; }
@@ -1099,6 +1101,11 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
   .account-sidebar a:hover { background: var(--panel-2); color: var(--text); }
   .account-sidebar a[aria-current="page"] { background: rgba(var(--accent-rgb), .14); color: #fff; box-shadow: inset 3px 0 var(--accent); }
   .account-sidebar .account-overview { margin-bottom: 8px; color: var(--text); }
+  /* The sidebar already lists every settings group on desktop, so the phone-style grid below the saved
+     list would only duplicate it — drop it from desktop-width browsers (phones keep it, sidebar hidden). */
+  .profile-page .group-list { display: none; }
+  /* The space it frees carries the subscription summary instead (drawn but hidden under 1024px). */
+  .account-plan-overview { display: block; }
   .account-content .sub-h:first-child { margin-top: 0; }
   .account-content .account-section + .account-section { margin-top: 28px; }
   .account-content .row-link, .account-content .row-switch { padding: 20px 24px; min-height: 76px; }
