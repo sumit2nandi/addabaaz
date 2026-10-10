@@ -35,7 +35,7 @@ refund processed ──► the credit spent on that order comes back
 ```
 
 **The one letter a new account receives** is the welcome e-mail (`server/src/welcome-email.js`): it carries the
-confirmation link *and* the credit ticket, so sign-up does not also produce a "confirm your email" note and a
+confirmation link *and* a one-line credit note (a short transactional letter: no images, no promotional blocks), so sign-up does not also produce a "confirm your email" note and a
 separate "you got credit" note. The route therefore runs the promotions first and calls
 `onSignup({ user, code, mail: 'welcome' })` — with `mail: 'welcome'` the module skips its own `notifyCredit` for
 that account (the inviter still gets their referral mail). `features.sendWelcome()` is the sender: it mints the
