@@ -215,10 +215,12 @@ function wireImageFallbacks() {
   window.addEventListener('error', (e) => {
     const t = e.target;
     if (!(t instanceof HTMLImageElement) || swapToHighQuality(t)) return;
-    if (t.dataset.fbTried) return;
-    t.dataset.fbTried = '1';
-    const fb = t.dataset.fb;
-    if (fb) t.src = fb; else t.classList.add('img-failed');
+    const [fb, ...remaining] = (t.dataset.fb || '').split('|');
+    if (fb) {
+      t.dataset.fb = remaining.join('|');
+      t.dataset.fbTried = '1';
+      t.src = fb;
+    } else t.classList.add('img-failed');
   }, true);
 }
 

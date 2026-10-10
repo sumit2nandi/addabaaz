@@ -30,10 +30,12 @@ export default async function showView(ctx) {
   const label = !t ? 'Play' : t.resume ? `Resume ${cat.label(t.video)}` : t.continued ? `Continue ${cat.label(t.video)}` : `Play ${cat.label(t.video)}`;
   const trailer = extras.find((v) => v.kind === 'trailer');
   ctx.setTitle(s.titleEn || s.title);
+  const bgSrc = s.backdrop || (latest ? cat.thumb(latest, 'maxresdefault') : '');
+  const bgFallback = [s.backdrop && latest ? cat.thumb(latest, 'maxresdefault') : '', s.posterLg || s.poster, latest ? cat.thumb(latest, 'hqdefault') : ''].filter(Boolean).join('|');
 
   ctx.root.innerHTML = html`
     <section class="detail-hero" id="detailHero">
-      <div class="hero-bg">${latest ? heroBg(cat.thumb(latest, 'maxresdefault'), s.posterLg || s.poster, { fallback: cat.thumb(latest, 'hqdefault'), lowThumb: cat.thumb(latest, 'mqdefault'), lowPoster: s.poster }) : heroBg(s.posterLg || s.poster, '', { lowThumb: s.poster })}</div>
+      <div class="hero-bg">${latest ? heroBg(bgSrc, s.posterLg || s.poster, { fallback: bgFallback, blurUp: false }) : heroBg(s.posterLg || s.poster, '', { blurUp: false })}</div>
       <div class="hero-shade"></div>
       ${s.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
       <div class="hero-inner">

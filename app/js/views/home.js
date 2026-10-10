@@ -171,9 +171,11 @@ function heroHtml(slides) {
   return html`<section class="hero" aria-roledescription="carousel" aria-label="Featured shows">
     ${slides.map(({ show, latest }, i) => {
       const entry = entries[i];
+      const bgSrc = show.backdrop || cat.thumb(latest, 'maxresdefault');
+      const bgFallback = [show.backdrop ? cat.thumb(latest, 'maxresdefault') : '', show.posterLg || show.poster, cat.thumb(latest, 'hqdefault')].filter(Boolean).join('|');
       return html`<article class="hero-slide ${initialSlideClass(i, slides.length)}" data-i="${i}" data-show-id="${show.id}" data-watch-id="${entry.watch}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
         <a class="hero-banner-link" href="#/show/${show.id}" aria-label="View ${show.titleEn || show.title} details">
-          <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault'), lowThumb: cat.thumb(latest, 'mqdefault'), lowPoster: show.poster })}</div>
+          <div class="hero-bg">${heroBg(bgSrc, show.posterLg || show.poster, { lazy: i > 0, fallback: bgFallback, blurUp: false })}</div>
         </a>
         <div class="hero-shade"></div>
         ${show.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}

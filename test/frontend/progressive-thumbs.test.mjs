@@ -125,16 +125,18 @@ test('components build the progressive markup for cards, banners and posters', (
   assert.match(c, /\|\| lowResolutionSrc\(src\)/, 'uploaded full-size images automatically resolve their saved compact sibling');
   assert.match(c, /src="\$\{low \|\| src\}" data-hq="\$\{low \? src : ''\}"/, 'img() shows the low rendition and keeps the best in data-hq');
   assert.match(c, /lowSrc: app\.catalog\.thumb\(v, 'mqdefault'\)/, 'video cards start from YouTube mqdefault (320x180)');
-  assert.match(c, /lowThumb = '', lowPoster = ''/, 'heroBg takes low renditions');
-  assert.match(c, /srcset="\$\{lp \|\| poster\}" data-hq="\$\{lp \? poster : ''\}"/, 'the banner poster source starts low on phones');
+  assert.match(c, /lowThumb = '', lowPoster = '', blurUp = true/, 'heroBg can opt out of low-resolution placeholders');
+  assert.match(c, /const lt = blurUp \?/, 'blurUp=false skips the background thumbnail rendition');
+  assert.match(c, /const lp = blurUp \?/, 'blurUp=false skips the phone poster rendition');
+  assert.match(c, /srcset="\$\{lp \|\| poster\}" data-hq="\$\{lp \? poster : ''\}"/, 'the banner poster source starts low on phones when blur-up is enabled');
 });
 
-test('every call site that shows a best-quality image also passes a low rendition', () => {
+test('every call site that benefits from a compact progressive rendition passes one', () => {
   const pairs = [
     ['app/js/views/show.js', /\$\{img\(cat\.thumb\(v, 'maxresdefault'\), '', \{[^}]*lowSrc: cat\.thumb\(v, 'mqdefault'\)/],
-    ['app/js/views/show.js', /heroBg\(cat\.thumb\(latest, 'maxresdefault'\)[\s\S]*?lowThumb: cat\.thumb\(latest, 'mqdefault'\), lowPoster: s\.poster/],
+    ['app/js/views/show.js', /const bgSrc = s\.backdrop \|\| \(latest \? cat\.thumb\(latest, 'maxresdefault'\) : ''\);[\s\S]*?const bgFallback = \[s\.backdrop && latest \? cat\.thumb\(latest, 'maxresdefault'\) : '', s\.posterLg \|\| s\.poster, latest \? cat\.thumb\(latest, 'hqdefault'\) : ''\]\.filter\(Boolean\)\.join\('\|'\);[\s\S]*?heroBg\(bgSrc, s\.posterLg \|\| s\.poster, \{ fallback: bgFallback, blurUp: false \}\)/],
     ['app/js/views/show.js', /img\(s\.posterLg \|\| s\.poster, s\.title, \{ lazy: false, lowSrc: s\.poster \}\)/],
-    ['app/js/views/home.js', /lowThumb: cat\.thumb\(latest, 'mqdefault'\), lowPoster: show\.poster/],
+    ['app/js/views/home.js', /const bgSrc = show\.backdrop \|\| cat\.thumb\(latest, 'maxresdefault'\);[\s\S]*?const bgFallback = \[show\.backdrop \? cat\.thumb\(latest, 'maxresdefault'\) : '', show\.posterLg \|\| show\.poster, cat\.thumb\(latest, 'hqdefault'\)\]\.filter\(Boolean\)\.join\('\|'\);[\s\S]*?heroBg\(bgSrc, show\.posterLg \|\| show\.poster, \{ lazy: i > 0, fallback: bgFallback, blurUp: false \}\)/],
     ['app/js/views/home.js', /img\(show\.posterLg \|\| show\.poster, '', \{ lazy: i > 0, lowSrc: show\.poster \}\)/],
     ['app/js/views/soon.js', /img\(u\.posterLg \|\| u\.poster, u\.title, \{ lazy: false, lowSrc: u\.poster \}\)/],
     ['app/js/views/soon.js', /img\(u\.backdrop \|\| u\.posterLg \|\| u\.poster, '', \{ lazy: false, lowSrc: u\.poster \}\)/],
@@ -142,8 +144,24 @@ test('every call site that shows a best-quality image also passes a low renditio
     ['app/js/views/watch.js', /player-wall-art', lazy: false, lowSrc: cat\.thumb\(v, 'mqdefault'\)/],
     ['app/js/views/reels.js', /lowSrc: cover\.low/],
   ];
-  for (const [file, re] of pairs) assert.match(read(file), re, `${file} passes a low rendition: ${re}`);
+  for (const [file, re] of pairs) assert.match(read(file), re, `${file} uses its intended image rendition: ${re}`);
   assert.match(read('app/js/views/reels.js'), /low: cat\.thumb\(v, 'mqdefault'\)/, 'reel covers compute the low rendition');
+});
+
+test('Home and show heroes prefer a show backdrop and do not pass blur-up placeholders', () => {
+  const home = read('app/js/views/home.js'), detail = read('app/js/views/show.js');
+  assert.match(home, /const bgSrc = show\.backdrop \|\| cat\.thumb\(latest, 'maxresdefault'\)/, 'Home starts with the uploaded show backdrop');
+  assert.match(detail, /const bgSrc = s\.backdrop \|\| \(latest \? cat\.thumb\(latest, 'maxresdefault'\) : ''\)/, 'the show page starts with the uploaded show backdrop');
+  assert.match(home, /const bgFallback = \[show\.backdrop \? cat\.thumb\(latest, 'maxresdefault'\) : '', show\.posterLg \|\| show\.poster, cat\.thumb\(latest, 'hqdefault'\)\]/, 'Home keeps maxresdefault, poster, and hqdefault as the fallback chain');
+  assert.match(detail, /const bgFallback = \[s\.backdrop && latest \? cat\.thumb\(latest, 'maxresdefault'\) : '', s\.posterLg \|\| s\.poster, latest \? cat\.thumb\(latest, 'hqdefault'\) : ''\]/, 'the show page keeps maxresdefault, poster, and hqdefault as the fallback chain');
+  for (const [name, source] of [['Home', home], ['show page', detail]]) {
+    const heroCalls = source.match(/heroBg\([^\n]+/g) || [];
+    assert.ok(heroCalls.length, `${name} has a hero background`);
+    for (const call of heroCalls) {
+      assert.match(call, /blurUp: false/, `${name} disables blur-up for its hero art`);
+      assert.doesNotMatch(call, /lowThumb|lowPoster|lowSrc/, `${name} does not pass low-resolution hero placeholders`);
+    }
+  }
 });
 
 test('main.js upgrades on load and runs the upgrade before the data-fb fallback on error', () => {
@@ -154,5 +172,7 @@ test('main.js upgrades on load and runs the upgrade before the data-fb fallback 
   assert.match(fn, /document\.addEventListener\('load'[\s\S]*loadHighQuality\(t\)/, 'load prefetches and swaps in the best rendition only after it arrives');
   assert.doesNotMatch(fn, /window\.addEventListener\('load'/, 'a window listener never receives image load events');
   assert.match(fn, /if \(!\(t instanceof HTMLImageElement\) \|\| swapToHighQuality\(t\)\) return;/, 'a failed placeholder jumps straight to the best rendition');
+  assert.match(fn, /const \[fb, \.\.\.remaining\] = \(t\.dataset\.fb \|\| ''\)\.split\('\|'\)/, 'pipe-delimited fallbacks are attempted in order');
+  assert.match(fn, /t\.dataset\.fb = remaining\.join\('\|'\)/, 'each fallback is consumed so a later failure advances the chain');
   assert.ok(fn.indexOf('swapToHighQuality(t)) return') < fn.indexOf("t.dataset.fbTried = '1'"), 'before the fallback is marked as tried');
 });

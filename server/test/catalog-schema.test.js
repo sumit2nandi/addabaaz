@@ -10,6 +10,20 @@ test('R2 catalog-photo paths are accepted offline and can be checked by the admi
   assert.match(validate('show', show, { r2FileExists: () => false }).errors.join(' '), /R2 photo .* does not exist/);
 });
 
+test('show backdrops accept media paths, remain optional and reject unsafe paths', () => {
+  const show = { id: 'backdrop-show', title: 'Backdrop show', description: 'A description', poster: 'media/shows/backdrop-show.webp' };
+  const absent = validate('show', show);
+  assert.deepEqual(absent.errors, []);
+  assert.equal(Object.hasOwn(absent.doc, 'backdrop'), false, 'an omitted backdrop stays omitted');
+
+  const withBackdrop = validate('show', { ...show, backdrop: 'media/shows/backdrop-wide.webp' });
+  assert.deepEqual(withBackdrop.errors, []);
+  assert.equal(withBackdrop.doc.backdrop, 'media/shows/backdrop-wide.webp', 'a local media/ backdrop is retained');
+
+  const invalid = validate('show', { ...show, backdrop: '../media/shows/backdrop-wide.webp' });
+  assert.match(invalid.errors.join(' '), /backdrop must be an uploaded image/);
+});
+
 test('R2 video-thumbnail paths allow generated nested WebP renditions and check object existence online', () => {
   const thumbnail = 'r2-assets/video-thumbnails/premium/show-name/0123456789abcdef01234567-hq.webp';
   const video = {

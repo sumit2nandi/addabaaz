@@ -21,11 +21,11 @@ export function img(src, alt = '', { cls = '', lazy = true, fallback, priority =
 export const HERO_POSTER_MQ = '(max-width: 759px)';
 /** Hero background. Wide screens get the landscape episode thumbnail; phones (portrait, < 760px) get the portrait show poster instead,
  *  because a 16:9 picture cropped into a tall phone screen shows only a thin slice of the middle (faces cut in half). */
-// `lowThumb` / `lowPoster` are the small renditions shown first (see ui/progressive.js); the wide still and the poster
-// replace them only once their high-quality renditions have downloaded.
-export function heroBg(thumb, poster, { lazy = false, fallback, lowThumb = '', lowPoster = '' } = {}) {
-  const lt = (lowThumb && lowThumb !== thumb ? lowThumb : '') || lowResolutionSrc(thumb);
-  const lp = (lowPoster && lowPoster !== poster ? lowPoster : '') || lowResolutionSrc(poster);
+// `lowThumb` / `lowPoster` are the small renditions shown first (see ui/progressive.js); `blurUp: false` skips
+// them for full-bleed artwork that should use its sharp source immediately.
+export function heroBg(thumb, poster, { lazy = false, fallback, lowThumb = '', lowPoster = '', blurUp = true } = {}) {
+  const lt = blurUp ? ((lowThumb && lowThumb !== thumb ? lowThumb : '') || lowResolutionSrc(thumb)) : '';
+  const lp = blurUp ? ((lowPoster && lowPoster !== poster ? lowPoster : '') || lowResolutionSrc(poster)) : '';
   const img = html`<img src="${lt || thumb || poster}" data-hq="${lt ? thumb : ''}" alt="" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''}>`;
   return poster ? html`<picture><source media="${HERO_POSTER_MQ}" srcset="${lp || poster}" data-hq="${lp ? poster : ''}">${img}</picture>` : img;
 }
