@@ -63,3 +63,18 @@ test('the Google slot is fixed-size and contained, and Google\'s own button is l
   assert.match(css, /\.social-compact \.social-g \{ contain: layout paint size; \}/);
   assert.doesNotMatch(css, /social-g iframe/);
 });
+
+test('desktop sign-in/sign-up is a two-panel card while phones keep the compact column', () => {
+  const view = read('app/js/views/auth.js');
+  assert.match(view, /<aside class="auth-side">/);
+  assert.match(view, /<div class="auth-main">/);
+  const css = read('app/css/styles.css');
+  assert.match(css, /\.auth-side \{ display: none; \}/);
+  assert.match(css, /\.auth-main \{ display: contents; \}/);
+  const desktop = css.slice(css.indexOf('.auth-side { display: none; }'));
+  assert.match(desktop, /@media \(min-width: 900px\) \{\s*\.auth-page\.auth-entry \{ padding: 56px/);
+  assert.match(desktop, /\.auth-entry \.auth-card \{[^}]*grid-template-columns: minmax\(300px, 400px\) minmax\(0, 1fr\)/);
+  assert.match(desktop, /\.auth-entry \.auth-side \{ display: flex/);
+  assert.match(desktop, /\.auth-entry \.auth-main \{ display: grid; align-content: start/);
+  assert.doesNotMatch(desktop, /overflow: hidden|height: 100dvh/);
+});

@@ -1310,6 +1310,24 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 
 /* Placeholder-led auth fields retain labels for assistive technology. */
 .auth-entry .auth-field-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* Desktop brand panel for sign-in / sign-up. On phones the panel is hidden and the wrapper collapses
+   (display: contents), so the compact single-column flow above is untouched. */
+.auth-side { display: none; }
+.auth-main { display: contents; }
+@media (min-width: 900px) {
+  .auth-page.auth-entry { padding: 56px var(--pad) 72px; }
+  .auth-entry .auth-card { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); align-items: stretch; width: min(980px, 100%); background: var(--panel); border: 1px solid var(--border-2); border-radius: 24px; padding: 0; box-shadow: 0 30px 80px rgba(0,0,0,.55); }
+  .auth-entry .auth-side { display: flex; flex-direction: column; gap: 14px; padding: 46px 38px 38px; border-right: 1px solid var(--border); border-radius: 24px 0 0 24px; background: radial-gradient(120% 70% at 0% 0%, rgba(var(--accent-rgb), .34), transparent 62%), linear-gradient(165deg, #1c0505 0%, #340404 52%, #150404 100%); }
+  .auth-entry .auth-side .brand-lockup { font-size: 22px; letter-spacing: 2px; }
+  .auth-entry .auth-side h2 { font-size: clamp(26px, 2.6vw, 34px); font-weight: 800; line-height: 1.15; margin-top: 8px; }
+  .auth-entry .auth-side p { color: var(--text-2); font-size: 14px; line-height: 1.6; }
+  .auth-entry .auth-side ul { margin-top: auto; display: grid; gap: 10px; padding-top: 24px; }
+  .auth-entry .auth-side li { display: flex; gap: 10px; align-items: flex-start; color: var(--muted); font-size: 13.5px; }
+  .auth-entry .auth-side li svg { color: var(--gold); flex: none; margin-top: 2px; }
+  .auth-entry .auth-main { display: grid; align-content: start; gap: 12px; padding: 46px 48px 34px; min-width: 0; }
+  .auth-entry .auth-card h1 { font-size: 28px; }
+  .auth-entry .auth-busy { border-radius: 24px; }
+}
 .auth-entry .auth-icon-field { position: relative; }
 .auth-entry .auth-icon-field > svg { position: absolute; left: 0; top: 13px; color: var(--muted); pointer-events: none; }
 .auth-entry .form .auth-icon-field input:not([type=checkbox]) { padding-left: 30px; }
@@ -1413,7 +1431,8 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 /* ---------- Refer & earn: responsive referral dashboard ---------- */
 .referral-shell { display: grid; gap: 18px; min-width: 0; }
 .referral-eyebrow { display: block; color: var(--gold); font-size: 10.5px; font-weight: 800; letter-spacing: .16em; line-height: 1.4; text-transform: uppercase; }
-.referral-hero { position: relative; isolation: isolate; display: flex; align-items: center; min-height: 310px; overflow: hidden; padding: clamp(24px, 4vw, 46px); border: 1px solid rgba(255,255,255,.13); border-radius: 22px; background: #080809; box-shadow: 0 18px 46px rgba(0,0,0,.28); }
+/* overflow: clip (not hidden) — same visual crop, but it can never turn the hero into a scroll container. */
+.referral-hero { position: relative; isolation: isolate; display: flex; align-items: center; min-height: 310px; overflow: clip; padding: clamp(24px, 4vw, 46px); border: 1px solid rgba(255,255,255,.13); border-radius: 22px; background: #080809; box-shadow: 0 18px 46px rgba(0,0,0,.28); }
 .referral-hero-image { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; object-position: right center; }
 .referral-hero::after { content: ''; position: absolute; z-index: 1; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(5,5,5,.98) 0%, rgba(5,5,5,.91) 32%, rgba(5,5,5,.67) 51%, rgba(5,5,5,.18) 83%, rgba(5,5,5,.1) 100%), linear-gradient(0deg, rgba(5,5,5,.32), transparent 44%); }
 .referral-hero-copy { position: relative; z-index: 2; width: min(62%, 590px); }
