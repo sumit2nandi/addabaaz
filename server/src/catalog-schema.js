@@ -97,7 +97,7 @@ function show(input, ctx) {
 
 // Video or episode. The `source` decides where it plays from: YouTube id, Cloudflare R2 object, or a direct mp4/hls URL; premium access is independent of source.
 function video(input, ctx) {
-  const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'description', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access', 'rating', 'subtitles', 'publishAt', 'hidden', 'topRank'], 'A video', ctx);
+  const r = reader(input, ['id', 'showId', 'kind', 'episode', 'title', 'shortTitle', 'description', 'source', 'thumbnail', 'duration', 'publishedAt', 'views', 'access', 'rating', 'subtitles', 'publishAt', 'hidden', 'adminsOnly', 'topRank'], 'A video', ctx);
   r.id(); r.oneOf('kind', KINDS, { req: true }); r.str('showId', { max: 64, pattern: ID, nullable: true }); ref(r, ctx, 'showId', [ctx.showIds, ctx.upcomingIds].filter(Boolean));
   r.int('episode', { min: 1, max: 100000, nullable: true }); if (r.out.kind && r.out.kind !== 'episode') r.out.episode = null;
   r.str('title', { req: true, max: 300 }); r.str('shortTitle', { max: 120 }); r.str('description', { max: 500 });
@@ -112,6 +112,7 @@ function video(input, ctx) {
       if (!/^[\w\-./]+$/.test(key) || key.includes('..') || key.startsWith('/') || key.endsWith('/')) r.errors.push('source.key must be a safe R2 object key (e.g. premium/shahid-ep6/master.m3u8).');
       else if (s.format && !['mp4', 'hls'].includes(s.format)) r.errors.push('source.format must be mp4 or hls.');
       else if (/\.m3u8$/i.test(key) && s.format === 'mp4') r.errors.push("A .m3u8 key can't be format mp4.");
+      else if (!/\.m3u8$/i.test(key) && s.format === 'hls') r.errors.push('Force HLS needs the key of an HLS master playlist ending in .m3u8. A single video file plays as MP4 — use "detect from the file name" instead. To serve real HLS, encode a playlist package first (npm run encode:hls).');
       else r.out.source = { type: 'r2', key, ...(s.format ? { format: s.format } : {}) };
       if (!r.has('thumbnail')) r.errors.push('R2 videos need a public thumbnail image.');
     } else if (t === 'mp4' || t === 'hls') {
@@ -120,6 +121,11 @@ function video(input, ctx) {
   }
   r.img('thumbnail'); r.int('duration', { req: true, max: 86400 }); r.date('publishedAt', { req: true }); r.int('views', { dflt: 0 });
   r.oneOf('access', ACCESS, { req: true }); r.oneOf('rating', RATINGS); r.date('publishAt'); r.bool('hidden', false);
+  // "Show to Admins only": a hidden video that signed-in admin accounts may still see and play on the live
+  // website/apps while everybody else (and Google) keeps seeing nothing. Only meaningful while hidden —
+  // an unhidden video is public anyway, so the flag is cleared there instead of lingering for a later hide.
+  r.bool('adminsOnly', false);
+  if (!r.out.hidden) r.out.adminsOnly = false;
   // The homepage "Top 10 Episodes" rail: an editor's pick, 1 = first (Content studio → Top 10).
   r.int('topRank', { min: 1, max: 10, nullable: true });
   if (r.out.topRank && r.out.kind !== 'episode') r.out.topRank = null;   // only episodes can be ranked

@@ -14,7 +14,11 @@ test('HLS engine warming skips MP4/native HLS and shares the script request', as
   await prepareHtml5Player({ type: 'r2', key: 'master.m3u8' });
   assert.equal(document.querySelectorAll('script').length, 0);
   globalThis.navigator.userAgent = 'Chrome/130';
-  const first = prepareHtml5Player({ type: 'r2', format: 'hls' });
+  // "Force HLS" on a plain video file must not warm the HLS engine: the stream endpoint plays such a source as
+  // MP4 (error report #861), so preloading hls.js for it would be wrong as well as wasted bandwidth.
+  await prepareHtml5Player({ type: 'r2', key: 'premium/x/video.mp4', format: 'hls' });
+  assert.equal(document.querySelectorAll('script').length, 0);
+  const first = prepareHtml5Player({ type: 'r2', key: 'premium/x/master.m3u8' });
   const second = prepareHtml5Player({ type: 'hls' });
   assert.equal(first, second);
   assert.equal(document.querySelectorAll('script').length, 1);

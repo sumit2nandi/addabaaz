@@ -42,7 +42,17 @@ export default async function auth(ctx) {
 
   ctx.root.innerHTML = html`<div class="page auth-page auth-entry">
     <form class="auth-card form" id="af" novalidate>
-      <button type="button" class="auth-close" id="authClose" aria-label="Close">${icon('x', { size: 16 })}</button>
+      <aside class="auth-side">
+        <span class="brand-lockup"><b>ADDA</b><i>BAAZ</i></span>
+        <h2>One account.<br>Every screen.</h2>
+        <p>Premium originals, early access &amp; ad-free viewing — pick up on any device right where you left off.</p>
+        <ul>
+          <li>${icon('check', { size: 16 })}<span>Watch on TV, laptop &amp; mobile</span></li>
+          <li>${icon('check', { size: 16 })}<span>Up to 5 viewing profiles</span></li>
+          <li>${icon('check', { size: 16 })}<span>Pay once — no auto-renewal</span></li>
+        </ul>
+      </aside>
+      <div class="auth-main">
       <h1>${signup ? 'Create account' : 'Welcome back'}</h1>
       ${ref ? html`<div class="notice ok" id="refNote">${icon('gift', { size: 18 })}<span>Invite code <b>${ref}</b> will be applied — you and your friend both get credit.</span></div>` : ''}
       <p class="muted" id="authSub">${canOtp ? 'Use your mobile number to get started.' : (signup ? 'Save your favourites and watch across devices.' : 'Pick up where you left off.')}</p>
@@ -77,12 +87,13 @@ export default async function auth(ctx) {
         <button class="btn btn-primary btn-lg block" type="submit" id="asub">${signup ? 'Create account' : 'Sign in'}${icon('arrow-right', { size: 18 })}</button>
       </div>
 
-      <div class="auth-busy" id="asBusy" hidden><div class="spinner"></div><p id="asBusyMsg">Signing you in…</p></div>
       <div class="form-status" id="as" role="alert"></div>
       ${signup ? html`<p class="fine">By creating an account you agree to our <a href="#/terms">Terms</a> and <a href="#/privacy">Privacy Policy</a>.</p>` : ''}
       <p class="switch-auth">${signup ? html`Already have an account? <a href="#/signin?next=${encodeURIComponent(next)}">Sign In</a>` : html`Don’t have an account? <a href="#/signup?next=${encodeURIComponent(next)}">Create an Account</a>`}</p>
       <div class="auth-footer-links"><p class="fine">Trouble Signing In? <a href="#/support">Get Help</a></p>
       <a class="skip guest-btn" href="#/">Browse as Guest</a></div>
+      </div>
+      <div class="auth-busy" id="asBusy" hidden><div class="spinner"></div><p id="asBusyMsg">Signing you in…</p></div>
     </form></div>`.s;
 
   const st = () => $('#as', ctx.root);
@@ -131,7 +142,6 @@ export default async function auth(ctx) {
     if (shown) { box.hidden = false; $('#or', ctx.root).hidden = false; }
   });
   $('#pwt', ctx.root)?.addEventListener('click', () => { const i = $('[name=password]', ctx.root); i.type = i.type === 'password' ? 'text' : 'password'; });
-  $('#authClose', ctx.root).addEventListener('click', () => go(!u.account && /^\/account(?:[/?]|$)/.test(next) ? '/' : next));   // the × at the top-right closes the form
 
   /* ---------- phone sign-in (SMS OTP) ---------- */
   // The number is sent to the server in the form people type it; the server normalizes it (country code,

@@ -1,4 +1,6 @@
 import { accountPlan } from '../ui/account-plan.js';
+import { accountNav } from '../ui/account-nav.js';
+import { settingGroups } from './account-extra.js';
 import { addPhone } from '../ui/add-phone.js';
 import { app } from '../app.js';
 import { html, $ } from '../util.js';
@@ -13,7 +15,9 @@ export default async function accountDetails(ctx) {
   ctx.setTitle('Edit Account');
   const parts = (account.name || '').trim().split(/\s+/);
   let savedName = parts.join(' '), busy = false;
+  // Same sidebar shell as the other account pages on desktop; phones keep the stacked edit form.
   ctx.root.innerHTML = html`<div class="page page-narrow account-details-page">
+    <div class="account-layout">${accountNav(settingGroups(), 'overview')}<div class="account-content">
     <header class="account-edit-header"><a class="page-back" href="#/account" aria-label="Back to Account">${icon('left', { size: 28 })}</a><h1>Edit Account</h1></header>
     <div id="accountPlanSummary">${accountPlan(u)}</div>
     <form class="account-edit-form" id="accountNameForm">
@@ -28,6 +32,7 @@ export default async function accountDetails(ctx) {
       <button class="btn btn-primary account-save" type="submit" id="saveAccount" disabled>Save Changes</button>
       <a class="account-manage-link" href="#/profiles?manage=1">Manage Viewing Profiles</a>
     </form>
+    </div></div>
   </div>`.s;
   ctx.onCleanup(u.on('subscription', () => {
     const summary = $('#accountPlanSummary', ctx.root);

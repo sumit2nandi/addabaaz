@@ -9,6 +9,8 @@ import { avatar, toast, confirmSignOut } from '../ui/components.js';
 import { go } from '../router.js';
 import { isNative } from '../platform.js';
 import { accountGroup, wireAccountAccordion } from '../ui/account-accordion.js';
+import { accountNav } from '../ui/account-nav.js';
+import { accountPlan } from '../ui/account-plan.js';
 import { verifyBanner, settingGroups, settingSection, wireSetting } from './account-extra.js';
 import { friendly } from '../errors.js';
 
@@ -19,7 +21,10 @@ export default async function account(ctx) {
   ctx.setTitle('Account');
   const p = u.profile;
   const identity = u.supportsAuth ? 'Browsing as a guest — sign in to sync across devices.' : 'Your list and progress are saved on this device.';
+  // Desktop gets the shared sidebar + content shell (settings/support use it too); on phones the sidebar is
+  // display:none and the wrappers collapse to today's single-column flow.
   ctx.root.innerHTML = html`<div class="page page-narrow account-page profile-page">
+    <div class="account-layout">${accountNav(settingGroups(), 'overview')}<div class="account-content">
     ${!u.supportsAuth ? html`<section class="card-panel notice" role="status"><div>${icon('info', { size: 22 })}</div><div><b>Local-Only Mode</b><p class="muted">This app isn’t connected to ADDABAAZ cloud. Profiles and settings stay on this phone; sign-in, sync, and push notifications need a cloud connection.</p></div></section>` : ''}
     ${verifyBanner()}
     ${u.supportsAuth && !u.isPremium && !isNative ? html`<section class="card-panel subscribe-banner"><div><h2>Subscribe to <em class="premium-word">premium</em></h2><p>Premium Originals, Early Access</p></div><a class="btn btn-light" href="#/plans">Subscribe</a></section>` : ''}
@@ -30,6 +35,9 @@ export default async function account(ctx) {
         ${!u.account ? html`<p class="muted">${identity}</p>` : ''}</div>
       ${u.supportsAuth && !u.account ? html`<div class="profile-actions"><a class="btn btn-primary" href="#/signin">Sign In</a><a class="btn btn-ghost" href="#/signup">Create Account</a></div>` : ''}
     </section>
+    <!-- Subscription summary: drawn everywhere but only *shown* on desktop-width browsers (CSS below), where the
+         settings grid it replaces used to sit. Phones and the native apps keep today's page. -->
+    ${u.supportsAuth && !isNative ? html`<div class="account-plan-overview" id="accountPlanOverview">${accountPlan(u)}</div>` : ''}
     ${profileStrip(u)}
     <div id="accountSavedList">${savedListStrip(savedEntries(u, app.catalog))}</div>
     <nav class="card-panel list group-list" aria-label="Settings">
@@ -38,8 +46,13 @@ export default async function account(ctx) {
     <footer class="profile-footer">
       ${u.account ? html`<button class="logout-link" id="signout">Sign Out</button>` : ''}
     </footer>
+    </div></div>
   </div>`.s;
 
+  ctx.onCleanup(u.on('subscription', () => {
+    const summary = $('#accountPlanOverview', ctx.root);
+    if (summary) summary.innerHTML = accountPlan(u).s;
+  }));
   ctx.onCleanup(u.on('library', () => {
     const saved = $('#accountSavedList', ctx.root);
     if (!saved) return;

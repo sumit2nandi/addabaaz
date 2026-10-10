@@ -102,6 +102,28 @@ test('deletion action follows the public details and the profile footer stays co
   assert.match(read('app/css/styles.css'), /:has\(\.profile-page\) \.footer \{ margin-top: 8px; \}/);
 });
 
+test('desktop-only overview: the settings grid steps aside for the subscription summary', () => {
+  const css = read('app/css/styles.css');
+  const account = read('app/js/views/account.js');
+  // The account desktop block: the media query that follows the phone-only sidebar rule.
+  const start = css.indexOf('@media (min-width: 1024px) {', css.indexOf('.account-sidebar { display: none; }'));
+  const desktop = css.slice(start, css.indexOf('/* Inline profile settings', start));
+  assert.ok(start > -1 && desktop.length > 0, 'the account desktop media block is found');
+  assert.match(desktop, /\.profile-page \.group-list \{ display: none; \}/,
+    'the settings grid (highlighted duplicate of the sidebar) is dropped from desktop-width browsers only');
+  assert.match(desktop, /\.account-plan-overview \{ display: block; \}/,
+    'the subscription summary appears only in that same desktop block');
+  assert.match(css.slice(0, start), /\.account-plan-overview \{ display: none; \}/,
+    'below desktop width the summary stays hidden, so phones keep today’s page');
+  assert.match(css, /\.profile-page \.group-list \{ display: grid;/,
+    'the grid rule itself survives for the markup the phone flow still renders');
+  assert.match(account, /import \{ accountPlan \} from '\.\.\/ui\/account-plan\.js';/);
+  assert.match(account, /u\.supportsAuth && !isNative \? html`<div class="account-plan-overview" id="accountPlanOverview">\$\{accountPlan\(u\)\}<\/div>` : ''/,
+    'the overview reuses the shared Current Plan card, on the website only (never native, never local mode)');
+  assert.match(account, /u\.on\('subscription', \(\) => \{\s*const summary = \$\('#accountPlanOverview', ctx\.root\);/,
+    'a plan bought or cancelled elsewhere repaints the summary without a reload');
+});
+
 test('guest mobile identity and sign-in buttons occupy separate rows', () => {
   const css = read('app/css/styles.css');
   const mobile = css.slice(css.lastIndexOf('@media (max-width: 899px)'));
