@@ -7,14 +7,14 @@ import { avatar, toast, confirmSignOut } from './components.js';
 import { CONFIG } from '../config.js';
 import { mayLeaveKids } from './parental.js';
 
-// The desktop rail follows the familiar streaming layout: search first, then the catalogue and viewer library.
+// Keep the shared primary destinations in the same order as the mobile floating bar; desktop-only links follow.
 // Free is the existing Shows filter, not a separate content catalogue.
 const NAV = [
-  ['/search', 'Search', 'search', 'search'],
   ['/', 'Home', 'home', 'home'],
   ['/shows', 'Shows', 'shows', 'tv'],
-  ['/shows?access=free', 'Free', 'free', 'gift'],
   ['/reels', 'Reels', 'reels', 'reels'],
+  ['/search', 'Search', 'search', 'search'],
+  ['/shows?access=free', 'Free', 'free', 'gift'],
   ['/upcoming', 'Coming Soon', 'upcoming', 'clock'],
   ['/list', 'My List', 'list', 'list'],   // the photo gallery is hidden (app/js/views/gallery.js redirects home)
 ];

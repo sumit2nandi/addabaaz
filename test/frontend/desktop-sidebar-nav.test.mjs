@@ -28,9 +28,13 @@ test('desktop rail includes labeled destinations, a Free filter, Studio submenu 
   const { document } = await shellFixture();
   const nav = document.querySelector('#topbar .primary-nav');
   assert.equal(nav.getAttribute('aria-label'), 'Primary');
-  assert.deepEqual([...nav.querySelectorAll(':scope > a')].map((a) => a.textContent.trim()), [
-    'Search', 'Home', 'Shows', 'Free', 'Reels', 'Coming Soon', 'My List',
+  const desktopLinks = [...nav.querySelectorAll(':scope > a')].map((a) => a.textContent.trim());
+  assert.deepEqual(desktopLinks, [
+    'Home', 'Shows', 'Reels', 'Search', 'Free', 'Coming Soon', 'My List',
   ]);
+  const desktopCore = [...desktopLinks.slice(0, 4), document.querySelector('#profileWrap .sidebar-account-link > span:last-child').textContent.trim()];
+  const floatingMenu = [...document.querySelectorAll('#tabbar a')].map((a) => a.querySelector('span').textContent.trim());
+  assert.deepEqual(desktopCore, floatingMenu, 'shared desktop destinations and Profile follow the mobile floating-menu order');
   assert.equal(nav.querySelector('[href="#/shows?access=free"]').dataset.nav, 'free');
   assert.ok(nav.querySelector('[data-nav="search"] svg'), 'Search has a visible icon');
   assert.ok(nav.querySelector('[data-nav="home"] svg'), 'Home has a visible icon');
