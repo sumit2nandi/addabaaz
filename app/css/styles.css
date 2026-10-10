@@ -1632,8 +1632,9 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
     padding: calc(26px + var(--sat)) 0 calc(20px + var(--sab)) calc(16px + var(--sal));
     align-items: stretch; flex-direction: column; gap: 0;
     background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
-    overflow: visible; isolation: isolate;
+    overflow: visible; isolation: isolate; transition: width .24s var(--ease), background .3s, box-shadow .3s;
   }
+  .topbar:hover, .topbar:focus-within { width: var(--desktop-nav-open-width); }
   /* Keep the navigation backdrop hidden at rest, then darken the expanded area enough for its labels to read. */
   .topbar::before {
     content: ''; position: absolute; z-index: 0; top: 0; bottom: 0; left: 0;
@@ -1641,8 +1642,7 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
     background: linear-gradient(90deg, rgba(5,5,5,.92) 0%, rgba(5,5,5,.84) 45%, rgba(5,5,5,.66) 78%, rgba(5,5,5,.42) 88%, rgba(5,5,5,.22) 94%, rgba(5,5,5,.08) 98%, rgba(5,5,5,0) 100%);
     transition: opacity .22s ease, visibility 0s linear .22s;
   }
-  .topbar:has(.primary-nav .nav-link:hover, #profileWrap .sidebar-account-row:hover)::before,
-  .topbar:has(.primary-nav .nav-link:focus-visible, #profileWrap:focus-within)::before {
+  .topbar:hover::before, .topbar:focus-within::before {
     opacity: 1; visibility: visible; transition: opacity .22s ease, visibility 0s;
   }
   .topbar > * { position: relative; z-index: 1; }
@@ -1683,13 +1683,11 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
     transition: max-width .28s var(--ease), opacity .18s ease, transform .28s var(--ease);
   }
   .primary-nav .nav-link:hover, .primary-nav .nav-link:focus-visible { color: rgba(255,255,255,.88); }
-  /* Hovering or focusing any rail destination opens every label together. */
-  .topbar:has(.primary-nav .nav-link:hover, #profileWrap .sidebar-account-row:hover) .primary-nav .nav-link,
-  .topbar:has(.primary-nav .nav-link:focus-visible, #profileWrap:focus-within) .primary-nav .nav-link {
+  /* Hovering anywhere inside the desktop rail opens every label together. */
+  .topbar:hover .primary-nav .nav-link, .topbar:focus-within .primary-nav .nav-link {
     width: calc(var(--desktop-nav-open-width) - 16px - var(--sal)); gap: 13px;
   }
-  .topbar:has(.primary-nav .nav-link:hover, #profileWrap .sidebar-account-row:hover) .primary-nav .nav-link > span,
-  .topbar:has(.primary-nav .nav-link:focus-visible, #profileWrap:focus-within) .primary-nav .nav-link > span {
+  .topbar:hover .primary-nav .nav-link > span, .topbar:focus-within .primary-nav .nav-link > span {
     flex: 1 1 auto; max-width: 180px; opacity: 1; transform: none; pointer-events: auto;
   }
   /* Keep every destination white; distinguish the active section with weight, not a red tint or pill. */
@@ -1703,8 +1701,7 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
     width: calc(var(--desktop-nav-width) - 16px - var(--sal)); gap: 0; padding: 0;
     border: 0; border-radius: 0; background: transparent; transition: width .24s var(--ease);
   }
-  .topbar:has(.primary-nav .nav-link:hover) .sidebar-account-row,
-  .topbar:has(.primary-nav .nav-link:focus-visible) .sidebar-account-row,
+  .topbar:hover .sidebar-account-row, .topbar:focus-within .sidebar-account-row,
   .sidebar-account-row:hover, #profileWrap:focus-within {
     width: calc(var(--desktop-nav-open-width) - 16px - var(--sal));
   }
@@ -1722,30 +1719,30 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
     transform: translateX(-8px); pointer-events: none;
     transition: max-width .28s var(--ease), opacity .18s ease, transform .28s var(--ease);
   }
-  .topbar:has(.primary-nav .nav-link:hover) #profileWrap .sidebar-account-link > span:last-child,
-  .topbar:has(.primary-nav .nav-link:focus-visible) #profileWrap .sidebar-account-link > span:last-child,
+  .topbar:hover #profileWrap .sidebar-account-link > span:last-child,
+  .topbar:focus-within #profileWrap .sidebar-account-link > span:last-child,
   .sidebar-account-row:hover .sidebar-account-link > span:last-child,
   #profileWrap:focus-within .sidebar-account-link > span:last-child {
     flex: 1 1 auto; max-width: 180px; opacity: 1; transform: none; pointer-events: auto;
   }
-  .topbar:has(.primary-nav .nav-link:hover) #profileWrap .sidebar-account-link,
-  .topbar:has(.primary-nav .nav-link:focus-visible) #profileWrap .sidebar-account-link,
+  .topbar:hover #profileWrap .sidebar-account-link,
+  .topbar:focus-within #profileWrap .sidebar-account-link,
   .sidebar-account-row:hover .sidebar-account-link, #profileWrap:focus-within .sidebar-account-link { gap: 8px; }
   #profileWrap .avatar-btn {
     display: grid; place-items: center; width: 0; height: 40px; flex: none; padding: 0; border: 0; border-radius: 9px;
     background: transparent; color: var(--muted); opacity: 0; overflow: hidden; pointer-events: none;
     transition: width .22s var(--ease), opacity .18s ease, background .18s;
   }
-  .topbar:has(.primary-nav .nav-link:hover) #profileWrap .avatar-btn,
-  .topbar:has(.primary-nav .nav-link:focus-visible) #profileWrap .avatar-btn,
+  .topbar:hover #profileWrap .avatar-btn,
+  .topbar:focus-within #profileWrap .avatar-btn,
   #profileWrap:hover .avatar-btn, #profileWrap:focus-within .avatar-btn {
     width: 28px; opacity: 1; pointer-events: auto;
   }
   #profileWrap .avatar-btn:hover { border: 0; background: rgba(255,255,255,.12); color: rgba(255,255,255,.88); }
   #profileWrap .mobile-avatar { display: none; }
   #profileWrap .desktop-profile-arrow { display: none; place-items: center; }
-  .topbar:has(.primary-nav .nav-link:hover) #profileWrap .desktop-profile-arrow,
-  .topbar:has(.primary-nav .nav-link:focus-visible) #profileWrap .desktop-profile-arrow,
+  .topbar:hover #profileWrap .desktop-profile-arrow,
+  .topbar:focus-within #profileWrap .desktop-profile-arrow,
   #profileWrap:hover .desktop-profile-arrow, #profileWrap:focus-within .desktop-profile-arrow { display: grid; }
   .top-actions #installBtn {
     width: 100%; max-height: 0; margin: 0; padding-top: 0; padding-bottom: 0; border-width: 0;

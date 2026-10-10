@@ -85,8 +85,10 @@ test('desktop-only styling makes a fixed left rail without changing phone naviga
   assert.match(rail, /\.topbar\s*\{[^}]*width:\s*var\(--desktop-nav-width\)[^}]*height:\s*100vh[^}]*background:\s*transparent[^}]*backdrop-filter:\s*none/s);
   assert.match(rail, /\.topbar::before \{[^}]*opacity: 0; visibility: hidden;[^}]*linear-gradient\(90deg, rgba\(5,5,5,\.92\)[^}]*rgba\(5,5,5,0\) 100%/,
     'the stronger navigation backdrop stays hidden at rest and fades to a transparent edge');
-  assert.match(rail, /\.topbar:has\(\.primary-nav \.nav-link:hover[^}]*::before[\s\S]*opacity: 1; visibility: visible;/,
-    'the fading backdrop appears only when a menu row is hovered or focused');
+  assert.ok(rail.includes('.topbar:hover, .topbar:focus-within { width: var(--desktop-nav-open-width); }'),
+    'the entire left rail becomes the hover target and expands to the label boundary');
+  assert.ok(rail.includes('.topbar:hover::before, .topbar:focus-within::before {'),
+    'the fading backdrop appears while the pointer or keyboard focus is inside the rail');
   assert.match(rail, /\.topbar \.brand-text \{[^}]*max-width: none;[^}]*opacity: 1; transform: none;/,
     'the Addabaaz wordmark stays visible while the menu labels are collapsed');
   assert.match(rail, /\.topbar \.brand::before \{[^}]*background: linear-gradient\(90deg, rgba\(5,5,5,\.7\)[^}]*mask-image: linear-gradient\(180deg/,
@@ -101,18 +103,16 @@ test('desktop-only styling makes a fixed left rail without changing phone naviga
   assert.match(rail, /\.hero-inner\s*\{\s*padding-left:\s*var\(--desktop-content-left\)/);
   assert.match(rail, /\.primary-nav \.nav-link > span \{[^}]*max-width: 0;[^}]*opacity: 0;/,
     'menu labels are hidden at rest');
-  assert.ok(rail.includes('.topbar:has(.primary-nav .nav-link:hover, #profileWrap .sidebar-account-row:hover) .primary-nav .nav-link,'),
-    'hovering any destination expands all desktop menu rows');
-  assert.ok(rail.includes('.topbar:has(.primary-nav .nav-link:hover, #profileWrap .sidebar-account-row:hover) .primary-nav .nav-link > span,'),
-    'hovering any destination reveals every menu label together');
-  assert.ok(rail.includes('.topbar:has(.primary-nav .nav-link:focus-visible, #profileWrap:focus-within) .primary-nav .nav-link > span'),
-    'keyboard focus also reveals every destination label');
+  assert.ok(rail.includes('.topbar:hover .primary-nav .nav-link, .topbar:focus-within .primary-nav .nav-link {'),
+    'hovering anywhere inside the rail expands every menu row');
+  assert.ok(rail.includes('.topbar:hover .primary-nav .nav-link > span, .topbar:focus-within .primary-nav .nav-link > span {'),
+    'hovering anywhere inside the rail reveals every menu label together');
   assert.ok(rail.includes('color: rgba(255,255,255,.68); font-size: 18px;'),
     'unselected desktop destinations use softened white');
   assert.ok(rail.includes('.primary-nav .nav-link:hover, .primary-nav .nav-link:focus-visible { color: rgba(255,255,255,.88); }'),
     'the hovered icon brightens slightly without becoming pure white');
-  assert.doesNotMatch(rail, /\.topbar:hover \.primary-nav \.nav-link > span/,
-    'hovering the faded area alone does not reveal menu details');
+  assert.ok(rail.includes('.topbar:hover #profileWrap .sidebar-account-link > span:last-child,'),
+    'hovering anywhere inside the rail also reveals the Profile label');
   assert.match(rail, /\.primary-nav \.nav-link\.active \{ color: #fff; background: transparent;/,
     'desktop menu icons and text stay white, including the active destination');
   assert.ok(rail.includes('.sidebar-account-link:hover { color: rgba(255,255,255,.88); }'),
