@@ -36,6 +36,12 @@ explicit `width`/`height`, absolute URLs everywhere, no `<script>`, no inline ev
 stylesheet. The `<style>` block in `<head>` carries only the 520px media query; clients that strip it still get
 a correct (if single-width) layout.
 
+**The stacking rule:** a `<tr>` stacks *all* of its cells or *none* of them. Half-stacking — one cell
+`display:block` beside a sibling that still carries an inline `width` — is the classic way an e-mail "fits" on
+desktop and squeezes into ten words per line on a phone, and it is what `preview-pages.test.js` now asserts
+against the template. Concretely: the credit ticket and the feature grid stack; the show cards keep a 68px
+poster beside the text at every width, because that is the arrangement that still reads at 320px.
+
 ## Turning it into a real template
 
 1. Add `welcomeEmail(o)` to `server/src/emails.js`, next to `receiptEmail()`. Escape anything user-provided with

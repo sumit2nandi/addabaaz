@@ -39,18 +39,27 @@
   .stage{padding:clamp(18px,4vw,34px) 16px 70px;display:flex;justify-content:center}
   .device{width:660px;max-width:100%;transition:width .22s cubic-bezier(.2,.7,.2,1)}
   .device.phone{width:402px}
+  .device.small{width:332px}
   .device.full{width:100%}
   .caption{display:flex;justify-content:space-between;gap:10px;font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;
     color:var(--muted);font-weight:700;padding:0 4px 10px}
   .caption em{font-style:normal;color:var(--gold)}
   .frame{border:1px solid var(--line);border-radius:18px;overflow:hidden;background:#08080a;box-shadow:0 40px 90px rgba(0,0,0,.7)}
-  .device.phone .frame{border:9px solid #17171c;border-radius:34px}
+  .device.phone .frame,.device.small .frame{border:9px solid #17171c;border-radius:34px}
   iframe{display:block;width:100%;height:1560px;border:0;background:#08080a}
   .notes{max-width:700px;margin:0 auto;padding:0 20px 70px;color:var(--muted);font-size:12.5px;line-height:1.75}
   .notes b{color:var(--text)}
   .notes a{color:var(--text)}
   .notes code{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12px}
-  @media (max-width:760px){ .bar{gap:8px} .id{margin-right:0} }
+  @media (max-width:760px){
+    .bar{gap:8px;padding-top:10px;padding-bottom:10px}
+    .id{margin-right:0;flex-basis:100%}
+    .grow{display:none}
+    .seg,.pill{flex:1 1 auto;justify-content:center}
+    .caption{display:none}                     /* the hints are for a laptop reviewing a laptop preview */
+    .stage{padding-top:14px}
+    .notes{padding:0 16px 50px;font-size:12px}
+  }
 </style>
 </head>
 <body>
@@ -60,6 +69,7 @@
   <div class="seg" role="group" aria-label="Preview width">
     <button type="button" data-w="desktop" aria-pressed="true">Desktop · 600px</button>
     <button type="button" data-w="phone" aria-pressed="false">Phone · 390px</button>
+    <button type="button" data-w="small" aria-pressed="false">Small · 320px</button>
     <button type="button" data-w="full" aria-pressed="false">Full</button>
   </div>
   <label class="pill"><input type="checkbox" id="noimg"> Images off</label>
@@ -89,9 +99,10 @@
   // not to the reviewer's browser window.
   for (const b of document.querySelectorAll('.seg button')) {
     b.addEventListener('click', () => {
-      dev.className = 'device' + (b.dataset.w === 'phone' ? ' phone' : b.dataset.w === 'full' ? ' full' : '');
+      dev.className = 'device' + (b.dataset.w === 'phone' ? ' phone' : b.dataset.w === 'small' ? ' small' : b.dataset.w === 'full' ? ' full' : '');
       document.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-      cap2.textContent = b.dataset.w === 'phone' ? '402px frame → the 520px query fires' : '600px is the sent width';
+      cap2.textContent = b.dataset.w === 'full' ? 'the media query is off below 520px'
+        : `${b.dataset.w === 'small' ? 320 : 390}px viewport → the 520px query fires`;
     });
   }
   // Same-origin document, so the toggle reaches into it instead of keeping a second copy of the e-mail.

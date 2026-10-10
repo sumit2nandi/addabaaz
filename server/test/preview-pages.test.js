@@ -88,6 +88,50 @@ test('the e-mail document carries no script, and the template keeps its merge fi
 });
 
 // The reviewer's copy is generated, so it can never drift away from the template it came from.
+// One invariant for the phone layout: a <tr> stacks ALL of its cells or NONE of them. The bug this guards:
+// `.thumb{width:100%}` with no display rule sitting beside a sibling that WAS display:block — the unstacked
+// cell swallows the row and squeezes its neighbour into ten words per line, which is exactly what a 390px
+// screenshot shows and a 600px one never would.
+test('no row half-stacks in the phone media query', () => {
+  const src = fs.readFileSync(path.join(PREVIEW, 'welcome-email.html'), 'utf8');
+  const mq = /@media only screen and \(max-width:\d+px\)\{([\s\S]*?)\n  \}/.exec(src)?.[1] || '';
+  assert.ok(mq, 'the template has a phone media query');
+  const css = mq.replace(/\/\*[\s\S]*?\*\//g, '');           // comments would otherwise be read as part of the next selector
+  const display = new Map();                                   // class → 'block' | 'none'
+  for (const [, sel, body] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    const d = /display:\s*(block|none)/.exec(body)?.[1];
+    if (!d) continue;
+    for (const one of sel.split(',')) { const c = /^\s*\.([\w-]+)\s*$/.exec(one)?.[1]; if (c) display.set(c, d); }
+  }
+  // Walk the tables, collecting each <tr>'s OWN cells: a <td> inside a nested table belongs to that table's
+  // row, not the outer one — which is why the depth is recorded when the row opens.
+  let depth = 0; const rows = []; const open = [];
+  for (const m of src.matchAll(/<(\/)?(table|tr|td)\b([^>]*)/gi)) {
+    const closing = m[1] === '/', tag = m[2].toLowerCase();
+    if (tag === 'table') { depth += closing ? -1 : 1; continue; }
+    if (tag === 'tr') { if (!closing) open.push({ cells: [], depth }); else { const r = open.pop(); if (r) rows.push(r.cells); } continue; }
+    if (tag === 'td' && !closing) { const r = open[open.length - 1]; if (r && r.depth === depth) r.cells.push(m[3]); }
+  }
+  assert.ok(rows.length > 10, `the scan should see every row of the document (saw ${rows.length})`);
+
+  const stateOf = (attrs) => {
+    const cls = (/"([^"]*)"/.exec(/class="[^"]*"/.exec(attrs)?.[0] || '') || [])[1]?.split(/\s+/) || [];
+    const d = cls.map((c) => display.get(c)).filter(Boolean);
+    return { stacks: d.includes('block'), hidden: d.every((x) => x === 'none') && d.length > 0, any: d.length > 0, fixedWidth: /width:\s*\d/.test(attrs) };
+  };
+  let checked = 0;
+  for (const cells of rows) {
+    const states = cells.map(stateOf);
+    if (!states.some((x) => x.stacks)) continue;
+    checked++;
+    for (const [i, x] of states.entries()) {
+      assert.ok(x.stacks || x.hidden || !x.fixedWidth,
+        `a row stacks ${states.filter((y) => y.stacks).length} of ${states.length} cells while cell ${i + 1} keeps an inline width — the stacked layout will squeeze its neighbours`);
+    }
+  }
+  assert.ok(checked >= 2, `expected the ticket and the feature grid to stack (found ${checked} stacking rows)`);
+});
+
 test('preview/email.html is exactly the template with the demo values filled in', () => {
   const built = render(fs.readFileSync(path.join(PREVIEW, 'welcome-email.html'), 'utf8'));
   assert.equal(fs.readFileSync(path.join(PREVIEW, 'email.html'), 'utf8'), built, 'run `npm run email:preview` after editing the template');
