@@ -1,239 +1,44 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark light"><meta name="supported-color-schemes" content="dark light">
-<title>Welcome to ADDABAAZ — Rs. 100 is in your account</title>
-<style type="text/css">/* The one <style> block in this mail, and the one source of the phone rules: server/src/welcome-email.js
-     exports it verbatim for the letters it builds, so what a reviewer checks here is what a subscriber gets.
-     Only the phone layout lives here — everything that must survive a client stripping <style> is inline. */
+<title>Confirm your ADDABAAZ account</title>
+<style type="text/css">/* The one <style> block in this mail, shared verbatim with preview/welcome-email.html. */
   @media only screen and (max-width:520px){
-    /* One rule for the whole file: at phone width no <td> changes its display type and none takes width:100%.
-       A block-level cell inside a table row breaks that row's box - the panel border wraps one cell while the
-       others overflow it - and a cell widened to 100% squeezes the stacked neighbour beside it to ten words a
-       line. Both looked fine at 600px, which is why the preview has a phone button. Sections are therefore
-       built so they never need restacking: a strip sits under its panel instead of beside it, and a row whose
-       two halves do different jobs is laid out side-by-side. Only the buttons reflow, and they are tables.
-       server/test/preview-pages.test.js and server/test/welcome-email.test.js fail on any td-coupled
-       display or width rule, and the block is shared with the mailer (see below). */
     .pad{padding-left:18px !important;padding-right:18px !important}
-    .h1{font-size:26px !important;line-height:1.15 !important;letter-spacing:-.5px !important}
-    .lede{font-size:15px !important}
-    .figure{font-size:32px !important}
-    /* The buttons are the one thing that does reflow, and they are <table>s: a table shrink-wraps its
-       content, so making it block-level and full-width stretches the pill without touching its cells. */
+    .h1{font-size:24px !important;line-height:1.2 !important}
     .cta{display:block !important;width:100% !important}
     .cta a{display:block !important}
-    .ctaGhost{margin-left:0 !important;margin-top:10px !important}
-    /* Show cards keep their 68px poster beside the text at every width — only the numbers shrink. */
-    .cardThumb{width:68px !important;padding:12px 0 12px 12px !important}
-    .cardThumb img{width:68px !important;height:auto !important}
-    .cardText{padding:13px 10px 14px 13px !important}
-    .cardTitle{font-size:17px !important;line-height:1.3 !important}
-    .kicker{letter-spacing:1.5px !important;white-space:nowrap !important}
-    .hide{display:none !important}
-  }
-</style>
+  }</style>
 </head>
-<body style="margin:0;padding:0;background:#08080a;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%">
-<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:transparent;opacity:0">Rs. 100 of credit is waiting, and one tap confirms this address.&zwnj;&nbsp;&#8199;&zwnj;&nbsp;&#8199;</div>
+<body style="margin:0;padding:0;background:#08080a;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:transparent;opacity:0">One tap confirms your email address.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#08080a" style="background:#08080a;width:100%">
-<tr><td align="center" style="padding:26px 12px 40px">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#0e0e12" style="width:100%;max-width:600px;background:#0e0e12;border:1px solid rgba(255,255,255,.07);border-radius:20px">
-
-  <tr><td bgcolor="#050505" class="pad" style="background:#050505;padding:20px 28px 18px;border-radius:20px 20px 0 0">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-      <td valign="middle" style="font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:21px;font-weight:bold;letter-spacing:3.2px;line-height:1;color:#ffffff">ADDA<span style="color:#d00000">BAAZ</span></td>
-      <td valign="middle" align="right" class="hide" style="font-size:9px;font-weight:bold;letter-spacing:2.4px;text-transform:uppercase;line-height:1;color:#6f6f7c">Stories beyond the screen</td>
-    </tr></table>
+<tr><td align="center" style="padding:24px 12px 36px">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#0e0e12" style="width:100%;max-width:600px;background:#0e0e12;border-radius:16px">
+  <tr><td class="pad" style="padding:22px 28px 20px;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:20px;font-weight:bold;letter-spacing:3px;line-height:1;color:#ffffff">ADDA<span style="color:#d00000">BAAZ</span></td></tr>
+  <tr><td class="pad" style="padding:8px 28px 0">
+    <h1 class="h1" style="margin:0;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:28px;font-weight:bold;line-height:1.15;color:#ffffff">Confirm your email</h1>
   </td></tr>
-  <tr>
-    <td bgcolor="#8f0000" height="2" style="background:#8f0000;width:34%;font-size:0;line-height:0">&nbsp;</td>
-    <td bgcolor="#b80000" height="2" style="background:#b80000;width:33%;font-size:0;line-height:0">&nbsp;</td>
-    <td bgcolor="#d00000" height="2" style="background:#d00000;width:33%;font-size:0;line-height:0">&nbsp;</td>
-  </tr>
-
-  <tr><td class="pad" style="padding:26px 28px 0">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-      <td valign="middle" width="8" bgcolor="#d00000" style="width:8px;background:#d00000;border-radius:999px;font-size:0;line-height:0;height:8px">&nbsp;</td>
-      <td valign="middle" style="padding-left:9px;margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1color:#8d8d99">স্বাগতম · your account is ready</td>
-    </tr></table>
-    <h1 class="h1" style="margin:14px 0 0;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:34px;font-weight:bold;line-height:1.08;letter-spacing:-.8px;color:#ffffff">
-      Bengali originals,<br>from our adda to&nbsp;your&nbsp;screen.
-    </h1>
-    <p class="lede" style="margin:16px 0 0;font-size:15.5px;line-height:1.7;color:#a3a3b0">
-      Hi Riya, this is the whole of ADDABAAZ in one place — series, stand-up, podcasts and reels made in our
-      Kolkata studio, on your phone, your laptop or the television. We have put Rs. 100 of credit in your account to start you off.
-    </p>
+  <tr><td class="pad" style="padding:18px 28px 0">
+    <p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#d6d6de">Hi Riya,</p>
+    <p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#d6d6de">Confirm your email address to finish creating your ADDABAAZ account.</p>
+    <p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#d6d6de">Your Rs. 100 new-account credit is already in your account. It comes off the price of any plan at checkout.</p>
+    <p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#d6d6de">This link works once and expires in three days. Until you confirm, buying a plan is blocked.</p>
   </td></tr>
-
-  <!-- The credit ticket: the balance strip sits under the amount at every width, so nothing restacks on a phone. -->
-  <tr><td class="pad" style="padding:28px 28px 0">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#14141a" style="background:#14141a;border:1px solid rgba(245,197,24,.26);border-radius:16px">
-      <tr><td style="padding:20px 20px 18px">
-        <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1color:#f5c518">New-account credit</p>
-        <p class="figure" style="margin:12px 0 0;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:38px;font-weight:bold;line-height:1;letter-spacing:-1px;color:#ffffff">Rs. 100</p>
-        <p style="margin:12px 0 0;font-size:13.5px;line-height:1.65;color:#9a9aa6">
-          It comes straight off the price of any plan at checkout, and it stays in your account until you spend
-          it. Nothing to activate, no card to add first.
-        </p>
-      </td></tr>
-      <tr><td bgcolor="#1a1a22" style="background:#1a1a22;border-top:1px dashed rgba(245,197,24,.3);border-radius:0 0 16px 16px;padding:13px 20px 14px">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-          <td valign="middle"><p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1color:#7d7d8a">Balance</p><p style="margin:6px 0 0;font-size:11px;line-height:1.4;color:#6f6f7c">Account › Credit</p></td>
-          <td valign="middle" align="right"><p style="margin:0;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:21px;font-weight:bold;line-height:1;letter-spacing:-.4px;color:#f5c518">Rs. 100.00</p></td>
-        </tr></table>
-      </td></tr>
-    </table>
-  </td></tr>
-  <tr><td class="pad" style="padding:26px 28px 0">
-    
+  <tr><td class="pad" style="padding:8px 28px 0">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="left" class="cta" style="border-radius:999px">
       <tr><td align="center" bgcolor="#d00000" style="padding:0;background:#d00000;border-radius:999px">
-        <a href="https://addabaaz.in/verify?token=6aQ1mFhT2sY9pLdK0vNcE7rXbZ3iWuJf1tgHnMqA5oE" style="display:inline-block;padding:14px 30px;font-size:14.5px;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-weight:bold;letter-spacing:.3px;color:#ffffff;text-decoration:none">Confirm my email</a>
-      </td></tr>
-    </table>
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="left" class="cta ctaGhost" style="margin-left:10px;border-radius:999px">
-      <tr><td align="center" bgcolor="#111116" style="padding:0;background:#111116;border:1px solid rgba(255,255,255,.14);border-radius:999px">
-        <a href="https://addabaaz.in/#/" style="display:inline-block;padding:13px 24px;font-size:14px;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-weight:bold;letter-spacing:.3px;color:#d6d6de;text-decoration:none">Start watching</a>
+        <a href="https://addabaaz.in/verify?token=6aQ1mFhT2sY9pLdK0vNcE7rXbZ3iWuJf1tgHnMqA5oE" style="display:inline-block;padding:14px 30px;font-size:14.5px;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-weight:bold;letter-spacing:.3px;color:#ffffff;text-decoration:none">Confirm my email</a>
       </td></tr>
     </table>
     <div style="clear:both;line-height:0;font-size:0">&nbsp;</div>
-    <p style="margin:14px 0 0;font-size:12.5px;line-height:1.6;color:#9a9aa6">
-      The link above works once and expires in three days. Until it is used, buying a plan stays blocked — watching is open right now.
-    </p>
   </td></tr>
-
-  <tr><td class="pad" style="padding:38px 28px 0">
-    <p style="margin:0;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:19px;font-weight:bold;letter-spacing:-.3px;line-height:1.2;color:#ffffff">Start with these three</p>
+  <tr><td class="pad" style="padding:26px 28px 28px;border-top:1px solid rgba(255,255,255,.07)">
+    <p style="margin:0;font-size:12.5px;line-height:1.6;color:#9a9aa6">Questions? Reply to this email or write to <a href="mailto:office@addabaaz.in" style="color:#ffffff;text-decoration:underline">office@addabaaz.in</a>.</p>
+    <p style="margin:14px 0 0;font-size:11.5px;line-height:1.6;color:#6f6f7c">ADDABAAZ · 162/B, 283 Lake Gardens, Kolkata, West Bengal 700045, India</p>
+    <p style="margin:10px 0 0;font-size:11px;line-height:1.6;color:#5c5c68">You are receiving this because you just created an ADDABAAZ account. This is an account message, not marketing.</p>
   </td></tr>
-  <tr><td class="pad" style="padding:16px 28px 0">
-
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#111116;border:1px solid rgba(255,255,255,.07);border-radius:16px">
-      <tr>
-        <td class="cardThumb" width="104" valign="top" style="width:104px;padding:14px 0 14px 14px">
-          <a href="https://addabaaz.in/#/show/shahid" style="text-decoration:none"><img src="https://addabaaz.in/media/shows/shahid-sm.webp" width="80" height="107" alt="শহীদ" style="display:block;width:80px;height:auto;border:0;border-radius:10px;background:#1a1a20"></a>
-        </td>
-        <td class="cardText" valign="top" style="padding:16px 12px 16px 16px">
-          <p class="kicker" style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1color:#f5c518">01 · Series</p>
-          <p class="cardTitle" style="margin:9px 0 0;font-family:&#39;Tiro Bangla&#39;,&#39;Noto Serif Bengali&#39;,&#39;Noto Sans Bengali&#39;,Arial,sans-serif;font-size:19px;font-weight:bold;line-height:1.25;color:#ffffff"><a href="https://addabaaz.in/#/show/shahid" style="color:#ffffff;text-decoration:none">শহীদ</a></p>
-          <p style="margin:7px 0 0;font-size:13px;line-height:1.6;color:#9a9aa6">Khudiram Bose, Jatindra Nath Das, Pritilata, Bina Das — one story in every episode.</p>
-        </td>
-        <td class="hide" valign="middle" width="54" align="right" style="width:54px;padding-right:16px">
-          <a href="https://addabaaz.in/#/show/shahid" style="font-size:12.5px;font-weight:bold;color:#d00000;text-decoration:none">Watch&nbsp;›</a>
-        </td>
-      </tr>
-    </table>
-    <div style="height:10px;line-height:10px;font-size:0">&nbsp;</div>
-
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#111116;border:1px solid rgba(255,255,255,.07);border-radius:16px">
-      <tr>
-        <td class="cardThumb" width="104" valign="top" style="width:104px;padding:14px 0 14px 14px">
-          <a href="https://addabaaz.in/#/show/laugh-bite" style="text-decoration:none"><img src="https://addabaaz.in/media/shows/laugh-bite-sm.webp" width="80" height="107" alt="Laugh Bite" style="display:block;width:80px;height:auto;border:0;border-radius:10px;background:#1a1a20"></a>
-        </td>
-        <td class="cardText" valign="top" style="padding:16px 12px 16px 16px">
-          <p class="kicker" style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1color:#f5c518">02 · Stand-up</p>
-          <p class="cardTitle" style="margin:9px 0 0;font-family:&#39;Plus Jakarta Sans&#39;,Arial,Helvetica,sans-serif;font-size:19px;font-weight:bold;line-height:1.25;color:#ffffff"><a href="https://addabaaz.in/#/show/laugh-bite" style="color:#ffffff;text-decoration:none">Laugh Bite</a></p>
-          <p style="margin:7px 0 0;font-size:13px;line-height:1.6;color:#9a9aa6">Subhadip Ghosh, Vaskar Manna, Pramit Mitra and Anmitra Sarkar — local jokes, local trains, local chaos.</p>
-        </td>
-        <td class="hide" valign="middle" width="54" align="right" style="width:54px;padding-right:16px">
-          <a href="https://addabaaz.in/#/show/laugh-bite" style="font-size:12.5px;font-weight:bold;color:#d00000;text-decoration:none">Watch&nbsp;›</a>
-        </td>
-      </tr>
-    </table>
-    <div style="height:10px;line-height:10px;font-size:0">&nbsp;</div>
-
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#111116;border:1px solid rgba(255,255,255,.07);border-radius:16px">
-      <tr>
-        <td class="cardThumb" width="104" valign="top" style="width:104px;padding:14px 0 14px 14px">
-          <a href="https://addabaaz.in/#/show/faltu-kotha" style="text-decoration:none"><img src="https://addabaaz.in/media/shows/faltu-kotha-sm.webp" width="80" height="107" alt="ফালতু কথা" style="display:block;width:80px;height:auto;border:0;border-radius:10px;background:#1a1a20"></a>
-        </td>
-        <td class="cardText" valign="top" style="padding:16px 12px 16px 16px">
-          <p class="kicker" style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1color:#f5c518">03 · Podcast</p>
-          <p class="cardTitle" style="margin:9px 0 0;font-family:&#39;Tiro Bangla&#39;,&#39;Noto Serif Bengali&#39;,&#39;Noto Sans Bengali&#39;,Arial,sans-serif;font-size:19px;font-weight:bold;line-height:1.25;color:#ffffff"><a href="https://addabaaz.in/#/show/faltu-kotha" style="color:#ffffff;text-decoration:none">ফালতু কথা</a></p>
-          <p style="margin:7px 0 0;font-size:13px;line-height:1.6;color:#9a9aa6">গল্প নাই, যুক্তি নাই — শুধু ফালতু কথা. Unfiltered and occasionally unhinged.</p>
-        </td>
-        <td class="hide" valign="middle" width="54" align="right" style="width:54px;padding-right:16px">
-          <a href="https://addabaaz.in/#/show/faltu-kotha" style="font-size:12.5px;font-weight:bold;color:#d00000;text-decoration:none">Watch&nbsp;›</a>
-        </td>
-      </tr>
-    </table>
-  </td></tr>
-
-  <tr><td class="pad" style="padding:38px 28px 0">
-    <p style="margin:0;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:19px;font-weight:bold;letter-spacing:-.3px;line-height:1.2;color:#ffffff">Four things worth knowing</p>
-  </td></tr>
-  <tr><td class="pad" style="padding:6px 28px 0">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-      <tr><td style="padding:15px 0 16px;">
-        <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1color:#d00000">Continue watching</p>
-        <p style="margin:8px 0 0;font-size:13.5px;line-height:1.62;color:#9a9aa6">Stop mid-episode on the phone, finish it on the laptop — we keep the timestamp and autoplay hands you the next one.</p>
-      </td></tr>
-      <tr><td style="padding:15px 0 16px;border-top:1px solid rgba(255,255,255,.06);">
-        <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1color:#d00000">My List &amp; reminders</p>
-        <p style="margin:8px 0 0;font-size:13.5px;line-height:1.62;color:#9a9aa6">Save anything for later. On a Coming Soon title, tap Remind me and we tell you the day it lands.</p>
-      </td></tr>
-      <tr><td style="padding:15px 0 16px;border-top:1px solid rgba(255,255,255,.06);">
-        <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1color:#d00000">Who’s watching?</p>
-        <p style="margin:8px 0 0;font-size:13.5px;line-height:1.62;color:#9a9aa6">A profile each, with its own list — and a PIN-locked kids profile whenever you want one.</p>
-      </td></tr>
-      <tr><td style="padding:15px 0 16px;border-top:1px solid rgba(255,255,255,.06);">
-        <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1color:#d00000">Installs itself</p>
-        <p style="margin:8px 0 0;font-size:13.5px;line-height:1.62;color:#9a9aa6">Open it in the browser and choose Add to Home screen — it becomes an app on Android, iOS and desktop.</p>
-      </td></tr>
-    </table>
-  </td></tr>
-
-  <tr><td class="pad" style="padding:34px 28px 0">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#161208" style="background:#161208;border:1px dashed rgba(245,197,24,.34);border-radius:16px">
-      <tr><td style="padding:20px 22px 22px">
-        <p style="margin:0;font-size:9.5px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1color:#f5c518">Pass it on</p>
-        <p style="margin:11px 0 0;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:20px;font-weight:bold;line-height:1.3;letter-spacing:-.3px;color:#ffffff">Rs. 100 for them.<br>Rs. 100 for you.</p>
-        <p style="margin:11px 0 0;font-size:13.5px;line-height:1.65;color:#9a9aa6">
-          Share your code — both balances go up by Rs. 100 the moment your friend confirms their account, so the
-          offer stays honest for everyone.
-        </p>
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-          <tr>
-            <td bgcolor="#0b0b0d" style="background:#0b0b0d;border:1px solid rgba(245,197,24,.3);border-radius:10px;padding:10px 16px;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;letter-spacing:3.4px;color:#f5c518">AB12CD34</td>
-            <td style="padding-left:14px"><a href="https://addabaaz.in/#/account" style="font-size:13.5px;font-weight:bold;color:#ffffff;text-decoration:underline">Open Refer &amp; earn</a></td>
-          </tr>
-        </table>
-      </td></tr>
-    </table>
-  </td></tr>
-  <tr><td class="pad" style="padding:34px 28px 34px">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-      <td width="2" bgcolor="#d00000" style="width:2px;background:#d00000;font-size:0;line-height:0">&nbsp;</td>
-      <td valign="top" style="padding-left:16px">
-        <p style="margin:0;font-family:'Tiro Bangla','Noto Serif Bengali','Noto Sans Bengali',Arial,sans-serif;font-size:16px;line-height:1.8;color:#e6e6ec">গল্প আমাদের আড্ডা থেকেই শুরু হয়। ভালো লাগলে শোনো, না লাগলে বলো — আমরা শুনছি।</p>
-        <p style="margin:10px 0 0;font-size:13px;line-height:1.6;color:#7d7d8a">Stories start at the adda. Tell us when one lands — and when it doesn’t. — <span style="color:#c8c8d2;font-weight:bold">The ADDABAAZ team, Kolkata</span></p>
-      </td>
-    </tr></table>
-  </td></tr>
-
-  <tr><td bgcolor="#050505" class="pad" style="background:#050505;border-top:1px solid rgba(255,255,255,.07);padding:24px 28px 26px;border-radius:0 0 20px 20px">
-    <p style="margin:0;font-size:12.5px;line-height:1.7;color:#8d8d99">
-      Trouble signing in, with a plan or a payment? Reply to this mail or write to
-      <a href="mailto:office@addabaaz.in" style="color:#ffffff;text-decoration:underline">office@addabaaz.in</a>
-      — a real person answers. You can also raise a ticket under <a href="https://addabaaz.in/#/support" style="color:#ffffff;text-decoration:underline">Support</a>.
-    </p>
-    <p style="margin:18px 0 0;line-height:1">
-      <a href="https://www.instagram.com/addabaazdeep" style="display:inline-block;margin:0 6px 8px 0;padding:7px 13px;border:1px solid rgba(255,255,255,.09);border-radius:999px;background-color:#111116;font-size:9.5px;font-weight:bold;letter-spacing:1.6px;text-transform:uppercase;color:#c2c2cc;text-decoration:none">Instagram</a><a href="https://www.facebook.com/ADDABAAZDEEP" style="display:inline-block;margin:0 6px 8px 0;padding:7px 13px;border:1px solid rgba(255,255,255,.09);border-radius:999px;background-color:#111116;font-size:9.5px;font-weight:bold;letter-spacing:1.6px;text-transform:uppercase;color:#c2c2cc;text-decoration:none">Facebook</a><a href="https://www.youtube.com/@ADDABAAZ01" style="display:inline-block;margin:0 6px 8px 0;padding:7px 13px;border:1px solid rgba(255,255,255,.09);border-radius:999px;background-color:#111116;font-size:9.5px;font-weight:bold;letter-spacing:1.6px;text-transform:uppercase;color:#c2c2cc;text-decoration:none">YouTube</a><a href="https://addabaaz.in/#/reels" style="display:inline-block;margin:0 6px 8px 0;padding:7px 13px;border:1px solid rgba(255,255,255,.09);border-radius:999px;background-color:#111116;font-size:9.5px;font-weight:bold;letter-spacing:1.6px;text-transform:uppercase;color:#c2c2cc;text-decoration:none">Reels</a>
-    </p>
-    <p style="margin:20px 0 0;font-size:11.5px;line-height:1.7;color:#6f6f7c">
-      ADDABAAZ · 162/B, 283 Lake Gardens, Kolkata, West Bengal 700045, India ·
-      <a href="https://addabaaz.in/#/privacy" style="color:#9a9aa6;text-decoration:underline">Privacy</a> ·
-      <a href="https://addabaaz.in/#/terms" style="color:#9a9aa6;text-decoration:underline">Terms</a> ·
-      <a href="https://addabaaz.in/#/refunds" style="color:#9a9aa6;text-decoration:underline">Refunds</a> ·
-      <a href="https://addabaaz.in/#/account" style="color:#9a9aa6;text-decoration:underline">Email preferences</a>
-    </p>
-    <p style="margin:9px 0 0;font-size:11px;line-height:1.6;color:#5c5c68">
-      You’re getting this because you just created an ADDABAAZ account — that is why it carries a confirmation link.
-      Receipts and security notices will keep arriving at this address; those are not marketing and cannot be turned off.
-    </p>
-  </td></tr>
-
 </table>
-<p style="margin:20px 0 0;font-size:10.5px;letter-spacing:1.6px;text-transform:uppercase;color:#4a4a55;text-align:center">ADDABAAZ · stories beyond the screen · Kolkata</p>
 </td></tr>
 </table>
 </body></html>

@@ -234,13 +234,13 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .hero-dock { position: absolute; z-index: 4; left: var(--pad); right: var(--pad); bottom: var(--hero-dock-bottom); margin: 0; pointer-events: none; }
 .hero-dock > a, .hero-dock > button { pointer-events: auto; }
 .hero-bg { position: absolute; inset: 0; z-index: -2; }
-.hero-bg img { width: 100%; height: 100%; object-fit: cover; object-position: center 25%; animation: kenburns 24s ease-out both; filter: var(--art-pop-hero); }
-.hero-slide:not(.active) .hero-bg img { animation: none; }
+.hero-bg img { width: 100%; height: 100%; object-fit: cover; object-position: center 25%; filter: var(--art-pop-hero); }
+/* No slow zoom on the banner art: it enlarged the still up to 1.12x and made it look soft. The artwork is shown at its natural scale. */
 .hero-bg picture { display: block; width: 100%; height: 100%; }
-@keyframes kenburns { from { transform: scale(1.02); } to { transform: scale(1.12); } }
 /* The banner shading: dark enough at the left that the white title always sits on a near-solid base, but
    lighter than it used to be (.94/.70/.15) so more of the artwork's own colour reaches the eye. */
-.hero-shade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(5,5,5,.88) 0%, rgba(5,5,5,.58) 38%, rgba(5,5,5,.1) 75%), linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.44) 22%, rgba(5,5,5,0) 50%), linear-gradient(180deg, rgba(5,5,5,.72), rgba(5,5,5,0) 22%); }
+/* Scrims only at the sides and the bottom, behind the title and the buttons. Nothing covers the top of the artwork. */
+.hero-shade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(5,5,5,.88) 0%, rgba(5,5,5,.58) 38%, rgba(5,5,5,.1) 75%), linear-gradient(270deg, rgba(5,5,5,.6) 0%, rgba(5,5,5,0) 18%), linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.44) 22%, rgba(5,5,5,0) 50%); }
 .hero-inner { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; padding: calc(var(--topbar-h) + var(--sat) + 40px) var(--pad) var(--hero-pb, 72px); }
 .hero-copy { max-width: 620px; display: grid; gap: 14px; }
 /* Uniform across every slide: same stack for all titles — Latin glyphs take the display sans, Bengali glyphs

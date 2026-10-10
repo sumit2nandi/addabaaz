@@ -20,20 +20,25 @@ const SRC = path.join(root, 'preview', 'welcome-email.html');
 const OUT = path.join(root, 'preview', 'email.html');
 const OUT_SHIPPED = path.join(root, 'preview', 'email-shipped.html');
 
-// Demo values a reviewer sees: the amounts are the .env defaults (PROMO_SIGNUP_CREDIT_INR / _REFERRAL_), the
-// code is the shape the console prints, the media host is left empty so the preview reads the site's own
-// /media instead of reaching out to production.
+// Demo values a reviewer sees: the amount is the .env default (PROMO_SIGNUP_CREDIT_INR), and the link is the
+// shape of the real one-time /verify link.
 export const DEMO = {
   first_name: 'Riya',
   site_url: 'https://addabaaz.in',
-  // A look-alike of the real thing: `${siteUrl}/verify?token=…`, the same one-time link /auth/verify accepts.
   verify_url: 'https://addabaaz.in/verify?token=6aQ1mFhT2sY9pLdK0vNcE7rXbZ3iWuJf1tgHnMqA5oE',
-  media_url: '',
   credit_rupees: '100',
-  balance_rupees: '100',
-  invite_code: 'AB12CD34',
   support_email: 'office@addabaaz.in',
 };
+
+/* The template is generated from the letter itself: welcomeEmail() is called with merge-field placeholders, so
+ * the design a reviewer sees is the markup the mailer sends, with only the values left open. */
+export function templateFromLetter() {
+  const letter = welcomeEmail({
+    name: '{{first_name}}', siteUrl: '{{site_url}}', creditPaise: 10000,
+    verifyUrl: '{{verify_url}}', supportEmail: '{{support_email}}',
+  });
+  return letter.html.replace('Rs. 100 new-account', 'Rs. {{credit_rupees}} new-account');
+}
 
 export function render(source, values = DEMO) {
   const out = source.replace(/\{\{(\w+)\}\}/g, (all, key) => (key in values ? String(values[key]) : all));
@@ -42,18 +47,19 @@ export function render(source, values = DEMO) {
   return out;
 }
 
-// What the mailer is called with in production comes from the promo module and the account row, so this is the
-// closest thing to a real send that can live in a repository: the same numbers a Rs. 100 / Rs. 100 sign-up gets.
+// What the mailer is called with in production comes from the promo module and the account row.
 export const SHIPPED = {
   name: DEMO.first_name + ' Sen', siteUrl: DEMO.site_url, verifyUrl: DEMO.verify_url,
-  creditPaise: 10000, balancePaise: 10000, inviteCode: DEMO.invite_code, referralPaise: 10000, supportEmail: DEMO.support_email,
+  creditPaise: 10000, supportEmail: DEMO.support_email,
 };
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const source = fs.readFileSync(SRC, 'utf8');
+  const source = templateFromLetter();
   const built = render(source);
   const shipped = welcomeEmail(SHIPPED).html;
   if (process.argv.includes('--check')) {
+    const onDiskTemplate = fs.existsSync(SRC) ? fs.readFileSync(SRC, 'utf8') : '';
+    if (onDiskTemplate !== source) { console.error('preview/welcome-email.html is out of date — run `npm run email:preview`.'); process.exit(1); }
     const onDisk = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf8') : '';
     if (onDisk !== built) { console.error('preview/email.html is out of date — run `npm run email:preview`.'); process.exit(1); }
     const onDiskShipped = fs.existsSync(OUT_SHIPPED) ? fs.readFileSync(OUT_SHIPPED, 'utf8') : '';
@@ -61,6 +67,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.log('✔ preview/email.html matches preview/welcome-email.html');
     console.log('✔ preview/email-shipped.html matches server/src/welcome-email.js');
   } else {
+    fs.writeFileSync(SRC, source);
     fs.writeFileSync(OUT, built);
     fs.writeFileSync(OUT_SHIPPED, shipped);
     console.log(`✔ preview/email.html written (${(built.length / 1024).toFixed(1)} kB) · merge fields filled with the demo values`);

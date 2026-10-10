@@ -312,6 +312,7 @@ test('phones fade the banner from the bottom only, leaving the artwork on top cl
   assert.doesNotMatch(mobile, /^\s*\.detail-hero \.hero-shade \{[^}]*background:/m, 'and neither does the detail banner');
 
   assert.match(desktop, /\.hero-shade \{[^}]*linear-gradient\(90deg/, 'desktops keep the side scrim behind the hero text');
-  assert.match(desktop, /\.hero-shade \{[^}]*linear-gradient\(180deg/, 'desktops keep the top scrim behind the topbar');
+  assert.doesNotMatch(desktop, /\.hero-shade \{[^}]*linear-gradient\(180deg/, 'no top scrim: the top of the artwork stays clear');
+  assert.match(desktop, /\.hero-shade \{[^}]*linear-gradient\(270deg/, 'a right-side scrim behind the poster edge');
   assert.doesNotMatch(desktop, /--hero-fade-mobile/, 'the phone fade never touches the desktop layout');
 });

@@ -82,12 +82,11 @@ test('the e-mail document carries no script, and the template keeps its merge fi
     // the design drifting back to a generic SaaS template.
     assert.match(rendered.text, /background:#0e0e12/, 'the message card stays dark');
     assert.match(rendered.text, /#d00000/, 'the studio red is used for the wordmark, the rules and the CTA');
-    assert.match(rendered.text, /#f5c518/, 'gold marks the credit, as it does on the plans page');
     assert.doesNotMatch(rendered.text, /\{\{\w+\}\}/, 'nothing unreplaced is left for the reader to see');
 
     const template = await s.get('/preview/welcome-email.html');
     assert.equal(template.status, 200);
-    for (const field of ['{{first_name}}', '{{site_url}}', '{{verify_url}}', '{{media_url}}', '{{credit_rupees}}', '{{balance_rupees}}', '{{invite_code}}', '{{support_email}}'])
+    for (const field of ['{{first_name}}', '{{verify_url}}', '{{credit_rupees}}', '{{support_email}}'])
       assert.ok(template.text.includes(field), `the sendable template still carries ${field}`);
     assert.doesNotMatch(template.text, /href="\/#/, 'links are absolute: a mail is never opened from the site');
     // The primary button of the letter is that link; if the harness ever loses it, the design a reviewer
@@ -112,7 +111,7 @@ test('nothing is restacked at phone width — only tables reflow', () => {
       if (cls) rules.set(cls, (rules.get(cls) || '') + body);
     }
   }
-  assert.ok(rules.size >= 8, `expected the phone rules to cover the layout (saw ${rules.size} classes)`);
+  assert.ok(rules.size >= 3, `expected the phone rules to cover the layout (saw ${rules.size} classes)`);
   for (const [cls, body] of rules) {
     const on = (pattern) => [...src.matchAll(new RegExp(pattern, 'g'))].length;
     assert.ok(on(`class="[^"]*\\b${cls}\\b`) > 0, `.${cls} is styled at phone width but used nowhere — dead rule`);
@@ -140,7 +139,7 @@ test('the mailer output shown in the harness is the mailer output, part for part
   assert.doesNotMatch(shipped, /<script|<iframe|\{\{\w+\}\}/, 'a standalone document: no script, no leftover field');
   const parts = (doc) => new Set([...doc.matchAll(/class="([^"]+)"/g)].flatMap((m) => m[1].split(/\s+/)).filter(Boolean));
   assert.deepEqual([...parts(shipped)].sort(), [...parts(design)].sort(), 'the letter and the reviewed design use the same parts');
-  for (const label of ['New-account credit', 'Confirm', 'Start with these three', 'Four things worth knowing', 'Pass it on', 'Lake Gardens']) {
+  for (const label of ['Confirm my email', 'Lake Gardens', 'account message, not marketing']) {
     assert.ok(shipped.includes(label) && design.includes(label), `“${label}” is in one document but not the other`);
   }
 });

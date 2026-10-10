@@ -86,3 +86,16 @@ test('Top 10 ranking: 1…10 on an episode, ignored everywhere else', () => {
   assert.deepEqual(reel.errors, []);
   assert.equal(reel.doc.topRank, null, 'a reel can never hold a Top 10 slot');
 });
+
+test('a show backdrop is an optional 16:9 image: a media/ path is accepted, absent stays absent, a bad path is rejected', () => {
+  const base = { id: 'backdrop-show', title: 'Backdrop show', description: 'A description', poster: 'media/shows/poster.webp' };
+  const good = validate('show', { ...base, backdrop: 'media/shows/backdrop-1920.webp' });
+  assert.deepEqual(good.errors, [], 'a media/ backdrop path validates');
+  assert.equal(good.doc.backdrop, 'media/shows/backdrop-1920.webp');
+  const absent = validate('show', base);
+  assert.deepEqual(absent.errors, [], 'a show without a backdrop still validates');
+  assert.equal('backdrop' in absent.doc, false, 'an absent backdrop is not written into the output');
+  const bad = validate('show', { ...base, backdrop: 'media/../etc/passwd' });
+  assert.match(bad.errors.join(' '), /backdrop must be an uploaded image/, 'a path traversal backdrop is rejected');
+  assert.match(validate('show', { ...base, backdrop: 'javascript:alert(1)' }).errors.join(' '), /backdrop must be an uploaded image/, 'a non-image URL is rejected');
+});

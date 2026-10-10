@@ -120,7 +120,7 @@ test('show details keep all four hero controls in one row on phones', () => {
   const phones = css.slice(css.indexOf('@media (max-width: 759px)'));
   assert.ok(phones.indexOf('--hero-fade-mobile') > 0, 'the fade only applies on phones');
   assert.doesNotMatch(phones, /^\s*\.detail-hero \.hero-shade \{[^}]*background:/m, 'the detail banner keeps no separate phone scrim');
-  assert.match(css.slice(0, css.indexOf('@media (max-width: 759px)')), /\.hero-shade \{[^}]*linear-gradient\(180deg/,
+  assert.doesNotMatch(css.slice(0, css.indexOf('@media (max-width: 759px)')), /\.hero-shade \{[^}]*linear-gradient\(180deg/,
     'desktops keep the banner scrim they always had');
 });
 

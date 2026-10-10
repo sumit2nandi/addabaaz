@@ -29,8 +29,8 @@ test('public and admin themes use a darker logo red with stronger button gradien
     'the red account-action styling stays scoped to Account & Settings');
   assert.match(read('app/js/views/account.js'), /<button class="logout-link" id="signout">Sign Out<\/button>/,
     'Sign out is a brand-red footer line, outside the red button styling');
-  assert.match(read('app/js/views/account-extra.js'), /class="btn btn-ghost" type="button" data-copy=/,
-    'Copy actions use the account button styling');
+  assert.match(read('app/js/views/account-extra.js'), /class="btn btn-primary" id="refShare" data-referral-share type="button"/,
+    'the referral Share action uses the branded primary button');
   assert.doesNotMatch(appCss, /#e50914|#ff2a36|#ff5a5f/, 'the old, louder reds are removed from the public theme');
   assert.doesNotMatch(adminCss, /#e50914|#ff2a36|#ff5a5f/, 'the old, louder reds are removed from the admin theme');
 });
