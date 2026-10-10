@@ -67,9 +67,10 @@ function askGst(bill, base) {
 /** Full-screen cancel screen (after the payment window is dismissed unpaid): Retry or back to plans. */
 function failPopup() {
   return new Promise((resolve) => {
-    const { el, close } = openDialog(html`<div class="fail-x">${icon('x', { size: 30 })}</div><h2>Payment Failed</h2><p class="muted">It looks like you cancelled the payment.</p><div class="fail-actions"><button class="btn btn-light block" id="fRetry">Retry Payment</button><button class="btn btn-outline block" id="fPlans">View Plans</button></div>`, { title: 'Payment Failed', cls: 'dialog-sm dlg-fail', onClose: () => resolve('plans') });
-    $('#fRetry', el).onclick = () => { el.dataset.choice = 'retry'; close(); };
-    el.addEventListener('close', () => resolve(el.dataset.choice || 'plans'), { once: true });
+    const { el, close } = openDialog(html`<div class="fail-x">${icon('x', { size: 30 })}</div><h2>Payment Failed</h2><p class="muted">It looks like you cancelled the payment.</p><div class="fail-actions"><button class="btn btn-light block" id="fRetry">Retry Payment</button><button class="btn btn-outline block" id="fPlans">View Plans</button></div>`, { title: 'Payment Failed', cls: 'dialog-sm dlg-fail', onClose: () => resolve(el.dataset.choice || 'plans') });
+    const choose = (choice) => { el.dataset.choice = choice; close(); };
+    $('#fRetry', el).onclick = () => choose('retry');
+    $('#fPlans', el).onclick = () => choose('plans');
   });
 }
 
@@ -96,6 +97,12 @@ export default async function plans(ctx) {
   const next = /^\/(?!\/)/.test(ctx.query.next || '') ? ctx.query.next : '';
   if (!u.supportsAuth) {
     ctx.root.innerHTML = html`<div class="page">${sectionHeader({ title: 'Plans Need the ADDABAAZ Server', back: backButton })}<div class="empty">${icon('crown', { size: 44 })}<p>This copy of ADDABAAZ is running without the API, so subscriptions aren’t available. Free episodes and reels work as usual.</p><a class="btn btn-primary" href="#/">Keep Watching</a></div></div>`.s; return;
+  }
+  // A payment can finish in the provider window or via the webhook while this route is still open.
+  // Re-read the session before drawing so returning to Plans shows the active plan and expiry, rather
+  // than the subscription snapshot from before checkout. A refresh failure must not hide the pricing page.
+  if (u.account && typeof u.refreshAccount === 'function') {
+    await u.refreshAccount().catch((err) => console.warn('[plans] account sync failed', err));
   }
   const { plans: list, payments, billing: bill } = await u.plans();
   const memo = {};
@@ -239,7 +246,16 @@ export default async function plans(ctx) {
             else toast(friendly(err) + (err.status >= 500 ? ' If money was deducted, your plan will activate automatically within a few minutes.' : ''));
             return;
           }
-          if (outcome === 'cancelled') { if (await failPopup() !== 'retry') return; continue; }
+          if (outcome === 'cancelled') {
+            const choice = await failPopup();
+            if (choice !== 'retry') {
+              // The dialog is already sitting over Plans. Re-enter the route so its account/subscription
+              // read runs again; this also makes the View Plans action useful instead of just dismissing.
+              go('/plans' + (next ? '?next=' + encodeURIComponent(next) : ''), { replace: true });
+              return;
+            }
+            continue;
+          }
           break;
         }
         if (payments.provider === 'razorpay' && wantsCredit) creditPaise = 0;   // spent — don't offer it twice in one visit
