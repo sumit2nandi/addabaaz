@@ -174,7 +174,7 @@ export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS
     // one out), and `PREVIEW_PAGES=0` takes the whole area down without a code change.
     if (!/^(0|false|no)$/i.test(process.env.PREVIEW_PAGES || '1')) {
       const previewHeaders = (_q, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' }); next(); };
-      // Read from disk on every request: the reviewer edits an HTML file and reloads — no build, no stale cache.
+      // Read from disk on every request: the reviewer edits an HTML file and reloads — no build, no cache.
       // The harness page carries one inline script, so it needs the CSP hash treatment maintenance.html uses.
       const previewPage = (name) => (_q, res) => {
         const file = path.join(ROOT, 'preview', name);
@@ -183,7 +183,6 @@ export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS
         res.set('Content-Security-Policy', cspForInlineScripts(body)).type('html').send(body);
       };
       app.get(['/preview', '/preview/'], previewHeaders, previewPage('index.html'));
-      app.get('/preview/email', previewHeaders, previewPage('email.html'));
       app.use('/preview', previewHeaders, express.static(path.join(ROOT, 'preview'), { index: false, dotfiles: 'ignore', etag: true }));
     }
 
