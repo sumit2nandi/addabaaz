@@ -97,7 +97,7 @@ test('the video editor can set the position too, so saving a video never loses i
   const view = read('admin/js/views/content.js');
   assert.match(view, /\{ k: 'topRank', label: 'Top 10 position \(optional\)', type: 'number', min: 1, max: 10/);
   const schema = read('server/src/catalog-schema.js');
-  assert.match(schema, /'hidden', 'topRank'\], 'A video'/, 'the API accepts the field');
+  assert.match(schema, /'hidden', 'adminsOnly', 'topRank'\], 'A video'/, 'the API accepts the field');
   assert.match(schema, /r\.int\('topRank', \{ min: 1, max: 10, nullable: true \}\)/, '1…10 or nothing');
   assert.match(schema, /if \(r\.out\.topRank && r\.out\.kind !== 'episode'\) r\.out\.topRank = null;/, 'only episodes can be ranked');
 });
