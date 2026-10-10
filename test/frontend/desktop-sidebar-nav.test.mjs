@@ -83,7 +83,7 @@ test('desktop-only styling makes a fixed left rail without changing phone naviga
   assert.match(rail, /--desktop-nav-width:\s*80px; --desktop-nav-open-width:\s*156px; --desktop-content-left:\s*var\(--desktop-nav-width\)/,
     'main content begins just after the collapsed icon rail');
   assert.match(rail, /\.topbar\s*\{[^}]*width:\s*var\(--desktop-nav-width\)[^}]*height:\s*100vh[^}]*background:\s*transparent[^}]*backdrop-filter:\s*none/s);
-  assert.match(rail, /\.topbar::before \{[^}]*opacity: 0; visibility: hidden;[^}]*linear-gradient\(90deg, rgba\(5,5,5,\.84\)[^}]*rgba\(5,5,5,0\) 100%/,
+  assert.match(rail, /\.topbar::before \{[^}]*opacity: 0; visibility: hidden;[^}]*linear-gradient\(90deg, rgba\(5,5,5,\.92\)[^}]*rgba\(5,5,5,0\) 100%/,
     'the stronger navigation backdrop stays hidden at rest and fades to a transparent edge');
   assert.match(rail, /\.topbar:has\(\.primary-nav \.nav-link:hover[^}]*::before[\s\S]*opacity: 1; visibility: visible;/,
     'the fading backdrop appears only when a menu row is hovered or focused');
@@ -101,16 +101,26 @@ test('desktop-only styling makes a fixed left rail without changing phone naviga
   assert.match(rail, /\.hero-inner\s*\{\s*padding-left:\s*var\(--desktop-content-left\)/);
   assert.match(rail, /\.primary-nav \.nav-link > span \{[^}]*max-width: 0;[^}]*opacity: 0;/,
     'menu labels are hidden at rest');
-  assert.match(rail, /\.primary-nav \.nav-link:hover, \.primary-nav \.nav-link:focus-visible \{[^}]*width: calc\(var\(--desktop-nav-open-width\)[^}]*color: #fff;/,
-    'the hovered row expands to the yellow edge with white text and icons');
+  assert.match(rail, /\.primary-nav \.nav-link:hover, \.primary-nav \.nav-link:focus-visible \{[^}]*width: calc\(var\(--desktop-nav-open-width\)/,
+    'the hovered menu row expands to the yellow edge');
+  assert.ok(rail.includes('color: rgba(255,255,255,.68); font-size: 18px;'),
+    'unselected desktop destinations use softened white');
+  assert.ok(rail.includes('color: rgba(255,255,255,.88); background: transparent;'),
+    'hovered or focused menu labels brighten slightly without becoming pure white');
   assert.match(rail, /\.primary-nav \.nav-link:hover > span, \.primary-nav \.nav-link:focus-visible > span \{[^}]*max-width: 180px; opacity: 1;/,
     'only the hovered or keyboard-focused row reveals its label');
   assert.doesNotMatch(rail, /\.topbar:hover \.primary-nav \.nav-link > span/,
     'hovering the faded area alone does not reveal menu details');
   assert.match(rail, /\.primary-nav \.nav-link\.active \{ color: #fff; background: transparent;/,
     'desktop menu icons and text stay white, including the active destination');
-  assert.match(rail, /\.sidebar-account-link:hover, \.sidebar-account-link\.active \{ background: transparent; color: #fff; \}/,
-    'the desktop Profile entry also stays white on hover and when active');
+  assert.ok(rail.includes('.sidebar-account-link:hover { color: rgba(255,255,255,.88); }'),
+    'the desktop Profile label stays soft while hovered');
+  assert.ok(rail.includes('.sidebar-account-link.active { color: #fff; font-weight: 800; }'),
+    'the desktop Profile label turns bright white when selected');
+  assert.ok(rail.includes('padding: 0 8px; border-radius: 9px;'),
+    'the Profile row leaves enough room for the full label');
+  assert.ok(rail.includes('width: 28px; opacity: 1; pointer-events: auto;'),
+    'the Profile disclosure control is compact enough to avoid cropping its label');
   assert.doesNotMatch(rail, /\.nav-drop|\.studio-menu/,
     'desktop-only dropdown menus are absent from the rail');
   assert.match(css, /\.tabbar \{ display: none; \}/, 'desktop hides the floating phone tabs using the existing responsive rule');
