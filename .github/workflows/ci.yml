@@ -1,0 +1,53 @@
+name: CI
+on:
+  push:
+  pull_request:
+# Explicit least privilege. This workflow executes code from the pull request (npm ci, the test suite,
+# `docker build`/`docker run`), so the automatic GITHUB_TOKEN must never be able to write to the
+# repository — without this line the job inherits the repository default, which is read/write on many
+# projects and would let a PR push commits, create releases or rewrite tags from CI.
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # A test that wedges must not eat the runner. Without this the job ran to GitHub's 6 h default and
+    # every check on every branch stayed "in progress" (that is what happened when a self-rescheduling
+    # retry timer leaked into the test process), so a red result arrives in minutes, naming the test.
+    timeout-minutes: 30
+    services:
+      # Pulled via Google's public Docker Hub mirror: the runner's unauthenticated Docker Hub pulls
+      # were rate-limited ("toomanyrequests") and the job failed before any test ran. Same image, same tag.
+      mysql:
+        image: mirror.gcr.io/library/mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      TEST_DATABASE_URL: mysql://root:root@127.0.0.1:3306/x
+      # Fail a test that takes over 2 minutes instead of hanging (0 locally, where `npm test` has no
+      # budget; see the `test` script). The TAP block then reaches the annotation below.
+      ADDABAAZ_TEST_TIMEOUT_MS: 120000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm run validate:catalog
+      - run: for f in $(find admin app -name '*.js'); do node --check "$f" || exit 1; done   # the browser code has no build step
+      - run: set -o pipefail; npm test 2>&1 | tee /tmp/t.log
+      # TEMPORARY (CI logs are unreachable from the sandbox): on failure, publish the first failing TAP
+      # block as ONE annotation (GitHub truncates the list of annotations, so a single line carries all
+      # of it) and the full log as an artifact (`gh run download <run> -n test-log`).
+      - if: failure()
+        run: awk '/^not ok/{f=1} f{print; if (/^  \.\.\.$/) exit}' /tmp/t.log | head -150 | sed ':a;N;$!ba;s/\n/%0A/g' | sed 's/^/::error::/' || true
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: test-log, path: /tmp/t.log, retention-days: 5, if-no-files-found: ignore }
+      - run: npm run build:www
+      - run: docker build --tag addabaaz:ci .
+      - run: docker run --rm addabaaz:ci node --input-type=module -e "import('./server/src/web-assets.js').then(m => m.prepareWebAssets()).then(r => console.log('[web] Docker minification OK:', r.files, 'files')).catch(e => { console.error(e); process.exitCode = 1; })"

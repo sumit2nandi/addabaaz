@@ -1,0 +1,52 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { matchRoute } from '../../app/js/routes.js';
+const read = (p) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
+
+test('signed-in header shows only email beneath the name and offers accessible editing', () => {
+  const account = read('app/js/views/account.js');
+  assert.doesNotMatch(account, /u.account.providers|Google sign-in/);
+  assert.match(account, /u.account && !u.account.emailIsPlaceholder/);
+  assert.match(account, /class="muted profile-email">\$\{u.account.email\}/);
+  assert.match(account, /aria-label="Edit account details"/);
+  assert.match(account, /!u.account \? html`<p class="muted">\$\{identity\}/);
+  assert.equal(matchRoute('/account/details').view, 'account-details');
+});
+
+test('details editor uses authenticated name updates and verified email flow; phone changes do not misuse sign-in OTP', () => {
+  const source = read('app/js/views/account-details.js');
+  assert.match(source, /if \(!account\).*go\('\/signin\?next=\/account\/details'/);
+  assert.match(source, /updateAccountName\(name\)/);
+  assert.match(source, /requestAccountEmail/);
+  assert.match(source, /resendVerification/);
+  assert.match(source, /href="#\/support" aria-label="Request a phone-number change"/);
+  assert.doesNotMatch(source, /verifyOtp|requestOtp/);
+  assert.match(source, /href="#\/profiles\?manage=1"/);
+});
+
+
+test('account editor has paired name fields, inline contact editing, and dirty-state save', () => {
+  const source = read('app/js/views/account-details.js');
+  assert.match(source, /name="firstName" autocomplete="given-name"/);
+  assert.match(source, /name="lastName" autocomplete="family-name"/);
+  assert.match(source, /id="saveAccount" disabled>Save Changes/);
+  assert.match(source, /name === savedName/);
+  assert.match(source, /id="editEmail" aria-label="Edit email address"/);
+  assert.doesNotMatch(source, /class="card-panel"/);
+  assert.match(read('app/css/styles.css'), /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+});
+
+test('profile email sits tightly below the name without the edit button inflating the line', () => {
+  const css = read('app/css/styles.css');
+  assert.match(css, /\.profile-page \.profile-details-edit \{ position: relative; height: 20px; line-height: 1; \}/);
+  assert.match(css, /\.profile-details-edit::after \{[^}]*inset: -6px 0;/);
+  assert.match(css, /\.profile-page \.profile-head \.profile-email \{ margin-top: 0; line-height: 1.35; \}/);
+});
+
+test('profile email is plain text and Safari email auto-linking is disabled', () => {
+  assert.match(read('index.html'), /<meta name="format-detection" content="email=no">/);
+  const source = read('app/js/views/account.js');
+  assert.match(source, /<p class="muted profile-email">\$\{u.account.email\}<\/p>/);
+  assert.doesNotMatch(source, /mailto:/);
+});

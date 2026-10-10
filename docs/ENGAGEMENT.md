@@ -1,0 +1,89 @@
+# Viewing & engagement features
+
+Everything here degrades gracefully: the static site (no API) simply doesn't show what needs an account.
+
+## Accounts
+| Feature | How it works |
+|---|---|
+| **Forgot / reset password** | `/forgot` → email with a single-use link `…/reset?token=…` (valid 1 h, stored hashed). Resetting signs out every other session and logs the person in. The answer never reveals whether an address has an account; one email per address per minute. Social-only accounts can use the same flow to **add** a password. |
+| **Email confirmation** | The `…/verify?token=…` link (valid 3 days) travels inside the **welcome letter** — `server/src/welcome-email.js`, sent by `features.sendWelcome()` — so a new address gets one message, not a confirmation note plus a credit note. Resending from Account still sends the short `Confirm your email` mail. Social sign-ins arrive verified. **Only when SMTP is configured** is checkout blocked for unverified addresses (403 `email_unverified`) — otherwise nobody could ever confirm. Sign-up never waits on the mail server: the confirmation email gets a `SIGNUP_EMAIL_WAIT_MS` (default 5 s) budget inside the request and otherwise finishes in the background — the response reports `verificationEmailSent=false` + `verificationEmailPending=true`, and the page tells the viewer the mail is on its way (resend from Account). A failed send is reported the same way (`verificationEmailSent=false`), and the account stays usable either way. |
+| **Delete account** | Account → Delete account removes the login and linked service data. Payment and tax documents are retained detached from the account; see `docs/COMPLIANCE.md` for the exact retention and external request process. |
+| **Sign out everywhere** | Account → Security. Bumps a per-user session version; every older token stops working immediately. Changing/resetting the password does the same. |
+| **Sign in with Apple** | See `docs/AUTH.md`. |
+
+## Watching
+| Feature | Notes |
+|---|---|
+| **Subtitles** | Content studio → Videos & reels → *Subtitles*: upload `.srt`/`.vtt` (SRT is converted to WebVTT, validated, stored under `/uploads`) or paste an https `.vtt` URL. The player attaches them as `<track>`s (fetched by the app and used as same-origin blobs, so no CORS setup is needed on the video host). The viewer's last choice is remembered. Free YouTube videos use YouTube's own captions. |
+| **Cast** | A *Cast* button appears in browsers that support the Remote Playback API (Chrome/Edge/Android) or AirPlay (Safari). Works for R2/MP4/HLS titles; YouTube embeds use YouTube's own cast. |
+| **Kids profiles + parental PIN** | Mark a profile "Kids": only shows/videos rated **U** or **7+** are visible (unrated titles are hidden — set ratings in the admin). A 4–6 digit PIN (Account → Kids & parental controls) is required to leave a Kids profile and, on the server, to create/edit/delete profiles (`X-Parental-Pin`; 5 wrong tries lock for 15 min). **The kids filter itself runs in the app** — it is a family-friendly filter, not a security boundary: the raw `/catalog` JSON still lists everything. |
+| **Screens at once** | Each plan allows `STREAM_LIMIT` (default 2) premium streams at the same time. Devices identify themselves with `X-Device-Id`, send a heartbeat every 30 s while playing, and a seat expires 90 s after the last beat. Over the limit → 429 `stream_limit`; the player offers *Try again* and *Manage devices*. Free videos are never limited. |
+| **Resume anywhere** | Progress is stored per profile on the server (already the case); covered by a two-device test. |
+| **Ratings** | 👍/👎 on shows and videos, one per profile, public counts. Feeds *Because you watched …* on the home page (computed on the device from history, list and thumbs: same-genre shows you haven't started, minus ones you disliked). |
+
+## Notifications & Broadcasts
+Everything is sent from **Admin → Broadcast** (`#/notifications`): pick a channel (app push or e-mail), an
+audience, write the message, send yourself a test, then send. Sending runs in the background and the page
+shows live progress (sent / total / failed / skipped per broadcast, kept in the `campaigns` table).
+
+**App push** reaches Android app installations and browsers.
+1. Browsers & installed web apps: `npx web-push generate-vapid-keys`, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT=mailto:you@addabaaz.in`. Viewers switch it on in Account → Notifications (per browser; choose new episodes / launches / announcements). Signing out removes that device's subscription; dead subscriptions (404/410) are cleaned up automatically.
+2. **Android app:** create a Firebase project, set the server-only service account as `FCM_SERVICE_ACCOUNT`, and add the Firebase Android client config as a GitHub Actions secret (see `docs/MOBILE.md` → *Push notifications (no-laptop setup)*). After Android notification permission is granted, the app registers its FCM token whether signed in (`POST /devices`) or browsing as a guest (`POST /devices/guest`). Guest tokens have no account link and receive general broadcasts; episode and launch targeting remains account-only because guest lists and reminders stay on the phone. Signing in links the device to that account; the in-app notification switch unregisters it on opt-out. Tokens FCM reports as unregistered are deleted automatically. Android still controls whether notifications may be displayed. Both channels keep the same three per-device choices — *New episodes of shows I follow*, *When a Coming Soon title launches* and *Announcements & offers* — on the browser subscription (`push_subscriptions`, migration 006) and on the app installation (`push_devices`, migration 019); the Account → Notifications screen shows the same switches on the web and in the app. All three are on by default (migration 020) — switching notifications on is the opt-in, and the screen then lets anyone narrow it down; a device that turns one off is skipped for that audience and keeps the others, so an app user who follows one show and hates marketing can keep episode alerts and switch announcements off. Guest app installations have no account to target episode/launch notifications with, so they keep the single master switch.
+3. **Audiences:** everyone who turned notifications on (`all`, no preference filter), everyone who kept announcements on (`news`; on by default, so switching them off is the choice), followers of a show (`episodes`), reminder-holders of a Coming Soon launch (`launches`). The last three honour each device's own switches.
+4. **Automatic:** signed-in viewers receive a new-episode alert for a show they follow (My List) and a launch alert for a Coming Soon title they set a reminder for. Guest profiles, lists and reminders are local-only, so they are never used for personalized targeting. A `notify_sent` ledger makes every automatic notification at-most-once even across restarts or several server instances. Scheduled videos notify when they go live.
+
+**E-mail** reaches accounts by e-mail, using the same filters as the Users page (all / active subscribers /
+free / expiring within 7 days / expired). Requires `SMTP_URL` + `MAIL_FROM`. Every campaign e-mail carries a
+one-click unsubscribe link (`/api/v1/notifications/unsubscribe`, signed — no sign-in needed); people who
+unsubscribe are skipped from then on (`users.email_opt_out_at`), while receipts, password resets and billing
+mail are never affected. Sending is paged (25 at a time) and resumes at boot if a deploy interrupts it.
+
+**Test first:** *Send a test to me* sends exactly one message to the signed-in administrator — their own
+devices for push, their own address for e-mail. Nothing is recorded as a broadcast. Addresses are compared
+in normalized form, so two account rows that share one address (see *One address = one account* below)
+receive the announcement once.
+
+### One address = one account
+
+`users.email_norm` carries a UNIQUE index and every entry point (signup, sign-in, Google/Facebook/Apple
+sign-in, password reset, `npm run admin`) normalizes the address the same way: NFKC first (full-width `＠`
+and letters fold), then every kind of space and every invisible character is removed, then lower-case. So a
+copy-pasted look-alike cannot create a second account.
+
+Rows that already collided are listed in **Admin → Users** with the offending characters marked
+(`rupa⟨U+00A0⟩@example.com`, `rupa⟨space⟩@example.com`) and can be **merged** — the extra account's profiles,
+watch history, devices, subscriptions, payments, invoices, refund requests, support tickets, delivery history
+and push subscriptions move to the account you keep, then the extra account is deleted (audited as `user.merge`). A database
+created before the unique e-mail index existed may hold two rows with an *identical* address; the console
+says so in the card and the same merge applies. Take a backup (`npm run backup`) before merging a lot of
+accounts.
+
+iOS note: Web Push works only for the site **installed to the Home Screen** (iOS 16.4+); app push needs the
+iOS app built with the push plugin and an APNs key (or Firebase Cloud Messaging) — see `docs/MOBILE.md`.
+
+## Analytics
+- **First-party**: the player reports plays and watch time (`POST /events/play`, no cookies, no personal data, capped per request). Admin → Analytics shows plays/watch time per day, top shows and videos, revenue. Counted only when a video really starts playing here (ad-blockers may hide some). YouTube's own view counts are separate.
+- **Google Analytics 4 (optional)**: set `GA4_MEASUREMENT_ID=G-XXXXXXX`. It is loaded **only after the visitor accepts** the consent banner (shown only when an id is configured); *Privacy choices* on the Privacy page changes the decision at any time. Page views are sent on route changes.
+
+## Scheduled publishing
+Set *Publish at* on a video: until then it is hidden from viewers, the API, the sitemap and Google (admins still see it, with a "goes live" badge). The scheduler (every minute, `server/src/jobs.js`) announces it when it goes live.
+
+## Self-service refunds
+Billing → *Request a refund* (Razorpay-paid purchases within `REFUND_WINDOW_DAYS`, default 7). The support inbox gets an email; Admin → Refund requests → **Approve** runs the normal refund (Razorpay, credit note, access revoked unless you untick it) or **Decline** with a note the customer receives. If Razorpay refuses, the request returns to *pending*. Legal wording for your refund policy is a template (see `docs/COMPLIANCE.md`).
+
+## Error monitoring
+The shared web/PWA/Capacitor client installs diagnostics before app boot. It reports uncaught JavaScript errors and promise rejections, failed script/style loads, API health/catalog/session failures, API 5xx and connectivity failures, and fatal video playback failures. Reports are limited to 5 per page load and de-duplicated; transient sends are held briefly in memory and retried when connectivity returns or the app is foregrounded. A report can be sent before sign-in; the server links an account only when it verifies the first-party session token (client-supplied account IDs are ignored).
+
+Client context is bounded to the app version, browser/runtime and device capabilities, viewport, connection hints, visibility/native app state, a route path without query/hash, and safe error name/code/status/message/stack/cause details. Playback reports add the engine, media error/status and playback state while stripping signed media URLs. Credentials, common contact identifiers and sensitive nested fields are redacted; request bodies, device IDs, search/hash strings and authorization headers are not copied into report bodies. The client does not send this diagnostic context in local-only mode. Server diagnostics include the HTTP method/status and database/provider error codes where available; database failures retain the parameterized SQL template, bound-parameter count and structured driver exception (message/code/errno/SQLSTATE), but never interpolated SQL or bound values. Admin → Errors can search/filter by source, groups repeats from the last 7 days, and pages individual reports for 30 days. Each report shows its verified account link, code/status/request metadata, sanitized browser/runtime/network/native-app context, SQL template/exception where applicable, full diagnostic context and stack; **Copy report** includes the complete safe record. For alerts, `npm i @sentry/node` and set `SENTRY_DSN` — server errors are then forwarded too.
+
+## Operations scripts
+| Command | What |
+|---|---|
+| `npm run backup` | One gzipped NDJSON file with **every table** plus legacy MySQL-backed admin-uploaded files → `BACKUP_DIR` (default `./backups`), consistent snapshot, keeps the newest `BACKUP_KEEP` (14). `BACKUP_PASSPHRASE` encrypts it (AES-256-GCM) — **set it**: the file contains emails and password hashes. `BACKUP_R2_BUCKET` (+ `BACKUP_R2_*` or the `R2_*` credentials) also copies it to a **separate** bucket (never the bucket used for catalog/Broadcast photos or video/reel media). Not included: any photo/video objects stored in R2 (enable versioning or a separate media backup) and your env vars/JWT secret. Schedule it: `0 3 * * * cd /app && npm run -s backup >> /var/log/ab-backup.log 2>&1`. |
+| `npm run restore -- <file> --check` | Decrypts and validates a backup (row counts, end marker) without touching anything. **Do this regularly** — a backup you never restored is a hope, not a backup. |
+| `npm run restore -- <file> --force` | Migrates the schema, then **replaces** all data and uploads. A truncated, tampered or wrong-passphrase file is rejected before anything is deleted. Tested round trip: `server/test/backup.test.js`. |
+| `npm run loadtest -- --url http://staging:3000 --users 50 --seconds 20` | Dependency-free load generator (anonymous browsing + signed-in progress/ratings). Start the target with `DISABLE_RATE_LIMIT=true` (ignored in production). **Numbers are indicative only** — they depend on the machine, network and database; use them to compare before/after changes. Never aim it at production. |
+| `npm run encode:hls -- episode.mov --name shahid-ep6 --upload` | ffmpeg → adaptive HLS ladder (1080/720/480/360p, never upscaling, 6 s segments) → uploads to `premium/<name>/` in R2 and prints the key. **Needs ffmpeg/ffprobe on your machine; the command builder is unit-tested but the script has not been run against real ffmpeg/R2 here** — try a short clip first. |
+
+## Environment
+`STREAM_LIMIT`, `REFUND_WINDOW_DAYS`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `FCM_SERVICE_ACCOUNT`, `FCM_SERVICE_ACCOUNT_FILE`, `APPLE_CLIENT_ID`, `APPLE_SERVICE_ID`, `GA4_MEASUREMENT_ID`, `SENTRY_DSN`, `BACKUP_*`, `DISABLE_RATE_LIMIT` — see `.env.example`.

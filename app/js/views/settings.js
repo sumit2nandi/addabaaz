@@ -1,0 +1,26 @@
+import { pageBack } from '../ui/page-back.js';
+// One profile settings group (#/account/<group>): the group table lives in account-extra.js, so this
+// view only looks the group up, draws its section with a way back, and wires it.
+import { accountNav } from '../ui/account-nav.js';
+import { go } from '../router.js';
+import { html } from '../util.js';
+import { settingGroups, settingSection, wireSetting } from './account-extra.js';
+
+export default async function settings(ctx) {
+  if (ctx.params.group === 'danger') { go('/delete-account', { replace: true }); return; }
+  const meta = settingGroups().find((g) => g.id === ctx.params.group);
+  const body = meta ? settingSection(meta.id) : '';
+  if (!meta || !body) { go('/account', { replace: true }); return; }   // unknown group, or not for this viewer
+  ctx.setTitle(meta.title);
+  const backButton = pageBack(ctx, '/account');
+  ctx.root.innerHTML = html`<div class="page page-narrow account-page settings-page">
+    <div class="account-layout">
+      ${accountNav(settingGroups(), meta.id)}
+      <div class="account-content">
+        <header class="settings-page-heading">${backButton}<h1>${meta.title}</h1></header>
+        ${body}
+      </div>
+    </div>
+  </div>`.s;
+  wireSetting(meta.id, ctx.root, ctx);
+}

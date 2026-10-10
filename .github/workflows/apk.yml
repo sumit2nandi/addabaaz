@@ -1,0 +1,174 @@
+# Builds the Android APK in the cloud — no laptop required.
+# Every push to a working branch (arena/**) or main, pull requests targeting them, or a manual
+# Actions run (even from a phone) produces an installable debug APK Artifact:
+#   Actions → APK run → Artifacts → addabaaz-debug-apk (zip) → app-debug.apk
+# Every successful build additionally publishes the same APK as a rolling release asset, so the phone
+# can download it straight from https://github.com/<you>/<repo>/releases/tag/apk (no zip to unpack).
+name: APK
+
+on:
+  push:
+    # Every arena working branch (the glob cannot go stale the way a list of branch names did), plus the
+    # named branches that are being built on purpose right now. This session's branch is listed explicitly
+    # so an APK of the current work exists even if the glob is narrowed later.
+    branches:
+      - 'arena/01a10339-addabaaz'      # current working branch: support page, SMS sign-in, two consoles, cache clear
+      - 'arena/**'
+      - main
+  pull_request:
+    branches: [main, arena/ott]
+  workflow_dispatch:                      # "Run workflow" button in the Actions tab
+    inputs:
+      api_base:
+        description: 'API the app should talk to (leave empty for production)'
+        type: string
+        default: ''
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true                # a newer push replaces an in-flight build
+
+env:
+  API_BASE: https://addabaazott.onrender.com   # baked into www/app/env.js — the app talks to production
+
+jobs:
+  build:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm                      # root lockfile; the script below needs no deps anyway
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'              # required by AGP 8.9.1 (see mobile/scripts/patch-android.mjs)
+
+      # Bakes API_BASE into www/app/env.js, stamps sw.js and minifies the bundle (esbuild).
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Build the web bundle (www/)
+        env:
+          NATIVE_PUSH_ENABLED: ${{ secrets.FIREBASE_ANDROID_JSON != '' && 'true' || 'false' }}
+          # A manual run can point the app at another API (staging); everything else uses the default above.
+          API_BASE: ${{ github.event.inputs.api_base || 'https://addabaazott.onrender.com' }}
+        run: npm run build:www
+
+      - name: Install Capacitor tooling
+        run: npm install --prefix mobile
+
+      # Order matters: the Android project must exist before icons/splash can be written
+      # into it, and www/ must exist before `cap sync`.
+      - name: Generate Android project + icons
+        run: |
+          npm --prefix mobile run add:android   # cap add android, then raise AGP -> 8.9.1 / SDK -> 36
+          npm --prefix mobile run assets        # icons + splash from resources/
+
+      # The downloaded Firebase file is kept in Actions secrets, not committed to the repository.
+      # When present, validate it against in.addabaaz.app and place it in the generated app module.
+      - name: Configure Firebase Android app (optional)
+        env:
+          FIREBASE_ANDROID_JSON: ${{ secrets.FIREBASE_ANDROID_JSON }}
+        run: node mobile/scripts/configure-firebase.mjs android
+
+      # Direct `npm --prefix mobile run sync` on purpose: the repo-root `mobile:sync` script
+      # rebuilds www/ WITHOUT API_BASE and would silently ship a local-mode APK.
+      - name: Sync www/ into the Android project
+        run: npm --prefix mobile run sync       # cap sync, then re-run the AGP/SDK patch
+
+      - name: Ensure Android SDK 36 is installed
+        run: |
+          SDKMANAGER="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER=sdkmanager
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      # A stable debug keystore: every build signs with the same key, so a fresh APK installs as an
+      # UPDATE over an older install instead of being refused ("App not installed", signature mismatch).
+      # (Same file as the classic ~/.android/debug.keystore — password "android", alias androiddebugkey.)
+      - name: Install the pinned debug keystore (stable SHA-1)
+        run: mkdir -p "$HOME/.android" && cp mobile/debug.keystore "$HOME/.android/debug.keystore"
+
+      - name: Assemble debug APK
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      # The definitive fingerprint of THIS build — printed for diagnostics (support, keystore checks).
+      # Google sign-in needs no SHA-1 allowlisting: the app signs in through a Chrome Custom Tab.
+      - name: Show the APK signing certificate SHA-1
+        run: keytool -printcert -jarfile mobile/android/app/build/outputs/apk/debug/app-debug.apk | grep -E "Owner|SHA1:|SHA256:"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: addabaaz-debug-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  # Attach the same APK to a rolling "apk" release, so a phone (or someone with neither a laptop nor a
+  # GitHub account) can install it from one link instead of downloading and unpacking the artifact zip.
+  # Runs after every successful build — the download link is always the newest APK of the newest push.
+  publish:
+    name: Publish the download link
+    needs: build
+    # Pushes and manual runs only — never a pull_request. The publish step DELETES the rolling `apk`
+    # release and recreates it from the commit it just built, so allowing a PR job to run it would let
+    # any contributor's unreviewed branch replace the APK that the README points people at. A PR still
+    # gets its own artifact below (Actions → Artifacts); it simply cannot move the shared download.
+    if: >-
+      needs.build.result == 'success' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    # A push and its pull_request run both build the same commit and both publish the SAME rolling
+    # release. The publish step deletes the release and recreates it, so two of them at once fight
+    # over it and one dies with a red X even though the APK is fine. One shared group serialises the
+    # publishes (the jobs still build in parallel); the newest one publishes last.
+    concurrency:
+      group: apk-release
+      cancel-in-progress: false
+    permissions:
+      contents: write                     # only this job may write to the repository (the release asset)
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: addabaaz-debug-apk
+          path: out
+
+      - name: Publish the rolling "apk" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK="out/addabaaz-${GITHUB_SHA::7}.apk"
+          mv out/app-debug.apk "$APK"
+          gh release delete apk --yes --cleanup-tag 2>/dev/null || true
+          gh release create apk "$APK" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "ADDABAAZ app — test build ${GITHUB_SHA::7}" \
+            --notes "Installable **debug** build for testing (this is not the Play Store version). Android will ask you to allow installing from this browser — expected for a build that does not come from Google Play.
+          
+          Branch: \`${GITHUB_REF_NAME}\` · commit \`${GITHUB_SHA}\` · built $(date -u '+%d %b %Y, %H:%M UTC').
+          
+          Sign in with the same account you subscribed with on the website and premium titles unlock here automatically (the app itself does not sell plans — see docs/PAYMENTS.md)."

@@ -1,0 +1,21 @@
+<!-- Content studio shell (the CMS half of the management tools): everything is drawn by /content/js/main.js.
+     Same sign-in as the Admin console (/admin/), same session token, separate sidebar. Never indexed. -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0b0b0d">
+  <title>ADDABAAZ Content Studio</title>
+  <link rel="icon" href="/media/icons/logo-96.webp">
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+  <!-- Sign-in form or the studio (sidebar + page) is rendered into #app. -->
+  <div id="app"><p class="boot">Loading…</p></div>
+  <div id="toasts" role="status" aria-live="polite"></div>
+  <noscript>The content studio needs JavaScript.</noscript>
+  <script type="module" src="/content/js/main.js"></script>
+</body>
+</html>

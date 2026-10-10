@@ -1,0 +1,304 @@
+openapi: 3.0.3
+info:
+  title: ADDABAAZ API
+  version: 2.6.0
+  description: |
+    Backend for the ADDABAAZ web and mobile apps. Base path `/api/v1`.
+    Auth is a bearer JWT (`Authorization: Bearer <token>`) returned by signup/login.
+    Errors are `{ "error": { "code": "...", "message": "..." } }`. Write endpoints return `204` unless noted.
+servers:
+  - url: http://localhost:3000/api/v1
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+    admin: { type: http, scheme: bearer, description: 'An administrator account’s session token (users.is_admin; valid 12h after sign-in), or the optional ADMIN_TOKEN environment variable (24+ characters) for scripts' }
+  schemas:
+    Error:
+      type: object
+      properties: { error: { type: object, properties: { code: { type: string }, message: { type: string } } } }
+    User: { type: object, properties: { id: { type: string }, name: { type: string }, email: { type: string } } }
+    Profile: { type: object, properties: { id: { type: string }, name: { type: string }, color: { type: integer } } }
+    Auth:
+      type: object
+      properties: { token: { type: string }, user: { $ref: '#/components/schemas/User' }, profiles: { type: array, items: { $ref: '#/components/schemas/Profile' } }, verificationEmailSent: { type: boolean, description: 'Signup only; false means the account exists but the confirmation email was not delivered.' }, verificationEmailPending: { type: boolean, description: 'Signup only; true means the confirmation email is still being sent (a slow mail server never stalls the response) and will arrive shortly.' } }
+    Library:
+      type: object
+      properties:
+        list: { type: array, items: { type: object, properties: { type: { type: string, enum: [show, video, upcoming] }, id: { type: string }, addedAt: { type: string, format: date-time } } } }
+        progress: { type: object, additionalProperties: { type: object, properties: { position: { type: number }, duration: { type: number }, updatedAt: { type: string, format: date-time } } } }
+        reminders: { type: array, items: { type: object } }
+  parameters:
+    pid: { name: pid, in: path, required: true, schema: { type: string } }
+  responses:
+    NoContent: { description: Done }
+    Unauthorized: { description: Missing or invalid token, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+security: [ { bearer: [] } ]
+paths:
+  /health: { get: { security: [], summary: 'Liveness + service discovery (used by the app to detect API mode). Body includes db: up|down.', responses: { '200': { description: OK } } } }
+  /health/ready: { get: { security: [], summary: 'Readiness probe — 503 when MySQL is unreachable.', responses: { '200': { description: Ready }, '503': { description: Database down } } } }
+  /studio: { get: { security: [], summary: 'About / team / services / contact details plus homepage poster settings (edited in the admin console)', responses: { '200': { description: studio.json } } } }
+  /catalog: { get: { security: [], summary: Full catalog (shows, videos, upcoming, gallery, homePosters), responses: { '200': { description: catalog.json with homepage banner artwork settings } } } }
+  /plans: { get: { security: [], summary: 'Plans plus the active payment provider', responses: { '200': { description: '{ plans: [...], payments: { provider: razorpay|mock|none, keyId? }, billing: { gst: bool, coupons: bool, states: [{code,name}] } }' } } } }
+  /auth/signup:
+    post:
+      security: []
+      summary: Create account (+ first profile). Password 8–128 chars. Answers as soon as the account exists — a slow mail server never stalls it. Returns verificationEmailSent=false if the account was created but email delivery failed, or verificationEmailPending=true while the confirmation email is still being sent (SIGNUP_EMAIL_WAIT_MS budget).
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name, email, password], properties: { name: { type: string }, email: { type: string }, password: { type: string } } } } } }
+      responses: { '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Auth' } } } }, '409': { description: email_taken }, '429': { description: Rate limited } }
+  /auth/login:
+    post:
+      security: []
+      summary: Sign in
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [email, password], properties: { email: { type: string }, password: { type: string } } } } } }
+      responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Auth' } } } }, '401': { description: invalid_credentials } }
+  /auth/providers: { get: { security: [], summary: 'Which sign-in methods are enabled, with public client ids for the web/native SDKs.', responses: { '200': { description: '{ password, google?, facebook? }' } } } }
+  /auth/google:
+    post:
+      security: []
+      summary: Sign in / sign up with a Google ID token (verified server-side). Links to an existing account with the same verified email.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [identityToken], properties: { identityToken: { type: string } } } } } }
+      responses: { '200': { description: 'Auth + isNew flag' }, '400': { description: email_required / email_unverified }, '401': { description: invalid_credential }, '501': { description: provider_not_configured }, '503': { description: provider_unavailable } }
+  /auth/facebook:
+    post:
+      security: []
+      summary: Sign in / sign up with a Facebook user access token (verified via debug_token, must belong to this app).
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [accessToken], properties: { accessToken: { type: string } } } } } }
+      responses: { '200': { description: 'Auth + isNew flag' }, '400': { description: email_required / email_unverified }, '401': { description: invalid_credential }, '501': { description: provider_not_configured }, '503': { description: provider_unavailable } }
+  /videos/{id}/stream:
+    post:
+      security: [ {}, { bearer: [] } ]
+      summary: 'Playable URL for an R2-stored video. Premium titles require a signed-in user with an active plan; Free titles are public.'
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses:
+        '200': { description: '{ type: mp4|hls, url, expiresAt }', content: { application/json: { schema: { type: object, properties: { type: { type: string, enum: [mp4, hls] }, url: { type: string }, expiresAt: { type: string, format: date-time } } } } } }
+        '400': { description: not_hosted (video isn't an R2 source) }
+        '401': { description: login_required }
+        '402': { description: subscription_required (signed in, but no active paid plan) }
+        '404': { description: unknown video }
+        '503': { description: storage_not_configured }
+  /media/{token}/{path}:
+    get:
+      security: []
+      summary: 'HLS gateway. `token` comes from /videos/{id}/stream. Playlists (.m3u8) are proxied; everything else is a 302 to a 15-minute presigned R2 URL.'
+      parameters: [ { name: token, in: path, required: true, schema: { type: string } }, { name: path, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: playlist }, '302': { description: redirect to R2 }, '401': { description: expired/invalid token }, '404': { description: not found } }
+  /contact:
+    post:
+      security: []
+      summary: Contact form. Honeypot field `website` must be empty. 5 requests / 10 min / IP.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name, email, message], properties: { name: { type: string }, email: { type: string }, message: { type: string }, website: { type: string } } } } } }
+      responses: { '202': { description: Accepted } }
+  /me:
+    get: { summary: Current user, profiles and subscription, responses: { '200': { description: OK }, '401': { $ref: '#/components/responses/Unauthorized' } } }
+    patch: { summary: Rename user, responses: { '200': { description: OK } } }
+    delete: { summary: Permanently delete the account and all its data (App Store 5.1.1(v)), responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /profiles:
+    get: { summary: List profiles, responses: { '200': { description: OK } } }
+    post: { summary: Create profile (max 5), responses: { '201': { description: Created }, '409': { description: profile_limit } } }
+  /profiles/{pid}:
+    parameters: [ { $ref: '#/components/parameters/pid' } ]
+    patch: { summary: Update name/colour, responses: { '200': { description: OK } } }
+    delete: { summary: Delete profile (not the last one), responses: { '204': { $ref: '#/components/responses/NoContent' }, '409': { description: last_profile } } }
+  /profiles/{pid}/library:
+    parameters: [ { $ref: '#/components/parameters/pid' } ]
+    get: { summary: My List, watch progress and reminders, responses: { '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Library' } } } } } }
+  /profiles/{pid}/list/{type}/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/pid' }
+      - { name: type, in: path, required: true, schema: { type: string, enum: [show, video, upcoming] } }
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put: { summary: Add to My List (idempotent), responses: { '204': { $ref: '#/components/responses/NoContent' }, '404': { description: not_found } } }
+    delete: { summary: Remove from My List, responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /profiles/{pid}/progress/{videoId}:
+    parameters: [ { $ref: '#/components/parameters/pid' }, { name: videoId, in: path, required: true, schema: { type: string } } ]
+    put:
+      summary: Save playback position (keeps the 500 most recent)
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [position, duration], properties: { position: { type: number }, duration: { type: number } } } } } }
+      responses: { '204': { $ref: '#/components/responses/NoContent' } }
+    delete: { summary: Remove from Continue Watching, responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /profiles/{pid}/reminders/{id}:
+    parameters: [ { $ref: '#/components/parameters/pid' }, { name: id, in: path, required: true, schema: { type: string } } ]
+    put: { summary: Set a reminder for an upcoming title, responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+    delete: { summary: Remove reminder, responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /subscription:
+    get: { summary: Current subscription, responses: { '200': { description: OK } } }
+    delete: { summary: 'End a DEMO plan. Real plans are prepaid and cannot be cancelled here (409 not_cancellable).', responses: { '200': { description: '{ subscription }' }, '409': { description: not_cancellable } } }
+  /payments/checkout:
+    post:
+      summary: 'Start a purchase. razorpay → creates an order (returns keyId, orderId, amount, currency, prefill) for Razorpay Checkout; mock (dev only) → activates instantly; none → 501.'
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [planId], properties: { planId: { type: string, enum: [plus-monthly, plus-yearly] }, couponCode: { type: string }, billing: { type: object, description: 'Required when GST invoicing is on: state (name or 2-digit code) or a valid gstin + name', properties: { state: { type: string }, gstin: { type: string }, name: { type: string } } } } } } } }
+      responses: { '201': { description: 'razorpay: order for Checkout · coupon: free grant · mock: demo activation (all include quote/subscription)' }, '400': { description: 'unknown_plan | invalid_coupon | billing_state_required | invalid_gstin | business_name_required' }, '501': { description: payments_not_configured }, '502': { description: provider_error } }
+  /payments/quote:
+    post:
+      summary: 'Price preview with a coupon (Razorpay provider only).'
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [planId], properties: { planId: { type: string }, couponCode: { type: string } } } } } }
+      responses: { '200': { description: '{ quote: { planId, listPaise, discountPaise, finalPaise, coupon } }' }, '400': { description: invalid_coupon (message says why) }, '501': { description: payments_not_configured } }
+  /billing:
+    get: { summary: 'Paid plans with their invoice, credit notes and refund status', responses: { '200': { description: '{ payments: [...] }' } } }
+  /invoices/{id}/pdf:
+    get:
+      summary: 'Download a GST invoice or credit note (owner only)'
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: PDF, content: { application/pdf: { schema: { type: string, format: binary } } } }, '404': { description: not found } }
+  /invoices/{id}/email:
+    post:
+      summary: 'Email the invoice PDF to the account address'
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      responses: { '204': { $ref: '#/components/responses/NoContent' }, '404': { description: not found } }
+  /payments/verify:
+    post:
+      summary: 'Report a finished Razorpay payment. The HMAC signature is verified with the key secret; the plan is activated once (idempotent). The order must belong to the caller.'
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [orderId, paymentId, signature], properties: { orderId: { type: string }, paymentId: { type: string }, signature: { type: string } } } } } }
+      responses: { '200': { description: '{ subscription }' }, '400': { description: invalid_signature }, '404': { description: unknown order }, '501': { description: payments_not_configured } }
+  /payments/webhook:
+    post:
+      security: []
+      summary: 'Razorpay → API. Signed with RAZORPAY_WEBHOOK_SECRET over the raw body (X-Razorpay-Signature). Handles payment.captured / order.paid (activates the plan + issues the invoice, even if the buyer never returned), payment.failed, and refund.created / processed / failed.'
+      responses: { '200': { description: ok }, '400': { description: invalid_signature } }
+  /admin/payments:
+    get: { summary: 'Admin (Bearer ADMIN_TOKEN): recent payments, ?email=&limit=', security: [ { admin: [] } ], responses: { '200': { description: '{ payments }' }, '401': { description: unauthorized }, '403': { description: not an administrator } } }
+  /admin/payments/{id}/refund:
+    post:
+      summary: 'Admin: refund a Razorpay payment (fully or partly). Issues a credit note once processed; a full refund ends the access.'
+      security: [ { admin: [] } ]
+      parameters: [ { name: id, in: path, required: true, schema: { type: string } } ]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { amountPaise: { type: integer, minimum: 100 }, reason: { type: string }, revokeAccess: { type: boolean } } } } } }
+      responses: { '201': { description: '{ refund, creditNote, accessRevoked }' }, '409': { description: not_refundable | refund_exceeds_payment }, '502': { description: provider_error } }
+  /admin/coupons:
+    get: { summary: 'Admin: list coupons with redemption counts', security: [ { admin: [] } ], responses: { '200': { description: '{ coupons }' } } }
+    post:
+      summary: 'Admin: create a coupon'
+      security: [ { admin: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [code, kind, value], properties: { code: { type: string }, kind: { type: string, enum: [percent, flat] }, value: { type: integer, description: 'percent 1-100, or paise' }, description: { type: string }, planIds: { type: array, items: { type: string } }, maxRedemptions: { type: integer }, perUserLimit: { type: integer, default: 1 }, startsAt: { type: string, format: date-time }, expiresAt: { type: string, format: date-time } } } } } }
+      responses: { '201': { description: '{ coupon }' }, '400': { description: validation }, '409': { description: exists } }
+  /admin/coupons/{code}:
+    patch: { summary: 'Admin: change active / dates / limits / description', security: [ { admin: [] } ], parameters: [ { name: code, in: path, required: true, schema: { type: string } } ], responses: { '200': { description: '{ coupon }' }, '404': { description: unknown } } }
+  /admin/invoices.csv:
+    get: { summary: 'Admin: sales register CSV (invoices +, credit notes -), ?from=YYYY-MM-DD&to=YYYY-MM-DD in IST', security: [ { admin: [] } ], responses: { '200': { description: text/csv } } }
+  /admin/invoices/{id}/pdf:
+    get: { summary: 'Admin: any invoice as PDF', security: [ { admin: [] } ], parameters: [ { name: id, in: path, required: true, schema: { type: string } } ], responses: { '200': { description: PDF } } }
+  /admin/session:
+    get: { summary: 'Admin: who am I (also proves the session is an admin one)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/stats:
+    get: { summary: 'Admin: dashboard numbers (revenue, subscribers, sign-ups, recent activity)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/health:
+    get: { summary: 'Admin: setup checklist (GSTIN, SMTP, R2, Razorpay, secrets…)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/email/test:
+    post: { summary: 'Admin: send a real SMTP diagnostic message to the signed-in administrator', security: [ { admin: [] } ], responses: { '200': { description: '{ sent: true, to }' }, '400': { description: administrator session required (ADMIN_TOKEN cannot receive mail) }, '503': { description: email_not_configured | email_send_failed } } }
+  /admin/users:
+    get: { summary: 'Admin: users, ?q=&filter=all|paid|free|expiring|expired|admin|disabled&limit=&offset=', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/users/{id}:
+    get: { summary: 'Admin: one user with profiles, subscription and payments', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '404': { description: unknown user } } }
+    patch: { summary: 'Admin: change name / isAdmin / disabled (cannot lock yourself out or remove the last admin)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '409': { description: cannot_lock_yourself_out | last_admin } } }
+    delete: { summary: 'Admin: delete a user (payment and invoice records are kept)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '409': { description: cannot_lock_yourself_out | last_admin } } }
+  /admin/users/duplicates:
+    get: { summary: 'Admin: accounts that share one e-mail address (the stored address shows invisible characters as ⟨U+XXXX⟩), plus how many rows were normalized', security: [ { admin: [] } ], responses: { '200': { description: '{ groups: [ { key, count, users: [ { id, name, email, emailPlain, emailNorm, dup, createdAt, planId, expiresAt, profiles, devices, providers, isAdmin, disabled } ] } ], normalized }' }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/users/merge:
+    post: { summary: 'Admin: fold a duplicate account into the one that stays { keepId, removeId } — profiles, history, devices, plan, payments, invoices, support tickets and delivery history move over, then the extra account is deleted (audited as user.merge)', security: [ { admin: [] } ], responses: { '200': { description: '{ keep, removed, moved }' }, '400': { description: same account / missing id }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '404': { description: unknown account }, '409': { description: not_duplicates } } }
+  /admin/users/{id}/grant:
+    post: { summary: 'Admin: give free access { days, planId?, note? } — no payment or invoice', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/users/{id}/revoke-plan:
+    post: { summary: 'Admin: end the current plan now (does not refund)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/messages:
+    get: { summary: 'Admin: contact messages, ?status=open|handled|all', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/messages/{id}:
+    patch: { summary: 'Admin: mark handled / reopen { handled }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+    delete: { summary: 'Admin: delete a message', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/audit:
+    get: { summary: 'Admin: audit log, newest first, ?action=&before=<id>&limit=', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/catalog:
+    get: { summary: 'Admin: the whole catalog including the studio profile', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/catalog/youtube/preview:
+    post: { summary: 'Admin: use YouTube Data API v3 to scan every page of the channel uploads playlist, then compare all upload IDs with the catalog. Requires YOUTUBE_API_KEY; saves a short-lived server-side snapshot. Public page loads never fetch YouTube.', security: [ { admin: [] } ], responses: { '200': { description: '{ items: [{ id, title, publishedAt, thumbnail, url, suggestedKind, alreadyImported }], total, missing, previewToken, checkedAt, expiresAt }' }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '503': { description: youtube_not_configured | youtube_unavailable } } }
+  /admin/catalog/youtube/import:
+    post: { summary: 'Admin: import 1–200 selected preview items { previewToken, batchId?, selections: [{ id, kind: reel|clip }] }. Does not fetch YouTube again; imports are free, unrated and have unknown duration. Multiple chunk requests can share batchId.', security: [ { admin: [] } ], responses: { '200': { description: '{ batchId, added, skipped, ids, checkedAt }' }, '400': { description: invalid_youtube_preview | invalid selections }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '409': { description: youtube_preview_expired | youtube_preview_changed } } }
+  /admin/catalog/youtube/imports:
+    get: { summary: 'Admin: last import batch and active imports made today (Asia/Kolkata); database only, does not fetch YouTube.', security: [ { admin: [] } ], responses: { '200': { description: '{ last: { batchId, importedAt, videoIds } | null, todayVideoIds }' }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/catalog/youtube/remove-imports:
+    post: { summary: 'Admin: remove tracked YouTube videos from { scope: last|today }; does not fetch YouTube.', security: [ { admin: [] } ], responses: { '200': { description: '{ scope, removed, skipped }' }, '400': { description: invalid scope }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/catalog/videos/bulk:
+    post: { summary: 'Admin: bulk hide, restore or delete 1–500 selected videos { action: hide|show|delete, ids: [...] }. Hiding removes videos from public catalogs and deletes viewer-list/progress references only when action=delete.', security: [ { admin: [] } ], responses: { '200': { description: '{ action, affected, skipped, ids }' }, '400': { description: invalid IDs or action }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/catalog/{type}:
+    post: { summary: 'Admin: add an item; type = shows|videos|upcoming|gallery. Validated like `npm run validate:catalog`', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '400': { description: validation }, '409': { description: exists } } }
+  /admin/catalog/{type}/order:
+    put: { summary: 'Admin: set display order { ids: [...] }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator } } }
+  /admin/catalog/{type}/{id}:
+    put: { summary: 'Admin: replace an item', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '404': { description: unknown } } }
+    delete: { summary: 'Admin: delete an item (shows: ?cascade=1 also deletes their videos)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '409': { description: has_videos } } }
+  /admin/studio:
+    put: { summary: 'Admin: replace the studio profile (About / Services / Contact)', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '400': { description: validation } } }
+  /admin/uploads/image:
+    post: { summary: 'Admin: upload a catalog photo rendition (raw png/jpeg/webp/gif body, ≤ 10 MB; R2 must be configured). The full image is stored in private R2 under catalog/<hash>[-hq].<ext> and returned as r2-assets/catalog/<name>. When `X-Image-Renditions: progressive` is sent, POST the smaller WebP with `X-Image-Variant-Of: <high-quality filename>`; it is stored as catalog/<hash>-low.webp. MySQL stores catalog paths, not photo bytes. A stable app URL redirects to a fresh signed R2 GET URL.', security: [ { admin: [] } ], responses: { '201': { description: uploaded path, bytes, type and optional variant }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '413': { description: too large }, '400': { description: unsupported_image / invalid_image_variant }, '404': { description: high-quality parent not found }, '503': { description: storage_not_configured } } }
+  /admin/uploads/video:
+    post: { summary: 'Admin: presigned PUT URL for a video file in private R2 storage { filename, slug } → { key, uploadUrl, expiresInSeconds }', security: [ { admin: [] } ], responses: { '200': { description: ok }, '401': { description: unauthorized / admin_session_expired }, '403': { description: not an administrator }, '503': { description: storage_not_configured } } }
+
+  # ---- v2.6: accounts, viewing, engagement (all additive) ----
+  /auth/apple: { post: { security: [], tags: [auth], summary: 'Sign in with Apple. Body { identityToken, name? } (name is only sent by Apple the first time). Same response as /auth/google.', requestBody: { required: true, content: { application/json: { schema: { type: object, required: [identityToken], properties: { identityToken: { type: string }, name: { type: string } } } } } }, responses: { '200': { description: 'Auth' }, '400': { description: 'Invalid token' }, '501': { description: 'Apple sign-in is not configured' } } } }
+  /auth/forgot: { post: { security: [], tags: [auth], summary: 'Email a password-reset link. Always 202 (never reveals whether the address has an account); one email per address per 60 s.', requestBody: { required: true, content: { application/json: { schema: { type: object, required: [email], properties: { email: { type: string } } } } } }, responses: { '202': { description: Accepted }, '400': { description: 'Not an email address' } } } }
+  /auth/reset: { post: { security: [], tags: [auth], summary: 'Choose a new password with the emailed single-use token (valid 1 hour). Signs out every other session and returns a new session (Auth). Also verifies the email address.', requestBody: { required: true, content: { application/json: { schema: { type: object, required: [token, password], properties: { token: { type: string }, password: { type: string, minLength: 8 } } } } } }, responses: { '200': { description: 'Auth' }, '400': { description: 'invalid_token / weak password' } } } }
+  /auth/verify: { post: { security: [], tags: [auth], summary: 'Confirm an email address with the emailed single-use token (valid 3 days).', requestBody: { required: true, content: { application/json: { schema: { type: object, required: [token], properties: { token: { type: string } } } } } }, responses: { '200': { description: '{ verified: true }' }, '400': { description: invalid_token } } } }
+  /auth/email-change/verify: { post: { security: [], tags: [auth], summary: 'Confirm and atomically promote a pending phone-account contact email with its one-hour single-use token.', requestBody: { required: true, content: { application/json: { schema: { type: object, required: [token], properties: { token: { type: string } } } } } }, responses: { '200': { description: '{ verified: true, email }' }, '400': { description: invalid_token }, '409': { description: email_taken } } } }
+  /me/verify/resend: { post: { tags: [account], summary: 'Send the confirmation email again (429 if one was sent in the last minute).', responses: { '204': { $ref: '#/components/responses/NoContent' }, '429': { description: Too soon } } } }
+  /me/email: { post: { tags: [account], summary: 'Request a one-hour confirmation link to add or replace the contact email on a phone-verified account. The current email remains active until confirmation.', requestBody: { required: true, content: { application/json: { schema: { type: object, required: [email], properties: { email: { type: string, maxLength: 254 } } } } } }, responses: { '202': { description: Verification email sent; pending address is not yet the account email }, '400': { description: invalid_email }, '409': { description: email_taken, email_unchanged, or phone_signin_required }, '429': { description: too_soon } } } }
+  /me/password: { post: { tags: [account], summary: 'Change (or, for social-only accounts, set) the password. Body { currentPassword?, newPassword }. Signs out other devices and returns a new session.', responses: { '200': { description: Auth }, '403': { description: 'Wrong current password' } } } }
+  /me/sessions/revoke: { post: { tags: [account], summary: 'Sign out everywhere: invalidates every session token and returns a fresh one for this device.', responses: { '200': { description: Auth } } } }
+  /me/pin: { put: { tags: [parental], summary: 'Set or change the parental PIN (4–6 digits). Body { pin, currentPin? }.', responses: { '204': { $ref: '#/components/responses/NoContent' }, '403': { description: 'pin_invalid' }, '429': { description: 'pin_locked (5 wrong tries → 15 minutes)' } } }, delete: { tags: [parental], summary: 'Remove the PIN. Body { pin }.', responses: { '204': { $ref: '#/components/responses/NoContent' } } } }
+  /me/pin/verify: { post: { tags: [parental], summary: 'Check a PIN without changing anything. Body { pin }.', responses: { '204': { $ref: '#/components/responses/NoContent' }, '403': { description: pin_invalid }, '429': { description: pin_locked } } } }
+  /me/devices: { get: { tags: [playback], summary: 'Devices that recently played premium video and the plan’s simultaneous-screen limit.', responses: { '200': { description: '{ devices: [{ deviceId, label, watching, lastSeen, current }], streamLimit }' } } } }
+  /me/devices/{deviceId}: { delete: { tags: [playback], summary: 'Forget a device (frees its screen slot).', parameters: [ { name: deviceId, in: path, required: true, schema: { type: string } } ], responses: { '204': { $ref: '#/components/responses/NoContent' } } } }
+  /playback/heartbeat: { post: { tags: [playback], summary: 'Every 30 s while a premium video plays (header X-Device-Id). Body { videoId }. 429 stream_limit when more screens than the plan allows are playing.', responses: { '204': { $ref: '#/components/responses/NoContent' }, '429': { description: stream_limit } } } }
+  /playback/stop: { post: { tags: [playback], summary: 'Release this device’s screen slot (paused, ended or left the page).', responses: { '204': { $ref: '#/components/responses/NoContent' } } } }
+  /profiles/{pid}/ratings: { get: { tags: [engagement], summary: 'This profile’s thumbs, as { "show:id": 1|-1, "video:id": … }.', parameters: [ { $ref: '#/components/parameters/pid' } ], responses: { '200': { description: map } } } }
+  /profiles/{pid}/ratings/{type}/{id}: { put: { tags: [engagement], summary: 'Thumbs up (1) or down (-1). Body { value }. type is show or video. Returns the new public counts.', parameters: [ { $ref: '#/components/parameters/pid' }, { name: type, in: path, required: true, schema: { type: string, enum: [show, video] } }, { name: id, in: path, required: true, schema: { type: string } } ], responses: { '200': { description: '{ up, down }' } } }, delete: { tags: [engagement], summary: 'Clear the thumb.', parameters: [ { $ref: '#/components/parameters/pid' }, { name: type, in: path, required: true, schema: { type: string } }, { name: id, in: path, required: true, schema: { type: string } } ], responses: { '200': { description: '{ up, down }' } } } }
+  /ratings/{type}/{id}: { get: { security: [], tags: [engagement], summary: 'Public thumb counts { up, down }.', parameters: [ { name: type, in: path, required: true, schema: { type: string, enum: [show, video] } }, { name: id, in: path, required: true, schema: { type: string } } ], responses: { '200': { description: counts } } } }
+  /events/play: { post: { security: [], tags: [analytics], summary: 'First-party play statistics (no personal data). Body { videoId, event: start|progress, seconds? }. Always 204.', responses: { '204': { $ref: '#/components/responses/NoContent' } } } }
+  /client-errors: { post: { security: [], tags: [analytics], summary: 'Browser/PWA/Capacitor error report { message, errorName?, errorCode?, status?, stack?, url?, details? }. Rate limited; accepts anonymous reports. A valid bearer session is resolved server-side for account attribution; client-supplied IDs are ignored. Always 204.', responses: { '204': { $ref: '#/components/responses/NoContent' } } } }
+  /push/config: { get: { security: [], tags: [push], summary: 'Whether Web Push is configured and the VAPID public key.', responses: { '200': { description: '{ enabled, publicKey }' } } } }
+  /push/subscribe: { post: { tags: [push], summary: 'Register this browser. Body { subscription (PushSubscription JSON), prefs?: { episodes, launches, news } }.', responses: { '204': { $ref: '#/components/responses/NoContent' } } } }
+  /push/status: { post: { tags: [push], summary: 'Body { endpoint } → { prefs } or 404 if not subscribed.', responses: { '200': { description: '{ prefs }' } } } }
+  /push/prefs: { patch: { tags: [push], summary: 'Change which notifications this browser receives. Body { endpoint, episodes?, launches?, news? }.', responses: { '204': { $ref: '#/components/responses/NoContent' } } } }
+  /push/unsubscribe: { post: { tags: [push], summary: 'Body { endpoint }.', responses: { '204': { $ref: '#/components/responses/NoContent' } } } }
+  /devices: { post: { tags: [push], summary: 'Register this app installation for app push. Body { token (FCM registration token), platform?: android|ios|web, label? }.', responses: { '201': { description: '{ ok }' } } }, get: { tags: [push], summary: 'Devices this account receives app push on.', responses: { '200': { description: '{ devices: [{ platform, label, lastSeen }] }' } } }, delete: { tags: [push], summary: 'Forget a device token. Body { token }.', responses: { '204': { $ref: '#/components/responses/NoContent' } } } }
+  /devices/guest: { post: { security: [], tags: [push], summary: 'Register a connected guest app installation without sign-in. Body { token, platform?: android|ios|web, label? }. Receives general broadcasts only; profile-based episode/launch audiences exclude guest tokens.', responses: { '201': { description: '{ ok }' }, '429': { description: 'Rate limited' } } }, delete: { security: [], tags: [push], summary: 'Forget an app token on this installation when notifications are switched off; also cleans stale account links. Body { token }.', responses: { '204': { $ref: '#/components/responses/NoContent' } } } }
+  /notifications/unsubscribe: { get: { security: [], tags: [push], summary: 'One-click unsubscribe from broadcast e-mails (signed link ?u=&t=). Returns a small HTML page.', parameters: [ { name: u, in: query, required: true, schema: { type: string } }, { name: t, in: query, required: true, schema: { type: string } } ], responses: { '200': { description: HTML confirmation page } } } }
+  /payments/{id}/refund-request: { post: { tags: [billing], summary: 'Ask for a refund (Razorpay-paid purchases inside REFUND_WINDOW_DAYS). Body { reason? }. An admin approves or declines it.', parameters: [ { name: id, in: path, required: true, schema: { type: string } } ], responses: { '201': { description: '{ request: { id, status } }' }, '409': { description: 'outside_window / already_requested / already_refunded / not_refundable' } } } }
+  /refund-requests: { get: { tags: [billing], summary: 'My refund requests and the refund window in days.', responses: { '200': { description: '{ requests, windowDays }' } } } }
+  /admin/inbox: { get: { security: [ { admin: [] } ], tags: [admin], summary: 'Counts for the console badges { refunds, errors, tickets }.', responses: { '200': { description: counts } } } }
+  /admin/analytics: { get: { security: [ { admin: [] } ], tags: [admin], summary: 'Plays and watch time (?days=7|30|90) plus revenue.', responses: { '200': { description: '{ days, totals, daily, shows, videos, business }' } } } }
+  /admin/database/monitor:
+    get:
+      security: [ { admin: [] } ]
+      tags: [admin]
+      summary: 'Current MySQL/schema metrics and downsampled history for the Admin database charts; defaults to the last 7 days. Retained metrics are sampled once a minute.'
+      parameters: [ { name: range, in: query, schema: { type: string, enum: [1h, 6h, 24h, 3d, 7d, 14d, 30d], default: 7d } } ]
+      responses: { '200': { description: '{ schemaName, sampledAt, storage, tables, instance, history, range, rangeSeconds, retentionDays, sampleIntervalSeconds }' }, '401': { description: unauthorized }, '403': { description: not an administrator } }
+  /admin/database/monitor/settings:
+    patch:
+      security: [ { admin: [] } ]
+      tags: [admin]
+      summary: 'Set database history retention; decreasing it permanently prunes older samples.'
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [retentionDays], properties: { retentionDays: { type: integer, enum: [1, 3, 7, 14, 30] } } } } } }
+      responses: { '200': { description: '{ retentionDays }' }, '400': { description: invalid retention }, '401': { description: unauthorized }, '403': { description: not an administrator } }
+  /admin/application/monitor:
+    get:
+      security: [ { admin: [] } ]
+      tags: [admin]
+      summary: 'Current-process Node.js health and downsampled API performance history across app instances; defaults to seven days. Request paths and user data are not recorded.'
+      parameters: [ { name: range, in: query, schema: { type: string, enum: [1h, 6h, 24h, 3d, 7d, 14d, 30d], default: 7d } } ]
+      responses: { '200': { description: '{ current: { instanceId, sampledAt, uptimeSeconds, processors, cpuPercent, memory, system, http }, history: [{ at, cpuPercent, memoryRssBytes, heapUsedBytes, heapTotalBytes, load1, activeInstances, requestsPerMinute, responseAverageMs, responseP50Ms, responseP95Ms, responseMaxMs, clientErrorsPerMinute, serverErrorsPerMinute, serverErrorRatePct }], range, rangeSeconds, retentionDays, sampleIntervalSeconds }' }, '401': { description: unauthorized }, '403': { description: not an administrator } }
+  /admin/application/monitor/settings:
+    patch:
+      security: [ { admin: [] } ]
+      tags: [admin]
+      summary: 'Set application history retention; decreasing it permanently prunes older samples.'
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [retentionDays], properties: { retentionDays: { type: integer, enum: [1, 3, 7, 14, 30] } } } } } }
+      responses: { '200': { description: '{ retentionDays }' }, '400': { description: invalid retention }, '401': { description: unauthorized }, '403': { description: not an administrator } }
+  /admin/refund-requests: { get: { security: [ { admin: [] } ], tags: [admin], summary: 'Customer refund requests (?status=pending|approved|declined|all).', responses: { '200': { description: '{ total, requests }' } } } }
+  /admin/refund-requests/{id}/approve: { post: { security: [ { admin: [] } ], tags: [admin], summary: 'Approve and refund through Razorpay (credit note issued). Body { note?, amountPaise?, revokeAccess? }. If the provider refuses, the request returns to pending.', parameters: [ { name: id, in: path, required: true, schema: { type: string } } ], responses: { '200': { description: '{ refund, accessRevoked }' }, '409': { description: already_decided } } } }
+  /admin/refund-requests/{id}/decline: { post: { security: [ { admin: [] } ], tags: [admin], summary: 'Decline (the customer is emailed the note). Body { note? }.', parameters: [ { name: id, in: path, required: true, schema: { type: string } } ], responses: { '204': { $ref: '#/components/responses/NoContent' } } } }
+  /admin/notifications: { get: { security: [ { admin: [] } ], tags: [admin], summary: 'Broadcast channels, audiences (with counts) and recent broadcasts.', responses: { '200': { description: '{ push: { configured, web, native, webSubscribers, nativeDevices, publicKey }, email: { configured, from, optedOut, audiences }, audiences, campaigns }' } } } }
+  /admin/notifications/send: { post: { security: [ { admin: [] } ], tags: [admin], summary: 'Send a broadcast in the background. Body { channel: push|email, audience: news|all|show:<id>|launch:<id> (push) or all|paid|free|expiring|expired (e-mail), title, body, url, button? }. Poll GET /admin/notifications/{id} for progress.', responses: { '202': { description: 'campaign row { id, channel, status, total, sent, failed, skipped }' }, '400': { description: bad input / unknown audience }, '503': { description: push_not_configured | email_not_configured } } } }
+  /admin/notifications/{id}: { get: { security: [ { admin: [] } ], tags: [admin], summary: 'Progress of one broadcast.', parameters: [ { name: id, in: path, required: true, schema: { type: string } } ], responses: { '200': { description: 'campaign row + done' }, '404': { description: Unknown broadcast } } } }
+  /admin/notifications/test: { post: { security: [ { admin: [] } ], tags: [admin], summary: 'Send one test message to the signed-in administrator (their devices for push, their address for e-mail). Body { channel, title, body, url, button? }. Requires an admin session (not ADMIN_TOKEN).', responses: { '200': { description: '{ ok }' }, '409': { description: test_failed } } } }
+  /admin/errors: { get: { security: [ { admin: [] } ], tags: [admin], summary: 'Grouped client/server errors from the last 7 days plus the 20 most recent; recent entries include verified userId, URL, user-agent and stack.', responses: { '200': { description: '{ groups, recent }' } } }, delete: { security: [ { admin: [] } ], tags: [admin], summary: 'Clear the error log.', responses: { '204': { $ref: '#/components/responses/NoContent' } } } }
+  /admin/uploads/subtitle: { post: { security: [ { admin: [] } ], tags: [admin], summary: 'Upload an .srt or .vtt as the raw request body (max 2 MB). SRT is converted to WebVTT. Returns { path, cues, bytes }; use the path in a video’s subtitles[].url. Subtitle files remain stored in MySQL; new photo bytes are stored in R2.', responses: { '201': { description: '{ path, cues }' }, '400': { description: unsupported_subtitle } } } }

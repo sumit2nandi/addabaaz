@@ -1,0 +1,92 @@
+/* Full-screen viewer: the photo gallery's lightbox, and the "tap the poster to see it whole" popup.
+ *
+ * One item = a single image, with arrows hidden; gallery captions remain optional. Several items = the
+ * gallery viewer, with arrows, keyboard, swipe and a 1 / n counter.
+ */
+import { html, $ } from '../util.js';
+import { icon } from '../icons.js';
+
+/** Full-screen image viewer for a list of `{ id, image, imageLg, caption, group }` items. */
+export function openLightbox(items, startId, { label = 'Image viewer', showCaption = true } = {}) {
+  const many = items.length > 1;
+  let i = Math.max(0, items.findIndex((g) => g.id === startId));
+  const prevFocus = document.activeElement;
+  const root = document.createElement('div');
+  root.className = 'lightbox'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', label);
+  root.innerHTML = html`<button class="lb-close icon-btn" aria-label="Close">${icon('x', { size: 26 })}</button>
+    ${many ? html`<button class="lb-nav lb-prev icon-btn" aria-label="Previous image">${icon('left', { size: 30 })}</button>` : ''}
+    <figure><img alt=""><figcaption></figcaption></figure>
+    ${many ? html`<button class="lb-nav lb-next icon-btn" aria-label="Next image">${icon('right', { size: 30 })}</button>` : ''}`.s;
+  document.body.appendChild(root); document.body.classList.add('no-scroll');
+  const im = $('img', root), cap = $('figcaption', root);
+  cap.hidden = !showCaption;
+  const show = (n) => {
+    i = (n + items.length) % items.length; const g = items[i];
+    im.classList.add('loading'); im.onload = () => im.classList.remove('loading');
+    // A popup image may itself have a fallback (a banner still without a max-resolution rendition): main.js's
+    // delegated error handler swaps data-fb in, so hand it a fresh, untried one for every image shown.
+    im.dataset.fb = g.fallback || ''; delete im.dataset.fbTried;
+    im.src = g.imageLg || g.image; im.alt = g.caption || g.group || '';
+    // One image: just its label (a poster has no "1 / 1"). Several: the group and the position.
+    cap.textContent = !showCaption ? '' : many ? `${g.group || ''}${g.group && g.caption ? ' · ' : ''}${g.caption || ''}${g.caption || g.group ? ' · ' : ''}${i + 1} / ${items.length}`.trim()
+      : (g.caption || g.group || '');
+    [items[(i + 1) % items.length], items[(i - 1 + items.length) % items.length]].forEach((x) => { if (x) new Image().src = x.imageLg || x.image; });
+  };
+  // The browser Back button closes the viewer (a history entry is pushed while open).
+  let popped = false;
+  const onPop = () => { popped = true; close(); };
+  const close = () => { if (root.isConnected === false) return; window.removeEventListener('popstate', onPop); if (!popped) { popped = true; history.back(); } root.remove(); document.body.classList.remove('no-scroll'); document.removeEventListener('keydown', key); prevFocus?.focus?.(); };
+  const key = (e) => {
+    if (e.key === 'Escape') close(); else if (many && e.key === 'ArrowRight') show(i + 1); else if (many && e.key === 'ArrowLeft') show(i - 1);
+    else if (e.key === 'Tab') { const f = [...root.querySelectorAll('button')]; const a = document.activeElement; if (e.shiftKey && a === f[0]) { e.preventDefault(); f.at(-1).focus(); } else if (!e.shiftKey && a === f.at(-1)) { e.preventDefault(); f[0].focus(); } }
+  };
+  document.addEventListener('keydown', key);
+  root.addEventListener('click', (e) => { if (e.target.closest('.lb-close') || e.target === root) close(); else if (e.target.closest('.lb-next')) show(i + 1); else if (e.target.closest('.lb-prev')) show(i - 1); });
+  // Touch swipe: remember where the finger went down, compare on release.
+  let x0 = null;
+  root.addEventListener('pointerdown', (e) => { x0 = e.clientX; });
+  root.addEventListener('pointerup', (e) => { if (many && x0 != null && Math.abs(e.clientX - x0) > 50) show(i + (e.clientX < x0 ? 1 : -1)); x0 = null; });
+  show(i); $('.lb-close', root).focus();
+  history.pushState(null, '', location.href);
+  window.addEventListener('popstate', onPop, { once: true });
+}
+
+/**
+ * The images a title's artwork popup can show, each once: the banner still and the poster. Captions provide
+ * accessible image names but are kept out of the visible popup UI. `backdropFallback` is used when the still's
+ * full-size rendition is missing (YouTube does not publish maxresdefault for every upload).
+ */
+export function artworkItems({ poster = '', backdrop = '', backdropFallback = '' } = {}) {
+  const items = [];
+  if (backdrop) items.push({ id: 'backdrop', image: backdrop, imageLg: backdrop, fallback: backdropFallback && backdropFallback !== backdrop ? backdropFallback : '', caption: 'Artwork' });
+  if (poster && poster !== backdrop) items.push({ id: 'poster', image: poster, imageLg: poster, caption: 'Poster' });
+  return items;
+}
+
+/**
+ * Show a title's artwork full-size on a dark backdrop — never cropped and never squeezed into the page's
+ * own poster box. `start` is 'backdrop' (the wide still) or 'poster' (what the details banner shows on a
+ * phone — see ui/components.js `bannerArtMode`); when there is only one image the popup has no arrows. A
+ * title with no artwork at all opens nothing.
+ */
+export function openArtwork({ title = '', poster = '', backdrop = '', backdropFallback = '' } = {}, start = 'backdrop') {
+  const items = artworkItems({ poster, backdrop, backdropFallback });
+  if (!items.length) return;
+  const at = items.some((x) => x.id === start) ? start : items[0].id;
+  openLightbox(items, at, { label: title ? `${title} — artwork` : 'Artwork', showCaption: false });
+}
+
+/**
+ * The details page's banner is a tap target for the same popup: it opens the artwork the banner is showing.
+ * Pass `start` as the id of that picture ('poster' on phones, 'backdrop' wider — ui/components.js
+ * `bannerArtMode`), either directly or as a function resolved at tap time so a rotation is honoured. The
+ * banner is the only artwork entry point on a phone, where the poster box is hidden. Clicks on buttons, links
+ * and form fields belong to those controls, and a click that ends a text selection is ignored.
+ */
+export function tapArtwork(hero, art, start = 'backdrop') {
+  hero?.addEventListener('click', (e) => {
+    if (e.target.closest('a, button, input, select, textarea, label')) return;
+    if (String(window.getSelection?.() || '').trim()) return;
+    openArtwork(art, typeof start === 'function' ? start() : start);
+  });
+}

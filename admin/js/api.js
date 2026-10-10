@@ -1,0 +1,171 @@
+/* Admin API client. The session token is the same one the public site stores, so being signed in there is enough. */
+import { reportAdminError } from './error-reporter.js';
+
+// Sign-in token key: the same localStorage entry the public site uses, so an admin account signed in on the site is signed in here too.
+const KEY = 'ab.token';
+export const getToken = () => { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } };
+export const setToken = (t) => { if (t) localStorage.setItem(KEY, JSON.stringify(t)); else localStorage.removeItem(KEY); };
+
+// Error carrying the HTTP status and the API's error code.
+export class ApiError extends Error {
+  constructor(status, message, code) { super(message); this.status = status; this.code = code; }
+}
+// Tell main.js the session is invalid so it can show the sign-in form.
+const authLost = (err) => window.dispatchEvent(new CustomEvent('admin:auth', { detail: err }));
+
+// Every request goes through here: adds the token, sends JSON (or a raw body for uploads), parses the reply, and turns failures into ApiError.
+async function send(method, path, { body, raw, headers = {}, base = '/api/v1/admin' } = {}) {
+  const token = getToken();
+  let res;
+  try {
+    res = await fetch(base + path, {
+      method,
+      headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...headers },
+      body: raw ?? (body !== undefined ? JSON.stringify(body) : undefined),
+    });
+  } catch (cause) {
+    const error = new ApiError(0, 'Can’t reach the server. Check your connection.', 'network');
+    error.cause = cause;
+    reportAdminError(error, { where: 'admin-api-network', method, route: path, status: 0 });
+    throw error;
+  }
+  if (res.status === 204) return null;
+  const isJson = (res.headers.get('content-type') || '').includes('json');
+  let data = res;
+  if (isJson) {
+    try { data = await res.json(); }
+    catch (cause) { reportAdminError(cause, { where: 'admin-api-json', method, route: path, status: res.status }); data = {}; }
+  }
+  if (!res.ok) {
+    const e = new ApiError(res.status, data?.error?.message || `Request failed (${res.status})`, data?.error?.code);
+    if (res.status >= 500) reportAdminError(e, { where: 'admin-api-response', method, route: path, status: res.status, requestId: res.headers.get('x-request-id') });
+    if (base.endsWith('/admin') && (res.status === 401 || (res.status === 403 && ['forbidden', 'account_disabled'].includes(e.code)))) authLost(e);
+    throw e;
+  }
+  return data;
+}
+
+// Store the full rendition first, then its compact WebP companion. The `-hq` marker is added only when
+// the companion is ready, so older/single-rendition uploads never make the viewer request a missing file.
+async function uploadImageRenditions(path, full, low) {
+  const paired = low?.type === 'image/webp' && low.size > 0 && low.size < full.size;
+  const saved = await send('POST', path, {
+    raw: full,
+    headers: { 'Content-Type': full.type || 'application/octet-stream', ...(paired ? { 'X-Image-Renditions': 'progressive' } : {}) },
+  });
+  if (!paired) return saved;
+  const name = String(saved.path || '').split('/').pop();
+  const variant = await send('POST', path, {
+    raw: low,
+    headers: { 'Content-Type': low.type, 'X-Image-Variant-Of': name },
+  });
+  return { ...saved, lowPath: variant.path };
+}
+
+// Convenience wrappers: api.get / post / put / patch / del, all under /api/v1/admin.
+export const api = {
+  get: (p) => send('GET', p),
+  post: (p, body = {}) => send('POST', p, { body }),
+  put: (p, body = {}) => send('PUT', p, { body }),
+  patch: (p, body = {}) => send('PATCH', p, { body }),
+  del: (p) => send('DELETE', p),
+  /** Signs in with email + password on the public auth endpoint (the same account as on the site). */
+  async login(email, password) {
+    const r = await send('POST', '/auth/login', { body: { email, password }, base: '/api/v1' });
+    setToken(r.token); return r;
+  },
+  /** Provider settings and social sign-in use the same public authentication endpoints as the main site. */
+  authProviders: () => send('GET', '/auth/providers', { base: '/api/v1' }),
+  async loginSocial(provider, credential) {
+    const body = provider === 'google' ? { idToken: credential }
+      : provider === 'facebook' ? { accessToken: credential }
+        : { identityToken: credential.identityToken, name: credential.name };
+    const r = await send('POST', `/auth/${provider}`, { body, base: '/api/v1' });
+    setToken(r.token); return r;
+  },
+  /** Authenticated file download (PDF invoices, CSV register). */
+  async download(path, filename) {
+    const res = await send('GET', path);          // returns the Response for non-JSON bodies
+    const url = URL.createObjectURL(await res.blob());
+    const a = Object.assign(document.createElement('a'), { href: url, download: filename }); document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  },
+  /** Uploads a raw photo; the server creates and stores both WebP sizes beside the specified R2 video. */
+  uploadVideoThumbnail: (videoKey, file) => send('POST', '/uploads/video-thumbnail', {
+    raw: file,
+    headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Video-Key': videoKey },
+  }),
+  /** Uploads a .srt/.vtt subtitle file (converted to WebVTT on the server) → { path, cues }. */
+  uploadSubtitle: (file) => send('POST', '/uploads/subtitle', { raw: file, headers: { 'Content-Type': 'application/octet-stream' } }),
+  /** Uploads full + compact admin image renditions → { path, lowPath? }. */
+  uploadImage: (full, low) => uploadImageRenditions('/uploads/image', full, low),
+  /** Uploads both Broadcast image renditions to private R2 and returns the stable high-quality app URL. */
+  uploadBroadcastImage: (full, low) => uploadImageRenditions('/uploads/broadcast-image', full, low),
+};
+
+/** PUT a big file straight to R2 with progress (XHR: fetch has no upload progress). */
+export function putFile(url, file, onProgress, contentType) {
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open('PUT', url);
+    x.setRequestHeader('Content-Type', contentType || file.type || 'video/mp4');
+    x.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
+    x.onload = () => {
+      if (x.status >= 200 && x.status < 300) return resolve();
+      const xml = String(x.responseText || '');
+      const code = xml.match(/<Code>([^<]+)<\/Code>/i)?.[1] || '';
+      const msg = xml.match(/<Message>([^<]+)<\/Message>/i)?.[1] || '';
+      const detail = code === 'NoSuchBucket' || x.status === 404
+        ? `Cloudflare R2 bucket not found (HTTP ${x.status}${code ? ` ${code}` : ''}). Check that R2_BUCKET matches your exact bucket name in Cloudflare.`
+        : code === 'SignatureDoesNotMatch'
+          ? 'Cloudflare R2 rejected the upload signature (403 SignatureDoesNotMatch). Check R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY on the server.'
+          : x.status === 403
+            ? `Cloudflare R2 refused the upload (403${code ? ` ${code}` : ''}). Make sure your R2 API token has “Object Read & Write” permission for this bucket.`
+            : `Storage refused the upload (HTTP ${x.status}${code ? ` ${code}` : ''}${msg ? `: ${msg}` : ''}). Check the R2 token allows writes and the bucket CORS allows PUT from this site.`;
+      const error = new ApiError(x.status, detail, 'r2_upload');
+      reportAdminError(error, { where: 'r2-direct-upload', method: 'PUT', route: '/uploads/video', status: x.status });
+      reject(error);
+    };
+    const origin = typeof location !== 'undefined' && location.origin ? location.origin : 'this site';
+    x.onerror = () => {
+      const error = new ApiError(0, `Upload to Cloudflare R2 was blocked by the browser (CORS or network error). In Cloudflare R2 → Bucket → Settings → CORS Policy, allow origin “${origin}” with AllowedMethods ["GET", "HEAD", "PUT"] and AllowedHeaders ["*"].`, 'r2_cors');
+      reportAdminError(error, { where: 'r2-direct-upload', method: 'PUT', route: '/uploads/video', status: 0 });
+      reject(error);
+    };
+    x.onabort = () => {
+      const error = new ApiError(0, 'The video upload was cancelled before it finished.', 'r2_abort');
+      reportAdminError(error, { where: 'r2-direct-upload', method: 'PUT', route: '/uploads/video', status: 0, severity: 'warning' });
+      reject(error);
+    };
+    x.ontimeout = () => {
+      const error = new ApiError(0, 'The video upload timed out. Check your connection and try again.', 'r2_timeout');
+      reportAdminError(error, { where: 'r2-direct-upload', method: 'PUT', route: '/uploads/video', status: 0 });
+      reject(error);
+    };
+    x.send(file);
+  });
+}
+
+/** Shrinks/re-encodes the full rendition in the browser (WebP where it saves space). `webpOnly` creates
+ *  the small progressive placeholder; for GIFs that placeholder is a still frame, while the full upload keeps
+ *  its animation. Returns null when this browser cannot encode WebP. */
+export async function prepareImage(file, { maxWidth = 1600, quality = 0.86, webpOnly = false } = {}) {
+  if (!file?.type?.startsWith('image/')) throw new ApiError(400, 'Choose an image file.');
+  if (!webpOnly && (file.type === 'image/gif' || file.size < 40_000 && file.type === 'image/webp')) return file;
+  const bmp = await createImageBitmap(file).catch(() => null);
+  if (!bmp) return webpOnly ? null : file;
+  const sourceWidth = bmp.width;
+  const widthLimit = Math.max(1, Number(maxWidth) || 1600);
+  const scale = Math.min(1, widthLimit / sourceWidth), w = Math.max(1, Math.round(sourceWidth * scale)), h = Math.max(1, Math.round(bmp.height * scale));
+  const c = Object.assign(document.createElement('canvas'), { width: w, height: h });
+  const context = c.getContext('2d');
+  if (!context) { bmp.close?.(); return webpOnly ? null : file; }
+  context.drawImage(bmp, 0, 0, w, h);
+  bmp.close?.();
+  const blob = await new Promise((resolve) => c.toBlob(resolve, 'image/webp', quality)).catch(() => null);
+  if (!blob) return webpOnly ? null : file;
+  if (webpOnly) return blob.type === 'image/webp' ? blob : null;
+  // Even if WebP happens to be a few bytes larger, a genuinely downscaled output is still the right
+  // full-resolution upload: never let a large original slip past the chosen size limit.
+  return blob.type === 'image/webp' && (blob.size < file.size || sourceWidth > widthLimit) ? blob : file;
+}

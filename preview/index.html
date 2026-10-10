@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ADDABAAZ · welcome e-mail preview</title>
+<!-- Internal design-review page (docs: preview/README.md). It is served with X-Robots-Tag: noindex and is
+     never linked from the app, so it stays out of search results and out of the viewer's navigation.
+     Asset paths are root-absolute (/preview/email.html): the page is reachable as /preview as well
+     as /preview/, and a relative path would then resolve to /email.html and 404.
+     The one inline script below is allowed by a CSP hash (server/src/web.js → cspForInlineScripts), the same
+     way maintenance.html's is — the site policy has no 'unsafe-inline' for scripts. -->
+<style>
+  :root{
+    --bg:#08080a; --panel:#111116; --line:rgba(255,255,255,.09); --text:#fff; --muted:#9a9aa6;
+    --accent:#b80000; --accent-2:#d00000; --gold:#f5c518;
+    --font:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans Bengali',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .bar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+    padding:12px clamp(14px,3vw,24px);background:rgba(8,8,10,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+  .id{display:flex;flex-direction:column;gap:3px;margin-right:8px}
+  .id b{font-size:16px;letter-spacing:2.8px}
+  .id b span{color:var(--accent-2)}
+  .id i{font-style:normal;font-size:9.5px;letter-spacing:1.9px;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .grow{flex:1 1 auto}
+  .seg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--panel)}
+  .seg button{appearance:none;border:0;background:transparent;color:var(--muted);font:inherit;font-weight:700;font-size:12.5px;
+    padding:8px 14px;cursor:pointer;letter-spacing:.2px}
+  .seg button+button{border-left:1px solid var(--line)}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+  .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel);border-radius:999px;
+    padding:8px 14px;font-weight:700;font-size:12.5px;color:var(--muted);cursor:pointer;user-select:none;text-decoration:none}
+  .pill:hover,.seg button:hover{filter:brightness(1.35)}
+  .pill input{accent-color:var(--accent-2);width:14px;height:14px;cursor:pointer;margin:0}
+  a.pill{color:var(--muted)}
+  .stage{padding:clamp(18px,4vw,34px) 16px 70px;display:flex;justify-content:center}
+  .device{width:660px;max-width:100%;transition:width .22s cubic-bezier(.2,.7,.2,1)}
+  .device.phone{width:402px}
+  .device.small{width:332px}
+  .device.full{width:100%}
+  .caption{display:flex;justify-content:space-between;gap:10px;font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--muted);font-weight:700;padding:0 4px 10px}
+  .caption em{font-style:normal;color:var(--gold)}
+  .frame{border:1px solid var(--line);border-radius:18px;overflow:hidden;background:#08080a;box-shadow:0 40px 90px rgba(0,0,0,.7)}
+  .device.phone .frame,.device.small .frame{border:9px solid #17171c;border-radius:34px}
+  iframe{display:block;width:100%;height:1560px;border:0;background:#08080a}
+  .notes{max-width:700px;margin:0 auto;padding:0 20px 70px;color:var(--muted);font-size:12.5px;line-height:1.75}
+  .notes b{color:var(--text)}
+  .notes a{color:var(--text)}
+  .notes code{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12px}
+  @media (max-width:760px){
+    .bar{gap:8px;padding-top:10px;padding-bottom:10px}
+    .id{margin-right:0;flex-basis:100%}
+    .grow{display:none}
+    .seg,.pill{flex:1 1 auto;justify-content:center}
+    .caption{display:none}                     /* the hints are for a laptop reviewing a laptop preview */
+    .stage{padding-top:14px}
+    .notes{padding:0 16px 50px;font-size:12px}
+  }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="id"><b>ADDA<span>BAAZ</span></b><i>Welcome e-mail · body review</i></div>
+  <div class="grow"></div>
+  <div class="seg" id="widths" role="group" aria-label="Preview width">
+    <button type="button" data-w="desktop" aria-pressed="true">Desktop · 600px</button>
+    <button type="button" data-w="phone" aria-pressed="false">Phone · 390px</button>
+    <button type="button" data-w="small" aria-pressed="false">Small · 320px</button>
+    <button type="button" data-w="full" aria-pressed="false">Full</button>
+  </div>
+  <!-- The same letter from two ends: the template a human tuned, and the document the mailer builds. -->
+  <div class="seg" id="source" role="group" aria-label="Which document">
+    <button type="button" data-src="/preview/email.html" aria-pressed="true">Design</button>
+    <button type="button" data-src="/preview/email-shipped.html" aria-pressed="false">Mailer output</button>
+  </div>
+  <label class="pill"><input type="checkbox" id="noimg"> Images off</label>
+  <a class="pill" href="/preview/welcome-email.html">Merge-field template ↗</a>
+</div>
+
+<div class="stage">
+  <div class="device" id="device">
+    <div class="caption"><span id="cap1">Design template, demo values filled in — Riya · Rs. 100 · AB12CD34</span><em id="cap2">600px is the sent width</em></div>
+    <div class="frame"><iframe id="fr" src="/preview/email.html" title="ADDABAAZ welcome e-mail body"></iframe></div>
+  </div>
+</div>
+
+<p class="notes">
+  <b>What this is.</b> The welcome e-mail body, at the width it is sent at. <b>Phone</b> is what fires the
+  520px media query, and that query follows one rule: <b>nothing restacks</b>. Every section is built so the
+  same layout works at 600px and 320px — the ticket keeps its balance as a strip under the amount, the four
+  facts are a list, a show card keeps its 68px poster beside the text; only paddings and sizes change, plus the
+  two buttons, which are <code>&lt;table&gt;</code>s and may therefore stretch. <b>Small · 320px</b> is the
+  width that actually breaks table layouts, so check that one too. <b>Mailer output</b> switches the frame from
+  the tuned template to what <code>server/src/welcome-email.js</code> actually returns for the same numbers —
+  the letter a subscriber receives, confirmation link and all (with the credit ticket when the offer is on, and
+  without the link once an address is confirmed). Both documents must carry the same sections and the same phone
+  rules; <code>server/test/preview-pages.test.js</code> fails if they stop agreeing.
+  <b>Images off</b> hides every <code>&lt;img&gt;</code> — Outlook desktop cannot render the WebP artwork
+  in <code>media/shows</code>, so the design has to read well without it, which is why every panel carries a
+  solid background colour. The markup the mailer sends, with its <code>{{merge_fields}}</code>, is
+  <a href="/preview/welcome-email.html">welcome-email.html</a>; regenerate the rendered copy with
+  <code>npm run email:preview</code>. Wiring notes: <code>preview/README.md</code>.
+</p>
+
+<script>
+  const fr = document.getElementById('fr'), dev = document.getElementById('device'), cap2 = document.getElementById('cap2');
+  const cap1 = document.getElementById('cap1');
+  // Two independent segmented controls (width and source), each toggling `aria-pressed` only inside its group.
+  const press = (group, b) => group.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  // Width switching: the e-mail lives in an iframe so its own @media rules react to the frame's width,
+  // not to the reviewer's browser window.
+  const widths = document.getElementById('widths');
+  for (const b of widths.querySelectorAll('button')) {
+    b.addEventListener('click', () => {
+      dev.className = 'device' + (b.dataset.w === 'phone' ? ' phone' : b.dataset.w === 'small' ? ' small' : b.dataset.w === 'full' ? ' full' : '');
+      press(widths, b);
+      cap2.textContent = b.dataset.w === 'full' ? 'the media query is off below 520px'
+        : `${b.dataset.w === 'small' ? 320 : 390}px viewport → the 520px query fires`;
+    });
+  }
+  // Source switching: `Design` is preview/email.html (the tuned template, filled with demo values); `Mailer
+  // output` is preview/email-shipped.html, the document server/src/welcome-email.js returns for the same
+  // numbers. A test compares their structure, so the two cannot drift apart unnoticed.
+  const source = document.getElementById('source');
+  for (const b of source.querySelectorAll('button')) {
+    b.addEventListener('click', () => {
+      press(source, b);
+      fr.src = b.dataset.src;
+      cap1.textContent = b.dataset.src.includes('shipped')
+        ? 'welcomeEmail() output · Rs. 100 credit · AB12CD34 · with a confirmation link'
+        : 'Design template, demo values filled in — Riya · Rs. 100 · AB12CD34';
+    });
+  }
+  // Same-origin document, so the toggle reaches into it instead of keeping a second copy of the e-mail.
+  const hide = (on) => {
+    try { for (const im of fr.contentDocument.images) im.style.visibility = on ? 'hidden' : ''; }
+    catch { /* opened over file:// there is no same-origin access: the toggle simply does nothing */ }
+  };
+  document.getElementById('noimg').addEventListener('change', (e) => hide(e.target.checked));
+  fr.addEventListener('load', () => { if (document.getElementById('noimg').checked) hide(true); });
+</script>
+</body>
+</html>
