@@ -85,9 +85,11 @@ test('desktop-only styling makes a fixed left rail without changing phone naviga
   assert.match(rail, /\.topbar\s*\{[^}]*width:\s*var\(--desktop-nav-width\)[^}]*height:\s*100vh[^}]*background:\s*transparent[^}]*backdrop-filter:\s*none/s);
   assert.match(rail, /\.topbar::before \{[^}]*opacity: 0; visibility: hidden;[^}]*linear-gradient\(90deg, rgba\(5,5,5,\.92\)[^}]*rgba\(5,5,5,0\) 100%/,
     'the stronger navigation backdrop stays hidden at rest and fades to a transparent edge');
-  assert.ok(rail.includes('.topbar:hover, .topbar:focus-within { width: var(--desktop-nav-open-width); }'),
+  assert.ok(rail.includes('.topbar:hover, .topbar:has(:focus-visible) { width: var(--desktop-nav-open-width); }'),
     'the entire left rail becomes the hover target and expands to the label boundary');
-  assert.ok(rail.includes('.topbar:hover::before, .topbar:focus-within::before {'),
+  assert.doesNotMatch(rail, /\.topbar:focus-within/,
+    'a mouse click that leaves focus on a menu link does not pin the desktop rail open');
+  assert.ok(rail.includes('.topbar:hover::before, .topbar:has(:focus-visible)::before {'),
     'the fading backdrop appears while the pointer or keyboard focus is inside the rail');
   assert.match(rail, /\.topbar \.brand-text \{[^}]*max-width: none;[^}]*opacity: 1; transform: none;/,
     'the Addabaaz wordmark stays visible while the menu labels are collapsed');
@@ -103,9 +105,9 @@ test('desktop-only styling makes a fixed left rail without changing phone naviga
   assert.match(rail, /\.hero-inner\s*\{\s*padding-left:\s*var\(--desktop-content-left\)/);
   assert.match(rail, /\.primary-nav \.nav-link > span \{[^}]*max-width: 0;[^}]*opacity: 0;/,
     'menu labels are hidden at rest');
-  assert.ok(rail.includes('.topbar:hover .primary-nav .nav-link, .topbar:focus-within .primary-nav .nav-link {'),
+  assert.ok(rail.includes('.topbar:hover .primary-nav .nav-link, .topbar:has(:focus-visible) .primary-nav .nav-link {'),
     'hovering anywhere inside the rail expands every menu row');
-  assert.ok(rail.includes('.topbar:hover .primary-nav .nav-link > span, .topbar:focus-within .primary-nav .nav-link > span {'),
+  assert.ok(rail.includes('.topbar:hover .primary-nav .nav-link > span, .topbar:has(:focus-visible) .primary-nav .nav-link > span {'),
     'hovering anywhere inside the rail reveals every menu label together');
   assert.ok(rail.includes('color: rgba(255,255,255,.68); font-size: 18px;'),
     'unselected desktop destinations use softened white');
