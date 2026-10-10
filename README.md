@@ -50,6 +50,7 @@ data/catalog.json    content SEED + static/mobile bundle (live catalog is in MyS
 data/studio.json     About / team / services / contact details (same role)
 media/               optimised WebP artwork + app icons (generated)
 server/              REST API + static file server (Express), MySQL layer, SQL migrations, tests
+preview/             unlisted /preview pages for reviewing the e-mail bodies in a browser (noindex, `PREVIEW_PAGES=0` to hide)
 mobile/              Capacitor config for Android & iOS
 scripts/             optimize-images.sh, validate-catalog.mjs, build-www.mjs
 docs/                ARCHITECTURE.md · SEO.md · ADMIN.md · AUTH.md · PREMIUM.md · DATABASE.md · MOBILE.md · CONTENT.md · openapi.yaml

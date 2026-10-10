@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ADDABAAZ · welcome e-mail preview</title>
+<!-- Internal design-review page (docs: preview/README.md). It is served with X-Robots-Tag: noindex and
+     is never linked from the app, so it stays out of search results and out of the viewer's navigation.
+     The one inline script below is allowed by a CSP hash (server/src/web.js → cspForInlineScripts), the
+     same way maintenance.html's is — the site policy has no 'unsafe-inline' for scripts. -->
+<style>
+  :root{
+    --bg:#050505; --panel:#111114; --line:rgba(255,255,255,.12); --text:#fff; --muted:#9a9aa6;
+    --accent:#b80000; --accent-2:#d00000; --gold:#f5c518;
+    --font:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans Bengali',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .bar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:12px;align-items:center;
+    padding:12px clamp(14px,3vw,26px);background:rgba(5,5,5,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .id{display:flex;flex-direction:column;gap:3px;margin-right:6px}
+  .id b{font-size:16px;letter-spacing:2.6px}
+  .id b span{color:var(--accent-2)}
+  .id i{font-style:normal;font-size:10px;letter-spacing:1.7px;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .grow{flex:1 1 auto}
+  .seg{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--panel)}
+  .seg button{appearance:none;border:0;background:transparent;color:var(--muted);font:inherit;font-weight:700;font-size:12.5px;
+    padding:8px 14px;cursor:pointer;letter-spacing:.2px}
+  .seg button+button{border-left:1px solid var(--line)}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+  .pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--panel);border-radius:999px;
+    padding:8px 14px;font-weight:700;font-size:12.5px;color:var(--muted);cursor:pointer;user-select:none}
+  .pill:hover,.seg button:hover{filter:brightness(1.2)}
+  .pill input{accent-color:var(--accent-2);width:14px;height:14px;cursor:pointer;margin:0}
+  a.pill{text-decoration:none;color:var(--muted)}
+  .stage{padding:clamp(18px,4vw,34px) 16px 70px;display:flex;justify-content:center}
+  .device{width:660px;max-width:100%;transition:width .22s cubic-bezier(.2,.7,.2,1)}
+  .device.phone{width:402px}
+  .device.full{width:100%}
+  .caption{display:flex;justify-content:space-between;gap:10px;font-size:11px;letter-spacing:1.4px;text-transform:uppercase;
+    color:var(--muted);font-weight:700;padding:0 4px 9px}
+  .caption em{font-style:normal;color:var(--gold)}
+  .frame{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#f2f2f4;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+  .device.phone .frame{border:9px solid #1b1b20;border-radius:34px;background:#f2f2f4}
+  iframe{display:block;width:100%;height:1500px;border:0;background:#f2f2f4}
+  .note{max-width:660px;margin:0 auto;padding:0 20px 60px;color:var(--muted);font-size:12.5px;line-height:1.7}
+  .note a{color:var(--text)}
+  .note code{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12px}
+  @media (max-width:760px){ .bar{gap:8px} .id{margin-right:0} }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="id"><b>ADDA<span>BAAZ</span></b><i>Welcome e-mail · body review</i></div>
+  <div class="grow"></div>
+  <div class="seg" role="group" aria-label="Preview width">
+    <button type="button" data-w="desktop" aria-pressed="true">Desktop · 600px</button>
+    <button type="button" data-w="phone" aria-pressed="false">Phone · 390px</button>
+    <button type="button" data-w="full" aria-pressed="false">Full</button>
+  </div>
+  <label class="pill"><input type="checkbox" id="noimg"> Images off</label>
+  <a class="pill" href="template.html">Sendable template ↗</a>
+</div>
+
+<div class="stage">
+  <div class="device" id="device">
+    <div class="caption"><span id="cap">Rendered with demo values — Riya · Rs.&nbsp;100 · AB12CD34</span><em id="cap2">iframe = the e-mail document</em></div>
+    <div class="frame"><iframe id="fr" src="email.html" title="ADDABAAZ welcome e-mail body"></iframe></div>
+  </div>
+</div>
+
+<p class="note">
+  <b>What this is.</b> The welcome e-mail body, in the width it is sent at. <b>Phone</b> is what triggers the
+  stacking media query at 520px: the credit ticket splits, the feature grid goes one-per-row and the play
+  buttons drop out. <b>Images off</b> hides every <code>&lt;img&gt;</code> — Outlook desktop cannot render the
+  WebP artwork in <code>media/shows</code>, so the layout must read well without it, which is why each dark card
+  carries a solid background colour. The sendable markup, with its <code>{{merge_fields}}</code>, is
+  <a href="template.html">template.html</a>; wiring notes are in <code>preview/README.md</code>.
+</p>
+
+<script>
+  const fr = document.getElementById('fr'), dev = document.getElementById('device'), cap2 = document.getElementById('cap2');
+  // Width switching: the e-mail lives in an iframe so its own @media rules react to the frame's width,
+  // not the reviewer's browser window.
+  for (const b of document.querySelectorAll('.seg button')) {
+    b.addEventListener('click', () => {
+      dev.className = 'device' + (b.dataset.w === 'phone' ? ' phone' : b.dataset.w === 'full' ? ' full' : '');
+      document.querySelectorAll('.seg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      cap2.textContent = b.dataset.w === 'phone' ? '402px frame → the 520px query fires' : 'iframe = the e-mail document';
+    });
+  }
+  // Same-origin document, so the toggle reaches in rather than shipping a second copy of the e-mail.
+  const hide = (on) => {
+    try { for (const im of fr.contentDocument.images) im.style.visibility = on ? 'hidden' : ''; }
+    catch { /* a file:// preview is not same-origin: the toggle simply does nothing */ }
+  };
+  document.getElementById('noimg').addEventListener('change', (e) => hide(e.target.checked));
+  fr.addEventListener('load', () => { if (document.getElementById('noimg').checked) hide(true); });
+</script>
+</body>
+</html>

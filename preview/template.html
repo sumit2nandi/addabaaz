@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Email clients get this same <meta> pair in <head>; it stops dark-mode Gmail/Apple Mail from
+     inverting a design that was authored light and already carries its own dark panels. -->
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light">
+<title>ADDABAAZ · welcome e-mail (template with merge fields)</title>
+<!-- The sendable body: {{first_name}} {{site_url}} {{media_url}} {{credit_rupees}} {{balance_rupees}} {{invite_code}} {{support_email}} are replaced by the mailer. -->
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;family=Tiro+Bangla:ital@0;1&amp;display=swap" rel="stylesheet">
+<style type="text/css">
+  @media only screen and (max-width:520px){
+    .pad{padding-left:20px !important;padding-right:20px !important}
+    .h1{font-size:26px !important;line-height:1.18 !important}
+    .half{display:block !important;width:100% !important;max-width:100% !important}
+    .halfgap{display:block !important;width:100% !important;height:14px !important;line-height:14px !important}
+    .stack{display:block !important;width:100% !important;text-align:left !important;padding:14px 18px 16px !important;border-left:0 !important;border-radius:0 !important}
+    .ticket{padding:20px 18px 4px !important}
+    .ticket .stack{padding:0 0 16px !important}
+    .go{display:none !important}
+    .btn{display:block !important;width:100% !important}
+    .btnin{display:block !important}
+    .tag{display:none !important}
+  }
+
+  /* Preview-only: the web fonts the app uses, so the type matches addabaaz.in. A mail client that
+     ignores @import/@font-face falls back to the Arial stack written into every element. */
+  body{margin:0;padding:0;background:#f2f2f4;-webkit-text-size-adjust:100%}
+</style>
+</head>
+<body style="margin:0;background:#f2f2f4">
+<!-- ============================================================
+ADDABAAZ · welcome email body
+600px · table-based · every style inline · no external CSS/images required
+Merge fields: {{first_name}} {{site_url}} {{media_url}} {{credit_rupees}}
+              {{balance_rupees}} {{invite_code}} {{support_email}}
+============================================================ -->
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:transparent;opacity:0">
+  Rs. {{credit_rupees}} of ADDABAAZ credit is already in your account — spend it on any plan. &zwnj;&nbsp;&#8199;&zwnj;&nbsp;&#8199;&zwnj;&nbsp;&#8199;
+</div>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f2f2f4" style="background:#f2f2f4;width:100%">
+<tr><td align="center" style="padding:28px 12px">
+
+
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:100%;max-width:600px;background:#ffffff;border:1px solid #e9e9ec;border-radius:18px;overflow:hidden">
+
+  <!-- ---------- masthead ---------- -->
+  <tr><td bgcolor="#050505" class="pad" style="background:#050505;padding:22px 30px 20px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td valign="bottom" style="font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:21px;font-weight:bold;letter-spacing:3px;line-height:1;color:#ffffff">
+          ADDA<span style="color:#d00000">BAAZ</span>
+        </td>
+        <td class="tag" valign="bottom" align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:9.5px;font-weight:bold;letter-spacing:2.2px;text-transform:uppercase;line-height:1;color:#8d8d99">
+          Stories beyond the screen
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+  <tr><td bgcolor="#b80000" height="3" style="background:#b80000;font-size:0;line-height:0">&nbsp;</td></tr>
+  <tr><td bgcolor="#f5c518" height="1" style="background:#f5c518;font-size:0;line-height:0">&nbsp;</td></tr>
+
+  <!-- ---------- hero ---------- -->
+  <tr><td class="pad" style="padding:36px 30px 0">
+    <p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;line-height:1;color:#b80000">
+      স্বাগতম &nbsp;·&nbsp; welcome to the adda
+    </p>
+    <h1 class="h1" style="margin:0;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:33px;font-weight:bold;letter-spacing:-0.6px;line-height:1.1;color:#0b0b0d">
+      Bengali stories worth&nbsp;staying&nbsp;up&nbsp;for.
+    </h1>
+    <p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15.5px;line-height:1.66;color:#4d4d59">
+      Hi {{first_name}} — your ADDABAAZ account is open. Original series, stand-up from the
+      Kolkata circuit, podcasts you can argue with and the reels in between: made by our own studio,
+      streaming on your phone, your laptop or the television.
+    </p>
+  </td></tr>
+
+  <!-- ---------- the credit ticket ---------- -->
+  <tr><td class="pad" style="padding:28px 30px 0">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0b0b0d" class="ticket" style="background:#0b0b0d;border:1px solid #232328;border-radius:14px">
+      <tr>
+        <td class="stack" style="padding:20px 18px 20px 22px">
+          <p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1;color:#f5c518">
+            New-account credit
+          </p>
+          <p style="margin:0;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:30px;font-weight:bold;line-height:1;color:#ffffff">
+            Rs. {{credit_rupees}}
+          </p>
+          <p style="margin:10px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:#b4b4c0">
+            It comes off the price of any plan at checkout, and it waits for you —
+            nothing to activate, nothing to remember.
+          </p>
+        </td>
+        <td class="stack" width="132" align="left" valign="middle" bgcolor="#18181c" style="background:#18181c;border-left:1px dashed #35353c;border-radius:0 14px 14px 0;padding:20px 18px">
+          <p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;letter-spacing:1.6px;text-transform:uppercase;line-height:1;color:#8d8d99">
+            Your balance
+          </p>
+          <p style="margin:0;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:20px;font-weight:bold;line-height:1;color:#f5c518">
+            Rs. {{balance_rupees}}
+          </p>
+          <p style="margin:8px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11.5px;line-height:1.5;color:#7e7e8b">
+            Account &rsaquo; Credit
+          </p>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- ---------- calls to action ---------- -->
+  <tr><td class="pad" style="padding:26px 30px 0">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="left" bgcolor="#b80000" class="btn" style="background:#b80000;border-radius:11px">
+      <tr><td align="center" class="btnin" style="padding:0">
+        <a href="{{site_url}}/#/" style="display:inline-block;padding:15px 30px;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;letter-spacing:.2px;color:#ffffff;text-decoration:none">Start&nbsp;watching</a>
+      </td></tr>
+    </table>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="left" class="btn" style="margin-left:8px">
+      <tr><td align="center" class="btnin" style="padding:0">
+        <a href="{{site_url}}/#/plans" style="display:inline-block;padding:15px 22px;font-family:Arial,Helvetica,sans-serif;font-size:14.5px;font-weight:bold;color:#b80000;text-decoration:none">See&nbsp;plans&nbsp;&rsaquo;</a>
+      </td></tr>
+    </table>
+    <div style="mso-line-height-rule:exactly;clear:both;line-height:0;font-size:0">&nbsp;</div>
+  </td></tr>
+
+  <!-- ---------- what to watch first ---------- -->
+  <tr><td class="pad" style="padding:40px 30px 0;border-top:1px solid #ececee">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td valign="bottom"><h2 style="margin:0;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:20px;font-weight:bold;line-height:1.2;color:#0b0b0d">Start with these three</h2></td>
+        <td class="tag" align="right" valign="bottom" style="padding-bottom:3px"><a href="{{site_url}}/#/shows" style="font-family:Arial,Helvetica,sans-serif;font-size:12.5px;font-weight:bold;color:#b80000;text-decoration:none">All shows &rsaquo;</a></td>
+      </tr>
+    </table>
+    <p style="margin:8px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#6d6d79">What our viewers keep going back to this week.</p>
+  </td></tr>
+
+  <tr><td class="pad" style="padding:16px 30px 0">
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0b0b0d" style="background:#0b0b0d;border-radius:14px">
+      <tr>
+        <td width="92" valign="top" style="width:92px;padding:12px 0 12px 12px">
+          <a href="{{site_url}}/#/show/shahid" style="text-decoration:none"><img src="{{media_url}}/media/shows/shahid-sm.webp" width="68" height="94" alt="শহীদ" style="display:block;width:68px;height:94px;border:0;border-radius:8px;background:#202026"></a>
+        </td>
+        <td class="stack" valign="top" style="padding:15px 12px 15px 16px">
+          <p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:9.5px;font-weight:bold;letter-spacing:1.8px;text-transform:uppercase;line-height:1;color:#f5c518">Series · Historical drama</p>
+          <p style="margin:0;font-family:'Tiro Bangla','Noto Serif Bengali','Noto Sans Bengali','Plus Jakarta Sans',Arial,sans-serif;font-size:18px;font-weight:bold;line-height:1.25;color:#ffffff"><a href="{{site_url}}/#/show/shahid" style="color:#ffffff;text-decoration:none">শহীদ</a></p>
+          <p style="margin:6px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.55;color:#a8a8b4">Khudiram Bose, Jatindra Nath Das, Pritilata, Bina Das — one story in every episode.</p>
+        </td>
+        <td class="go" width="52" align="right" valign="middle" style="width:52px;padding:0 14px 0 0">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right" bgcolor="#b80000" style="background:#b80000;border-radius:999px">
+            <tr><td align="center" valign="middle" width="32" height="32" style="width:32px;height:32px;line-height:32px">
+              <a href="{{site_url}}/#/show/shahid" style="display:block;font-family:Arial,sans-serif;font-size:11px;line-height:32px;color:#ffffff;text-decoration:none">&#9654;</a>
+            </td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <div style="height:10px;line-height:10px;font-size:0">&nbsp;</div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0b0b0d" style="background:#0b0b0d;border-radius:14px">
+      <tr>
+        <td width="92" valign="top" style="width:92px;padding:12px 0 12px 12px">
+          <a href="{{site_url}}/#/show/laugh-bite" style="text-decoration:none"><img src="{{media_url}}/media/shows/laugh-bite-sm.webp" width="68" height="94" alt="Laugh Bite" style="display:block;width:68px;height:94px;border:0;border-radius:8px;background:#202026"></a>
+        </td>
+        <td class="stack" valign="top" style="padding:15px 12px 15px 16px">
+          <p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:9.5px;font-weight:bold;letter-spacing:1.8px;text-transform:uppercase;line-height:1;color:#f5c518">Stand-up comedy</p>
+          <p style="margin:0;font-family:'Plus Jakarta Sans',Arial,sans-serif;font-size:18px;font-weight:bold;line-height:1.25;color:#ffffff"><a href="{{site_url}}/#/show/laugh-bite" style="color:#ffffff;text-decoration:none">Laugh Bite</a></p>
+          <p style="margin:6px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.55;color:#a8a8b4">Subhadip Ghosh, Vaskar Manna, Pramit Mitra and Anmitra Sarkar — local jokes, local trains, local chaos. 100% faltu guaranteed.</p>
+        </td>
+        <td class="go" width="52" align="right" valign="middle" style="width:52px;padding:0 14px 0 0">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right" bgcolor="#b80000" style="background:#b80000;border-radius:999px">
+            <tr><td align="center" valign="middle" width="32" height="32" style="width:32px;height:32px;line-height:32px">
+              <a href="{{site_url}}/#/show/laugh-bite" style="display:block;font-family:Arial,sans-serif;font-size:11px;line-height:32px;color:#ffffff;text-decoration:none">&#9654;</a>
+            </td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <div style="height:10px;line-height:10px;font-size:0">&nbsp;</div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0b0b0d" style="background:#0b0b0d;border-radius:14px">
+      <tr>
+        <td width="92" valign="top" style="width:92px;padding:12px 0 12px 12px">
+          <a href="{{site_url}}/#/show/faltu-kotha" style="text-decoration:none"><img src="{{media_url}}/media/shows/faltu-kotha-sm.webp" width="68" height="94" alt="ফালতু কথা" style="display:block;width:68px;height:94px;border:0;border-radius:8px;background:#202026"></a>
+        </td>
+        <td class="stack" valign="top" style="padding:15px 12px 15px 16px">
+          <p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:9.5px;font-weight:bold;letter-spacing:1.8px;text-transform:uppercase;line-height:1;color:#f5c518">Podcast · New episodes</p>
+          <p style="margin:0;font-family:'Tiro Bangla','Noto Serif Bengali','Noto Sans Bengali','Plus Jakarta Sans',Arial,sans-serif;font-size:18px;font-weight:bold;line-height:1.25;color:#ffffff"><a href="{{site_url}}/#/show/faltu-kotha" style="color:#ffffff;text-decoration:none">ফালতু কথা</a></p>
+          <p style="margin:6px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.55;color:#a8a8b4">গল্প নাই, যুক্তি নাই — শুধু ফালতু কথা. Unfiltered, satirical, occasionally unhinged.</p>
+        </td>
+        <td class="go" width="52" align="right" valign="middle" style="width:52px;padding:0 14px 0 0">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right" bgcolor="#b80000" style="background:#b80000;border-radius:999px">
+            <tr><td align="center" valign="middle" width="32" height="32" style="width:32px;height:32px;line-height:32px">
+              <a href="{{site_url}}/#/show/faltu-kotha" style="display:block;font-family:Arial,sans-serif;font-size:11px;line-height:32px;color:#ffffff;text-decoration:none">&#9654;</a>
+            </td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+  </td></tr>
+
+  <!-- ---------- how it works ---------- -->
+  <tr><td class="pad" style="padding:34px 30px 0">
+    <h2 style="margin:0 0 4px;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:20px;font-weight:bold;line-height:1.2;color:#0b0b0d">Four things worth knowing</h2>
+  </td></tr>
+  <tr><td class="pad" style="padding:18px 30px 0">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td class="half" width="50%" valign="top" bgcolor="#f7f7f9" style="background:#f7f7f9;border-radius:12px;padding:18px 18px 20px">
+          <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;letter-spacing:1.7px;text-transform:uppercase;line-height:1;color:#b80000">Continue watching</p>
+          <p style="margin:9px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#4d4d59">Stop mid-episode on the phone, finish it on the laptop. We keep the timestamp, and autoplay hands you the next one.</p>
+        </td>
+        <td class="halfgap" width="16" style="width:16px;font-size:0;line-height:16px">&nbsp;</td>
+        <td class="half" width="50%" valign="top" bgcolor="#f7f7f9" style="background:#f7f7f9;border-radius:12px;padding:18px 18px 20px">
+          <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;letter-spacing:1.7px;text-transform:uppercase;line-height:1;color:#b80000">My List &amp; reminders</p>
+          <p style="margin:9px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#4d4d59">Save anything for later. On a Coming Soon title, tap <b>Remind me</b> and we will tell you the day it lands.</p>
+        </td>
+      </tr>
+      <tr><td colspan="3" style="height:12px;line-height:12px;font-size:0">&nbsp;</td></tr>
+      <tr>
+        <td class="half" width="50%" valign="top" bgcolor="#f7f7f9" style="background:#f7f7f9;border-radius:12px;padding:18px 18px 20px">
+          <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;letter-spacing:1.7px;text-transform:uppercase;line-height:1;color:#b80000">Who’s watching?</p>
+          <p style="margin:9px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#4d4d59">Separate profiles on one account, each with its own list — plus a PIN-locked kids profile.</p>
+        </td>
+        <td class="halfgap" width="16" style="width:16px;font-size:0;line-height:16px">&nbsp;</td>
+        <td class="half" width="50%" valign="top" bgcolor="#f7f7f9" style="background:#f7f7f9;border-radius:12px;padding:18px 18px 20px">
+          <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;letter-spacing:1.7px;text-transform:uppercase;line-height:1;color:#b80000">No download needed</p>
+          <p style="margin:9px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#4d4d59">Open it in the browser and choose <b>Add to Home screen</b> — it installs like an app, on Android, iOS and desktop.</p>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- ---------- referrals ---------- -->
+  <tr><td class="pad" style="padding:30px 30px 0">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fdf4f4" style="background:#fdf4f4;border:1px solid #f6dcdc;border-radius:14px">
+      <tr>
+        <td class="stack" valign="middle" style="padding:20px 20px 20px 22px">
+          <p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:bold;letter-spacing:1.9px;text-transform:uppercase;line-height:1;color:#b80000">Pass it on</p>
+          <p style="margin:0;font-family:'Plus Jakarta Sans',Arial,Helvetica,sans-serif;font-size:19px;font-weight:bold;line-height:1.3;color:#0b0b0d">Rs. {{credit_rupees}} for them. Rs. {{credit_rupees}} for you.</p>
+          <p style="margin:9px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13.5px;line-height:1.6;color:#5c5c68">Send your code and both balances go up the moment your friend confirms their email or phone — so it stays fair for everyone.</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="left" style="margin-top:14px">
+            <tr>
+              <td bgcolor="#ffffff" style="background:#ffffff;border:1px dashed #e0b4b4;border-radius:9px;padding:9px 16px;font-family:'Plus Jakarta Sans',Arial,sans-serif;font-size:14px;font-weight:bold;letter-spacing:2.5px;color:#b80000">{{invite_code}}</td>
+              <td style="padding-left:12px"><a href="{{site_url}}/#/account" style="font-family:Arial,sans-serif;font-size:13.5px;font-weight:bold;color:#b80000;text-decoration:underline">Open Refer &amp; earn</a></td>
+            </tr>
+          </table>
+          <div style="clear:both;line-height:0;font-size:0">&nbsp;</div>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- ---------- sign-off ---------- -->
+  <tr><td class="pad" style="padding:32px 30px 34px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td width="3" bgcolor="#b80000" style="width:3px;background:#b80000;border-radius:2px;font-size:0;line-height:0">&nbsp;</td>
+        <td valign="top" style="padding-left:16px">
+          <p style="margin:0;font-family:'Tiro Bangla','Noto Serif Bengali','Noto Sans Bengali',Georgia,serif;font-size:15.5px;line-height:1.75;color:#2c2c35">গল্প আমাদের আড্ডা থেকেই শুরু হয়। ভালো লাগলে শোনো, না লাগলে বলো — আমরা শুনছি।</p>
+          <p style="margin:9px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13.5px;line-height:1.6;color:#7a7a86">Stories start at the adda. Tell us when one lands — and when it doesn’t. — <b style="color:#4d4d59">The ADDABAAZ team, Kolkata</b></p>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- ---------- footer ---------- -->
+  <tr><td bgcolor="#050505" class="pad" style="background:#050505;padding:24px 30px 26px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr><td>
+        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;line-height:1.65;color:#a3a3ae">
+          Trouble signing in, a plan or a payment? Reply to this email or write to
+          <a href="mailto:{{support_email}}" style="color:#ffffff;text-decoration:underline">{{support_email}}</a> —
+          a real person answers. You can also open a ticket under
+          <a href="{{site_url}}/#/support" style="color:#ffffff;text-decoration:underline">Support</a>.
+        </p>
+      </td></tr>
+      <tr><td style="padding-top:16px">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td bgcolor="#15151a" style="background:#15151a;border:1px solid #2b2b32;border-radius:999px;padding:8px 14px"><a href="https://www.instagram.com/addabaazdeep" style="font-family:Arial,sans-serif;font-size:10px;font-weight:bold;letter-spacing:1.4px;text-transform:uppercase;color:#d5d5dc;text-decoration:none">Instagram</a></td>
+            <td width="8" style="width:8px;font-size:0">&nbsp;</td>
+            <td bgcolor="#15151a" style="background:#15151a;border:1px solid #2b2b32;border-radius:999px;padding:8px 14px"><a href="https://www.facebook.com/ADDABAAZDEEP" style="font-family:Arial,sans-serif;font-size:10px;font-weight:bold;letter-spacing:1.4px;text-transform:uppercase;color:#d5d5dc;text-decoration:none">Facebook</a></td>
+            <td width="8" style="width:8px;font-size:0">&nbsp;</td>
+            <td bgcolor="#15151a" style="background:#15151a;border:1px solid #2b2b32;border-radius:999px;padding:8px 14px"><a href="https://www.youtube.com/@ADDABAAZ01" style="font-family:Arial,sans-serif;font-size:10px;font-weight:bold;letter-spacing:1.4px;text-transform:uppercase;color:#d5d5dc;text-decoration:none">YouTube</a></td>
+            <td width="8" style="width:8px;font-size:0">&nbsp;</td>
+            <td bgcolor="#15151a" style="background:#15151a;border:1px solid #2b2b32;border-radius:999px;padding:8px 14px"><a href="{{site_url}}/#/reels" style="font-family:Arial,sans-serif;font-size:10px;font-weight:bold;letter-spacing:1.4px;text-transform:uppercase;color:#d5d5dc;text-decoration:none">Reels</a></td>
+          </tr>
+        </table>
+      </td></tr>
+      <tr><td style="padding-top:18px;border-top:1px solid #1c1c22">
+        <p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11.5px;line-height:1.65;color:#7c7c88">
+          ADDABAAZ · 162/B, 283 Lake Gardens, Kolkata, West Bengal 700045, India ·
+          <a href="{{site_url}}/#/privacy" style="color:#a3a3ae;text-decoration:underline">Privacy</a> ·
+          <a href="{{site_url}}/#/terms" style="color:#a3a3ae;text-decoration:underline">Terms</a> ·
+          <a href="{{site_url}}/#/refunds" style="color:#a3a3ae;text-decoration:underline">Refunds</a> ·
+          <a href="{{site_url}}/#/account" style="color:#a3a3ae;text-decoration:underline">Email preferences</a>
+        </p>
+        <p style="margin:10px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.6;color:#5f5f6b">
+          You’re receiving this welcome note because you just created an ADDABAAZ account. Billing receipts and
+          security notices will keep coming to this address.
+        </p>
+      </td></tr>
+    </table>
+  </td></tr>
+
+</table>
+
+<p style="margin:18px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.6;color:#9c9ca6;text-align:center">
+  ADDABAAZ — stories beyond the screen · Kolkata
+</p>
+
+</td></tr>
+</table>
+
+</body>
+</html>

@@ -167,6 +167,26 @@ export function mountWebsite(app, { serveStatic = true, ROOT, db, catalog, PLANS
     app.get(['/content', '/content/'], consoleHeaders, (_q, res) => res.sendFile(path.join(ROOT, 'content/index.html')));
     app.use('/content', consoleHeaders, express.static(path.join(ROOT, 'content'), { index: false, dotfiles: 'ignore', etag: true }));
 
+    /* ---------- /preview — design pages, not viewer pages (preview/README.md) ---------- */
+    // The welcome e-mail body as it will actually be sent, framed in a browser so the design can be reviewed
+    // at its real width before it goes into the mailer. Nothing here is linked from the app, indexed, or
+    // shipped in the static bundle (`npm run build:www` copies an explicit list of folders and leaves this
+    // one out), and `PREVIEW_PAGES=0` takes the whole area down without a code change.
+    if (!/^(0|false|no)$/i.test(process.env.PREVIEW_PAGES || '1')) {
+      const previewHeaders = (_q, res, next) => { res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' }); next(); };
+      // Read from disk on every request: the reviewer edits an HTML file and reloads — no build, no stale cache.
+      // The harness page carries one inline script, so it needs the CSP hash treatment maintenance.html uses.
+      const previewPage = (name) => (_q, res) => {
+        const file = path.join(ROOT, 'preview', name);
+        if (!fs.existsSync(file)) return res.status(404).type('text/plain').send('Not found');
+        const body = fs.readFileSync(file, 'utf8');
+        res.set('Content-Security-Policy', cspForInlineScripts(body)).type('html').send(body);
+      };
+      app.get(['/preview', '/preview/'], previewHeaders, previewPage('index.html'));
+      app.get('/preview/email', previewHeaders, previewPage('email.html'));
+      app.use('/preview', previewHeaders, express.static(path.join(ROOT, 'preview'), { index: false, dotfiles: 'ignore', etag: true }));
+    }
+
     // Every other GET is a page of the web app (/, /show/shahid …). Unknown pages get a REAL 404 status (with the app shell, so
     // people still see the site) — otherwise search engines index every mistyped URL as a "soft 404".
     app.get('*', async (req, res, next) => {
