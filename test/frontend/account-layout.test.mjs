@@ -124,6 +124,18 @@ test('desktop-only overview: the settings grid steps aside for the subscription 
     'a plan bought or cancelled elsewhere repaints the summary without a reload');
 });
 
+test('desktop account details uses the full account workspace beside its navigation', () => {
+  const css = read('app/css/styles.css');
+  const narrow = css.indexOf('.account-details-page { max-width: 720px; padding-top: 24px; }');
+  const desktopWidth = css.indexOf('@media (min-width: 1024px) { .account-details-page { max-width: 1200px; } }', narrow);
+  assert.ok(narrow >= 0 && desktopWidth > narrow,
+    'the desktop width override follows the phone/tablet form width');
+  assert.match(css, /\.account-layout \{ display: grid; grid-template-columns: 250px minmax\(0, 1fr\); gap: 40px;/,
+    'the account editor keeps a dedicated navigation column next to the form');
+  assert.match(css, /\.account-details-page \{ max-width: 720px; padding-top: 24px; \}/,
+    'smaller screens retain the narrow single-column editor');
+});
+
 test('guest mobile identity and sign-in buttons occupy separate rows', () => {
   const css = read('app/css/styles.css');
   const mobile = css.slice(css.lastIndexOf('@media (max-width: 899px)'));

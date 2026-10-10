@@ -1227,6 +1227,7 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 
 /* Account editor: quiet underlined fields rather than stacked cards. */
 .account-details-page { max-width: 720px; padding-top: 24px; }
+@media (min-width: 1024px) { .account-details-page { max-width: 1200px; } }
 .account-edit-header { display: flex; align-items: center; gap: 8px; min-width: 0; margin-bottom: 32px; }
 .account-edit-header .page-back { margin-left: -8px; }
 .account-edit-header h1 { min-width: 0; font-size: 20px; font-weight: 700; }
