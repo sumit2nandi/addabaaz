@@ -18,7 +18,7 @@ import { app } from '../app.js';
 const THRESHOLD = 88;   // px of pull required to trigger a refresh
 const MAX = 96;         // px the indicator may travel
 const MIN_SPIN = 400;   // ms the indicator stays up, so even an instant refresh feels acknowledged
-let startY = null, pulled = 0, engaged = false, el = null;
+let startX = null, startY = null, pulled = 0, engaged = false, el = null;
 
 // Leave the gesture alone where it would mean something else: the reels feed swipes vertically,
 // dialogs freeze the scroll at the top, and a refresh mid-video would tear down the player
@@ -33,7 +33,7 @@ const ensure = () => {
   el = document.createElement('div');
   el.id = 'ptr';
   el.className = 'ptr';
-  el.innerHTML = '<div class="spinner"></div>';
+  el.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true"><circle class="tr" cx="20" cy="20" r="15.9155"></circle><circle class="arc" cx="20" cy="20" r="15.9155"></circle></svg>';
   document.body.appendChild(el);
   return el;
 };
@@ -87,18 +87,27 @@ export function initPullToRefresh() {
   document.__ptrInit = true;
 
   document.addEventListener('touchstart', (e) => {
-    startY = null; pulled = 0; engaged = false;
+    startX = null; startY = null; pulled = 0; engaged = false;
     if (e.touches.length !== 1 || blocked() || window.scrollY > 0) return;
-    startY = e.touches[0].clientY;
+    startX = e.touches[0].clientX; startY = e.touches[0].clientY;
   }, { passive: true });
 
   document.addEventListener('touchmove', (e) => {
     if (startY == null) return;
-    if (e.touches.length !== 1 || blocked()) { startY = null; pulled = 0; engaged = false; rest(); return; }
-    if (window.scrollY > 0) { startY = null; pulled = 0; engaged = false; rest(); return; }   // scrolled down mid-gesture
-    const dy = e.touches[0].clientY - startY;
+    if (e.touches.length !== 1 || blocked()) { startX = null; startY = null; pulled = 0; engaged = false; rest(); return; }
+    if (window.scrollY > 0) { startX = null; startY = null; pulled = 0; engaged = false; rest(); return; }   // scrolled down mid-gesture
+    const dx = e.touches[0].clientX - startX, dy = e.touches[0].clientY - startY;
     if (!engaged) {
-      if (dy <= 4) return;                   // not a pull yet — let the page behave normally
+      // Whichever side calls preventDefault() first on this touch sequence wins the gesture. Waiting
+      // until the indicator was about to show (the old `dy <= 4` check below) to call it left every
+      // touchmove before that un-prevented — long enough, on some devices/browsers, for the browser's
+      // own pull-to-refresh to already have committed to running instead. That race (not anything about
+      // the pull itself) is why a soft refresh sometimes played out as a real page reload.
+      //
+      // So: a few pixels of travel to tell a pull from a tap, same as before, but the moment the
+      // direction is clear it is claimed right here — not deferred any further.
+      if (dy < 4 && Math.abs(dx) < 4) return;             // not enough movement yet to tell
+      if (Math.abs(dx) >= dy) { startX = null; startY = null; pulled = 0; rest(); return; }   // a horizontal swipe (rails/carousels): hand it back to the browser untouched
       engaged = true;                        // from here on this IS our gesture: keep holding the
     }                                        // native overscroll back even if the finger wobbles up
     pulled = dy;
@@ -106,7 +115,7 @@ export function initPullToRefresh() {
     move(dy * 0.55);
   }, { passive: false });
 
-  const abandon = () => { startY = null; pulled = 0; engaged = false; rest(); };
+  const abandon = () => { startX = null; startY = null; pulled = 0; engaged = false; rest(); };
   const end = () => {
     if (startY == null) return;
     const fire = pulled >= THRESHOLD;
