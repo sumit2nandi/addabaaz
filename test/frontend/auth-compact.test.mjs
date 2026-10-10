@@ -6,7 +6,9 @@ const read = (p) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8')
 test('sign-in and signup share a compact scoped layout without hiding auth methods or navigation', () => {
   const view = read('app/js/views/auth.js');
   assert.match(view, /class="page auth-page auth-entry"/);
-  for (const id of ['emailPane', 'otpPane', 'social', 'authClose', 'pwt', 'as']) assert.ok(view.includes(`id="${id}"`));
+  for (const id of ['emailPane', 'otpPane', 'social', 'pwt', 'as']) assert.ok(view.includes(`id="${id}"`));
+  assert.ok(!view.includes('authClose') && !view.includes('auth-close'), 'the close button is gone: these pages are not popups');
+  assert.ok(!read('app/css/styles.css').includes('.auth-close'), 'no close-button styles remain');
   for (const href of ['#/forgot', '#/support', '#/terms', '#/privacy']) assert.ok(view.includes(href));
   assert.match(view, /class="auth-footer-links"/);
   assert.match(view, /signup \? 'Create account' : 'Welcome back'/);

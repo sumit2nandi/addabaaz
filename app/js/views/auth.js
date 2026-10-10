@@ -42,7 +42,6 @@ export default async function auth(ctx) {
 
   ctx.root.innerHTML = html`<div class="page auth-page auth-entry">
     <form class="auth-card form" id="af" novalidate>
-      <button type="button" class="auth-close" id="authClose" aria-label="Close">${icon('x', { size: 16 })}</button>
       <aside class="auth-side">
         <span class="brand-lockup"><b>ADDA</b><i>BAAZ</i></span>
         <h2>One account.<br>Every screen.</h2>
@@ -143,7 +142,6 @@ export default async function auth(ctx) {
     if (shown) { box.hidden = false; $('#or', ctx.root).hidden = false; }
   });
   $('#pwt', ctx.root)?.addEventListener('click', () => { const i = $('[name=password]', ctx.root); i.type = i.type === 'password' ? 'text' : 'password'; });
-  $('#authClose', ctx.root).addEventListener('click', () => go(!u.account && /^\/account(?:[/?]|$)/.test(next) ? '/' : next));   // the × at the top-right closes the form
 
   /* ---------- phone sign-in (SMS OTP) ---------- */
   // The number is sent to the server in the form people type it; the server normalizes it (country code,
