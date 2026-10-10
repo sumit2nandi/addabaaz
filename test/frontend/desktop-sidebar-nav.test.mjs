@@ -91,8 +91,12 @@ test('desktop-only styling makes a fixed left rail without changing phone naviga
   assert.match(rail, /@media \(min-width: 900px\)/);
   assert.match(rail, /--desktop-nav-width:\s*clamp\(/);
   assert.match(rail, /\.topbar\s*\{[^}]*width:\s*var\(--desktop-nav-width\)[^}]*height:\s*100vh/s);
-  assert.match(rail, /background: linear-gradient\(90deg, rgba\(5,5,5,\.84\)/,
-    'the rail background is translucent over the page artwork');
+  assert.match(rail, /background: linear-gradient\(90deg, rgba\(5,5,5,\.92\) 0%, rgba\(5,5,5,\.86\) 48%, rgba\(5,5,5,\.62\) 72%[^;]*rgba\(5,5,5,0\) 100%/,
+    'the rail fades smoothly from a readable dark edge into the page artwork');
+  assert.match(rail, /\.topbar \.brand-text \{[^}]*max-width: none;[^}]*opacity: 1; transform: none;/,
+    'the Addabaaz wordmark stays visible while the menu labels are collapsed');
+  assert.doesNotMatch(rail, /\.topbar:hover \.brand-text/,
+    'the wordmark does not depend on menu hover');
   assert.match(rail, /\.nav\.primary-nav\s*\{[^}]*flex-direction:\s*column/);
   assert.match(rail, /\.hero-inner\s*\{\s*padding-left:\s*var\(--desktop-content-left\)/);
   assert.match(rail, /\.primary-nav \.nav-link > span \{[^}]*max-width: 0;[^}]*opacity: 0;/,

@@ -1618,36 +1618,35 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
 }
 
 /* ---------- desktop streaming-style navigation rail ---------- */
-/* Keep only the icons visible at rest; labels slide out when the pointer or keyboard enters the rail. */
+/* Keep destination labels tucked away at rest; the brand remains visible above the icon-only rail. */
 .sidebar-account-link, .desktop-profile-arrow { display: none; }
 .sidebar-account-row { display: flex; align-items: center; }
 .mobile-avatar { display: inline-flex; }
 
 @media (min-width: 900px) {
-  :root { --desktop-nav-width: clamp(198px, 14vw, 228px); --desktop-content-left: calc(var(--desktop-nav-width) + 28px); }
+  :root { --desktop-nav-width: clamp(228px, 14vw, 252px); --desktop-content-left: calc(var(--desktop-nav-width) + 28px); }
 
   /* A translucent overlay sits over the full-bleed artwork, like the reference streaming sidebar. */
   .topbar {
     right: auto; width: var(--desktop-nav-width); height: 100vh; height: 100dvh;
     padding: calc(26px + var(--sat)) 18px calc(20px + var(--sab)) calc(16px + var(--sal));
     align-items: stretch; flex-direction: column; gap: 0;
-    background: linear-gradient(90deg, rgba(5,5,5,.84) 0%, rgba(5,5,5,.73) 70%, rgba(5,5,5,.43) 88%, rgba(5,5,5,.06) 100%);
+    background: linear-gradient(90deg, rgba(5,5,5,.92) 0%, rgba(5,5,5,.86) 48%, rgba(5,5,5,.62) 72%, rgba(5,5,5,.25) 88%, rgba(5,5,5,0) 100%);
     box-shadow: none; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
     transition: background .25s, box-shadow .25s;
   }
   .topbar.scrolled,
   body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) .topbar {
-    background: linear-gradient(90deg, rgba(5,5,5,.84) 0%, rgba(5,5,5,.73) 70%, rgba(5,5,5,.43) 88%, rgba(5,5,5,.06) 100%);
+    background: linear-gradient(90deg, rgba(5,5,5,.92) 0%, rgba(5,5,5,.86) 48%, rgba(5,5,5,.62) 72%, rgba(5,5,5,.25) 88%, rgba(5,5,5,0) 100%);
     box-shadow: none; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
   }
-  .topbar .brand { gap: 9px; width: 100%; padding-left: 10px; justify-content: flex-start; }
-  .topbar .brand img { width: 38px; height: 38px; }
+  .topbar .brand { gap: 8px; width: max-content; padding-left: 10px; justify-content: flex-start; }
+  .topbar .brand img { width: 34px; height: 34px; flex: none; }
+  /* Keep the wordmark visible even while the destination labels are collapsed. */
   .topbar .brand-text {
-    max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0; transform: translateX(-8px); pointer-events: none;
-    font-size: 17px; letter-spacing: 1.2px;
-    transition: max-width .28s var(--ease), opacity .18s ease, transform .28s var(--ease);
+    max-width: none; overflow: visible; white-space: nowrap; opacity: 1; transform: none; pointer-events: auto;
+    font-size: 15px; letter-spacing: .6px; flex: none;
   }
-  .topbar:hover .brand-text, .topbar:focus-within .brand-text { max-width: 180px; opacity: 1; transform: none; pointer-events: auto; }
 
   .nav.primary-nav {
     display: flex; flex-direction: column; align-items: stretch; gap: 3px;
