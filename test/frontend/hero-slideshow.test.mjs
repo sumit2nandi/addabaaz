@@ -298,8 +298,21 @@ test('phones fade the banner from the bottom only, leaving the artwork on top cl
   assert.ok(mobileFrom > 0, 'the phone breakpoint is there');
   const desktop = css.slice(0, mobileFrom), mobile = css.slice(mobileFrom);
 
-  // The artwork is shown as it is: no fade or scrim gradient on phones or desktops.
-  assert.doesNotMatch(css, /--hero-fade-mobile/, 'no phone fade token remains');
-  assert.match(mobile, /\.hero-shade, \.detail-hero \.hero-shade \{ background: none; \}/, 'phones: the home and detail banners have no scrim');
-  assert.match(desktop, /\.hero-shade \{ position: absolute; inset: 0; z-index: -1; background: none; \}/, 'desktops: no scrim gradient either');
+  const fade = css.match(/--hero-fade-mobile:\s*([^;]+);/)?.[1] || '';
+  assert.ok(fade, 'the phone fade is defined once, as a token every banner can share');
+  assert.match(fade, /^linear-gradient\(0deg/, 'it rises from the bottom edge upwards');
+  assert.doesNotMatch(fade, /180deg|90deg|270deg/, 'nothing darkens the poster from the top or from either side');
+  assert.match(fade, /var\(--bg\) 0%/, 'it is at its darkest at the very bottom, where the text and actions sit');
+  assert.match(fade, /rgba\(5,5,5,0\)\s+7\d%/, 'and it is gone by the upper third, so the artwork up there is untouched');
+  assert.ok(css.indexOf('--hero-fade-mobile') > mobileFrom, 'the token only exists for phones');
+
+  assert.match(mobile, /\.hero-shade, \.detail-hero \.hero-shade \{ background: var\(--hero-fade-mobile\); \}/,
+    'the home hero and the show / Coming Soon banners share that one fade');
+  assert.doesNotMatch(mobile, /^\s*\.hero-shade \{[^}]*background:/m, 'the home hero has no separate phone scrim left');
+  assert.doesNotMatch(mobile, /^\s*\.detail-hero \.hero-shade \{[^}]*background:/m, 'and neither does the detail banner');
+
+  assert.match(desktop, /\.hero-shade \{[^}]*linear-gradient\(90deg/, 'desktops keep the side scrim behind the hero text');
+  assert.doesNotMatch(desktop, /\.hero-shade \{[^}]*linear-gradient\(180deg/, 'no top scrim: the top of the artwork stays clear');
+  assert.match(desktop, /\.hero-shade \{[^}]*linear-gradient\(270deg/, 'a right-side scrim behind the poster edge');
+  assert.doesNotMatch(desktop, /--hero-fade-mobile/, 'the phone fade never touches the desktop layout');
 });

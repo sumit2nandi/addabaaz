@@ -239,8 +239,8 @@ body:not([data-route="home"]):not([data-route="show"]):not([data-route="soon"]) 
 .hero-bg picture { display: block; width: 100%; height: 100%; }
 /* The banner shading: dark enough at the left that the white title always sits on a near-solid base, but
    lighter than it used to be (.94/.70/.15) so more of the artwork's own colour reaches the eye. */
-/* No scrim: the banner shows the artwork as it is — no fade, no darkening, no blur. */
-.hero-shade { position: absolute; inset: 0; z-index: -1; background: none; }
+/* Scrims only at the sides and the bottom, behind the title and the buttons. Nothing covers the top of the artwork. */
+.hero-shade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(5,5,5,.88) 0%, rgba(5,5,5,.58) 38%, rgba(5,5,5,.1) 75%), linear-gradient(270deg, rgba(5,5,5,.6) 0%, rgba(5,5,5,0) 18%), linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.44) 22%, rgba(5,5,5,0) 50%); }
 .hero-inner { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; padding: calc(var(--topbar-h) + var(--sat) + 40px) var(--pad) var(--hero-pb, 72px); }
 .hero-copy { max-width: 620px; display: grid; gap: 14px; }
 /* Uniform across every slide: same stack for all titles — Latin glyphs take the display sans, Bengali glyphs
@@ -776,8 +776,11 @@ body.bare .topbar, body.bare .tabbar, body.bare .footer { display: none; } body.
 }
 @media (max-width: 759px) {
   .hero-bg img { object-position: center 15%; }
-  /* Phones: no scrim either, so the artwork is shown unfaded. */
-  .hero-shade, .detail-hero .hero-shade { background: none; }
+  /* Phones: one lower-only fade, shared by the home hero and the show / Coming Soon banners. It starts
+     where the title and the action dock begin and is gone by the upper third, so the poster artwork on
+     top stays clear - no top-down wash and no side-to-side darkening on top of it. */
+  :root { --hero-fade-mobile: linear-gradient(0deg, var(--bg) 0%, rgba(5,5,5,.86) 26%, rgba(5,5,5,.62) 46%, rgba(5,5,5,.22) 62%, rgba(5,5,5,0) 78%); }
+  .hero-shade, .detail-hero .hero-shade { background: var(--hero-fade-mobile); }
   .detail-hero { min-height: 74vh; min-height: 74svh; }
   .detail-hero .hero-inner { padding-bottom: 12px; }
   .page-tight.show-details-page { padding-top: 0; }
