@@ -61,12 +61,19 @@ test('desktop rail updates active items and opens both accessible menus', async 
   assert.equal(document.querySelector('#profileWrap .sidebar-account-link').classList.contains('active'), true,
     'Plans stays associated with the account entry in the sidebar');
 
+  const studioDrop = document.querySelector('.nav-drop');
   const studioButton = document.querySelector('.nav-drop-btn');
-  studioButton.dispatchEvent(new window.Event('click', { bubbles: true }));
-  assert.equal(studioButton.getAttribute('aria-expanded'), 'true');
+  studioDrop.dispatchEvent(new window.Event('pointerenter'));
+  assert.equal(studioButton.getAttribute('aria-expanded'), 'true', 'hover opens the Studio flyout');
   assert.equal(document.querySelector('.nav-drop .studio-menu').getAttribute('aria-hidden'), 'false');
-  document.querySelector('.nav-drop').dispatchEvent(new window.Event('pointerleave', { bubbles: false }));
-  assert.equal(studioButton.getAttribute('aria-expanded'), 'false', 'the flyout closes smoothly when the pointer leaves');
+  studioDrop.dispatchEvent(new window.Event('pointerleave'));
+  assert.equal(studioButton.getAttribute('aria-expanded'), 'false', 'the flyout closes when the pointer leaves');
+  studioDrop.dispatchEvent(new window.Event('focusin'));
+  assert.equal(studioButton.getAttribute('aria-expanded'), 'true', 'keyboard focus also opens the flyout');
+  studioDrop.dispatchEvent(new window.Event('focusout'));
+  assert.equal(studioButton.getAttribute('aria-expanded'), 'false', 'the flyout closes when keyboard focus leaves');
+  studioButton.dispatchEvent(new window.Event('click', { bubbles: true }));
+  assert.equal(studioButton.getAttribute('aria-expanded'), 'true', 'click remains available as a fallback');
 
   const profileButton = document.querySelector('#profileBtn');
   profileButton.dispatchEvent(new window.Event('click', { bubbles: true }));
@@ -90,8 +97,10 @@ test('desktop-only styling makes a fixed left rail without changing phone naviga
     'hover reveals the labels with a transition');
   assert.match(rail, /\.primary-nav \.nav-drop \.menu \{[^}]*opacity: 0; visibility: hidden; transform: translateX\(-8px\)/,
     'Studio details start hidden');
-  assert.match(rail, /\.primary-nav \.nav-drop:hover \.menu[\s\S]*opacity: 1; visibility: visible;/,
-    'and pop out from the Studio item on hover');
+  assert.match(rail, /\.primary-nav \.nav-drop\.open \.menu \{[^}]*opacity: 1; visibility: visible;/,
+    'the Studio flyout transitions into view when opened');
+  assert.match(read('app/js/ui/shell.js'), /studioDrop\?\.addEventListener\('pointerenter'/,
+    'hovering the Studio row opens the flyout');
   assert.match(rail, /\.primary-nav \.nav-link\.active, \.primary-nav \.nav-drop-btn\.active \{ color: #fff; background: transparent;/,
     'active sections no longer get a highlighted pill');
   assert.match(css, /\.tabbar \{ display: none; \}/, 'desktop hides the floating phone tabs using the existing responsive rule');

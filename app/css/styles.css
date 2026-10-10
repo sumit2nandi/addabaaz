@@ -1691,9 +1691,7 @@ body[data-route="account"]:has(.profile-page) .footer { margin-top: 8px; }
     opacity: 0; visibility: hidden; transform: translateX(-8px);
     pointer-events: none; transition: opacity .18s ease, transform .22s var(--ease), visibility 0s linear .22s;
   }
-  .primary-nav .nav-drop.open .menu,
-  .primary-nav .nav-drop:hover .menu,
-  .primary-nav .nav-drop:focus-within .menu {
+  .primary-nav .nav-drop.open .menu {
     opacity: 1; visibility: visible; transform: none; pointer-events: auto;
     transition: opacity .18s ease, transform .22s var(--ease), visibility 0s;
   }

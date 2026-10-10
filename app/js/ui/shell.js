@@ -149,7 +149,7 @@ function wireMenus() {
     closeAll(); setStudioOpen(true);
   });
   studioDrop?.addEventListener('pointerleave', () => {
-    if (!studioDrop.contains(document.activeElement)) setStudioOpen(false);
+    if (!studioMenu.contains(document.activeElement)) setStudioOpen(false);
   });
   studioDrop?.addEventListener('focusin', () => { closeAll(); setStudioOpen(true); });
   studioDrop?.addEventListener('focusout', (e) => {
@@ -162,7 +162,10 @@ function wireMenus() {
     if (btn) {
       const menu = btn.closest('#profileWrap, .nav-drop')?.querySelector('.menu');
       if (!menu) return;
-      if (menu.id === 'studioMenu') { closeAll(); setStudioOpen(true); return; }
+      if (menu.id === 'studioMenu') {
+        const open = studioButton.getAttribute('aria-expanded') !== 'true';
+        closeAll(); if (open) setStudioOpen(true); return;
+      }
       const open = menu.hidden;
       closeAll(); menu.hidden = !open; btn.setAttribute('aria-expanded', String(open)); return;
     }
