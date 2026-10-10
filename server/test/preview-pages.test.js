@@ -31,8 +31,12 @@ test('the e-mail preview is served unlisted: no-store, noindex, no viewer chrome
     assert.equal(r.status, 200, 'the harness answers');
     assert.match(r.headers.get('cache-control') || '', /no-store/, 'a reviewer edits the file and reloads — nothing may be cached');
     assert.match(r.headers.get('x-robots-tag') || '', /noindex/, 'a design page must never be indexed');
-    assert.match(r.text, /<iframe[^>]+src="email\.html"/, 'it frames the e-mail document itself');
+    assert.match(r.text, /<iframe[^>]+src="\/preview\/email\.html"/, 'it frames the e-mail document, by absolute path');
     assert.match(r.text, /ADDA/, 'the wordmark is in the header');
+    // /preview (no trailing slash) is the URL people actually type, and from there a relative asset path
+    // resolves to /email.html — so nothing in the page may be referenced relatively.
+    assert.doesNotMatch(r.text, /(?:src|href)="(?!\/|#|mailto:|https?:)[^"]*\.html"/, 'every asset path is root-absolute');
+    assert.equal((await s.get('/preview/')).status, 200, 'with or without the trailing slash');
   } finally { await s.close(); }
 });
 

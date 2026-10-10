@@ -7,7 +7,9 @@
 <!-- Internal design-review page (docs: preview/README.md). It is served with X-Robots-Tag: noindex and
      is never linked from the app, so it stays out of search results and out of the viewer's navigation.
      The one inline script below is allowed by a CSP hash (server/src/web.js → cspForInlineScripts), the
-     same way maintenance.html's is — the site policy has no 'unsafe-inline' for scripts. -->
+     same way maintenance.html's is — the site policy has no 'unsafe-inline' for scripts.
+     Asset paths are root-absolute (/preview/email.html): the page is reachable as /preview as well
+     as /preview/, and a relative path would then resolve to /email.html and 404. -->
 <style>
   :root{
     --bg:#050505; --panel:#111114; --line:rgba(255,255,255,.12); --text:#fff; --muted:#9a9aa6;
@@ -60,13 +62,13 @@
     <button type="button" data-w="full" aria-pressed="false">Full</button>
   </div>
   <label class="pill"><input type="checkbox" id="noimg"> Images off</label>
-  <a class="pill" href="template.html">Sendable template ↗</a>
+  <a class="pill" href="/preview/template.html">Sendable template ↗</a>
 </div>
 
 <div class="stage">
   <div class="device" id="device">
     <div class="caption"><span id="cap">Rendered with demo values — Riya · Rs.&nbsp;100 · AB12CD34</span><em id="cap2">iframe = the e-mail document</em></div>
-    <div class="frame"><iframe id="fr" src="email.html" title="ADDABAAZ welcome e-mail body"></iframe></div>
+    <div class="frame"><iframe id="fr" src="/preview/email.html" title="ADDABAAZ welcome e-mail body"></iframe></div>
   </div>
 </div>
 
@@ -76,7 +78,7 @@
   buttons drop out. <b>Images off</b> hides every <code>&lt;img&gt;</code> — Outlook desktop cannot render the
   WebP artwork in <code>media/shows</code>, so the layout must read well without it, which is why each dark card
   carries a solid background colour. The sendable markup, with its <code>{{merge_fields}}</code>, is
-  <a href="template.html">template.html</a>; wiring notes are in <code>preview/README.md</code>.
+  <a href="/preview/template.html">/preview/template.html</a>; wiring notes are in <code>preview/README.md</code>.
 </p>
 
 <script>
