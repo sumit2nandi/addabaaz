@@ -173,7 +173,7 @@ function heroHtml(slides) {
       const entry = entries[i];
       return html`<article class="hero-slide ${initialSlideClass(i, slides.length)}" data-i="${i}" data-show-id="${show.id}" data-watch-id="${entry.watch}" aria-roledescription="slide" aria-label="${i + 1} of ${slides.length}">
         <a class="hero-banner-link" href="#/show/${show.id}" aria-label="View ${show.titleEn || show.title} details">
-          <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: cat.thumb(latest, 'hqdefault'), blurUp: false })}</div>
+          <div class="hero-bg">${heroBg(cat.thumb(latest, 'maxresdefault'), show.posterLg || show.poster, { lazy: i > 0, fallback: `${show.posterLg || show.poster}|${cat.thumb(latest, 'hqdefault')}`, blurUp: false })}</div>
         </a>
         <div class="hero-shade"></div>
         ${show.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}

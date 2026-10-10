@@ -136,7 +136,7 @@ test('every call site that shows a best-quality image also passes a low renditio
     ['app/js/views/show.js', /\$\{img\(cat\.thumb\(v, 'maxresdefault'\), '', \{[^}]*lowSrc: cat\.thumb\(v, 'mqdefault'\)/],
     ['app/js/views/show.js', /heroBg\(cat\.thumb\(latest, 'maxresdefault'\)[\s\S]*?lowThumb: cat\.thumb\(latest, 'mqdefault'\), lowPoster: s\.poster/],
     ['app/js/views/show.js', /img\(s\.posterLg \|\| s\.poster, s\.title, \{ lazy: false, lowSrc: s\.poster \}\)/],
-    ['app/js/views/home.js', /heroBg\(cat\.thumb\(latest, 'maxresdefault'\), show\.posterLg \|\| show\.poster, \{ lazy: i > 0, fallback: cat\.thumb\(latest, 'hqdefault'\), blurUp: false \}\)/],
+    ['app/js/views/home.js', /heroBg\(cat\.thumb\(latest, 'maxresdefault'\), show\.posterLg \|\| show\.poster, \{ lazy: i > 0, fallback: `\$\{show\.posterLg \|\| show\.poster\}\|\$\{cat\.thumb\(latest, 'hqdefault'\)}`, blurUp: false \}\)/],
     ['app/js/views/home.js', /img\(show\.posterLg \|\| show\.poster, '', \{ lazy: i > 0, lowSrc: show\.poster \}\)/],
     ['app/js/views/soon.js', /img\(u\.posterLg \|\| u\.poster, u\.title, \{ lazy: false, lowSrc: u\.poster \}\)/],
     ['app/js/views/soon.js', /img\(u\.backdrop \|\| u\.posterLg \|\| u\.poster, '', \{ lazy: false, lowSrc: u\.poster \}\)/],
@@ -158,5 +158,18 @@ test('main.js upgrades on load and runs the upgrade before the data-fb fallback 
   assert.match(fn, /document\.addEventListener\('load'[\s\S]*loadHighQuality\(t\)/, 'load prefetches and swaps in the best rendition only after it arrives');
   assert.doesNotMatch(fn, /window\.addEventListener\('load'/, 'a window listener never receives image load events');
   assert.match(fn, /if \(!\(t instanceof HTMLImageElement\) \|\| swapToHighQuality\(t\)\) return;/, 'a failed placeholder jumps straight to the best rendition');
-  assert.ok(fn.indexOf('swapToHighQuality(t)) return') < fn.indexOf("t.dataset.fbTried = '1'"), 'before the fallback is marked as tried');
+  assert.match(fn, /const chain = String\(t\.dataset\.fb \|\| ''\)\.split\('\|'\)\.filter\(\(u\) => u && u !== t\.src\);/,
+    'data-fb is a chain: each failure steps one candidate further, never back to the URL that just failed');
+  assert.match(fn, /if \(next\) t\.src = next; else t\.classList\.add\('img-failed'\);/,
+    'an exhausted chain marks the image failed instead of retrying forever');
+  assert.doesNotMatch(fn, /fbTried/, 'the one-shot fallback flag is gone — the chain itself terminates');
+});
+
+test('the home hero walks down to its sharp local poster when YouTube has no max-resolution still', () => {
+  const home = read('app/js/views/home.js');
+  const call = home.match(/heroBg\(cat\.thumb\(latest, 'maxresdefault'\)[\s\S]*?\)\}<\/div>/)?.[0] || '';
+  assert.ok(call, 'the hero banner call exists');
+  assert.match(call, /blurUp: false/, 'no soft placeholder on the first paint');
+  assert.match(call, /fallback: `\$\{show\.posterLg \|\| show\.poster\}\|\$\{cat\.thumb\(latest, 'hqdefault'\)}`/,
+    'missing maxresdefault steps to the sharp uploaded poster (then hqdefault), so the banner never stays blurred');
 });
