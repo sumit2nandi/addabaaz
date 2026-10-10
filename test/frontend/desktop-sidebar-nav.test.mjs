@@ -101,14 +101,16 @@ test('desktop-only styling makes a fixed left rail without changing phone naviga
   assert.match(rail, /\.hero-inner\s*\{\s*padding-left:\s*var\(--desktop-content-left\)/);
   assert.match(rail, /\.primary-nav \.nav-link > span \{[^}]*max-width: 0;[^}]*opacity: 0;/,
     'menu labels are hidden at rest');
-  assert.match(rail, /\.primary-nav \.nav-link:hover, \.primary-nav \.nav-link:focus-visible \{[^}]*width: calc\(var\(--desktop-nav-open-width\)/,
-    'the hovered menu row expands to the yellow edge');
+  assert.ok(rail.includes('.topbar:has(.primary-nav .nav-link:hover, #profileWrap .sidebar-account-row:hover) .primary-nav .nav-link,'),
+    'hovering any destination expands all desktop menu rows');
+  assert.ok(rail.includes('.topbar:has(.primary-nav .nav-link:hover, #profileWrap .sidebar-account-row:hover) .primary-nav .nav-link > span,'),
+    'hovering any destination reveals every menu label together');
+  assert.ok(rail.includes('.topbar:has(.primary-nav .nav-link:focus-visible, #profileWrap:focus-within) .primary-nav .nav-link > span'),
+    'keyboard focus also reveals every destination label');
   assert.ok(rail.includes('color: rgba(255,255,255,.68); font-size: 18px;'),
     'unselected desktop destinations use softened white');
-  assert.ok(rail.includes('color: rgba(255,255,255,.88); background: transparent;'),
-    'hovered or focused menu labels brighten slightly without becoming pure white');
-  assert.match(rail, /\.primary-nav \.nav-link:hover > span, \.primary-nav \.nav-link:focus-visible > span \{[^}]*max-width: 180px; opacity: 1;/,
-    'only the hovered or keyboard-focused row reveals its label');
+  assert.ok(rail.includes('.primary-nav .nav-link:hover, .primary-nav .nav-link:focus-visible { color: rgba(255,255,255,.88); }'),
+    'the hovered icon brightens slightly without becoming pure white');
   assert.doesNotMatch(rail, /\.topbar:hover \.primary-nav \.nav-link > span/,
     'hovering the faded area alone does not reveal menu details');
   assert.match(rail, /\.primary-nav \.nav-link\.active \{ color: #fff; background: transparent;/,
