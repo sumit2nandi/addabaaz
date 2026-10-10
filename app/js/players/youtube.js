@@ -1,3 +1,5 @@
+import { isIOSBrowser } from '../util.js';
+
 // YouTube player adapter. Loads the IFrame API on demand and wraps it in the shared player interface (see players/index.js). Falls back to a plain iframe if the API is blocked.
 // The IFrame API script is loaded once and shared.
 let apiPromise = null;
@@ -205,12 +207,21 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
     shell.appendChild(mount);
     container.appendChild(shell);
   } else container.appendChild(mount);
+  /* WebKit grants autoplay at the instant play() runs: an unmuted attempt is refused and, unlike
+   * Chromium, muting afterwards and calling playVideo() again from a timer does not revive it. So on
+   * iPhone/iPad an autoplaying embed must be muted for its very first play request, whatever the
+   * caller asked for — otherwise the video simply never starts (works on Android, dead on iOS). */
+  const startMuted = Boolean(muted || (autoplay && isIOSBrowser()));
   let YT;
   try { YT = await loadYouTubeForPlayback(autoplay); }
   catch (e) {
-    // The plain iframe must honor the requested sound mode too. If browser policy blocks unmuted
-    // autoplay, the browser requires a user gesture; do not silently change the viewer's preference.
-    return plainIframe(container, videoId, start, autoplay, muted, controls);
+    /* The API-less iframe is the normal path on a phone: the IFrame API script often misses its
+     * autoplay budget, and this is the player most viewers actually get. It has no play() promise and
+     * no onAutoplayBlocked event, so it cannot retry a refused sound-first attempt — and every mobile
+     * browser refuses unmuted autoplay without a gesture. Start muted when autoplay was asked for:
+     * muted autoplay is always allowed, so playback begins instead of sitting on a poster. Sound
+     * returns with the first gesture (players/index.js) or the explicit sound control. */
+    return plainIframe(container, videoId, start, autoplay, Boolean(startMuted || autoplay), controls, { onProgress, onEnded, onState });
   }
 
   let player, timer, mutedFallbackTimer, mutedFallbackStartedAt = 0, destroyed = false, ready = false, mutedFallbackAttempted = false, loopEnabled = false;
@@ -220,7 +231,7 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
     setLoop: (value) => { loopEnabled = !!value; },
   }) : null;
   const retryMutedAutoplay = (target = player) => {
-    if (!autoplay || muted || mutedFallbackAttempted || destroyed || !target) return;
+    if (!autoplay || startMuted || mutedFallbackAttempted || destroyed || !target) return;
     mutedFallbackAttempted = true;
     clearTimeout(mutedFallbackTimer); mutedFallbackTimer = null;
     try { target.mute(); target.playVideo(); } catch { /* shared timeout handles a refused fallback */ }
@@ -233,16 +244,16 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
     player = new YT.Player(mount, {
       videoId,
       width: '100%', height: '100%',
-      playerVars: { autoplay: autoplay ? 1 : 0, playsinline: 1, controls: controls ? 1 : 0, fs: controls ? 1 : 0, rel: 0, modestbranding: 1, start: Math.floor(start), origin: httpOrigin(), iv_load_policy: 3, cc_load_policy: 0, hl: 'en', mute: muted ? 1 : 0 },
+      playerVars: { autoplay: autoplay ? 1 : 0, playsinline: 1, controls: controls ? 1 : 0, fs: controls ? 1 : 0, rel: 0, modestbranding: 1, start: Math.floor(start), origin: httpOrigin(), iv_load_policy: 3, cc_load_policy: 0, hl: 'en', mute: startMuted ? 1 : 0 },
       events: {
         onReady: (event) => {
           ready = true;
           settingsUI?.refresh();
           // Start explicitly in the requested mode; a muted retry is only for a refused sound-first attempt.
           if (autoplay) {
-            try { if (muted) event.target.mute(); event.target.playVideo(); }
+            try { if (startMuted) event.target.mute(); event.target.playVideo(); }
             catch { /* the browser may still require a tap */ }
-            if (!muted && !mutedFallbackAttempted) {
+            if (!startMuted && !mutedFallbackAttempted) {
               // Some iOS/YouTube combinations omit onAutoplayBlocked. If the player remains unstarted
               // after the sound-first attempt, retry muted; give genuine network buffering extra time.
               mutedFallbackStartedAt = Date.now();
@@ -300,24 +311,78 @@ export async function createYouTubePlayer(container, videoId, { start = 0, autop
   };
 }
 
-// Last-resort embed with no API (no progress tracking). Keep the requested mute mode and inline/autoplay parameters.
-function plainIframe(container, videoId, start, autoplay, muted, controls) {
-  const o = httpOrigin();
-  container.innerHTML = `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=${autoplay ? 1 : 0}&mute=${muted ? 1 : 0}&enablejsapi=1&controls=${controls ? 1 : 0}&fs=${controls ? 1 : 0}&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&cc_load_policy=0&hl=en&start=${Math.floor(start)}${o ? '&origin=' + encodeURIComponent(o) : ''}" title="Video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+/* Embed used when the IFrame API is blocked or misses its autoplay budget — on phones this is the
+ * common case, so it is a full player, not a degraded one:
+ *   - autoplay starts muted (the only mode mobile browsers allow without a gesture),
+ *   - the widget postMessage channel reports state/position, so the page can reveal the first frame,
+ *     track progress and tell a genuine autoplay block from a slow start.
+ * YouTube only answers that channel after a "listening" handshake, which is retried on load because
+ * the frame may not be listening yet when the command is sent. */
+let plainIframeId = 0;
+function plainIframe(container, videoId, start, autoplay, muted, controls, { onProgress, onEnded, onState } = {}) {
+  const o = httpOrigin(), id = `ab-yt-fallback-${++plainIframeId}`;
+  container.innerHTML = `<iframe id="${id}" src="https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=${autoplay ? 1 : 0}&mute=${muted ? 1 : 0}&enablejsapi=1&controls=${controls ? 1 : 0}&disablekb=${controls ? 0 : 1}&fs=${controls ? 1 : 0}&playsinline=1&rel=0&modestbranding=1&iv_load_policy=3&cc_load_policy=0&hl=en&start=${Math.floor(start)}${o ? '&origin=' + encodeURIComponent(o) : ''}" title="Video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
   const iframe = container.querySelector('iframe');
-  let isMuted = !!muted;
+  let isMuted = !!muted, currentTime = 0, duration = 0, destroyed = false;
+  let playerState = null, handshakeSeen = false;   // null = the frame has not told us anything yet
   const cmd = (line) => { try { iframe?.contentWindow?.postMessage(line, '*'); } catch { /* frame already gone */ } };
+  const announce = () => {
+    if (destroyed) return;
+    // The widget answers "listening" with onReady/initialDelivery; only then register for events.
+    cmd(JSON.stringify({ event: 'listening', id, channel: 'widget' }));
+    cmd(JSON.stringify({ event: 'command', func: 'addEventListener', args: ['onStateChange'] }));
+    cmd(JSON.stringify({ event: 'command', func: 'addEventListener', args: ['infoDelivery'] }));
+    cmd(JSON.stringify({ event: 'command', func: 'getPlayerState', args: [] }));
+  };
+  const setState = (value) => {
+    const next = Number(value);
+    if (!Number.isFinite(next) || next === playerState) return;
+    playerState = next;
+    if (next === 1) onState?.('playing');
+    else if (next === 2) onState?.('paused');
+    else if (next === 3) onState?.('buffering');
+    else if (next === 0) { onState?.('ended'); onEnded?.(); }
+  };
+  const onMessage = (event) => {
+    if (destroyed || !iframe?.contentWindow || event.source !== iframe.contentWindow) return;
+    let message;
+    try { message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; } catch { return; }
+    if (!message || typeof message !== 'object') return;
+    handshakeSeen = true;             // the frame is talking to us: state readings are trustworthy
+    if (message.event === 'onReady') { announce(); return; }
+    if (message.event === 'onStateChange') { setState(message.info ?? message.data); return; }
+    if (message.event !== 'infoDelivery' || !message.info) return;
+    const info = message.info;
+    if (Number.isFinite(Number(info.currentTime))) currentTime = Number(info.currentTime);
+    if (Number.isFinite(Number(info.duration))) duration = Number(info.duration);
+    if (info.playerState != null) setState(info.playerState);
+    onProgress?.(currentTime, duration);
+  };
+  const messageTarget = typeof window !== 'undefined' ? window : null;
+  messageTarget?.addEventListener?.('message', onMessage);
+  let retryTimer = null;
+  const onFrameLoad = () => { announce(); retryTimer = setTimeout(announce, 400); };   // the frame may not be listening yet
+  if (iframe?.addEventListener) iframe.addEventListener('load', onFrameLoad, { once: true });
+  announce();
   return {
     engine: 'iframe',
     mute() { isMuted = true; cmd('{"event":"command","func":"mute","args":""}'); },
     unmute() { isMuted = false; cmd('{"event":"command","func":"unMute","args":""}'); cmd('{"event":"command","func":"setVolume","args":"[100]"}'); },
     isMuted: () => isMuted,
     // Drive the frame through the postMessage command API (enablejsapi=1) so the custom controls
-    // still work on native even when the IFrame API itself failed to load.
+    // still work on native even when the IFrame API script itself failed to load.
     play() { cmd('{"event":"command","func":"playVideo","args":""}'); },
     pause() { cmd('{"event":"command","func":"pauseVideo","args":""}'); },
     seek(s) { cmd(`{"event":"command","func":"seekTo","args":[${Math.max(0, Math.floor(s))},true]}`); },
-    time: () => 0, duration: () => 0,
-    destroy() { container.innerHTML = ''; },
+    /** null until the frame reports a state: callers must not mistake "unknown" for "blocked". */
+    state: () => (handshakeSeen ? playerState : null),
+    time: () => currentTime, duration: () => duration,
+    destroy() {
+      destroyed = true;
+      clearTimeout(retryTimer);
+      iframe?.removeEventListener?.('load', onFrameLoad);
+      messageTarget?.removeEventListener?.('message', onMessage);
+      container.innerHTML = '';
+    },
   };
 }

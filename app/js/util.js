@@ -25,6 +25,17 @@ export function el(safe, tag = 'div', cls = '') {
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
+/** True on iPhone/iPad, including iPadOS desktop-mode Safari (whose UA says Mac but whose touch-point
+ *  count identifies an iPad). WebKit's autoplay rules differ from every other engine, so playback code
+ *  branches on this. Returns false when `navigator` is missing (server-side render, tests). */
+export function isIOSBrowser() {
+  const nav = typeof navigator === 'undefined' ? null : navigator;
+  if (!nav) return false;
+  return nav.userAgentData?.platform === 'iOS'
+    || /iPad|iPhone|iPod/i.test(nav.userAgent || '')
+    || (nav.platform === 'MacIntel' && Number(nav.maxTouchPoints) > 1);
+}
+
 // Delays a function until calls stop for `ms` milliseconds (used for search-as-you-type).
 export function debounce(fn, ms = 200) {
   let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };

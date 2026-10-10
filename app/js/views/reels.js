@@ -121,7 +121,14 @@ export default async function reels(ctx) {
     setTimeout(() => { if (active === i && token === my) activate(i, true); }, RETRY_MS[n]);
     return true;
   };
-  let active = -1, ctl = null, host = null, token = 0, hasPlayed = false;
+  let active = -1, ctl = null, host = null, token = 0, hasPlayed = false, revealTimer = null;
+  /* The player stays transparent until its first frame arrives (onState 'playing'), so the cover image
+   * covers the otherwise black iframe. An embed that starts but never reports that state (a slow or
+   * API-less YouTube frame) would look like a dead reel: reveal it anyway after a short grace period. */
+  const armReveal = (i, my) => {
+    clearTimeout(revealTimer);
+    revealTimer = setTimeout(() => { if (active === i && token === my) sections[i]?.classList.add('video-on'); }, 2500);
+  };
   const setIcon = (sec) => { const b = $('[data-reel-sound]', sec); if (b) b.innerHTML = icon(soundOn ? 'volume' : 'mute', { size: 26 }).s; };
   async function activate(i, force = false) {
     if (!force && i === active) return;
@@ -179,6 +186,7 @@ export default async function reels(ctx) {
       });
       if (my !== token) { c.destroy(); h.remove(); return; }
       ctl = c; host = h; sec.classList.add('playing');
+      armReveal(i, my);   // safety net: never leave the cover over a player that is running
     } catch (e) {
       h.remove(); console.warn('[Reels] Error:', e);
       const locked = e?.status === 401 || e?.status === 402;
@@ -200,7 +208,7 @@ export default async function reels(ctx) {
   // Account and plan data can arrive after the first reel was checked: a reel locked before then unlocks now.
   const unlockWhenAccountChanges = () => { if (active >= 0 && sections[active]?.classList.contains('locked')) activate(active, true); };
   const offAccount = [app.user.on('account', unlockWhenAccountChanges), app.user.on('subscription', unlockWhenAccountChanges)];
-  ctx.onCleanup(() => { io.disconnect(); token++; ctl?.destroy(); host?.remove(); offAccount.forEach((off) => off()); });
+  ctx.onCleanup(() => { io.disconnect(); token++; clearTimeout(revealTimer); ctl?.destroy(); host?.remove(); offAccount.forEach((off) => off()); });
 
   feed.addEventListener('click', async (e) => {
     if (e.target.closest('[data-reel-tap]')) {

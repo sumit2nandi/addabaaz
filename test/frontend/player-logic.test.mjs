@@ -1,4 +1,5 @@
-// Unit tests for createPlayer() autoplay: request sound first, honor explicit mute, and never unmute on a timer.
+// Unit tests for createPlayer() autoplay: request sound first (muted on iOS, where WebKit refuses an unmuted
+// start), honor explicit mute, and never unmute on a timer.
 // Browser autoplay policy may reject sound; HTML5/YouTube adapters can then retry muted and expose a tap-for-sound hint.
 // Run: node --test test/frontend/player-logic.test.mjs
 import { test, beforeEach } from 'node:test';
@@ -64,7 +65,9 @@ const withIphone = (extraWindow = {}) => {
   };
 };
 
-test('iPhone browser attempts unmuted autoplay first and skips the broad gesture unmute handler', async () => {
+test('iPhone browser starts autoplay muted, because WebKit refuses an unmuted first play', async () => {
+  /* WebKit judges autoplay at the moment play() runs and never reconsiders, so the delayed
+   * mute-then-retry that works on Android leaves the video dead on iOS: it has to start muted. */
   const env = withIphone();
   try {
     globalThis.__ytScenario = { bufferingAfterMs: 10, playAfterMs: 40 };
@@ -72,17 +75,17 @@ test('iPhone browser attempts unmuted autoplay first and skips the broad gesture
     const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'iphone-web' } }, {
       autoplay: true, onAutoplayMuted: () => mutedCb++,
     });
-    assert.equal(globalThis.__createdMuted, false, 'Safari gets the requested sound-first attempt');
+    assert.equal(globalThis.__createdMuted, true, 'the only start WebKit grants is a muted one');
     await wait(150);
-    assert.equal(globalThis.__muted, false, 'successful playback remains unmuted');
+    assert.equal(globalThis.__muted, true, 'the video plays muted rather than not at all');
     assert.equal(globalThis.__unmuted, false, 'no timer-based unmute');
-    assert.equal(mutedCb, 0);
+    assert.equal(mutedCb, 1, 'the viewer is offered the tap-for-sound control');
     assert.equal((env.listeners.pointerdown || []).length + (env.listeners.touchstart || []).length, 0, 'iOS uses explicit sound controls');
     ctl.destroy();
   } finally { env.restore(); }
 });
 
-test('iPhone native app also keeps successful sound-first playback unmuted', async () => {
+test('iPhone native app also starts muted; explicit sound controls still work', async () => {
   const env = withIphone({ Capacitor: { isNativePlatform: () => true } });
   try {
     globalThis.__ytScenario = { bufferingAfterMs: 10, playAfterMs: 40 };
@@ -90,14 +93,27 @@ test('iPhone native app also keeps successful sound-first playback unmuted', asy
     const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'iphone-app' } }, {
       autoplay: true, onAutoplayMuted: () => mutedCb++,
     });
-    assert.equal(globalThis.__createdMuted, false);
+    assert.equal(globalThis.__createdMuted, true);
     await wait(150);
-    assert.equal(globalThis.__muted, false);
-    assert.equal(mutedCb, 0);
+    assert.equal(globalThis.__muted, true);
+    assert.equal(mutedCb, 1);
     ctl.mute(); ctl.unmute();
     assert.equal(globalThis.__muted, false, 'explicit sound controls remain available');
     ctl.destroy();
   } finally { env.restore(); }
+});
+
+test('an embed that cannot report its state is never declared autoplay-blocked', async () => {
+  /* The API-less fallback iframe may stay silent. Without a state reading, "blocked" would be a guess,
+   * and a guessed block covers a playing video with a "Tap to Play" pill. */
+  globalThis.__ytScenario = { engine: 'iframe', unknownState: true, bufferingAfterMs: 10, playAfterMs: 40 };
+  let blockedCb = 0;
+  const ctl = await createPlayer(container, { source: { type: 'youtube', id: 'opaque-embed' } }, {
+    autoplay: true, onAutoplayBlocked: () => blockedCb++,
+  });
+  await wait(3600);
+  assert.equal(blockedCb, 0, 'a silent embed cannot prove it was refused');
+  ctl.destroy();
 });
 
 test('slow startup is not treated as blocked and does not trigger any delayed sound change', async () => {

@@ -17,19 +17,11 @@
  */
 import { loadYouTube, createYouTubePlayer } from './youtube.js';
 import { createHtml5Player } from './html5.js';
+import { isIOSBrowser } from '../util.js';
 
 // How long a player gets before "it never started" counts as a full autoplay block (a genuine
 // rejection on HTML5, a still-unstarted YouTube state at this point).
 const AUTOPLAY_WAIT_MS = 2200;
-// iOS pauses autoplaying media if script unmutes it without a direct user gesture. Include iPadOS
-// desktop-mode Safari, whose user agent says Mac but whose touch-point count identifies an iPad.
-function isIOSBrowser() {
-  const nav = globalThis.navigator;
-  if (!nav) return false;
-  return nav.userAgentData?.platform === 'iOS'
-    || /iPad|iPhone|iPod/i.test(nav.userAgent || '')
-    || (nav.platform === 'MacIntel' && Number(nav.maxTouchPoints) > 1);
-}
 
 /** Options (all optional): start, autoplay, muted, controls (false for reels), onProgress, onEnded, onState,
  *  onAutoplayMuted() - autoplay is running muted and needs an explicit sound action (show a "tap for sound" hint),
@@ -53,9 +45,14 @@ export async function createPlayer(container, video, opts = {}) {
     },
   };
 
-  // Respect the requested mute state on the first attempt. If autoplay with sound is prohibited,
-  // each engine has its own muted retry; the muted fallback is never lifted automatically later.
-  const playerOpts = autoplay ? { ...wrapped, muted: !wantSound } : wrapped;
+  /* Respect the requested mute state on the first attempt — except on iOS. WebKit decides whether a
+   * play() is allowed at the moment it is called: an unmuted first attempt is refused, and unlike
+   * Chromium it never reconsidered, so a later mute() + playVideo() fired from a timer still does not
+   * start the video (the reason an unmuted autoplay "works on Android, not on iPhone"). The only start
+   * WebKit reliably grants is a muted one, so every engine begins muted there and the viewer adds
+   * sound with a tap: `wantSound` stays true, so onAutoplayMuted still offers the sound control. */
+  const startMuted = !wantSound || (autoplay && iosBrowser);
+  const playerOpts = autoplay ? { ...wrapped, muted: startMuted } : wrapped;
 
   let ctl;
   if (src.type === 'youtube') ctl = await createYouTubePlayer(container, src.id, playerOpts);
@@ -99,7 +96,6 @@ export async function createPlayer(container, video, opts = {}) {
     // Total block (Low Power Mode, aggressive data saver…): even the muted fallback never ran.
     timers.push(setTimeout(() => {
       if (gone || playing || errored) return;          // a broken file is not an autoplay block: the page shows the error instead
-      if (ctl.engine === 'iframe') return;             // plain embed: no state events to inspect
       if (ctl.playPromise) {
         // HTML5: the play() promise is definitive. Pending (slow network) is NOT a block — only a real
         // NotAllowedError/AbortError rejection says the browser refused to start playback at all.
@@ -108,9 +104,14 @@ export async function createPlayer(container, video, opts = {}) {
         });
         return;
       }
-      // YouTube IFrame API: a player that is allowed starts loading within ~1s; still unstarted/cued at
-      // this point means the embed was refused entirely → offer the big "tap to play" affordance.
-      try { const st = ctl.state?.(); if (st !== 1 && st !== 3) opts.onAutoplayBlocked?.(); } catch { /* player already gone */ }
+      // YouTube (both the IFrame API and the API-less embed): a player that is allowed starts loading
+      // within ~1s; still unstarted/cued at this point means the embed was refused entirely → offer the
+      // big "tap to play" affordance. A null state means the embed reports nothing, so don't guess.
+      try {
+        const st = ctl.state?.();
+        if (st == null) return;
+        if (st !== 1 && st !== 3) opts.onAutoplayBlocked?.();
+      } catch { /* player already gone */ }
     }, AUTOPLAY_WAIT_MS * 1.5));
   }
 
