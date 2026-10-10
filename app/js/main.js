@@ -215,10 +215,13 @@ function wireImageFallbacks() {
   window.addEventListener('error', (e) => {
     const t = e.target;
     if (!(t instanceof HTMLImageElement) || swapToHighQuality(t)) return;
-    if (t.dataset.fbTried) return;
-    t.dataset.fbTried = '1';
-    const fb = t.dataset.fb;
-    if (fb) t.src = fb; else t.classList.add('img-failed');
+    // data-fb holds a `|`-separated chain of candidates: every failure steps one further down it (never back
+    // to the URL that just failed), so a banner can walk maxresdefault → sharp local poster → hqdefault
+    // instead of staying stuck on the first rendition that 404s. An exhausted chain marks the image failed.
+    const chain = String(t.dataset.fb || '').split('|').filter((u) => u && u !== t.src);
+    const next = chain.shift() || '';
+    t.dataset.fb = chain.join('|');
+    if (next) t.src = next; else t.classList.add('img-failed');
   }, true);
 }
 

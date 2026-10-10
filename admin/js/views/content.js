@@ -153,6 +153,7 @@ export default async function content(root, [section], ctx) {
     { k: 'duration', label: 'Duration (mm:ss)', placeholder: 'Auto-detected on upload (or e.g. 12:34)', help: 'Automatically derived when you upload a video file. For YouTube or external links, enter the runtime as mm:ss.' }, { k: 'publishedAt', label: 'Published', type: 'datetime', req: true },
     { k: 'publishAt', label: 'Publish at (optional)', type: 'datetime', help: 'Leave empty to publish now. A future time hides the video from viewers, Google and the API until then — admins still see it, and followers get a notification when it goes live.' },
     { k: 'hidden', label: 'Hide from the public website', type: 'bool', wide: true, help: 'Hidden videos stay in the admin catalog and can be restored later.' },
+    { k: 'adminsOnly', label: 'Show to Admins only', type: 'bool', wide: true, help: 'Needs “Hide from the public website”: signed-in admin accounts still see and can play it on the website and apps, so it can be reviewed live. Everybody else — and Google — sees nothing. Untick “Hide…” and this is cleared.' },
     ratingField, subtitlesField(),
     { k: 'views', label: 'Starting views', type: 'number', min: 0, help: 'Imported/catalog baseline. Plays recorded on ADDABAAZ are counted separately and included in the total shown in the video list.' },
     { k: 'topRank', label: 'Top 10 position (optional)', type: 'number', min: 1, max: 10, help: 'Pins this episode into the homepage “Top 10 Episodes” rail: 1 is first. Leave empty to rank it by views. Content studio → Top 10 arranges them all at once.' },
@@ -166,6 +167,13 @@ export default async function content(root, [section], ctx) {
       extra: (form) => {
         const sync = () => { const t = form.srcType.value; $$('[data-for]', form).forEach((d) => { d.hidden = d.dataset.for !== (t === 'mp4' || t === 'hls' ? 'url' : t); }); if (t === 'r2' && form.access.value === 'free' && create) form.access.value = 'premium'; };
         form.srcType.addEventListener('change', sync); sync(); wireSubtitles(form);
+        // "Show to Admins only" belongs to "Hide from the public website": the row appears (unticked) only
+        // while hidden is on, and unticking hidden clears it — an unhidden video can never carry a widened
+        // audience behind the scenes. (style.display, not [hidden]: .field sets display:grid in admin.css.)
+        const hiddenBox = form.elements.hidden, adminsBox = form.elements.adminsOnly;
+        const adminsRow = adminsBox?.closest('.field');
+        const syncHidden = () => { if (!adminsRow) return; adminsRow.style.display = hiddenBox.checked ? '' : 'none'; if (!hiddenBox.checked) adminsBox.checked = false; };
+        hiddenBox.addEventListener('change', syncHidden); syncHidden();
         let touched = !create; form.id.addEventListener('input', () => { touched = true; });
         const autoId = () => { if (touched) return; const y = form.srcType.value === 'youtube' ? ytId(form.ytUrl.value) : ''; form.id.value = y || slug(`${showTitle(form.showId.value)} ${form.title.value} ${form.episode.value}`) || ''; };
         for (const n of ['ytUrl', 'title', 'episode', 'showId', 'srcType']) form.elements[n].addEventListener('input', autoId);
@@ -405,7 +413,7 @@ export default async function content(root, [section], ctx) {
     $('#list').innerHTML = html`<div class="card flush">${rows.length ? html`<table class="tbl"><thead><tr><th class="select-col"><input type="checkbox" id="selectPage" aria-label="Select this page"></th><th></th><th>Title</th><th>Show</th><th>Website</th><th>Duration</th><th>Published</th><th class="end">Views</th><th></th></tr></thead><tbody>
       ${pageRows.map((v) => html`<tr><td class="select-col"><input type="checkbox" data-video-select="${v.id}" aria-label="Select ${v.title}" ${selectedVideoIds.has(v.id) ? 'checked' : ''}></td><td class="thumb wide">${thumb(v) ? html`<img src="${thumb(v)}" alt="" loading="lazy">` : ''}</td>
         <td class="title-cell"><strong class="clip">${v.shortTitle || v.title}</strong><br>${badge(youtubeKindLabel(v))} ${badge(v.source?.type === 'youtube' ? 'YouTube' : v.source?.type === 'r2' ? 'R2' : v.source?.type?.toUpperCase() || 'Video')} ${isPremiumVideo(v) ? badge('premium', 'gold') : ''}</td>
-        <td>${showTitle(v.showId) || html`<span class="muted">—</span>`}</td><td>${videoVisibility(v) === 'hidden' ? badge('Hidden', 'bad') : videoVisibility(v) === 'scheduled' ? badge('Scheduled', 'warn') : badge('Visible', 'ok')}</td>
+        <td>${showTitle(v.showId) || html`<span class="muted">—</span>`}</td><td>${videoVisibility(v) === 'hidden' ? badge('Hidden', 'bad') : videoVisibility(v) === 'scheduled' ? badge('Scheduled', 'warn') : badge('Visible', 'ok')}${v.hidden && v.adminsOnly ? html` ${badge('Admins only', 'warn')}` : ''}</td>
         <td>${v.duration > 0 ? fmtDur(v.duration) : '—'}</td><td class="small">${fmtDT(v.publishedAt)}</td><td class="end">${totalViews(v).toLocaleString('en-IN')}</td>
         <td class="end nowrap"><a class="icon-btn" href="/watch/${v.id}" target="_blank" rel="noopener" title="Open on site">${icon('external', 16)}</a><button class="icon-btn" data-edit="${v.id}" title="Edit">${icon('edit', 16)}</button><button class="icon-btn danger" data-del="${v.id}" title="Delete">${icon('trash', 16)}</button></td></tr>`)}</tbody></table>` : empty('No videos match.')}</div>
       ${pager({ total: rows.length, offset: F.offset, limit: PAGE })}`.s;

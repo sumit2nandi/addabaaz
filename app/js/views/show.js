@@ -33,7 +33,7 @@ export default async function showView(ctx) {
 
   ctx.root.innerHTML = html`
     <section class="detail-hero" id="detailHero">
-      <div class="hero-bg">${latest ? heroBg(cat.thumb(latest, 'maxresdefault'), s.posterLg || s.poster, { fallback: cat.thumb(latest, 'hqdefault'), lowThumb: cat.thumb(latest, 'mqdefault'), lowPoster: s.poster }) : heroBg(s.posterLg || s.poster, '', { lowThumb: s.poster })}</div>
+      <div class="hero-bg">${latest ? heroBg(cat.thumb(latest, 'maxresdefault'), s.posterLg || s.poster, { fallback: `${s.posterLg || s.poster}|${cat.thumb(latest, 'hqdefault')}`, blurUp: false }) : heroBg(s.posterLg || s.poster, '', { blurUp: false })}</div>
       <div class="hero-shade"></div>
       ${s.access === 'premium' ? premiumMark({ cls: 'premium-mark-hero' }) : ''}
       <div class="hero-inner">

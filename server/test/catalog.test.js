@@ -35,6 +35,31 @@ test('premium access is inherited from a series for every child video', () => {
   assert.equal(cat.isPremium(cat.video('free-clip')), false);
 });
 
+test('hidden "Show to Admins only" videos join the catalog for signed-in admins and nobody else', async () => {
+  const snapshot = {
+    catalog: {
+      shows: [], upcoming: [], videos: [
+        { id: 'public-one' },
+        { id: 'gone', hidden: true },
+        { id: 'staff-review', hidden: true, adminsOnly: true },
+        { id: 'later', publishAt: new Date(Date.now() + 3_600_000).toISOString() },
+      ],
+    },
+    studio: null,
+  };
+  const db = { catalog: { async version() { return 1; }, async snapshot() { return structuredClone(snapshot); } } };
+  const store = createCatalogStore({ db, catalogPath: null, ttl: 60_000 });
+  const ids = (view) => view.catalog.videos.map((v) => v.id);
+
+  assert.deepEqual(ids(await store.get()), ['public-one'], 'visitors see neither hidden videos nor scheduled ones');
+  assert.deepEqual(ids(await store.get({ staff: true })), ['public-one', 'staff-review'],
+    'signed-in admin accounts additionally receive the hidden video marked admins-only, verbatim');
+  assert.deepEqual(ids(await store.get({ all: true })), ['public-one', 'gone', 'staff-review', 'later'],
+    'the admin console keeps the full snapshot');
+  assert.equal((await store.get({ staff: true })).videoById.has('staff-review'), true,
+    'the staff view is indexed like every other catalog view, so watch pages resolve admins-only videos');
+});
+
 test('a fresh catalog read checks the database version even inside the in-memory TTL', async () => {
   let version = 1;
   let snapshot = { catalog: { shows: [], upcoming: [], videos: [{ id: 'before-admin-edit' }] }, studio: null };

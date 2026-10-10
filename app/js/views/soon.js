@@ -19,7 +19,7 @@ export default async function soon(ctx) {
   ctx.setTitle(`${u.titleEn || u.title} — Coming soon`);
   ctx.root.innerHTML = html`
     <section class="detail-hero" id="detailHero">
-      <div class="hero-bg">${img(u.backdrop || u.posterLg || u.poster, '', { lazy: false, lowSrc: u.poster })}</div><div class="hero-shade"></div>
+      <div class="hero-bg">${img(u.backdrop || u.posterLg || u.poster, '', { lazy: false })}</div><div class="hero-shade"></div>
       <div class="hero-inner">
         <button type="button" class="detail-poster" id="detailPoster" aria-label="Open the full poster">${img(u.posterLg || u.poster, u.title, { lazy: false, lowSrc: u.poster })}</button>
         <div class="hero-copy soon-hero-copy">

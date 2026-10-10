@@ -125,25 +125,29 @@ test('components build the progressive markup for cards, banners and posters', (
   assert.match(c, /\|\| lowResolutionSrc\(src\)/, 'uploaded full-size images automatically resolve their saved compact sibling');
   assert.match(c, /src="\$\{low \|\| src\}" data-hq="\$\{low \? src : ''\}"/, 'img() shows the low rendition and keeps the best in data-hq');
   assert.match(c, /lowSrc: app\.catalog\.thumb\(v, 'mqdefault'\)/, 'video cards start from YouTube mqdefault (320x180)');
-  assert.match(c, /lowThumb = '', lowPoster = ''/, 'heroBg takes low renditions');
+  assert.match(c, /lowThumb = '', lowPoster = '', blurUp = true/, 'heroBg takes low renditions and a blur-up opt-out');
+  assert.match(c, /blurUp \? \(\(lowThumb && lowThumb !== thumb \? lowThumb : ''\) \|\| lowResolutionSrc\(thumb\)\) : ''/,
+    'blurUp: false skips the low placeholder entirely, so the banner renders sharp from the first paint');
   assert.match(c, /srcset="\$\{lp \|\| poster\}" data-hq="\$\{lp \? poster : ''\}"/, 'the banner poster source starts low on phones');
 });
 
 test('every call site that shows a best-quality image also passes a low rendition', () => {
   const pairs = [
     ['app/js/views/show.js', /\$\{img\(cat\.thumb\(v, 'maxresdefault'\), '', \{[^}]*lowSrc: cat\.thumb\(v, 'mqdefault'\)/],
-    ['app/js/views/show.js', /heroBg\(cat\.thumb\(latest, 'maxresdefault'\)[\s\S]*?lowThumb: cat\.thumb\(latest, 'mqdefault'\), lowPoster: s\.poster/],
+    ['app/js/views/show.js', /heroBg\(cat\.thumb\(latest, 'maxresdefault'\), s\.posterLg \|\| s\.poster, \{ fallback: `\$\{s\.posterLg \|\| s\.poster\}\|\$\{cat\.thumb\(latest, 'hqdefault'\)}`, blurUp: false \}\)/],
     ['app/js/views/show.js', /img\(s\.posterLg \|\| s\.poster, s\.title, \{ lazy: false, lowSrc: s\.poster \}\)/],
-    ['app/js/views/home.js', /lowThumb: cat\.thumb\(latest, 'mqdefault'\), lowPoster: show\.poster/],
+    ['app/js/views/home.js', /heroBg\(cat\.thumb\(latest, 'maxresdefault'\), show\.posterLg \|\| show\.poster, \{ lazy: i > 0, fallback: `\$\{show\.posterLg \|\| show\.poster\}\|\$\{cat\.thumb\(latest, 'hqdefault'\)}`, blurUp: false \}\)/],
     ['app/js/views/home.js', /img\(show\.posterLg \|\| show\.poster, '', \{ lazy: i > 0, lowSrc: show\.poster \}\)/],
     ['app/js/views/soon.js', /img\(u\.posterLg \|\| u\.poster, u\.title, \{ lazy: false, lowSrc: u\.poster \}\)/],
-    ['app/js/views/soon.js', /img\(u\.backdrop \|\| u\.posterLg \|\| u\.poster, '', \{ lazy: false, lowSrc: u\.poster \}\)/],
+    ['app/js/views/soon.js', /img\(u\.backdrop \|\| u\.posterLg \|\| u\.poster, '', \{ lazy: false \}\)/],
     ['app/js/views/watch.js', /lowSrc: cat\.thumb\(target, 'mqdefault'\)/],
     ['app/js/views/watch.js', /player-wall-art', lazy: false, lowSrc: cat\.thumb\(v, 'mqdefault'\)/],
     ['app/js/views/reels.js', /lowSrc: cover\.low/],
   ];
   for (const [file, re] of pairs) assert.match(read(file), re, `${file} passes a low rendition: ${re}`);
   assert.match(read('app/js/views/reels.js'), /low: cat\.thumb\(v, 'mqdefault'\)/, 'reel covers compute the low rendition');
+  assert.doesNotMatch(read('app/js/views/home.js'), /lowThumb: cat\.thumb\(latest, 'mqdefault'\)/,
+    'the home hero is the one banner that never shows a soft placeholder — it opts out of blur-up');
 });
 
 test('main.js upgrades on load and runs the upgrade before the data-fb fallback on error', () => {
@@ -154,5 +158,25 @@ test('main.js upgrades on load and runs the upgrade before the data-fb fallback 
   assert.match(fn, /document\.addEventListener\('load'[\s\S]*loadHighQuality\(t\)/, 'load prefetches and swaps in the best rendition only after it arrives');
   assert.doesNotMatch(fn, /window\.addEventListener\('load'/, 'a window listener never receives image load events');
   assert.match(fn, /if \(!\(t instanceof HTMLImageElement\) \|\| swapToHighQuality\(t\)\) return;/, 'a failed placeholder jumps straight to the best rendition');
-  assert.ok(fn.indexOf('swapToHighQuality(t)) return') < fn.indexOf("t.dataset.fbTried = '1'"), 'before the fallback is marked as tried');
+  assert.match(fn, /const chain = String\(t\.dataset\.fb \|\| ''\)\.split\('\|'\)\.filter\(\(u\) => u && u !== t\.src\);/,
+    'data-fb is a chain: each failure steps one candidate further, never back to the URL that just failed');
+  assert.match(fn, /if \(next\) t\.src = next; else t\.classList\.add\('img-failed'\);/,
+    'an exhausted chain marks the image failed instead of retrying forever');
+  assert.doesNotMatch(fn, /fbTried/, 'the one-shot fallback flag is gone — the chain itself terminates');
+});
+
+test('the home hero walks down to its sharp local poster when YouTube has no max-resolution still', () => {
+  const home = read('app/js/views/home.js');
+  const call = home.match(/heroBg\(cat\.thumb\(latest, 'maxresdefault'\)[\s\S]*?\)\}<\/div>/)?.[0] || '';
+  assert.ok(call, 'the hero banner call exists');
+  assert.match(call, /blurUp: false/, 'no soft placeholder on the first paint');
+  assert.match(call, /fallback: `\$\{show\.posterLg \|\| show\.poster\}\|\$\{cat\.thumb\(latest, 'hqdefault'\)}`/,
+    'missing maxresdefault steps to the sharp uploaded poster (then hqdefault), so the banner never stays blurred');
+  // Every full-bleed hero banner opts out of the soft placeholder, not just the home one.
+  assert.doesNotMatch(read('app/js/views/show.js'), /lowThumb: cat\.thumb\(latest, 'mqdefault'\)/,
+    'the show hero banner never shows a soft placeholder either');
+  assert.match(read('app/js/views/show.js'), /heroBg\(s\.posterLg \|\| s\.poster, '', \{ blurUp: false \}\)/,
+    'a show without episodes still draws its banner sharp');
+  assert.doesNotMatch(read('app/js/views/soon.js'), /img\(u\.backdrop \|\| u\.posterLg \|\| u\.poster, '', \{ lazy: false, lowSrc/,
+    'the coming-soon hero renders its uploaded art sharp from the first paint');
 });

@@ -23,9 +23,11 @@ export const HERO_POSTER_MQ = '(max-width: 759px)';
  *  because a 16:9 picture cropped into a tall phone screen shows only a thin slice of the middle (faces cut in half). */
 // `lowThumb` / `lowPoster` are the small renditions shown first (see ui/progressive.js); the wide still and the poster
 // replace them only once their high-quality renditions have downloaded.
-export function heroBg(thumb, poster, { lazy = false, fallback, lowThumb = '', lowPoster = '' } = {}) {
-  const lt = (lowThumb && lowThumb !== thumb ? lowThumb : '') || lowResolutionSrc(thumb);
-  const lp = (lowPoster && lowPoster !== poster ? lowPoster : '') || lowResolutionSrc(poster);
+export function heroBg(thumb, poster, { lazy = false, fallback, lowThumb = '', lowPoster = '', blurUp = true } = {}) {
+  // blurUp: false renders the best artwork straight away — the home hero opts out so a full-screen banner is
+  // never seen as a soft, stretched placeholder (and never stays one when a sharp rendition is missing).
+  const lt = blurUp ? ((lowThumb && lowThumb !== thumb ? lowThumb : '') || lowResolutionSrc(thumb)) : '';
+  const lp = blurUp ? ((lowPoster && lowPoster !== poster ? lowPoster : '') || lowResolutionSrc(poster)) : '';
   const img = html`<img src="${lt || thumb || poster}" data-hq="${lt ? thumb : ''}" alt="" data-fb="${fallback || ''}" ${lazy ? raw('loading="lazy" decoding="async"') : ''}>`;
   return poster ? html`<picture><source media="${HERO_POSTER_MQ}" srcset="${lp || poster}" data-hq="${lp ? poster : ''}">${img}</picture>` : img;
 }

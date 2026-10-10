@@ -10,6 +10,7 @@ import { go } from '../router.js';
 import { isNative } from '../platform.js';
 import { accountGroup, wireAccountAccordion } from '../ui/account-accordion.js';
 import { accountNav } from '../ui/account-nav.js';
+import { accountPlan } from '../ui/account-plan.js';
 import { verifyBanner, settingGroups, settingSection, wireSetting } from './account-extra.js';
 import { friendly } from '../errors.js';
 
@@ -34,6 +35,9 @@ export default async function account(ctx) {
         ${!u.account ? html`<p class="muted">${identity}</p>` : ''}</div>
       ${u.supportsAuth && !u.account ? html`<div class="profile-actions"><a class="btn btn-primary" href="#/signin">Sign In</a><a class="btn btn-ghost" href="#/signup">Create Account</a></div>` : ''}
     </section>
+    <!-- Subscription summary: drawn everywhere but only *shown* on desktop-width browsers (CSS below), where the
+         settings grid it replaces used to sit. Phones and the native apps keep today's page. -->
+    ${u.supportsAuth && !isNative ? html`<div class="account-plan-overview" id="accountPlanOverview">${accountPlan(u)}</div>` : ''}
     ${profileStrip(u)}
     <div id="accountSavedList">${savedListStrip(savedEntries(u, app.catalog))}</div>
     <nav class="card-panel list group-list" aria-label="Settings">
@@ -45,6 +49,10 @@ export default async function account(ctx) {
     </div></div>
   </div>`.s;
 
+  ctx.onCleanup(u.on('subscription', () => {
+    const summary = $('#accountPlanOverview', ctx.root);
+    if (summary) summary.innerHTML = accountPlan(u).s;
+  }));
   ctx.onCleanup(u.on('library', () => {
     const saved = $('#accountSavedList', ctx.root);
     if (!saved) return;
