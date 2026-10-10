@@ -134,12 +134,12 @@ test('components build the progressive markup for cards, banners and posters', (
 test('every call site that shows a best-quality image also passes a low rendition', () => {
   const pairs = [
     ['app/js/views/show.js', /\$\{img\(cat\.thumb\(v, 'maxresdefault'\), '', \{[^}]*lowSrc: cat\.thumb\(v, 'mqdefault'\)/],
-    ['app/js/views/show.js', /heroBg\(cat\.thumb\(latest, 'maxresdefault'\)[\s\S]*?lowThumb: cat\.thumb\(latest, 'mqdefault'\), lowPoster: s\.poster/],
+    ['app/js/views/show.js', /heroBg\(cat\.thumb\(latest, 'maxresdefault'\), s\.posterLg \|\| s\.poster, \{ fallback: `\$\{s\.posterLg \|\| s\.poster\}\|\$\{cat\.thumb\(latest, 'hqdefault'\)}`, blurUp: false \}\)/],
     ['app/js/views/show.js', /img\(s\.posterLg \|\| s\.poster, s\.title, \{ lazy: false, lowSrc: s\.poster \}\)/],
     ['app/js/views/home.js', /heroBg\(cat\.thumb\(latest, 'maxresdefault'\), show\.posterLg \|\| show\.poster, \{ lazy: i > 0, fallback: `\$\{show\.posterLg \|\| show\.poster\}\|\$\{cat\.thumb\(latest, 'hqdefault'\)}`, blurUp: false \}\)/],
     ['app/js/views/home.js', /img\(show\.posterLg \|\| show\.poster, '', \{ lazy: i > 0, lowSrc: show\.poster \}\)/],
     ['app/js/views/soon.js', /img\(u\.posterLg \|\| u\.poster, u\.title, \{ lazy: false, lowSrc: u\.poster \}\)/],
-    ['app/js/views/soon.js', /img\(u\.backdrop \|\| u\.posterLg \|\| u\.poster, '', \{ lazy: false, lowSrc: u\.poster \}\)/],
+    ['app/js/views/soon.js', /img\(u\.backdrop \|\| u\.posterLg \|\| u\.poster, '', \{ lazy: false \}\)/],
     ['app/js/views/watch.js', /lowSrc: cat\.thumb\(target, 'mqdefault'\)/],
     ['app/js/views/watch.js', /player-wall-art', lazy: false, lowSrc: cat\.thumb\(v, 'mqdefault'\)/],
     ['app/js/views/reels.js', /lowSrc: cover\.low/],
@@ -172,4 +172,11 @@ test('the home hero walks down to its sharp local poster when YouTube has no max
   assert.match(call, /blurUp: false/, 'no soft placeholder on the first paint');
   assert.match(call, /fallback: `\$\{show\.posterLg \|\| show\.poster\}\|\$\{cat\.thumb\(latest, 'hqdefault'\)}`/,
     'missing maxresdefault steps to the sharp uploaded poster (then hqdefault), so the banner never stays blurred');
+  // Every full-bleed hero banner opts out of the soft placeholder, not just the home one.
+  assert.doesNotMatch(read('app/js/views/show.js'), /lowThumb: cat\.thumb\(latest, 'mqdefault'\)/,
+    'the show hero banner never shows a soft placeholder either');
+  assert.match(read('app/js/views/show.js'), /heroBg\(s\.posterLg \|\| s\.poster, '', \{ blurUp: false \}\)/,
+    'a show without episodes still draws its banner sharp');
+  assert.doesNotMatch(read('app/js/views/soon.js'), /img\(u\.backdrop \|\| u\.posterLg \|\| u\.poster, '', \{ lazy: false, lowSrc/,
+    'the coming-soon hero renders its uploaded art sharp from the first paint');
 });
